@@ -9,6 +9,16 @@ const config: NextConfig = {
     "/api/docs/[...name]": ["./docs/**/*"],
   },
   serverExternalPackages: ["mongodb", "exceljs", "parse5", "nodemailer", "imapflow"],
+  async rewrites() {
+    return [
+      { source: "/.well-known/oauth-protected-resource", destination: "/api/oauth/metadata?kind=resource" },
+      { source: "/.well-known/oauth-protected-resource/:path*", destination: "/api/oauth/metadata?kind=resource" },
+      { source: "/.well-known/oauth-authorization-server", destination: "/api/oauth/metadata?kind=as" },
+      { source: "/.well-known/oauth-authorization-server/:path*", destination: "/api/oauth/metadata?kind=as" },
+      { source: "/.well-known/openid-configuration", destination: "/api/oauth/metadata?kind=as" },
+      { source: "/.well-known/openid-configuration/:path*", destination: "/api/oauth/metadata?kind=as" },
+    ];
+  },
   async headers() {
     const common = [
       { key: "X-Content-Type-Options", value: "nosniff" },

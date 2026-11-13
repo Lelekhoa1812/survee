@@ -30,6 +30,7 @@ describe("MCP auth", () => {
     const query = await post({ authorization: `Bearer ${process.env.KQA_MCP_TOKEN}` }, "https://kqa.example/api/mcp?token=abc");
     const cookie = await post({ cookie: "kqa_admin=session" });
     for (const res of [missing, wrong, query, cookie]) expect(res.status).toBe(401);
+    expect(missing.headers.get("www-authenticate")).toContain("oauth-protected-resource");
     expect(touch).not.toHaveBeenCalled();
   });
 

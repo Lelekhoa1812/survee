@@ -18,7 +18,9 @@ Stateless Streamable HTTP. One JSON-RPC request, one JSON response. There is no 
 | Accept | `application/json, text/event-stream` |
 | Body | A single JSON-RPC 2.0 message |
 
-`GET` and `DELETE` answer 405. This server does not open an SSE channel and does not keep a session.
+`DELETE` answers 405. This server does not open an SSE channel and does not keep a session. A call with no bearer answers 401 and points ChatGPT at the OAuth discovery documents.
+
+ChatGPT connects to `https://<your-host>/api/mcp` with no pasted token. It discovers `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, then the host signs in and chooses Allow. That creates a key under Settings named after the app. Revoke or delete the key to disconnect it. Other agents can still use a bearer key or `KQA_MCP_TOKEN`.
 
 Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is the server token. A host can also create named keys under Settings. Each key has a name, a note, an optional expiry, and a value. The value is shown once. The database stores a SHA-256 hash plus a short fingerprint. A key can be revoked, restored, or deleted. Revoked, expired, and deleted keys are rejected.
 

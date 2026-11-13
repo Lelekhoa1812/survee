@@ -51,6 +51,7 @@ export function toKeyView(doc: ApiKeyDoc): ApiKeyView {
     expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
     revokedAt: doc.revokedAt ? doc.revokedAt.toISOString() : null,
     status: statusOf(doc),
+    via: doc.oauthClientId ? "oauth" : "key",
   };
 }
 
@@ -59,7 +60,7 @@ export async function listApiKeys(): Promise<ApiKeyView[]> {
   return docs.map(toKeyView);
 }
 
-export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
+export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; oauthClientId?: string; refreshSecret?: string }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
   const problem = validateKeySecret(input.secret);
   if (problem) return { ok: false, error: problem };
   const { prefix, suffix } = splitSecret(input.secret);
@@ -73,6 +74,8 @@ export async function createApiKey(input: { name: string; note?: string; secret:
     createdAt: new Date(),
     createdBy: input.createdBy,
     expiresAt: input.expiresAt ?? undefined,
+    ...(input.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
+    ...(input.refreshSecret ? { refreshHash: hashKey(input.refreshSecret) } : {}),
   };
   try {
     await (await col.apiKeys()).insertOne(doc);
@@ -132,4 +135,21 @@ export async function authenticateApiKey(secret: string): Promise<boolean> {
   const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
   if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
   return true;
+}
+
+const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Replace the access and refresh secrets for an OAuth connection. The previous values stop working. */
+export async function rotateOAuthKey(refreshSecret: string): Promise<{ access: string; refresh: string; expiresIn: number } | null> {
+  if (refreshSecret.length < MIN_SECRET || refreshSecret.length > MAX_SECRET) return null;
+  const c = await col.apiKeys();
+  const doc = await c.findOne({ refreshHash: hashKey(refreshSecret) });
+  if (!doc || doc.revokedAt) return null;
+  if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return null;
+  const access = generateKeySecret();
+  const refresh = generateKeySecret();
+  const { prefix, suffix } = splitSecret(access);
+  const expiresAt = new Date(Date.now() + OAUTH_TTL_MS);
+  await c.updateOne({ _id: doc._id }, { $set: { hash: hashKey(access), refreshHash: hashKey(refresh), prefix, suffix, expiresAt } });
+  return { access, refresh, expiresIn: Math.floor(OAUTH_TTL_MS / 1000) };
 }

@@ -16,6 +16,7 @@ interface KeyRow {
   expiresAt: string | null;
   revokedAt: string | null;
   status: "active" | "revoked" | "expired";
+  via?: "key" | "oauth";
 }
 
 type Filter = "all" | KeyRow["status"];
@@ -109,7 +110,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
             <Icon name="link" size={16} />
             <div>
               <h2>Agent connection</h2>
-              <div className="sub">Point an MCP client at this URL and send a key as a bearer token.</div>
+              <div className="sub">ChatGPT uses this URL and then asks you to sign in. Other agents can send a key as a bearer token.</div>
             </div>
           </div>
           <div className="card-pad stack">
@@ -227,7 +228,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
                 {visible.map((key) => (
                   <tr key={key.id}>
                     <td className="c-main" data-label="Name">
-                      <div className="name">{key.name}</div>
+                      <div className="name">{key.name} {key.via === "oauth" ? <Badge kind="info">Connected app</Badge> : null}</div>
                       <div className="desc">Added {relTime(key.createdAt)} · {key.createdBy}</div>
                     </td>
                     <td data-label="Value"><span className="code-chip" title="The full value is not stored">{key.prefix}…{key.suffix}</span></td>

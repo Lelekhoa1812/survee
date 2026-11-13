@@ -1,6 +1,6 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, ParticipantDoc, RevokedSessionDoc, SurveyVersionDoc } from "./repo/types";
+import type { ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, RevokedSessionDoc, SurveyVersionDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -43,7 +43,11 @@ async function ensureIndexes(d: Db) {
     d.collection("mail_messages").createIndex({ participantId: 1, sentAt: -1 }, { name: "by_participant" }),
     d.collection("mail_messages").createIndex({ interviewId: 1, sentAt: -1 }, { name: "by_interview" }),
     d.collection("api_keys").createIndex({ hash: 1 }, { unique: true, name: "hash_unique" }),
+    d.collection("api_keys").createIndex({ refreshHash: 1 }, { unique: true, sparse: true, name: "refresh_unique" }),
     d.collection("api_keys").createIndex({ createdAt: -1 }, { name: "recent_keys" }),
+    d.collection("oauth_clients").createIndex({ clientId: 1 }, { unique: true, name: "client_unique" }),
+    d.collection("oauth_codes").createIndex({ hash: 1 }, { unique: true, name: "code_unique" }),
+    d.collection("oauth_codes").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "ttl_code" }),
   ]);
 }
 
@@ -56,4 +60,6 @@ export const col = {
   revoked: async (): Promise<Collection<RevokedSessionDoc>> => (await db()).collection<RevokedSessionDoc>("revoked_sessions"),
   mail: async (): Promise<Collection<MailMessageDoc>> => (await db()).collection<MailMessageDoc>("mail_messages"),
   apiKeys: async (): Promise<Collection<ApiKeyDoc>> => (await db()).collection<ApiKeyDoc>("api_keys"),
+  oauthClients: async (): Promise<Collection<OAuthClientDoc>> => (await db()).collection<OAuthClientDoc>("oauth_clients"),
+  oauthCodes: async (): Promise<Collection<OAuthCodeDoc>> => (await db()).collection<OAuthCodeDoc>("oauth_codes"),
 };

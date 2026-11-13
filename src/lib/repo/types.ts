@@ -103,6 +103,26 @@ export interface RevokedSessionDoc {
   expireAt: Date;
 }
 
+/** collection: oauth_clients. A public OAuth client registered by ChatGPT or another MCP app. */
+export interface OAuthClientDoc {
+  _id: ObjectId;
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  createdAt: Date;
+}
+
+/** collection: oauth_codes. One-time authorization code. Only the hash is stored. */
+export interface OAuthCodeDoc {
+  _id: ObjectId;
+  hash: string;
+  clientId: string;
+  redirectUri: string;
+  challenge: string;
+  email: string;
+  expiresAt: Date;
+}
+
 /** collection: api_keys. The secret is stored only as a SHA-256 hash. prefix and suffix are for the host to recognize a key. */
 export interface ApiKeyDoc {
   _id: ObjectId;
@@ -116,6 +136,9 @@ export interface ApiKeyDoc {
   lastUsedAt?: Date;
   expiresAt?: Date;
   revokedAt?: Date;
+  /** Set when ChatGPT or another OAuth client created this key. */
+  oauthClientId?: string;
+  refreshHash?: string;
 }
 
 export interface ApiKeyView {
@@ -130,6 +153,7 @@ export interface ApiKeyView {
   expiresAt: string | null;
   revokedAt: string | null;
   status: "active" | "revoked" | "expired";
+  via: "key" | "oauth";
 }
 
 // ---- shapes handed to pages and APIs (plain JSON, ids and dates as strings)
