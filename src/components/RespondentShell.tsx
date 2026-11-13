@@ -53,7 +53,7 @@ export function RespondentShell({ token }: { token: string }) {
   // ---- load
   const load = useCallback(async () => {
     setPhase("loading");
-    const res = await api<Loaded & { ok: boolean }>(`/api/p/${token}`);
+    const res = await api<Loaded & { ok: boolean }>(`/api/p/${token}`, { headers: { "X-KQA-Client": "respondent" } });
     if (res.status === 404) { setPhase("invalid"); return; }
     if (!res.ok || !res.data.questions) { setPhase("error"); return; }
     answers.current = res.data.answers ?? {};
@@ -201,7 +201,7 @@ export function RespondentShell({ token }: { token: string }) {
   }
   if (phase === "error" || !data) {
     return (
-      <main className="center-page"><div className="hero"><BrandMark size={44} /><h1>We could not open this just now</h1><p className="muted">Check your connection and try again. Your answers are safe.</p><button className="btn primary" onClick={() => void load()}>Try again</button></div></main>
+      <main className="center-page"><div className="hero"><BrandMark size={44} /><h1>We could not open this just now</h1><p className="muted">Check your connection and try again. Nothing you have already saved is lost.</p><button className="btn primary" onClick={() => void load()}>Try again</button></div></main>
     );
   }
 

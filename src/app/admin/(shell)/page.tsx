@@ -15,7 +15,7 @@ export default async function Dashboard() {
       <div className="page-head">
         <div>
           <h1>Interviews</h1>
-          <p>Each interview is one questionnaire. Send every person their own private link and review what they answer.</p>
+          <p>Each interview is one questionnaire. Email each person their private link, or copy it, and review what they answer.</p>
         </div>
         <Link href="/admin/new" className="btn primary right"><Icon name="plus" size={16} /> New interview</Link>
       </div>
@@ -33,7 +33,7 @@ export default async function Dashboard() {
         <div className="card empty">
           <div className="ico"><Icon name="inbox" size={24} /></div>
           <h3>No interviews yet</h3>
-          <p>Upload a questionnaire file and KQA gives each person a private link. Answers save automatically and you can export them any time.</p>
+          <p>Upload a questionnaire file and KQA gives each person a private link you can email or copy. Answers save automatically and you can export them any time.</p>
           <Link href="/admin/new" className="btn primary"><Icon name="plus" size={16} /> Create your first interview</Link>
         </div>
       ) : (

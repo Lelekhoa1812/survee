@@ -2,7 +2,9 @@
 
 This is the complete specification for the HTML file you upload to KQA. If you are an AI agent asked to build a questionnaire for KQA, read this page end to end, then read `AGENT_PLAYBOOK.md`. Start from `template/starter.kqa.html`, which passes the checker as it stands.
 
-KQA gives every respondent a private link, shows them your HTML exactly as you designed it, saves each answer to MongoDB as they go, and lets the host review and export everything. Your file does not talk to the database. It declares its questions, marks which controls hold which answer, and the KQA runtime does the rest.
+KQA gives every respondent a private link, shows them your HTML exactly as you designed it, saves each answer to MongoDB as they go, and lets the host review and export everything. Your file does not talk to the database, and it does not send email. It declares its questions, marks which controls hold which answer, and the KQA runtime does the rest.
+
+The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, and dates are supported as well. Section 3.4 is the full list. KQA does not score answers. A required checkbox is answered when at least one box is ticked. Text that is only spaces is empty.
 
 ## 1. How it works
 
@@ -296,6 +298,8 @@ Per respondent, in MongoDB collection `participants`:
 Answers are keyed by **question id**. That is why ids and option values must stay stable. The survey file itself is stored immutably per version in `survey_versions`, so older exports can always be reproduced.
 
 The app validates every value against the manifest before saving (types, option membership, number ranges, lengths). An invalid value is rejected, never stored, and the page is reset to what is actually saved.
+
+There is no answer key and no score. "Answered" means a non-empty value: one chosen option, at least one ticked checkbox, or text that is not blank after trimming. A note on its own does not count. An optional email address may be stored on the person so the host can send the private link. That address is not a question in this file, and this file never sends mail.
 
 ## 7. Replacing a file after people have answered
 

@@ -102,7 +102,7 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function CopyButton({ text, label = "Copy", done = "Copied", className = "btn sm", icon = true, getText }: { text?: string; label?: string; done?: string; className?: string; icon?: boolean; getText?: () => string }) {
+export function CopyButton({ text, label = "Copy", done = "Copied", className = "btn sm", icon = true, getText, ariaLabel }: { text?: string; label?: string; done?: string; className?: string; icon?: boolean; getText?: () => string; ariaLabel?: string }) {
   const [ok, setOk] = useState(false);
   const toast = useToast();
   useEffect(() => {
@@ -114,6 +114,7 @@ export function CopyButton({ text, label = "Copy", done = "Copied", className = 
     <button
       type="button"
       className={className}
+      aria-label={ariaLabel || undefined}
       onClick={async () => {
         const good = await copyText(getText ? getText() : (text ?? ""));
         if (good) setOk(true);
@@ -161,11 +162,12 @@ export function Badge({ kind = "", children, plain }: { kind?: "ok" | "warn" | "
   return <span className={`badge ${kind} ${plain ? "plain" : ""}`}>{children}</span>;
 }
 
-export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown }): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
+export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string> }): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
   try {
+    const headers = { ...(init?.headers ?? {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) };
     const res = await fetch(url, {
       method: init?.method ?? (init?.body ? "POST" : "GET"),
-      headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: init?.body ? JSON.stringify(init.body) : undefined,
       credentials: "same-origin",
     });

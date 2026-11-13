@@ -2,14 +2,16 @@ import { progress } from "@/lib/format/answers";
 import { fail, json } from "@/lib/http";
 import { loadByToken } from "@/lib/repo";
 import { looksLikeToken } from "@/lib/tokens";
+import { shouldRecordVisit } from "@/lib/visit";
 
 type Ctx = { params: Promise<{ token: string }> };
 
 /** Everything the respondent shell needs: who they are, the questions and their saved answers. */
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
-  const ctx = await loadByToken(token, { touch: true });
+  // Prefetch of the invite link must not count as the person opening it. Status changes only on save.
+  const ctx = await loadByToken(token, { touch: shouldRecordVisit(req) });
   if (!ctx) return fail(404, "This link is not valid.");
   const { manifest } = ctx.version;
   return json({

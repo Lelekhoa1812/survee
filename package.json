@@ -2,7 +2,7 @@
   "name": "kqa",
   "version": "1.0.0",
   "private": true,
-  "description": "KQA: host-run interviews. Upload a self-contained HTML questionnaire, send each person a private link, keep every answer in MongoDB.",
+  "description": "KQA: host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -20,9 +20,11 @@
   },
   "dependencies": {
     "exceljs": "^4.4.0",
+    "imapflow": "^2.11.0",
     "marked": "^18.2.0",
     "mongodb": "^7.9.0",
     "next": "^16.4.6",
+    "nodemailer": "^10.5.0",
     "parse5": "^8.1.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "jsdom": "^31.0.0",

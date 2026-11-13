@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnswersTab } from "./AnswersTab";
 import { ExportTab } from "./ExportTab";
+import { InviteActions, PersonEmailEditor } from "./InviteActions";
 import type { InterviewData } from "./interview-types";
 import { PeopleTab } from "./PeopleTab";
 import { SurveyTab } from "./SurveyTab";
@@ -19,7 +20,7 @@ export function useOrigin(): string {
   return o;
 }
 
-const EVENT_TEXT: Record<string, string> = { open: "opened their link", save: "saved answers", submit: "submitted", reopen: "was reopened by you", created: "Interview created", version: "New survey version uploaded", status: "Status changed", export: "Exported answers" };
+const EVENT_TEXT: Record<string, string> = { open: "opened their link", save: "saved answers", submit: "submitted", reopen: "was reopened by you", created: "Interview created", version: "New survey version uploaded", status: "Status changed", export: "Exported answers", invite: "was emailed their link", mcp: "was updated by an agent" };
 
 export function InterviewView({ data, initialTab }: { data: InterviewData; initialTab: string }) {
   const router = useRouter();
@@ -93,14 +94,17 @@ export function InterviewView({ data, initialTab }: { data: InterviewData; initi
 
           {interview.mode === "single" && people[0] && (
             <section className="card">
-              <div className="card-head"><h2>Respondent link</h2><span className="sub right">{people[0].status === "submitted" ? "Submitted" : people[0].status === "in_progress" ? "In progress" : "Waiting for them to open it"}</span></div>
+              <div className="card-head"><h2>Respondent link</h2><span className="sub right">{people[0].status === "submitted" ? "Submitted" : people[0].status === "in_progress" ? "In progress" : "Not started"}</span></div>
               <div className="card-pad stack">
                 <div className="row wrap">
                   <div className="link-cell" style={{ flex: 1, minWidth: 220 }}><code style={{ maxWidth: "100%", fontSize: 13.5, padding: "9px 12px" }}>{origin ? `${origin}/${people[0].token}` : "…"}</code></div>
-                  <CopyButton className="btn primary" label="Copy link" getText={() => `${window.location.origin}/${people[0].token}`} />
+                  <CopyButton className="btn primary" label="Copy link" ariaLabel={`Copy ${people[0].name}'s link`} getText={() => `${window.location.origin}/${people[0].token}`} />
                   <a className="btn" href={`/${people[0].token}`} target="_blank" rel="noreferrer"><Icon name="external" size={15} /> Open</a>
                 </div>
                 <p className="muted" style={{ fontSize: 13.5 }}>Anyone with this link can answer, so send it only to the person it is meant for. It works on a phone, saves as they go and they can come back to it later.</p>
+                <PersonEmailEditor person={people[0]} refresh={refresh} />
+                <InviteActions person={people[0]} interviewOpen={interview.status === "open"} publicOrigin={data.publicOrigin} refresh={refresh} />
+                {data.publicOrigin && origin && data.publicOrigin !== origin ? <p className="invite-meta">The email uses {data.publicOrigin}, the public address of this app. Copy link uses the address you are looking at.</p> : null}
               </div>
             </section>
           )}
@@ -112,12 +116,12 @@ export function InterviewView({ data, initialTab }: { data: InterviewData; initi
           <section className="card">
             <div className="card-head"><h2>Recent activity</h2></div>
             {events.length === 0 ? (
-              <div className="card-pad muted">Nothing yet. Activity appears here as people open their link and answer.</div>
+              <div className="card-pad muted">Nothing yet. Activity appears here when someone saves an answer or you email a link.</div>
             ) : (
               <div className="list">
                 {events.map((e) => (
                   <div key={e.id} className="list-row" style={{ gridTemplateColumns: "1fr auto", padding: "11px 20px" }}>
-                    <span>{e.person && ["open", "save", "submit", "reopen"].includes(e.type) ? <><b>{e.person}</b> {EVENT_TEXT[e.type]}</> : (EVENT_TEXT[e.type] ?? e.type)}{e.type === "version" && e.meta?.version ? ` (version ${String(e.meta.version)})` : ""}</span>
+                    <span>{e.person && ["open", "save", "submit", "reopen", "invite"].includes(e.type) ? <><b>{e.person}</b> {e.type === "invite" && e.meta?.result === "failed" ? "could not be emailed a link" : EVENT_TEXT[e.type]}</> : e.type === "mcp" ? <>An agent used {typeof e.meta?.tool === "string" ? e.meta.tool : "a tool"}</> : (EVENT_TEXT[e.type] ?? e.type)}{e.type === "version" && e.meta?.version ? ` (version ${String(e.meta.version)})` : ""}</span>
                     <span className="muted nowrap" style={{ fontSize: 13 }}>{relTime(e.at)}</span>
                   </div>
                 ))}
@@ -128,7 +132,7 @@ export function InterviewView({ data, initialTab }: { data: InterviewData; initi
           <section className="card" style={{ borderColor: "var(--danger-line)" }}>
             <div className="card-head"><h2>Delete this interview</h2></div>
             <div className="card-pad row wrap">
-              <p className="muted" style={{ flex: 1, minWidth: 240 }}>Removes the interview, every survey version and all answers. Export first if you need a copy. This cannot be undone.</p>
+              <p className="muted" style={{ flex: 1, minWidth: 240 }}>Removes the interview, every survey version, the people, their answers, and the invite history. Export first if you need a copy. This cannot be undone.</p>
               <button className="btn danger" onClick={() => setDeleting(true)}><Icon name="trash" size={15} /> Delete interview</button>
             </div>
           </section>

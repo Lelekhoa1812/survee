@@ -1,6 +1,6 @@
 # KQA
 
-Host-run interviews. Upload a self-contained HTML questionnaire, send each person a private link, and keep every answer in MongoDB as they type. Review and export everything from one place.
+Host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB as they type. Review and export everything from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, and also a dropdown, a number, a scale, or a date. KQA does not score answers.
 
 | Portal | Address | For |
 |---|---|---|
@@ -23,6 +23,7 @@ Everything an agent needs to write a file that KQA accepts is in [`docs/`](docs)
 | [`docs/kqa-manifest.schema.json`](docs/kqa-manifest.schema.json) | JSON Schema of the manifest (generated) |
 | [`docs/template/starter.kqa.html`](docs/template/starter.kqa.html) | A known-good file with every question type and the standard design kit |
 | [`docs/examples/`](docs/examples) | Real questionnaires converted to the format |
+| [`docs/MCP.md`](docs/MCP.md) | How an agent operates a live interview (not how to write the HTML) |
 
 In the app, **Format guide** has a one-click **Copy everything for an AI agent** button, and `/api/docs/bundle.md` serves the same bundle as a single markdown document an agent can fetch.
 
@@ -51,6 +52,10 @@ In development the host login falls back to `admin@axion.local` / `12345678`. In
 | `MONGODB_DB` | Database name. Default `kqa` |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | The host login. Required in production |
 | `SESSION_SECRET` | Signs the admin session cookie. Required in production. `openssl rand -base64 32` |
+| `KQA_PUBLIC_URL` | Public origin used in invite emails, such as `https://your-host`. Required to send. The copied link on screen can still be the address you are visiting |
+| `KQA_MCP_TOKEN` | Bearer token for `POST /api/mcp`. Not the admin password. `openssl rand -base64 32` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Send invites. Port 587, STARTTLS. The password is never written into the repo |
+| `IMAP_HOST`, `IMAP_PORT` | On-demand bounce check. Port 993. Uses the same `SMTP_USER` and `SMTP_PASSWORD` |
 
 ## Commands
 
@@ -69,18 +74,19 @@ In development the host login falls back to `admin@axion.local` / `12345678`. In
 ## How it is built
 
 * Next.js 16 (App Router, TypeScript), React 19, plain CSS design tokens, IBM Plex.
-* MongoDB (Atlas) with the official driver. Collections: `interviews`, `survey_versions` (immutable per upload), `participants` (token, status, answers keyed by question id), `events` (audit, 180-day TTL), `login_attempts` (throttling, 30-minute TTL).
+* MongoDB (Atlas) with the official driver. Collections: `interviews`, `survey_versions` (immutable per upload), `participants` (token, optional email, status, answers keyed by question id), `mail_messages` (invite send and delivery, never the message body), `events` (audit, 180-day TTL), `login_attempts` (throttling, 30-minute TTL).
 * One definition of the format (`src/lib/format/schema.ts`, zod) feeds the checker, the answer validation, the JSON Schema and the docs, so they cannot drift.
 * Exports: Excel workbook, CSV (one row per person, or one per answer), Markdown report, JSON.
 
 ### Security model
 
 * Uploaded HTML is untrusted. It runs in an iframe with `sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"` (no same-origin) and a strict Content-Security-Policy that blocks network calls, framing and form posts. It can only talk to the app with `postMessage`, and the app accepts messages only from its own frame.
-* Respondent links carry a 144-bit random token. Tokens are the credential, so keep links private. A host can issue a new link for a person at any time.
+* Respondent links carry a 144-bit random token. Tokens are the credential, so keep links private. The link in an invite email is that credential. A host can issue a new link for a person at any time; the mailed link then stops working and is not sent again on its own.
 * The host area uses an HMAC-signed, httpOnly, same-site cookie, checks the request origin on every mutating call, and throttles failed logins.
+* Agents use `POST /api/mcp` with `Authorization: Bearer` and `KQA_MCP_TOKEN`. That token is not the admin password and not the session cookie. A missing or wrong token is rejected before the database is touched. See [`docs/MCP.md`](docs/MCP.md). `/_next/mcp` is only the Next.js development diagnostics endpoint.
 * Every answer is validated against the manifest on the server before it is stored.
 * `/admin` currently has one shared credential. Per-host accounts are planned.
 
 ## Deploying
 
-Vercel. Set the five environment variables above, make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`.
+Vercel. Set the environment variables above, including `KQA_MCP_TOKEN`, `KQA_PUBLIC_URL`, and the SMTP and IMAP names. Make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`. Do not put the SMTP password or the MCP token in the repository.

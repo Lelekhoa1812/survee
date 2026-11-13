@@ -4,6 +4,9 @@
  * This file is the single source of truth for the shape of `<script type="application/json" id="kqa-manifest">`.
  * `docs/kqa-manifest.schema.json` is generated from it (`npm run docs`), and the checker, the answer
  * validator and the exports all read the same types.
+ *
+ * There is no in-app question builder and no score. A required checkbox is answered when at least
+ * one option is stored. Text that is only spaces is empty. The HTML file does not send email.
  */
 import { z } from "zod";
 

@@ -8,7 +8,7 @@ const config: NextConfig = {
     "/admin/docs/[[...slug]]": ["./docs/**/*"],
     "/api/docs/[...name]": ["./docs/**/*"],
   },
-  serverExternalPackages: ["mongodb", "exceljs", "parse5"],
+  serverExternalPackages: ["mongodb", "exceljs", "parse5", "nodemailer", "imapflow"],
   async headers() {
     const common = [
       { key: "X-Content-Type-Options", value: "nosniff" },

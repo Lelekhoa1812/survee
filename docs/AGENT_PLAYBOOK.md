@@ -6,6 +6,8 @@ You are an AI agent asked to produce an HTML questionnaire for the KQA app. This
 
 Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) looks good on a phone. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
 
+This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
+
 ## Step 1. Gather what you need
 
 Before writing, make sure you know:
@@ -53,17 +55,51 @@ Group questions into sections of about 5 to 8. Give each section an `id`, `title
 2. Replace the manifest with yours.
 3. For each question, copy the matching pattern from the starter and change the id, label and values. Every card follows the same shape:
 
+Single choice (`single`). Help text is "Pick one." Nothing is pre-checked.
+
+```html
+<article class="kq-q" id="q-ID">
+  <div class="kq-q-head"><span class="kq-n">N</span><h3>LABEL</h3><span class="kq-tick" data-kqa-status="ID" aria-hidden="true"></span></div>
+  <p class="kq-help">Pick one.</p>
+  <fieldset class="kq-options">
+    <legend class="kq-sr">LABEL</legend>
+    <label class="kq-opt"><input type="radio" name="ID" data-kqa="ID" value="OPTION"><span>OPTION LABEL</span></label>
+  </fieldset>
+</article>
+```
+
+Checkboxes (`multi`). Help text is "Tick all that apply." A required checkbox is answered when at least one box is ticked. There is no minimum or maximum.
+
+```html
+<article class="kq-q" id="q-ID">
+  <div class="kq-q-head"><span class="kq-n">N</span><h3>LABEL</h3><span class="kq-tick" data-kqa-status="ID" aria-hidden="true"></span></div>
+  <p class="kq-help">Tick all that apply.</p>
+  <fieldset class="kq-options">
+    <legend class="kq-sr">LABEL</legend>
+    <label class="kq-opt"><input type="checkbox" data-kqa="ID" value="OPTION"><span>OPTION LABEL</span></label>
+  </fieldset>
+</article>
+```
+
+Free text. `text` is one line (a name, a company). `longtext` is a paragraph. Whitespace alone is an empty answer. Do not turn one into the other.
+
 ```html
 <article class="kq-q" id="q-ID">
   <div class="kq-q-head"><span class="kq-n">N</span><h3>LABEL</h3><span class="kq-tick" data-kqa-status="ID" aria-hidden="true"></span></div>
   <p class="kq-help">HELP</p>
-  <fieldset class="kq-options">
-    <legend class="kq-sr">LABEL</legend>
-    <label class="kq-opt"><input type="radio" name="ID" data-kqa="ID" value="OPTION"><span>OPTION LABEL</span></label>
-    ...
-  </fieldset>
+  <input type="text" data-kqa="ID" maxlength="500">
 </article>
 ```
+
+```html
+<article class="kq-q" id="q-ID">
+  <div class="kq-q-head"><span class="kq-n">N</span><h3>LABEL</h3><span class="kq-tick" data-kqa-status="ID" aria-hidden="true"></span></div>
+  <p class="kq-help">HELP</p>
+  <textarea data-kqa="ID" rows="4" maxlength="20000"></textarea>
+</article>
+```
+
+Dropdown, number, scale, and date use the same card. Copy those patterns from `template/starter.kqa.html`.
 
 4. Update the contents rail (`.kq-rail`) so each link points at a section `id`.
 5. Do not add anything the sandbox blocks (FORMAT.md section 2).

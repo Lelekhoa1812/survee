@@ -1,3 +1,4 @@
+import { parseEmail } from "@/lib/mail/address";
 import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
 import { addParticipants, getInterview } from "@/lib/repo";
 
@@ -13,10 +14,20 @@ export async function POST(req: Request, { params }: Ctx) {
   const body = await readJson<{ people?: unknown }>(req, 64 * 1024);
   if (!body.ok) return body.res;
   const raw = Array.isArray(body.data.people) ? body.data.people : [];
-  const people = raw
-    .slice(0, 100)
-    .map((p) => ({ name: str((p as { name?: unknown })?.name, 120) ?? "", note: str((p as { note?: unknown })?.note, 1000) }))
-    .filter((p) => p.name);
+  const people: { name: string; note?: string; email?: string }[] = [];
+  for (const item of raw.slice(0, 100)) {
+    const row = item as { name?: unknown; note?: unknown; email?: unknown };
+    const name = str(row?.name, 120) ?? "";
+    if (!name) continue;
+    if (row.email !== undefined && row.email !== null && row.email !== "") {
+      if (typeof row.email !== "string") return fail(400, "That does not look like an email address.");
+      const parsed = parseEmail(row.email);
+      if (!parsed.ok || !parsed.email) return fail(400, parsed.ok ? "That does not look like an email address." : parsed.error);
+      people.push({ name, note: str(row.note, 1000), email: parsed.email });
+    } else {
+      people.push({ name, note: str(row.note, 1000) });
+    }
+  }
   if (!people.length) return fail(400, "Add at least one person with a name.");
   return json({ ok: true, people: await addParticipants(id, people) }, 201);
 }

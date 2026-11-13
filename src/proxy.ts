@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySession } from "./lib/auth";
 /**
  * Keeps the host area private. Pages redirect to the sign-in screen; APIs answer 401.
  * Every admin route handler checks the session again, so this is a convenience layer, not the only lock.
+ * `/api/mcp` is outside this matcher on purpose. It authenticates with the KQA_MCP_TOKEN bearer, not this cookie.
  */
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

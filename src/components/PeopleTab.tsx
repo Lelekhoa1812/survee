@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { parseEmail, parsePersonLine } from "@/lib/mail/address";
 import type { InterviewData, PersonRow } from "./interview-types";
+import { InviteActions } from "./InviteActions";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
 
@@ -19,7 +21,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
     setWorking(p.id + action);
     const res = await api(`/api/admin/people/${p.id}/${action}`, { method: "POST", body: {} });
     setWorking("");
-    if (res.ok) { toast(action === "reopen" ? `${p.name} can edit again.` : "New link created. The old one no longer works."); refresh(); }
+    if (res.ok) { toast(action === "reopen" ? `${p.name} can edit again.` : "New link created. The old one no longer works. Send the new link if you already emailed it."); refresh(); }
     else toast(res.data.error ?? "That did not work.", "err");
   }
 
@@ -27,7 +29,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
     <div className="stack">
       <div className="row wrap">
         <p className="muted" style={{ flex: 1, minWidth: 240 }}>
-          {multi ? "Each person has their own private link. Their answers are kept under their name." : "This interview has one link. Add a name so you recognise the answers."}
+          {multi ? "Each person has their own private link. Add an email to send it, or copy the link." : "This interview has one link. Add their name and, if you have it, an email so you can send the link."}
         </p>
         {multi && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>}
       </div>
@@ -36,13 +38,13 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         <div className="card empty">
           <div className="ico"><Icon name="users" size={24} /></div>
           <h3>No people yet</h3>
-          <p>Add each person who will answer. KQA creates a private link for each one that you can copy and send however you like.</p>
+          <p>Add each person who will answer. KQA creates a private link, and you can email it from here or copy it.</p>
           <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>
         </div>
       ) : (
         <div className="card table-wrap">
           <table className="t cards">
-            <thead><tr><th>Name</th><th>Status</th><th>Progress</th><th>Last saved</th><th>Private link</th><th style={{ width: 1 }} /></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Progress</th><th>Last saved</th><th>Private link</th><th>Invite</th><th style={{ width: 1 }} /></tr></thead>
             <tbody>
               {data.people.map((p) => {
                 const s = STATUS[p.status];
@@ -54,6 +56,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
                       <div style={{ fontWeight: 600 }}>{p.name}</div>
                       {p.note && <div className="muted" style={{ fontSize: 13, maxWidth: 260 }}>{p.note}</div>}
                     </td>
+                    <td className="c-wide" data-label="Email">{p.email ? p.email : <span className="muted">No email</span>}</td>
                     <td className="c-status"><Badge kind={s.kind}>{s.label}</Badge></td>
                     <td className="c-wide" data-label="Progress" style={{ minWidth: 150 }}>
                       <div style={{ display: "grid", gap: 5 }}>
@@ -65,9 +68,12 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
                     <td className="c-wide" data-label="Private link">
                       <div className="link-cell">
                         <code title={link}>{link ? link.replace(/^https?:\/\//, "") : "…"}</code>
-                        <CopyButton className="btn sm icon" label="" done="" getText={() => `${window.location.origin}/${p.token}`} />
+                        <CopyButton className="btn sm icon" label="" done="" ariaLabel={`Copy ${p.name}'s link`} getText={() => `${window.location.origin}/${p.token}`} />
                         <a className="btn sm icon" href={`/${p.token}`} target="_blank" rel="noreferrer" aria-label={`Open ${p.name}'s link`} title="Open as the respondent"><Icon name="external" size={15} /></a>
                       </div>
+                    </td>
+                    <td className="c-wide" data-label="Invite">
+                      <InviteActions person={p} interviewOpen={data.interview.status === "open"} publicOrigin={data.publicOrigin} refresh={refresh} />
                     </td>
                     <td className="c-actions">
                       <div className="row-actions">
@@ -76,7 +82,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
                             {working === p.id + "reopen" ? <Spinner /> : <Icon name="lock" size={14} />} Reopen
                           </button>
                         ) : <span />}
-                        <button className="btn sm icon ghost" aria-label={`Edit ${p.name}`} title="Edit name and note" onClick={() => setEditing(p)}><Icon name="edit" size={15} /></button>
+                        <button className="btn sm icon ghost" aria-label={`Edit ${p.name}`} title="Edit name, email and note" onClick={() => setEditing(p)}><Icon name="edit" size={15} /></button>
                         <button className="btn sm icon ghost" aria-label={`New link for ${p.name}`} title="Create a new link (the old one stops working)" disabled={working === p.id + "token"} onClick={() => act(p, "token")}><Icon name="refresh" size={15} /></button>
                         {multi ? <button className="btn sm icon ghost" aria-label={`Remove ${p.name}`} title="Remove" onClick={() => setRemoving(p)}><Icon name="trash" size={15} /></button> : <span />}
                       </div>
@@ -105,39 +111,56 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
 
 function AddPeople({ interviewId, onClose, onDone }: { interviewId: string; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
-  const [rows, setRows] = useState([{ name: "", note: "" }, { name: "", note: "" }]);
+  const blank = () => ({ name: "", email: "", note: "" });
+  const [rows, setRows] = useState([blank(), blank()]);
   const [busy, setBusy] = useState(false);
-  const filled = rows.filter((r) => r.name.trim());
-  const set = (i: number, k: "name" | "note", v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const parsed = rows.map((r) => ({ ...r, emailResult: r.email.trim() ? parseEmail(r.email) : { ok: true as const, email: null } }));
+  const filled = parsed.filter((r) => r.name.trim());
+  const invalid = filled.some((r) => !r.emailResult.ok);
+  const set = (i: number, k: "name" | "email" | "note", v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
 
   function onPaste(i: number, e: React.ClipboardEvent<HTMLInputElement>) {
     const text = e.clipboardData.getData("text");
     if (!/\n/.test(text.trim())) return;
     e.preventDefault();
-    const names = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 100);
-    setRows((r) => [...r.slice(0, i), ...names.map((name) => ({ name, note: "" })), ...r.slice(i + 1).filter((x) => x.name || x.note)]);
+    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 100);
+    const next = lines.map((line) => {
+      const parsedLine = parsePersonLine(line);
+      if (!parsedLine.ok) return { name: parsedLine.name || line, email: parsedLine.emailRaw, note: "" };
+      if (!parsedLine.person) return { name: "", email: "", note: "" };
+      return { name: parsedLine.person.name, email: parsedLine.person.email ?? "", note: "" };
+    });
+    setRows((r) => [...r.slice(0, i), ...next.filter((row) => row.name || row.email), ...r.slice(i + 1).filter((x) => x.name || x.email || x.note)]);
   }
 
   async function save() {
+    if (invalid || filled.length === 0) return;
     setBusy(true);
-    const res = await api(`/api/admin/interviews/${interviewId}/people`, { method: "POST", body: { people: filled } });
+    const people = filled.map((r) => ({ name: r.name.trim(), email: r.emailResult.ok ? r.emailResult.email ?? undefined : undefined, note: r.note.trim() || undefined }));
+    const res = await api(`/api/admin/interviews/${interviewId}/people`, { method: "POST", body: { people } });
     setBusy(false);
     if (res.ok) { toast(`${filled.length} ${filled.length === 1 ? "person" : "people"} added. Their links are ready.`); onDone(); }
     else toast(res.data.error ?? "Could not add them.", "err");
   }
 
   return (
-    <Modal title="Add people" onClose={onClose} actions={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || filled.length === 0} onClick={save}>{busy && <Spinner />} Add {filled.length || ""} {filled.length === 1 ? "person" : "people"} and create {filled.length === 1 ? "link" : "links"}</button></>}>
-      <p className="muted" style={{ marginTop: -6 }}>A name is all you need. Use the note to remember who they are, for example their role or company. Paste a list of names into the first box to add many at once.</p>
+    <Modal title="Add people" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || filled.length === 0 || invalid} onClick={() => void save()}>{busy && <Spinner />} {filled.length === 0 ? "Add people" : <>Add {filled.length} {filled.length === 1 ? "person" : "people"} and create {filled.length === 1 ? "a link" : "links"}</>}</button></>}>
+      <p className="muted" style={{ marginTop: -6 }}>A name is enough. Email is optional. Paste one person per line: a name, Name, email, or Name &lt;email&gt;.</p>
       <div className="stack" style={{ gap: 10 }}>
-        {rows.map((r, i) => (
-          <div key={i} className="row" style={{ alignItems: "stretch" }}>
-            <input className="input" style={{ flex: 1.1 }} placeholder="Name" aria-label={`Name ${i + 1}`} value={r.name} maxLength={120} onChange={(e) => set(i, "name", e.target.value)} onPaste={(e) => onPaste(i, e)} />
-            <input className="input" style={{ flex: 1.4 }} placeholder="Note (optional)" aria-label={`Note ${i + 1}`} value={r.note} maxLength={1000} onChange={(e) => set(i, "note", e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && i === rows.length - 1) { e.preventDefault(); setRows((x) => [...x, { name: "", note: "" }]); } }} />
+        {parsed.map((r, i) => (
+          <div key={i} className="stack" style={{ gap: 4 }}>
+            <div className={`person-grid${i === 0 ? "" : " continued"}`}>
+              <label className="label" htmlFor={`add-name-${i}`}>Name</label>
+              <label className="label" htmlFor={`add-email-${i}`}>Email <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+              <input id={`add-name-${i}`} className="input" aria-label={`Name ${i + 1}`} value={r.name} maxLength={120} onChange={(e) => set(i, "name", e.target.value)} onPaste={(e) => onPaste(i, e)} />
+              <input id={`add-email-${i}`} className={`input${!r.emailResult.ok ? " error" : ""}`} type="text" inputMode="email" autoComplete="off" aria-label={`Email ${i + 1}, optional`} aria-invalid={!r.emailResult.ok} aria-describedby={!r.emailResult.ok ? `add-email-${i}-error` : undefined} value={r.email} maxLength={254} onChange={(e) => set(i, "email", e.target.value)} />
+            </div>
+            {!r.emailResult.ok ? <span id={`add-email-${i}-error`} className="field-error">{r.emailResult.error}</span> : null}
+            <input className="input" aria-label={`Note ${i + 1}, optional`} placeholder="Note (optional)" value={r.note} maxLength={1000} onChange={(e) => set(i, "note", e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && i === rows.length - 1) { e.preventDefault(); setRows((x) => [...x, blank()]); } }} />
           </div>
         ))}
-        <button className="btn ghost sm" style={{ justifySelf: "start" }} onClick={() => setRows((x) => [...x, { name: "", note: "" }])}><Icon name="plus" size={15} /> Add another</button>
+        <button className="btn ghost sm" type="button" style={{ justifySelf: "start" }} onClick={() => setRows((x) => [...x, blank()])}><Icon name="plus" size={15} /> Add another</button>
       </div>
     </Modal>
   );
@@ -146,17 +169,25 @@ function AddPeople({ interviewId, onClose, onDone }: { interviewId: string; onCl
 function EditPerson({ person, onClose, onDone }: { person: PersonRow; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(person.name);
+  const [email, setEmail] = useState(person.email ?? "");
   const [note, setNote] = useState(person.note ?? "");
   const [busy, setBusy] = useState(false);
+  const parsed = parseEmail(email);
   async function save() {
+    if (!parsed.ok) return;
     setBusy(true);
-    const res = await api(`/api/admin/people/${person.id}`, { method: "PATCH", body: { name, note } });
+    const res = await api(`/api/admin/people/${person.id}`, { method: "PATCH", body: { name, email, note } });
     setBusy(false);
     if (res.ok) { toast("Saved"); onDone(); } else toast(res.data.error ?? "Could not save.", "err");
   }
   return (
-    <Modal title="Edit person" onClose={onClose} actions={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !name.trim()} onClick={save}>{busy && <Spinner />} Save</button></>}>
+    <Modal title="Edit person" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || !name.trim() || !parsed.ok} onClick={() => void save()}>{busy && <Spinner />} Save</button></>}>
       <div className="field"><label htmlFor="pn">Name</label><input id="pn" className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} /></div>
+      <div className="field">
+        <label htmlFor="pe">Email <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+        <input id="pe" className={`input${!parsed.ok ? " error" : ""}`} type="text" inputMode="email" autoComplete="off" spellCheck={false} value={email} maxLength={254} aria-invalid={!parsed.ok} aria-describedby="pe-note" onChange={(e) => setEmail(e.target.value)} onBlur={() => { if (parsed.ok) setEmail(parsed.email ?? ""); }} />
+        {!parsed.ok ? <span id="pe-note" className="field-error">{parsed.error}</span> : <span id="pe-note" className="hint">Leave blank if you will copy the link. Changing it means the last email no longer counts as sent.</span>}
+      </div>
       <div className="field"><label htmlFor="pt">Note</label><textarea id="pt" className="textarea" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} /><span className="hint">Only you see this.</span></div>
     </Modal>
   );

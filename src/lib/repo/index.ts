@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { col } from "../db";
+import { parseEmail } from "../mail/address";
 import { progress, validateAnswer } from "../format/answers";
 import { LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { newToken } from "../tokens";
+import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import type { InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
 
 export type { InterviewSummary, ParticipantView } from "./types";
@@ -16,7 +18,7 @@ export function toOid(id: string): ObjectId | null {
 
 function participantView(p: ParticipantDoc): ParticipantView {
   return {
-    id: p._id.toHexString(), interviewId: p.interviewId.toHexString(), token: p.token, name: p.name, note: p.note, status: p.status, answers: p.answers ?? {},
+    id: p._id.toHexString(), interviewId: p.interviewId.toHexString(), token: p.token, name: p.name, email: p.email, note: p.note, status: p.status, answers: p.answers ?? {},
     revision: p.revision, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), lastSeenAt: iso(p.lastSeenAt), lastSavedAt: iso(p.lastSavedAt), submittedAt: iso(p.submittedAt),
   };
 }
@@ -122,7 +124,12 @@ export async function deleteInterview(id: string): Promise<boolean> {
   if (!oid) return false;
   const res = await (await col.interviews()).deleteOne({ _id: oid });
   if (!res.deletedCount) return false;
-  await Promise.all([(await col.versions()).deleteMany({ interviewId: oid }), (await col.participants()).deleteMany({ interviewId: oid }), (await col.events()).deleteMany({ interviewId: oid })]);
+  await Promise.all([
+    (await col.versions()).deleteMany({ interviewId: oid }),
+    (await col.participants()).deleteMany({ interviewId: oid }),
+    (await col.events()).deleteMany({ interviewId: oid }),
+    deleteMailForInterview(oid),
+  ]);
   return true;
 }
 
@@ -134,20 +141,32 @@ export async function listParticipants(interviewId: string): Promise<Participant
   return docs.map(participantView);
 }
 
-export async function addParticipants(interviewId: string, people: { name: string; note?: string }[]): Promise<ParticipantView[]> {
+export async function addParticipants(interviewId: string, people: { name: string; note?: string; email?: string }[]): Promise<ParticipantView[]> {
   const oid = toOid(interviewId);
   if (!oid || people.length === 0) return [];
   const now = new Date();
-  const docs: ParticipantDoc[] = people.map((p, i) => ({
-    _id: new ObjectId(), interviewId: oid, token: newToken(), name: p.name.trim().slice(0, 120) || "Respondent", note: p.note?.trim().slice(0, 1000) || undefined,
-    status: "invited", answers: {}, revision: 0, createdAt: new Date(now.getTime() + i), updatedAt: now,
-  }));
+  const docs: ParticipantDoc[] = people.map((p, i) => {
+    const parsed = p.email ? parseEmail(p.email) : { ok: true as const, email: null };
+    if (!parsed.ok) throw new Error("Invalid email");
+    return {
+      _id: new ObjectId(), interviewId: oid, token: newToken(), name: p.name.trim().slice(0, 120) || "Respondent", note: p.note?.trim().slice(0, 1000) || undefined,
+      email: parsed.email ?? undefined,
+      status: "invited" as const, answers: {}, revision: 0, createdAt: new Date(now.getTime() + i), updatedAt: now,
+    };
+  });
   await (await col.participants()).insertMany(docs);
   await (await col.interviews()).updateOne({ _id: oid }, { $set: { updatedAt: now } });
   return docs.map(participantView);
 }
 
-export async function updateParticipant(id: string, patch: { name?: string; note?: string | null }): Promise<ParticipantView | null> {
+export async function getParticipant(id: string): Promise<ParticipantView | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const doc = await (await col.participants()).findOne({ _id: oid });
+  return doc ? participantView(doc) : null;
+}
+
+export async function updateParticipant(id: string, patch: { name?: string; note?: string | null; email?: string | null }): Promise<ParticipantView | null> {
   const oid = toOid(id);
   if (!oid) return null;
   const set: Partial<ParticipantDoc> = { updatedAt: new Date() };
@@ -156,6 +175,14 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   if (patch.note !== undefined) {
     if (patch.note === null || patch.note.trim() === "") unset.note = "";
     else set.note = patch.note.trim().slice(0, 1000);
+  }
+  if (patch.email !== undefined) {
+    if (patch.email === null || patch.email.trim() === "") unset.email = "";
+    else {
+      const parsed = parseEmail(patch.email);
+      if (!parsed.ok || !parsed.email) throw new Error("Invalid email");
+      set.email = parsed.email;
+    }
   }
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
@@ -166,7 +193,10 @@ export async function updateParticipant(id: string, patch: { name?: string; note
 export async function deleteParticipant(id: string): Promise<boolean> {
   const oid = toOid(id);
   if (!oid) return false;
-  return ((await (await col.participants()).deleteOne({ _id: oid })).deletedCount ?? 0) > 0;
+  const res = await (await col.participants()).deleteOne({ _id: oid });
+  if (!res.deletedCount) return false;
+  await deleteMailForPerson(oid);
+  return true;
 }
 
 export async function regenerateToken(id: string): Promise<string | null> {
@@ -192,6 +222,10 @@ export interface RespondentContext {
   version: SurveyVersionDoc;
 }
 
+/**
+ * `touch` records that the respondent app itself loaded the link. It must not change `status`.
+ * "Not started" stays until the first successful save. Callers skip touch for mail-gateway prefetches.
+ */
 export async function loadByToken(token: string, opts: { touch?: boolean } = {}): Promise<RespondentContext | null> {
   const participants = await col.participants();
   const p = await participants.findOne({ token });
@@ -331,6 +365,13 @@ export async function recordLoginFailure(key: string): Promise<void> {
 }
 export async function clearLoginFailures(key: string): Promise<void> {
   await (await col.logins()).deleteMany({ key });
+}
+
+/** Audit an MCP tool call. Meta is the tool name and outcome only: no HTML, answers, or links. */
+export async function noteMcp(tool: string, ok: boolean, interviewId?: string): Promise<void> {
+  const oid = interviewId ? toOid(interviewId) : null;
+  const safe = /^[a-z0-9_]{1,64}$/.test(tool) ? tool : "unknown";
+  await (await col.events()).insertOne({ _id: new ObjectId(), ...(oid ? { interviewId: oid } : {}), type: "mcp", at: new Date(), meta: { tool: safe, ok } });
 }
 
 // ------------------------------------------------------------------------------------------ export input

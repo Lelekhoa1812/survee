@@ -1,6 +1,6 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { EventDoc, InterviewDoc, LoginAttemptDoc, ParticipantDoc, RevokedSessionDoc, SurveyVersionDoc } from "./repo/types";
+import type { EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, ParticipantDoc, RevokedSessionDoc, SurveyVersionDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -40,6 +40,8 @@ async function ensureIndexes(d: Db) {
     d.collection("login_attempts").createIndex({ key: 1, at: -1 }, { name: "by_key" }),
     d.collection("revoked_sessions").createIndex({ sid: 1 }, { unique: true, name: "sid_unique" }),
     d.collection("revoked_sessions").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0, name: "ttl_expiry" }),
+    d.collection("mail_messages").createIndex({ participantId: 1, sentAt: -1 }, { name: "by_participant" }),
+    d.collection("mail_messages").createIndex({ interviewId: 1, sentAt: -1 }, { name: "by_interview" }),
   ]);
 }
 
@@ -50,4 +52,5 @@ export const col = {
   events: async (): Promise<Collection<EventDoc>> => (await db()).collection<EventDoc>("events"),
   logins: async (): Promise<Collection<LoginAttemptDoc>> => (await db()).collection<LoginAttemptDoc>("login_attempts"),
   revoked: async (): Promise<Collection<RevokedSessionDoc>> => (await db()).collection<RevokedSessionDoc>("revoked_sessions"),
+  mail: async (): Promise<Collection<MailMessageDoc>> => (await db()).collection<MailMessageDoc>("mail_messages"),
 };

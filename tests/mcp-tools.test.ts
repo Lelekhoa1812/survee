@@ -1,0 +1,168 @@
+import { readFileSync } from "node:fs";
+import { ObjectId } from "mongodb";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
+process.env.KQA_PUBLIC_URL = "https://kqa.example";
+process.env.KQA_MCP_TOKEN = "t".repeat(43);
+process.env.SMTP_HOST = "smtp.example.com";
+process.env.SMTP_PORT = "587";
+process.env.SMTP_USER = "host@example.com";
+process.env.SMTP_PASSWORD = "test-only-secret";
+process.env.IMAP_HOST = "imap.example.com";
+process.env.IMAP_PORT = "993";
+
+const mailRows: Record<string, unknown>[] = [];
+const sent: { message: Record<string, unknown>; options: { port?: number; secure?: boolean; requireTLS?: boolean } }[] = [];
+const searches: unknown[] = [];
+
+vi.mock("nodemailer", () => ({
+  default: {
+    createTransport(options: { port?: number; secure?: boolean; requireTLS?: boolean; auth?: { pass?: string } }) {
+      return {
+        async sendMail(message: Record<string, unknown>) {
+          sent.push({ message, options });
+          if (JSON.stringify(message).includes(options.auth?.pass ?? "impossible")) throw new Error("password leaked into the message");
+          return { messageId: "<mcp-sent@example.com>" };
+        },
+        close() {},
+      };
+    },
+  },
+}));
+
+vi.mock("imapflow", () => ({
+  ImapFlow: vi.fn(function ImapFlow(this: Record<string, unknown>) {
+    this.connect = vi.fn(async () => {});
+    this.logout = vi.fn(async () => {});
+    this.close = vi.fn();
+    this.getMailboxLock = vi.fn(async () => ({ release() {} }));
+    this.search = vi.fn(async (query: unknown) => {
+      searches.push(query);
+      return [7];
+    });
+    this.fetch = vi.fn(() => (async function* () {
+      yield { source: Buffer.from("Message-ID: <bounce@example.com>\r\nAction: delivered\r\n") };
+    })());
+  }),
+}));
+
+vi.mock("../src/lib/db", () => ({
+  db: async () => { throw new Error("db() should not run in this test"); },
+  col: {
+    mail: async () => ({
+      insertOne: async (row: Record<string, unknown>) => { mailRows.push(row); return { insertedId: row._id }; },
+      find: () => ({ sort: () => ({ limit: () => ({ toArray: async () => mailRows }) }) }),
+      updateOne: async () => ({ matchedCount: 1 }),
+      deleteMany: async () => ({ deletedCount: 0 }),
+    }),
+    events: async () => ({ insertOne: async () => ({}) }),
+  },
+}));
+
+const personId = new ObjectId().toHexString();
+const interviewId = new ObjectId().toHexString();
+
+vi.mock("../src/lib/repo", async () => {
+  const actual = await vi.importActual<typeof import("../src/lib/repo")>("../src/lib/repo");
+  return {
+    ...actual,
+    noteMcp: vi.fn(async () => {}),
+    getParticipant: vi.fn(async () => ({
+      id: personId,
+      interviewId,
+      token: "person-token",
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      status: "invited",
+      answers: {},
+      revision: 0,
+      createdAt: "2026-11-13T00:00:00.000Z",
+      updatedAt: "2026-11-13T00:00:00.000Z",
+    })),
+    getInterview: vi.fn(async () => ({
+      _id: new ObjectId(interviewId),
+      name: "Investor interview",
+      mode: "multi",
+      status: "open",
+      currentVersion: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })),
+  };
+});
+
+import { handleMcp } from "../src/lib/mcp/http";
+import { listToolDefs } from "../src/lib/mcp/tools";
+
+function call(name: string, args: Record<string, unknown>) {
+  return handleMcp(new Request("https://kqa.example/api/mcp", {
+    method: "POST",
+    headers: {
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+      authorization: `Bearer ${process.env.KQA_MCP_TOKEN}`,
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
+  }));
+}
+
+beforeEach(() => {
+  mailRows.length = 0;
+  sent.length = 0;
+  searches.length = 0;
+});
+
+describe("MCP tools", () => {
+  it("documents every registered tool", () => {
+    const md = readFileSync(new URL("../docs/MCP.md", import.meta.url), "utf8");
+    for (const tool of listToolDefs()) expect(md).toContain(`\`${tool.name}\``);
+  });
+
+  it("sends one invite through the mocked SMTP transport", async () => {
+    const res = await call("send_invite", { personId });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { result?: string; to?: string } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.result).toBe("sent");
+    expect(body.result.structuredContent.to).toBe("ada@example.com");
+    expect(sent).toHaveLength(1);
+    expect(sent[0].options.port).toBe(587);
+    expect(sent[0].options.secure).toBe(false);
+    expect(sent[0].options.requireTLS).toBe(true);
+    expect(String(sent[0].message.subject)).toContain("Ada Lovelace");
+    expect(String(sent[0].message.subject)).toContain("Investor interview");
+    expect(String(sent[0].message.text)).toContain("https://kqa.example/person-token");
+    expect(String(sent[0].message.text)).not.toContain("data-kqa");
+    expect(JSON.stringify(sent[0].message)).not.toContain("test-only-secret");
+    expect(JSON.stringify(mailRows)).not.toContain("test-only-secret");
+    expect(mailRows).toHaveLength(1);
+  });
+
+  it("refuses a bulk send", async () => {
+    const res = await call("send_invite", { personIds: [personId] });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.error).toMatch(/one person/i);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("checks delivery through the mocked IMAP client and only for the stored id", async () => {
+    await call("send_invite", { personId });
+    searches.length = 0;
+    const res = await call("check_invite_delivery", { personId });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { delivery?: string; label?: string } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.delivery).toBe("delivered");
+    expect(body.result.structuredContent.label).toBe("Delivered");
+    expect(JSON.stringify(searches)).toContain("mcp-sent@example.com");
+    expect(JSON.stringify(searches)).not.toMatch(/UNSEEN|ALL/);
+  });
+
+  it("will not search an arbitrary mailbox", async () => {
+    const res = await call("check_invite_delivery", { personId, query: "ALL" });
+    const body = await res.json() as { result: { isError?: boolean } };
+    expect(body.result.isError).toBe(true);
+    expect(searches).toHaveLength(0);
+  });
+});

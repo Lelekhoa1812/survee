@@ -51,12 +51,12 @@ export function NewInterview() {
               <label className="choice">
                 <input type="radio" name="mode" checked={mode === "single"} onChange={() => setMode("single")} />
                 <strong>One person</strong>
-                <span>A single private link. Best when one client answers for their whole team.</span>
+                <span>A single private link you can email or copy. Best when one client answers for their whole team.</span>
               </label>
               <label className="choice">
                 <input type="radio" name="mode" checked={mode === "multi"} onChange={() => setMode("multi")} />
                 <strong>Multi-user</strong>
-                <span>A separate link for each person you add, with their name and notes, so you know who answered what.</span>
+                <span>A separate link for each person, with their name, optional email and notes, so you know who answered what.</span>
               </label>
             </div>
           </div>

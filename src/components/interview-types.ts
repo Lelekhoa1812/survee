@@ -1,10 +1,21 @@
 import type { AnswerMap, Manifest } from "@/lib/format/schema";
 
+export interface PersonMail {
+  state: "unsent" | "sent" | "failed";
+  sentAt?: string;
+  error?: string;
+  delivery: "delivered" | "bounced" | "unknown";
+  deliveryCheckedAt?: string;
+  deliveryDetail?: string;
+}
+
 export interface PersonRow {
   id: string;
   token: string;
   name: string;
+  email?: string;
   note?: string;
+  mail: PersonMail;
   status: "invited" | "in_progress" | "submitted";
   answered: number;
   total: number;
@@ -40,4 +51,6 @@ export interface InterviewData {
   versions: VersionRow[];
   events: EventRow[];
   manifest: Manifest;
+  /** Public origin used inside invite emails. Null when KQA_PUBLIC_URL is unset. */
+  publicOrigin: string | null;
 }
