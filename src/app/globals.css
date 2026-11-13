@@ -54,7 +54,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topbar { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
 .topbar-in { max-width: 1160px; margin: 0 auto; padding: 0 20px; height: 58px; display: flex; align-items: center; gap: 28px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -.01em; }
-.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--brand); display: grid; place-items: center; color: var(--brand-ink); }
+.brand-mark { display: block; flex: none; color: var(--brand); --mark-ink: var(--brand-ink); --mark-leg: #3dceb0; }
+.brand-lockup { display: inline-flex; align-items: center; color: var(--ink); }
+.brand-word { font-weight: 600; letter-spacing: -.03em; line-height: 1; }
+@media (prefers-color-scheme: dark) {
+  .brand-mark { --mark-leg: #087960; }
+}
 .brand small { font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: .02em; }
 .nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
 .topbar .right { flex-shrink: 0; }

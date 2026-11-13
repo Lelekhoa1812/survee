@@ -29,7 +29,7 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <form className="card auth-card" onSubmit={submit} noValidate>
       <div className="stack" style={{ gap: 10 }}>
-        <BrandMark size={40} />
+        <BrandMark size={40} wordmark />
         <div>
           <h1>Host sign in</h1>
           <p className="muted" style={{ marginTop: 4 }}>Create interviews, review answers and export them.</p>

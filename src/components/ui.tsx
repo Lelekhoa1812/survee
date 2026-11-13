@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 // ------------------------------------------------------------------------------------------------ icons
 const PATHS: Record<string, ReactNode> = {
@@ -38,12 +38,26 @@ export function Icon({ name, size = 18, className }: { name: keyof typeof PATHS 
   );
 }
 
-export function BrandMark({ size = 28 }: { size?: number }) {
+export function BrandMark({ size = 28, wordmark = false }: { size?: number; wordmark?: boolean }) {
+  const clipId = `kqa-leg-${useId().replace(/:/g, "")}`;
+  const mark = (
+    <svg className="brand-mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <defs>
+        <clipPath id={clipId}><rect x="10.2" y="0" width="22" height="32" /></clipPath>
+      </defs>
+      <rect width="32" height="32" rx="8" fill="currentColor" />
+      <g fill="none" strokeWidth="3.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11.15 15.25 22.15 7.75" stroke="var(--mark-ink)" />
+        <path d="M6.2 11.4 22.85 24.35" stroke="var(--mark-leg)" clipPath={`url(#${clipId})`} />
+        <path d="M11.15 7.35v17.3" stroke="var(--mark-ink)" />
+      </g>
+    </svg>
+  );
+  if (!wordmark) return mark;
   return (
-    <span className="brand-mark" style={{ width: size, height: size }} aria-hidden="true">
-      <svg width={size * 0.64} height={size * 0.64} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M5 12.5l4.5 4.5L19 7" />
-      </svg>
+    <span className="brand-lockup" style={{ fontSize: Math.round(size * 0.56), gap: Math.round(size * 0.28) }}>
+      {mark}
+      <span className="brand-word">KQA</span>
     </span>
   );
 }

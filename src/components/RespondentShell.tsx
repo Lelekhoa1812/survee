@@ -196,12 +196,12 @@ export function RespondentShell({ token }: { token: string }) {
   if (phase === "loading") return <div className="center-page"><div className="row muted"><Spinner /> Opening your questionnaire…</div></div>;
   if (phase === "invalid") {
     return (
-      <main className="center-page"><div className="hero"><BrandMark size={44} /><h1>This link is not valid</h1><p className="muted">It may have been mistyped, or your host may have replaced it with a new one. Ask your host to send the link again.</p></div></main>
+      <main className="center-page"><div className="hero"><BrandMark size={44} wordmark /><h1>This link is not valid</h1><p className="muted">It may have been mistyped, or your host may have replaced it with a new one. Ask your host to send the link again.</p></div></main>
     );
   }
   if (phase === "error" || !data) {
     return (
-      <main className="center-page"><div className="hero"><BrandMark size={44} /><h1>We could not open this just now</h1><p className="muted">Check your connection and try again. Nothing you have already saved is lost.</p><button className="btn primary" onClick={() => void load()}>Try again</button></div></main>
+      <main className="center-page"><div className="hero"><BrandMark size={44} wordmark /><h1>We could not open this just now</h1><p className="muted">Check your connection and try again. Nothing you have already saved is lost.</p><button className="btn primary" onClick={() => void load()}>Try again</button></div></main>
     );
   }
 
