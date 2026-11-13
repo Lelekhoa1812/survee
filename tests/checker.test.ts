@@ -1,0 +1,180 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { checkHtml } from "../src/lib/diagnostics/static";
+import type { Report } from "../src/lib/diagnostics/types";
+
+const STARTER = readFileSync(join(__dirname, "../docs/template/starter.kqa.html"), "utf8");
+
+function swap(html: string, from: string | RegExp, to: string): string {
+  const out = html.replace(from, to);
+  if (out === html) throw new Error(`fixture did not change: ${String(from)}`);
+  return out;
+}
+const codes = (r: Report) => r.diagnostics.map((d) => d.code);
+const find = (r: Report, code: string) => r.diagnostics.find((d) => d.code === code);
+
+describe("starter template", () => {
+  it("passes with no errors", () => {
+    const r = checkHtml(STARTER, { fileName: "starter.kqa.html" });
+    expect(r.diagnostics.filter((d) => d.severity === "error").map((d) => `${d.code} ${d.message}`)).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.manifest?.questions).toHaveLength(9);
+    expect(r.stats.boundQuestions).toBe(8);
+    expect(r.stats.customQuestions).toBe(1);
+  });
+  it("has no warnings either, so it is a safe model to copy", () => {
+    const r = checkHtml(STARTER);
+    expect(r.diagnostics.filter((d) => d.severity !== "info").map((d) => `${d.code} L${d.location?.line} ${d.message}`)).toEqual([]);
+  });
+});
+
+describe("file level", () => {
+  it("rejects an empty file", () => expect(codes(checkHtml("  \n"))).toContain("KQA100"));
+  it("reports a missing manifest", () => {
+    const r = checkHtml(swap(STARTER, /<script type="application\/json" id="kqa-manifest">/, '<script type="application/json" id="not-it">'));
+    expect(find(r, "KQA200")?.message).toMatch(/without id="kqa-manifest"/);
+    expect(r.ok).toBe(false);
+  });
+  it("reports a truncated file", () => {
+    const r = checkHtml(STARTER.slice(0, STARTER.indexOf("<script>\n  // A custom control") + 40));
+    expect(codes(r)).toContain("KQA112");
+  });
+  it("flags duplicate ids with the first location", () => {
+    const r = checkHtml(swap(STARTER, 'id="f-goal"', 'id="f-company"'));
+    expect(find(r, "KQA111")?.message).toMatch(/f-company.*used 2 times/);
+  });
+  it("warns when the doctype is missing", () => expect(codes(checkHtml(swap(STARTER, "<!doctype html>", "")))).toContain("KQA103"));
+});
+
+describe("manifest syntax", () => {
+  it("points at a trailing comma with line and column", () => {
+    const r = checkHtml(swap(STARTER, '"label": "What is your company called?"\n    },', '"label": "What is your company called?",\n    },'));
+    const d = find(r, "KQA202");
+    expect(d?.message).toMatch(/Trailing comma/);
+    expect(d?.location?.line).toBeGreaterThan(5);
+    expect(d?.context).toContain(">");
+  });
+  it("explains single quotes", () => {
+    const r = checkHtml(swap(STARTER, '"id": "priority"', "'id': 'priority'"));
+    expect(find(r, "KQA202")?.message).toMatch(/Single quotes/);
+  });
+  it("explains a missing comma", () => {
+    const r = checkHtml(swap(STARTER, '"id": "company", "type": "text"', '"id": "company" "type": "text"'));
+    expect(find(r, "KQA202")?.message).toMatch(/comma is probably missing/);
+  });
+  it("rejects comments in JSON", () => {
+    const r = checkHtml(swap(STARTER, '"format": "kqa/1",', '"format": "kqa/1", // version'));
+    expect(find(r, "KQA202")?.message).toMatch(/Comments are not allowed/);
+  });
+  it("requires type=application/json", () => {
+    const r = checkHtml(swap(STARTER, /<script type="application\/json" id="kqa-manifest">/, '<script id="kqa-manifest">'));
+    expect(codes(r)).toContain("KQA203");
+  });
+});
+
+describe("manifest rules", () => {
+  it("rejects a wrong format version", () => expect(codes(checkHtml(swap(STARTER, '"format": "kqa/1"', '"format": "kqa/2"')))).toContain("KQA204"));
+  it("suggests a type for a common mistake", () => {
+    const d = find(checkHtml(swap(STARTER, '"id": "priority", "type": "single"', '"id": "priority", "type": "radio"')), "KQA208");
+    expect(d?.message).toMatch(/Did you mean "single"/);
+    expect(d?.fix).toMatch(/Change "type" to "single"/);
+  });
+  it("suggests a slug for an invalid id", () => {
+    const d = find(checkHtml(swap(STARTER, '"id": "team-size"', '"id": "Team Size"')), "KQA206");
+    expect(d?.message).toMatch(/team-size/);
+  });
+  it("rejects duplicate question ids", () => expect(codes(checkHtml(swap(STARTER, '"id": "channels"', '"id": "priority"')))).toContain("KQA207"));
+  it("requires options on choice questions", () => {
+    const r = checkHtml(swap(STARTER, /"id": "channels", "type": "multi", "section": "choices",\n\s+"label": "Which channels do you use today\?",\n\s+"help": "Tick every channel that applies.",\n\s+"options": \[[^\]]*\]/, '"id": "channels", "type": "multi", "section": "choices", "label": "Which channels do you use today?"'));
+    expect(codes(r)).toContain("KQA209");
+  });
+  it("rejects duplicate option values", () => expect(codes(checkHtml(swap(STARTER, '"value": "speed"', '"value": "accuracy"')))).toContain("KQA210"));
+  it("rejects an unknown section", () => expect(codes(checkHtml(swap(STARTER, '"section": "writing", "required": true', '"section": "nope", "required": true')))).toContain("KQA211"));
+  it("rejects a bad scale", () => expect(codes(checkHtml(swap(STARTER, '"id": "confidence", "type": "scale", "section": "writing", "min": 1, "max": 5', '"id": "confidence", "type": "scale", "section": "writing", "min": 5, "max": 1')))).toContain("KQA212"));
+  it("warns about a misspelt field", () => {
+    const d = find(checkHtml(swap(STARTER, '"required": true,\n      "label": "Which area', '"require": true,\n      "label": "Which area')), "KQA216");
+    expect(d?.message).toMatch(/Did you mean "required"/);
+  });
+  it("flags options on a text question", () => expect(codes(checkHtml(swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "options": [{"value":"a","label":"A"},{"value":"b","label":"B"}],')))).toContain("KQA209"));
+});
+
+describe("bindings", () => {
+  it("catches a typo in data-kqa on both sides", () => {
+    const r = checkHtml(swap(STARTER, 'data-kqa="company"', 'data-kqa="compny"'));
+    expect(find(r, "KQA301")?.message).toMatch(/Did you mean "company"/);
+    expect(find(r, "KQA300")?.message).toMatch(/probably a typo/);
+  });
+  it("catches an option value that differs from the manifest", () => {
+    const d = find(checkHtml(swap(STARTER, 'data-kqa="priority" value="speed"', 'data-kqa="priority" value="fast"')), "KQA303");
+    expect(d?.message).toMatch(/not an option of "priority"/);
+    expect(d?.location?.snippet).toContain('value="fast"');
+  });
+  it("catches an option nobody can pick", () => {
+    const r = checkHtml(swap(STARTER, /<label class="kq-opt"><input type="radio" name="priority" data-kqa="priority" value="cost">.*<\/label>\n/, ""));
+    expect(find(r, "KQA304")?.message).toMatch(/option "cost"/);
+  });
+  it("catches the wrong element for the type", () => {
+    const d = find(checkHtml(swap(STARTER, 'type="radio" name="priority" data-kqa="priority" value="cost"', 'type="checkbox" name="priority" data-kqa="priority" value="cost"')), "KQA302");
+    expect(d?.message).toMatch(/needs radio buttons/);
+  });
+  it("catches radios of two questions sharing a name", () => expect(codes(checkHtml(swap(STARTER, 'name="confidence" data-kqa="confidence" value="1"', 'name="priority" data-kqa="confidence" value="1"')))).toContain("KQA319"));
+  it("catches a missing value attribute", () => expect(codes(checkHtml(swap(STARTER, 'data-kqa="priority" value="speed"', 'data-kqa="priority"')))).toContain("KQA312"));
+  it("catches a note field with no question note", () => {
+    const r = checkHtml(swap(STARTER, '"note": true', '"note": false'));
+    expect(codes(r)).toContain("KQA305");
+  });
+  it("catches a note the page forgot", () => expect(codes(checkHtml(swap(STARTER, 'data-kqa-note="priority"', 'data-kqa-other="priority"')))).toContain("KQA306"));
+  it("catches pre-selected controls", () => expect(codes(checkHtml(swap(STARTER, 'name="priority" data-kqa="priority" value="accuracy"', 'name="priority" data-kqa="priority" value="accuracy" checked')))).toContain("KQA320"));
+  it("catches a custom question nothing sets", () => {
+    const html = swap(STARTER, 'KQA.set("stars", value)', "void value");
+    expect(codes(checkHtml(html))).toContain("KQA317");
+  });
+  it("warns about unlabelled controls", () => expect(codes(checkHtml(swap(STARTER, '<label for="f-company">What is your company called?</label>', "What is your company called?")))).toContain("KQA308"));
+  it("checks control limits against the manifest", () => expect(codes(checkHtml(swap(STARTER, 'min="1" max="5000"', 'min="0" max="9"')))).toContain("KQA314"));
+  it("catches an unknown status element", () => expect(codes(checkHtml(swap(STARTER, 'data-kqa-status="goal"', 'data-kqa-status="goall"')))).toContain("KQA311"));
+});
+
+describe("sandbox", () => {
+  const withScript = (body: string) => swap(STARTER, "</body>", `<script>${body}</script></body>`);
+  it("blocks an external script", () => expect(codes(checkHtml(swap(STARTER, "</head>", '<script src="https://evil.example/x.js"></script></head>')))).toContain("KQA400"));
+  it("allows an allowlisted CDN script", () => expect(codes(checkHtml(swap(STARTER, "</head>", '<script src="https://cdnjs.cloudflare.com/ajax/libs/x/1.0.0/x.min.js"></script></head>')))).not.toContain("KQA400"));
+  it("blocks a relative script and stylesheet", () => {
+    const r = checkHtml(swap(STARTER, "</head>", '<script src="app.js"></script><link rel="stylesheet" href="style.css"></head>'));
+    expect(codes(r)).toEqual(expect.arrayContaining(["KQA400", "KQA401"]));
+  });
+  it("blocks a disallowed stylesheet host and @import", () => {
+    const r = checkHtml(swap(STARTER, "</head>", '<link rel="stylesheet" href="https://cdn.example/s.css"><style>@import url("https://cdn.example/t.css");</style></head>'));
+    expect(r.diagnostics.filter((d) => d.code === "KQA401")).toHaveLength(2);
+  });
+  it("flags network calls, storage, dialogs, navigation, eval", () => {
+    const r = checkHtml(withScript("fetch('/x'); localStorage.setItem('a','b'); confirm('sure?'); window.print(); location.href='/'; eval('1');"));
+    expect(codes(r)).toEqual(expect.arrayContaining(["KQA402", "KQA403", "KQA404", "KQA412", "KQA409", "KQA414"]));
+  });
+  it("ignores keywords inside comments and strings", () => {
+    const r = checkHtml(withScript("// fetch('/x')\nvar s = 'localStorage and confirm(1)'; /* eval('x') */"));
+    expect(codes(r)).not.toEqual(expect.arrayContaining(["KQA402"]));
+    expect(codes(r)).not.toContain("KQA403");
+    expect(codes(r)).not.toContain("KQA404");
+    expect(codes(r)).not.toContain("KQA414");
+  });
+  it("blocks forms that submit, meta refresh, base, iframes, file inputs", () => {
+    const html = swap(STARTER, "</main>", '<form action="/go" method="post"></form><iframe src="x"></iframe><input type="file"></main>').replace("</head>", '<meta http-equiv="refresh" content="5"><base href="/"></head>');
+    expect(codes(checkHtml(html))).toEqual(expect.arrayContaining(["KQA405", "KQA408", "KQA415", "KQA406", "KQA407"]));
+  });
+  it("flags http images and download links", () => {
+    const r = checkHtml(swap(STARTER, "</main>", '<img src="http://x.example/a.png" alt=""><a href="/x" download>x</a></main>'));
+    expect(codes(r)).toEqual(expect.arrayContaining(["KQA411", "KQA413"]));
+  });
+});
+
+describe("report shape", () => {
+  it("sorts errors first and gives line context", () => {
+    const r = checkHtml(swap(STARTER, 'data-kqa="priority" value="speed"', 'data-kqa="priority" value="fast"'));
+    expect(r.diagnostics[0].severity).toBe("error");
+    const d = find(r, "KQA303")!;
+    expect(d.location!.line).toBeGreaterThan(1);
+    expect(d.context).toMatch(/> +\d+ \|/);
+    expect(d.fix.length).toBeGreaterThan(10);
+  });
+});

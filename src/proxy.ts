@@ -1,0 +1,21 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySession } from "./lib/auth";
+
+/**
+ * Keeps the host area private. Pages redirect to the sign-in screen; APIs answer 401.
+ * Every admin route handler checks the session again, so this is a convenience layer, not the only lock.
+ */
+export function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const open = pathname === "/admin/login" || pathname === "/api/admin/login";
+  if (open) return NextResponse.next();
+  const ok = !!verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (ok) return NextResponse.next();
+  if (pathname.startsWith("/api/")) return NextResponse.json({ ok: false, error: "Sign in to continue." }, { status: 401 });
+  const url = req.nextUrl.clone();
+  url.pathname = "/admin/login";
+  url.search = pathname === "/admin" ? "" : `?next=${encodeURIComponent(pathname)}`;
+  return NextResponse.redirect(url);
+}
+
+export const config = { matcher: ["/admin/:path*", "/api/admin/:path*"] };

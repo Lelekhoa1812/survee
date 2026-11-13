@@ -1,0 +1,41 @@
+{
+  "name": "kqa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KQA: host-run interviews. Upload a self-contained HTML questionnaire, send each person a private link, keep every answer in MongoDB.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsx scripts/check.ts",
+    "docs": "tsx scripts/gen-docs.ts",
+    "e2e": "node scripts/e2e.mjs",
+    "shots": "node scripts/shots.mjs"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "marked": "^18.2.0",
+    "mongodb": "^7.9.0",
+    "next": "^16.4.6",
+    "parse5": "^8.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "jsdom": "^31.0.0",
+    "puppeteer-core": "^25.17.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

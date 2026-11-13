@@ -1,0 +1,28 @@
+import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { deleteParticipant, updateParticipant } from "@/lib/repo";
+
+type Ctx = { params: Promise<{ pid: string }> };
+
+export async function PATCH(req: Request, { params }: Ctx) {
+  const denied = await guardAdmin({ mutating: true });
+  if (denied) return denied;
+  const { pid } = await params;
+  const body = await readJson<{ name?: unknown; note?: unknown }>(req, 16 * 1024);
+  if (!body.ok) return body.res;
+  const patch: Parameters<typeof updateParticipant>[1] = {};
+  if (body.data.name !== undefined) {
+    const n = str(body.data.name, 120);
+    if (!n) return fail(400, "The name cannot be empty.");
+    patch.name = n;
+  }
+  if (body.data.note !== undefined) patch.note = str(body.data.note, 1000) ?? null;
+  const p = await updateParticipant(pid, patch);
+  return p ? json({ ok: true, person: p }) : fail(404, "Person not found.");
+}
+
+export async function DELETE(_req: Request, { params }: Ctx) {
+  const denied = await guardAdmin({ mutating: true });
+  if (denied) return denied;
+  const { pid } = await params;
+  return (await deleteParticipant(pid)) ? json({ ok: true }) : fail(404, "Person not found.");
+}

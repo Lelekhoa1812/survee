@@ -1,0 +1,1511 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SBC Investor Scouting Build Plan (internal)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script type="application/json" id="kqa-manifest">
+{
+  "format": "kqa/1",
+  "title": "SBC Investor Scouting Build Plan (internal)",
+  "description": "Internal build plan for the SBC investor scouting work. Record the answer to each open decision and a team note on each build item.",
+  "sections": [
+    {
+      "id": "summary",
+      "title": "Summary",
+      "description": "Overall comments on the plan."
+    },
+    {
+      "id": "open",
+      "title": "Open with SBC",
+      "description": "Decisions to settle with SBC, each with a place to record the answer and a note."
+    },
+    {
+      "id": "build",
+      "title": "Build list",
+      "description": "A team note against each build item, B1 to B21."
+    }
+  ],
+  "questions": [
+    {
+      "id": "summary-comments",
+      "type": "longtext",
+      "section": "summary",
+      "label": "Overall comments on this build plan",
+      "help": "Anything that changes the order of work, the handover or the decisions below."
+    },
+    {
+      "id": "d01-p-female-priority",
+      "type": "single",
+      "section": "open",
+      "label": "D1 · How should SBC's female-investor priority (P-Female) be handled?",
+      "help": "The platform never infers or scores gender. How SBC's female-investor priority is handled is SBC's decision. Do not learn from the marker until it is answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d02-wealth-thresholds",
+      "type": "single",
+      "section": "open",
+      "label": "D2 · How should the SGD 100k and SGD 2M wealth thresholds be handled?",
+      "help": "Only a stand-in (seniority and company size) is used now. The SGD 100k and 2M thresholds are not modelled until SBC answers.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d03-senior-scope",
+      "type": "single",
+      "section": "open",
+      "label": "D3 · Should senior employees (Director, VP, Head, President) be in scope for every persona?",
+      "help": "SBC moved 86% of the old bot's Negatives on that reason to a fit. AXION suggests yes.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d04-agreement-target",
+      "type": "single",
+      "section": "open",
+      "label": "D4 · What agreement target should the rating be measured against?",
+      "help": "The rating's agreement target, to be agreed with SBC. Needed for step 1.3 of the two-week path.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d05-rules-or-ai",
+      "type": "single",
+      "section": "open",
+      "label": "D5 · Should each persona be rated by Rules or by AI?",
+      "help": "Rules or AI per persona. AI Fast mode (Jev) is the AI default with LLM fallback. All starters ship as Rules.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d06-dripify-blacklist",
+      "type": "single",
+      "section": "open",
+      "label": "D6 · Should a Dripify blacklist be checked as a standing suppression?",
+      "help": "No Dripify code exists. A CSV of LinkedIn URLs or emails uploaded into Skip Team Links would work today.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d07-apollo-vs-dripify",
+      "type": "single",
+      "section": "open",
+      "label": "D7 · Should Apollo rows be checked against Dripify?",
+      "help": "Nobody reached on both. Structurally impossible for Apollo rows before reveal. Out unless SBC asks.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d08-dripify-file",
+      "type": "single",
+      "section": "open",
+      "label": "D8 · Should a file shaped for Dripify be produced?",
+      "help": "Out by an earlier lock, re-confirmed on 13 Nov: ask SBC.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d09-firmable-trial",
+      "type": "single",
+      "section": "open",
+      "label": "D9 · Should Firmable be trialled as an APAC data source?",
+      "help": "Firmable is absent from the code. A possible later test, if SBC asks.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d10-sales-nav-seats",
+      "type": "single",
+      "section": "open",
+      "label": "D10 · Which Sales Navigator seat or seats should the searches run through?",
+      "help": "Most Sales Navigator lists and team-link sit on Ricardo's seat. The tenant's connected account must hold a Sales Navigator seat.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d11-funds-projects",
+      "type": "single",
+      "section": "open",
+      "label": "D11 · Which funds and projects should the single guided form offer?",
+      "help": "The guided form (B5) needs the list of funds and projects.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d12-sales-nav-countries",
+      "type": "single",
+      "section": "open",
+      "label": "D12 · Should Sales Navigator searches stay Singapore-only?",
+      "help": "Starters search five countries on both tools. SBC's Sales Navigator personas are Singapore only.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d13-p1-p2-marks",
+      "type": "single",
+      "section": "open",
+      "label": "D13 · How should SBC's P1 and P2 marks be read for the agreement report?",
+      "help": "This sets how SBC's P1 and P2 marks are read, which the agreement report (B2) depends on.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d14-edge-mark",
+      "type": "single",
+      "section": "open",
+      "label": "D14 · How should the Edge label be treated, given SBC never marks Edge?",
+      "help": "SBC's marks never include Edge (see B1). Record whether the Edge label is kept, and why.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d15-na-mark",
+      "type": "single",
+      "section": "open",
+      "label": "D15 · How should the NA label be treated for the list marked NA throughout?",
+      "help": "One list (1,900 rows) is marked NA throughout, including 1,556 the bot rated P2. Do not read it as a rating.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d16-positive-sampling",
+      "type": "single",
+      "section": "open",
+      "label": "D16 · Should a sample of Positives be checked by hand for the agreement report?",
+      "help": "Unmarked rows are 98% bot Positives, so SBC's marks say little about Positives that are wrong. Treat marked Positives as an unchecked sample, not as accuracy. The sampling build item is B21.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d17-managers",
+      "type": "single",
+      "section": "open",
+      "label": "D17 · How should managers be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d18-industry-roles",
+      "type": "single",
+      "section": "open",
+      "label": "D18 · How should people in industry roles be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d19-non-profits",
+      "type": "single",
+      "section": "open",
+      "label": "D19 · How should people from non-profits be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d20-recruiters",
+      "type": "single",
+      "section": "open",
+      "label": "D20 · How should recruiters be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d21-one-person-firms",
+      "type": "single",
+      "section": "open",
+      "label": "D21 · How should people running one-person firms be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d22-advisers",
+      "type": "single",
+      "section": "open",
+      "label": "D22 · How should advisers be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d23-job-seekers",
+      "type": "single",
+      "section": "open",
+      "label": "D23 · How should job seekers be rated?",
+      "help": "A grey area from the rated lists. The keyword groups come from the bot's reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d24-persona-founder-ceo",
+      "type": "single",
+      "section": "open",
+      "label": "D24 · Confirm or change the starting rule for Founder / Owner / CEO",
+      "help": "Drawn from 9 rated lists with 7,114 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d25-persona-angel",
+      "type": "single",
+      "section": "open",
+      "label": "D25 · Confirm or change the starting rule for Angel Investors",
+      "help": "Drawn from 2 rated lists with 496 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d26-persona-partner",
+      "type": "single",
+      "section": "open",
+      "label": "D26 · Confirm or change the starting rule for Partner",
+      "help": "Drawn from 7 rated lists with 10,164 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d27-persona-eir",
+      "type": "single",
+      "section": "open",
+      "label": "D27 · Confirm or change the starting rule for Entrepreneur / Founder / Executive in Residence",
+      "help": "Drawn from 5 rated lists with 4,890 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d28-persona-director-vp",
+      "type": "single",
+      "section": "open",
+      "label": "D28 · Confirm or change the starting rule for Director / VP",
+      "help": "Drawn from 3 rated lists with 4,427 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d29-persona-strategic-board",
+      "type": "single",
+      "section": "open",
+      "label": "D29 · Confirm or change the starting rule for Strategic / Board / Senior Advisor",
+      "help": "Drawn from 3 rated lists with 3,767 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d30-persona-investment-director",
+      "type": "single",
+      "section": "open",
+      "label": "D30 · Confirm or change the starting rule for Investment Director / Head of Investments / Portfolio Manager",
+      "help": "Drawn from 1 rated list with 1,335 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d31-persona-cfo-cto",
+      "type": "single",
+      "section": "open",
+      "label": "D31 · Confirm or change the starting rule for CFO / Finance Director / CTO",
+      "help": "Drawn from 1 rated list with 1,197 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "d32-persona-exited-founder",
+      "type": "single",
+      "section": "open",
+      "label": "D32 · Confirm or change the starting rule for Exited Founder",
+      "help": "Drawn from 1 rated list with 790 people in SBC's examples. Confirm or change it.",
+      "options": [
+        {
+          "value": "agreed",
+          "label": "Agreed with SBC"
+        },
+        {
+          "value": "changed",
+          "label": "SBC chose a different answer (see note)"
+        },
+        {
+          "value": "open",
+          "label": "Still open with SBC"
+        }
+      ],
+      "note": true
+    },
+    {
+      "id": "b01-importer-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B1 · Bulk labelled-list importer: team note",
+      "help": "Size L. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b02-agreement-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B2 · Per-label agreement report: team note",
+      "help": "Size M. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b03-suppression-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B3 · Second suppression pass after reveal: team note",
+      "help": "Size S–M. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b04-approval-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B4 · Approval gate before credits: team note",
+      "help": "Size M. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b05-form-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B5 · Single guided form: team note",
+      "help": "Size L. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b06-years-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B6 · Years of experience fix: team note",
+      "help": "Size S. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b07-gender-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B7 · Gender guard: team note",
+      "help": "Size S. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b08-industry-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B8 · Apollo industry names: team note",
+      "help": "Size S. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b09-team-link-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B9 · Live team-link pull into the template: team note",
+      "help": "Size M. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b10-saved-list-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B10 · SBC saved-list suppression: team note",
+      "help": "Size S. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b11-template-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B11 · Template visibility and refresh: team note",
+      "help": "Size S. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b12-seat-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B12 · Sales Navigator seat for SBC: team note",
+      "help": "Size M. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b13-proofs-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B13 · Live proofs: team note",
+      "help": "Size M. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b14-suggestions-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B14 · Rules-mode suggestion UI: team note",
+      "help": "Size S. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b15-measures-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B15 · Weekly measures report: team note",
+      "help": "Size M. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b16-email-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B16 · Verified-email filter: team note",
+      "help": "Size S. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b17-privacy-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B17 · Privacy wording: team note",
+      "help": "Size S. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b18-e2e-test-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B18 · End-to-end persona-search test: team note",
+      "help": "Size M. Blocks handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b19-doc-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B19 · Doc corrections: team note",
+      "help": "Size S. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b20-retry-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B20 · Retry and validate failed ratings: team note",
+      "help": "Size S. Does not block handover. Add an owner, findings or the decision needed."
+    },
+    {
+      "id": "b21-sampling-note",
+      "type": "longtext",
+      "section": "build",
+      "label": "B21 · Sampled check of P1 and P2 for the agreement report: team note",
+      "help": "Size M. Does not block handover. Add an owner, findings or the decision needed."
+    }
+  ]
+}
+</script>
+<style>
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --surface-2: #f8fafc; --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084;
+  --line: #e2e7ee; --line-2: #cdd6e0; --field: #8794a5; --brand: #0b2a42; --accent: #087960; --accent-soft: #e5f3ee; --accent-ink: #ffffff;
+  --focus: #1f6feb; --danger: #b4261c; --r: 10px; --r-sm: 6px; --shadow: 0 1px 2px rgba(14, 27, 42, .05);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1622; --surface: #101f2e; --surface-2: #142536; --ink: #e8eef5; --ink-2: #b9c6d4; --muted: #8fa1b3;
+    --line: #213548; --line-2: #2f465c; --field: #5f7790; --brand: #07121d; --accent: #2bb58f; --accent-soft: #123428; --accent-ink: #04130e;
+    --focus: #6aa3ff; --danger: #f59a92; --shadow: none; color-scheme: dark;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; line-height: 1.25; font-weight: 600; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.kq-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* page: a contents rail on wide screens, one reading column everywhere */
+.kq-shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+.kq-rail { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--brand); color: #cfdbe6; padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
+.kq-rail strong { color: #fff; font-weight: 600; font-size: .95rem; padding: 0 8px 12px; }
+.kq-rail a { color: inherit; text-decoration: none; font-size: .9rem; padding: 7px 8px; border-radius: 6px; }
+.kq-rail a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.kq-page { width: 100%; max-width: 860px; margin: 0 auto; padding: 44px max(32px, env(safe-area-inset-right)) 96px max(32px, env(safe-area-inset-left)); }
+.kq-kicker { font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.kq-title h1 { font-size: 1.9rem; letter-spacing: -.01em; margin-top: 6px; }
+.kq-lede { color: var(--ink-2); max-width: 64ch; margin-top: 12px; font-size: 1.02rem; }
+.kq-locked-note { display: none; margin-top: 20px; padding: 12px 16px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--r); color: var(--ink); font-size: .92rem; }
+html[data-kqa-state="locked"] .kq-locked-note { display: block; }
+
+/* sections and question cards */
+.kq-section { padding-top: 52px; scroll-margin-top: 12px; }
+.kq-section-head { display: grid; gap: 6px; margin-bottom: 18px; }
+.kq-section-head h2 { font-size: 1.35rem; }
+.kq-section-head p { color: var(--ink-2); max-width: 64ch; }
+.kq-stack { display: grid; gap: 14px; }
+.kq-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 12px; }
+.kq-q-head { display: flex; align-items: baseline; gap: 10px; }
+.kq-q-head h3 { font-size: 1rem; flex: 1; }
+.kq-n { font: 500 .76rem var(--mono); color: var(--muted); }
+.kq-help { color: var(--ink-2); font-size: .9rem; max-width: 68ch; }
+.kq-tick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-2); flex: none; align-self: center; }
+.kq-tick[data-state="answered"] { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; border-color: var(--accent); }
+
+/* choices */
+.kq-options { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; min-width: 0; }
+.kq-opt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-size: .92rem; transition: border-color .15s, background .15s; }
+.kq-opt:hover { border-color: var(--field); }
+.kq-opt input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.kq-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.kq-opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.kq-opt input:focus-visible { outline: none; }
+
+/* inputs */
+.kq-field { display: grid; gap: 6px; }
+input[type="text"], input[type="number"], input[type="date"], input[type="email"], select, textarea { width: 100%; font: inherit; font-size: .95rem; color: var(--ink); background: var(--surface); border: 1px solid var(--field); border-radius: 8px; padding: 9px 11px; }
+textarea { resize: vertical; min-height: 84px; }
+::placeholder { color: var(--muted); opacity: 1; }
+input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-allowed; }
+
+/* scales: numbered radio buttons, or an input[type=range] */
+.kq-scale { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; max-width: 420px; }
+.kq-scale label { display: grid; place-items: center; height: 42px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-weight: 500; font-variant-numeric: tabular-nums; }
+.kq-scale label:hover { border-color: var(--field); }
+.kq-scale input { position: absolute; opacity: 0; pointer-events: none; }
+.kq-scale label:has(input:checked) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.kq-scale label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.kq-scale-ends { display: flex; justify-content: space-between; max-width: 420px; color: var(--muted); font-size: .8rem; }
+
+/* notes */
+.kq-note summary { list-style: none; cursor: pointer; display: inline-block; font-size: .84rem; color: var(--muted); border-radius: 4px; }
+.kq-note summary::-webkit-details-marker { display: none; }
+.kq-note summary:hover { color: var(--ink); }
+.kq-note[open] summary { margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .kq-shell { grid-template-columns: minmax(0, 1fr); }
+  .kq-rail { display: none; }
+  .kq-page { padding: 28px max(16px, env(safe-area-inset-right)) 72px max(16px, env(safe-area-inset-left)); }
+  .kq-q { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+</style>
+<style>
+/* Layout: a fixed left contents rail beside a single reading column. Navy is used only for the rail and primary buttons;
+   everything else is neutral, with colour reserved for phase and status. Works without JavaScript. */
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --surface-2: #f8fafc; --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084;
+  --line: #e2e7ee; --line-2: #cdd6e0; --field: #8794a5;
+  --brand: #0b2a42; --brand-ink: #ffffff; --rail-ink: #cfdbe6; --rail-muted: #90a7bb; --rail-line: rgba(255,255,255,.12);
+  --accent: #087960; --accent-ink: #ffffff; --accent-soft: #e5f3ee; --focus: #1f6feb;
+  --p1: #087960; --p1-bg: #e5f3ee; --p2: #2350c8; --p2-bg: #e8eefc; --tbc: #8f5600; --tbc-bg: #fdf0d9; --no: #526071; --no-bg: #eceff3;
+  --built: #087960; --built-bg: #e5f3ee; --partial: #8f5600; --partial-bg: #fdf0d9; --unp: #6a3fc4; --unp-bg: #f0eafc; --gap: #b4261c; --gap-bg: #fdecea;
+  --l-p1: #087960; --l-p1-bg: #e5f3ee; --l-p2: #0b6f82; --l-p2-bg: #e1f3f6; --l-edge: #8f5600; --l-edge-bg: #fdf0d9;
+  --l-neg: #b4261c; --l-neg-bg: #fdecea; --l-na: #526071; --l-na-bg: #eceff3;
+  --shadow: 0 1px 2px rgba(14,27,42,.05);
+  --r: 10px; --r-sm: 6px; --side: 272px;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1622; --surface: #12212f; --surface-2: #0f1c29; --ink: #eef3f8; --ink-2: #c3cfdb; --muted: #94a6b8;
+  --line: #213548; --line-2: #2f465c; --field: #5f7790; --brand: #07121d; --accent: #2bb58f; --accent-ink: #04130e; --accent-soft: #123428; --focus: #6aa3ff;
+  --p1: #4fd0a7; --p1-bg: #123428; --p2: #8fabff; --p2-bg: #1b2a52; --tbc: #f0b45a; --tbc-bg: #3a2c12; --no: #b4c2d0; --no-bg: #1d2f40;
+  --built: #4fd0a7; --built-bg: #123428; --partial: #f0b45a; --partial-bg: #3a2c12; --unp: #b79cf5; --unp-bg: #2b2250; --gap: #f59a92; --gap-bg: #40201f;
+  --l-p1: #4fd0a7; --l-p1-bg: #123428; --l-p2: #6fd3e6; --l-p2-bg: #11333b; --l-edge: #f0b45a; --l-edge-bg: #3a2c12;
+  --l-neg: #f59a92; --l-neg-bg: #40201f; --l-na: #b4c2d0; --l-na-bg: #1d2f40; --shadow: none; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0b1622; --surface: #12212f; --surface-2: #0f1c29; --ink: #eef3f8; --ink-2: #c3cfdb; --muted: #94a6b8;
+  --line: #213548; --line-2: #2f465c; --field: #5f7790; --brand: #07121d; --accent: #2bb58f; --accent-ink: #04130e; --accent-soft: #123428; --focus: #6aa3ff;
+  --p1: #4fd0a7; --p1-bg: #123428; --p2: #8fabff; --p2-bg: #1b2a52; --tbc: #f0b45a; --tbc-bg: #3a2c12; --no: #b4c2d0; --no-bg: #1d2f40;
+  --built: #4fd0a7; --built-bg: #123428; --partial: #f0b45a; --partial-bg: #3a2c12; --unp: #b79cf5; --unp-bg: #2b2250; --gap: #f59a92; --gap-bg: #40201f;
+  --l-p1: #4fd0a7; --l-p1-bg: #123428; --l-p2: #6fd3e6; --l-p2-bg: #11333b; --l-edge: #f0b45a; --l-edge-bg: #3a2c12;
+  --l-neg: #f59a92; --l-neg-bg: #40201f; --l-na: #b4c2d0; --l-na-bg: #1d2f40; --shadow: none; color-scheme: dark }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { margin: 0; line-height: 1.25; text-wrap: balance; font-weight: 600; letter-spacing: -0.005em; }
+p { margin: 0; }
+a { color: var(--accent); }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: .82em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.sr { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
+.skip { position: absolute; left: 12px; top: -48px; background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 6px; z-index: 50; box-shadow: var(--shadow); }
+.skip:focus { top: 12px; }
+.js-only { display: none !important; }
+.js .js-only { display: revert !important; }
+.js .js-only.flex { display: flex !important; }
+.js .sliders.js-only { display: grid !important; }
+.js .nojs-only { display: none !important; }
+.js .js-only[hidden] { display: none !important; }
+
+/* ---------- Shell ---------- */
+.shell { display: grid; grid-template-columns: var(--side) minmax(0, 1fr); min-height: 100vh; }
+.rail { border-right: 1px solid var(--rail-line); position: sticky; top: 0; align-self: start; height: 100vh; height: 100dvh; overflow-y: auto; background: var(--brand); color: var(--rail-ink); padding: 26px 16px 20px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; }
+.brandrow { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.mark { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; flex: none; }
+.mark::after { content: ""; width: 8px; height: 8px; border: 2px solid var(--accent-ink); border-radius: 2px; transform: rotate(45deg); }
+.brand { font-weight: 600; letter-spacing: .16em; font-size: .74rem; color: #fff; }
+.docname { padding: 0 8px; color: #fff; font-weight: 500; font-size: .92rem; line-height: 1.35; }
+.docname small { display: block; color: var(--rail-muted); font-weight: 400; font-size: .78rem; margin-top: 2px; }
+.toc { display: grid; gap: 2px; }
+.toc .th { margin: 12px 8px 4px; font: 500 .66rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--rail-muted); }
+.toc a { display: flex; align-items: baseline; gap: 10px; padding: 7px 8px; border-radius: 6px; color: var(--rail-ink); text-decoration: none; font-size: .875rem; transition: background .15s, color .15s; }
+.toc a .n { font: 400 .72rem var(--mono); color: var(--rail-muted); width: 1.5em; flex: none; }
+.toc a:hover { background: rgba(255,255,255,.07); color: #fff; }
+.toc a[aria-current="true"] { background: rgba(255,255,255,.12); color: #fff; }
+.toc a[aria-current="true"] .n { color: #fff; }
+.toc a:focus-visible { outline-color: #fff; }
+.railcard { margin-top: auto; background: rgba(255,255,255,.06); border: 1px solid var(--rail-line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+.railcard b { color: #fff; font-weight: 500; font-size: .84rem; }
+.railcard .bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.16); overflow: hidden; }
+.railcard .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .3s ease; }
+.railcard a { color: #fff; font-size: .8rem; }
+.legend { display: grid; gap: 6px; font-size: .76rem; color: var(--rail-muted); padding: 0 8px; }
+.legend div { display: flex; gap: 8px; align-items: center; }
+
+.mbar { display: none; }
+.mprog { display: none; }
+.content { min-width: 0; }
+.page { max-width: 920px; margin: 0 auto; padding-block: 44px 96px; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+
+/* ---------- Document header ---------- */
+.kicker { font: 500 .72rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.dochead { display: grid; gap: 14px; padding-bottom: 32px; }
+.dochead h1 { font-size: clamp(1.7rem, 3.4vw, 2.3rem); letter-spacing: -0.018em; }
+.lede { color: var(--ink-2); font-size: 1.04rem; max-width: 68ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 4px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); font-size: .86rem; color: var(--muted); }
+.meta div { display: flex; gap: 8px; }
+.meta dt { font-weight: 500; color: var(--ink-2); }
+.meta dd { margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: 8px; }
+.stats > div { background: var(--surface); padding: 14px 18px; display: grid; gap: 2px; align-content: start; }
+.stats b { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.stats span { font-size: .82rem; color: var(--muted); }
+
+/* ---------- Sections ---------- */
+.sec { padding-top: 56px; scroll-margin-top: 16px; }
+.sec + .sec { margin-top: 56px; border-top: 1px solid var(--line); }
+.sec[hidden] { display: none; }
+.sec-head { display: grid; gap: 8px; margin-bottom: 20px; }
+.sec-head h2 { font-size: 1.55rem; letter-spacing: -0.012em; }
+.sec-head .lede { font-size: .98rem; }
+.stack { display: grid; gap: 20px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
+.pad { padding: 20px; }
+
+/* ---------- Badges ---------- */
+.badge { display: inline-flex; align-items: center; gap: 6px; font: 500 .72rem/1 var(--sans); padding: 5px 9px; border-radius: 999px; background: var(--no-bg); color: var(--no); white-space: nowrap; }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.p1 { background: var(--p1-bg); color: var(--p1); }
+.badge.p2 { background: var(--p2-bg); color: var(--p2); }
+.badge.tbc { background: var(--tbc-bg); color: var(--tbc); }
+.badge.no { background: var(--no-bg); color: var(--no); }
+.badge.built { background: var(--built-bg); color: var(--built); }
+.badge.partial { background: var(--partial-bg); color: var(--partial); }
+.badge.unproven { background: var(--unp-bg); color: var(--unp); }
+.badge.gap { background: var(--gap-bg); color: var(--gap); }
+.badge.none { background: var(--no-bg); color: var(--no); }
+.lab { display: inline-block; font: 500 .74rem/1 var(--mono); padding: 5px 10px; border-radius: 999px; white-space: nowrap; }
+.lab.P1 { color: var(--l-p1); background: var(--l-p1-bg); } .lab.P2 { color: var(--l-p2); background: var(--l-p2-bg); }
+.lab.Edge { color: var(--l-edge); background: var(--l-edge-bg); } .lab.Negative { color: var(--l-neg); background: var(--l-neg-bg); }
+.lab.NA { color: var(--l-na); background: var(--l-na-bg); }
+
+/* ---------- Feature list ---------- */
+.feat { list-style: none; margin: 0; padding: 0; }
+.f { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 20px; padding: 16px 20px; border-top: 1px solid var(--line); }
+.f:first-child { border-top: 0; }
+.f h3 { font-size: .95rem; }
+.f p { color: var(--ink-2); font-size: .9rem; margin-top: 2px; max-width: 66ch; }
+.f-meta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; }
+.fn { grid-column: 1 / -1; margin-top: 6px; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: .82rem; color: var(--ink-2); line-height: 1.55; }
+.fn > span { display: block; font: 500 .66rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.cm { grid-column: 1 / -1; }
+.cm summary { list-style: none; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-size: .8rem; color: var(--muted); padding: 2px 0; border-radius: 4px; }
+.cm summary::-webkit-details-marker { display: none; }
+.cm summary:hover { color: var(--accent); }
+.cm summary svg { width: 14px; height: 14px; }
+.cm.has summary { color: var(--tbc); font-weight: 500; }
+.cm textarea { margin-top: 8px; }
+textarea, input[type="text"] { width: 100%; font-size: .9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--field); border-radius: 8px; padding: 9px 11px; resize: vertical; }
+::placeholder { color: var(--muted); opacity: 1; }
+textarea:focus, input[type="text"]:focus { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
+
+/* ---------- Overview ---------- */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.flow li { position: relative; padding-right: 14px; }
+.flow li:not(:last-child)::after { content: ""; position: absolute; top: 14px; left: 40px; right: 10px; height: 2px; background: var(--line-2); }
+.flow a { display: grid; gap: 4px; text-decoration: none; color: inherit; padding: 2px 0; border-radius: 8px; }
+.flow .dot { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; font: 500 .78rem var(--mono); display: grid; place-items: center; margin-bottom: 8px; position: relative; z-index: 1; }
+:root[data-theme="dark"] .flow .dot { background: var(--accent); color: var(--accent-ink); }
+.flow h3 { font-size: .98rem; }
+.flow p { font-size: .82rem; color: var(--muted); }
+.flow .bs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.flow a:hover h3 { color: var(--accent); }
+.phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.phase { padding: 20px; display: grid; gap: 12px; align-content: start; }
+.phase h3 { font-size: 1.02rem; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: .9rem; color: var(--ink-2); }
+.checks li { position: relative; padding-left: 24px; }
+.checks li::before { content: ""; position: absolute; left: 3px; top: .42em; width: 11px; height: 6px; border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+.phase.l2 .checks li::before { border-color: var(--p2); }
+
+/* ---------- Personas ---------- */
+.pf { display: grid; gap: 16px; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--line); padding: 3px; border-radius: 9px; gap: 2px; justify-self: start; }
+.seg label { padding: 6px 13px; border-radius: 7px; font-size: .84rem; cursor: pointer; color: var(--ink-2); user-select: none; transition: background .15s; }
+.seg label:hover { color: var(--ink); }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; align-items: stretch; grid-auto-flow: dense; }
+.persona { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); transition: border-color .15s; }
+.persona:hover { border-color: var(--line-2); }
+.persona[open] { grid-column: 1 / -1; border-color: var(--line-2); }
+.persona summary { list-style: none; cursor: pointer; padding: 14px 16px; display: grid; gap: 6px; position: relative; border-radius: var(--r); }
+.persona summary::-webkit-details-marker { display: none; }
+.persona summary::after { content: ""; position: absolute; right: 16px; top: 18px; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .2s; }
+.persona[open] summary::after { transform: rotate(-135deg); top: 21px; }
+.persona h3 { font-size: .95rem; padding-right: 22px; }
+.persona .one { font-size: .84rem; color: var(--muted); }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.tag { font-size: .72rem; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); }
+.tag.src { font-family: var(--mono); }
+.pd { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 24px; padding: 4px 16px 16px; border-top: 1px solid var(--line); margin-top: 0; padding-top: 14px; }
+.pd dl { margin: 0; display: grid; gap: 2px; align-content: start; }
+.pd dt { font: 500 .66rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.pd dd { margin: 0; font-size: .86rem; }
+
+/* ---------- Rating demo ---------- */
+.rater { padding: 20px; display: grid; gap: 18px; }
+.legendrow { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .82rem; color: var(--muted); }
+.legendrow span { display: inline-flex; gap: 8px; align-items: center; }
+.bands { display: flex; height: 40px; border-radius: 8px; overflow: hidden; font: 500 .72rem var(--mono); }
+.bands div { display: grid; place-items: center; min-width: 0; overflow: hidden; white-space: nowrap; flex-basis: 0; transition: flex-grow .25s ease; }
+.bands .b-neg { background: var(--l-neg-bg); color: var(--l-neg); } .bands .b-edge { background: var(--l-edge-bg); color: var(--l-edge); }
+.bands .b-p2 { background: var(--l-p2-bg); color: var(--l-p2); } .bands .b-p1 { background: var(--l-p1-bg); color: var(--l-p1); }
+.ticks { position: relative; height: 16px; margin-top: 6px; font: 400 .7rem var(--mono); color: var(--muted); }
+.ticks span { position: absolute; transform: translateX(-50%); transition: left .25s ease; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.sliders label { display: grid; gap: 6px; font-size: .84rem; font-weight: 500; }
+.sliders .lt { display: flex; gap: 8px; align-items: center; }
+.sliders output { font: 500 .78rem var(--mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; }
+input[type="range"] { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: var(--line-2); margin: 8px 0; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--accent); cursor: grab; }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--accent); cursor: grab; }
+.sample { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.sample > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.sample b { font-size: .86rem; font-weight: 500; }
+.sample small { color: var(--muted); font-size: .78rem; }
+.sample .lab { grid-row: 1 / span 2; grid-column: 2; }
+.cap { font-size: .8rem; color: var(--muted); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: .8rem; text-decoration: underline; }
+
+/* ---------- Path ---------- */
+.lane { display: grid; gap: 14px; }
+.lane + .lane { margin-top: 32px; }
+.lane-h { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.lane-h h3 { font-size: 1.1rem; } .lane-h span.sub { color: var(--muted); font-size: .88rem; }
+.steps { list-style: none; margin: 0; padding: 0; }
+.step { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 0 16px; position: relative; padding-bottom: 20px; }
+.step:last-child { padding-bottom: 0; }
+.step:not(:last-child)::before { content: ""; position: absolute; left: 23px; top: 32px; bottom: 4px; width: 2px; background: var(--line); }
+.mk { width: 48px; height: 28px; border-radius: 14px; background: var(--p1-bg); color: var(--p1); font: 600 .76rem var(--mono); display: grid; place-items: center; }
+.l2 .mk { background: var(--p2-bg); color: var(--p2); }
+.step h3 { font-size: .96rem; padding-top: 3px; }
+.step p { color: var(--ink-2); font-size: .9rem; margin-top: 2px; max-width: 64ch; }
+.done { margin-top: 10px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: .86rem; color: var(--ink-2); max-width: 64ch; }
+.done b { display: block; font: 500 .66rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.l2 .done b { color: var(--p2); }
+.measures { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.m { border-top: 2px solid var(--ink); padding-top: 12px; display: grid; gap: 4px; align-content: start; }
+.m b { font-size: .95rem; font-weight: 600; } .m span { font-size: .86rem; color: var(--ink-2); } .m .now { font: 400 .76rem var(--mono); color: var(--muted); }
+
+/* ---------- Boxes (lists in columns) ---------- */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.box h3 { font-size: .95rem; }
+.box p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+table.ev th.num, table.ev td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.ev .dim { color: var(--muted); font-weight: 400; }
+table.ev tr.tot td { background: var(--surface-2); font-weight: 600; border-top: 1px solid var(--line-2); }
+table.ev { min-width: 600px; }
+table.ev th, table.ev td { white-space: normal; }
+table.ev th[scope="row"] { font-weight: 500; text-align: left; min-width: 180px; background: transparent; font: 500 .88rem/inherit var(--sans); line-height: inherit; letter-spacing: 0; text-transform: none; color: var(--ink); }
+table.ev.sm th, table.ev.sm td { padding-left: 10px; padding-right: 10px; }
+table.ev.sm th[scope="row"] { min-width: 150px; }
+table.ev td, table.ev th[scope="row"] { background: var(--surface); }
+table.ev tr.tot th[scope="row"] { background: var(--surface-2); font-weight: 600; }
+.twrap:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.dgroup { margin: 14px 0 -2px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 2px; }
+.dgroup:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.dgroup .gk { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.dgroup h3 { font-size: 1.1rem; }
+.dgroup p { margin: 0; color: var(--muted); font-size: .88rem; max-width: 68ch; }
+.dec .rule { margin: 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 6px 6px 0; font-size: .9rem; color: var(--ink); max-width: 68ch; }
+.dec .rule b { display: block; font: 500 .66rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.dec.compact .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.dec.compact .opt { flex: 1 1 220px; }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 6px; }
+.jump a { font-size: .82rem; color: var(--ink-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 12px; background: var(--surface); text-decoration: none; }
+.jump a:hover { border-color: var(--field); color: var(--ink); }
+
+.box ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; font-size: .9rem; color: var(--ink-2); }
+.box.wide { grid-column: 1 / -1; }
+
+/* ---------- Decisions ---------- */
+.decisions { display: grid; gap: 14px; }
+.dec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 12px; }
+.dec:has(input:checked) { border-color: var(--accent); }
+.dh { display: flex; gap: 10px; align-items: baseline; }
+.dn { font: 500 .76rem var(--mono); color: var(--muted); }
+.dh h3, .dh h4 { font-size: 1rem; flex: 1; }
+.ans { display: none; font: 500 .7rem var(--sans); color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px; }
+.dec:has(input:checked) .ans, .dec.answered .ans { display: inline-block; }
+.dec .ctx { color: var(--ink-2); font-size: .9rem; max-width: 68ch; }
+.opts { display: grid; gap: 6px; }
+.opt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-size: .9rem; transition: border-color .15s, background .15s; }
+.opt:hover { border-color: var(--field); }
+.opt input:focus-visible { outline: none; }
+.opt input { margin: 3px 0 0; accent-color: var(--accent); flex: none; width: 16px; height: 16px; }
+.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.opt .sug { margin-left: 8px; font: 500 .66rem var(--mono); letter-spacing: .04em; color: var(--accent); }
+.note summary { list-style: none; cursor: pointer; font-size: .82rem; color: var(--muted); display: inline-block; }
+.note summary::-webkit-details-marker { display: none; }
+.note summary:hover { color: var(--accent); }
+.note textarea { margin-top: 8px; min-height: 3em; }
+.answers { padding: 20px; display: grid; gap: 14px; }
+.answers .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.answers .row label { display: grid; gap: 4px; font-size: .82rem; color: var(--muted); flex: 1 1 220px; }
+.btn { cursor: pointer; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 8px; padding: 9px 16px; font-size: .88rem; font-weight: 500; transition: background .15s, border-color .15s; }
+.btn:hover { background: #12466b; border-color: #12466b; }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line-2); }
+.btn.ghost:hover { border-color: var(--accent); background: var(--surface); }
+:root[data-theme="dark"] .btn:not(.ghost) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn:not(.ghost) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); } }
+pre.summary { margin: 0; white-space: pre-wrap; word-break: break-word; font: 400 .78rem/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; max-height: 360px; overflow: auto; }
+.warnnote { display: none; color: var(--tbc); font-size: .84rem; font-weight: 500; }
+.toast { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); background: var(--brand); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: .86rem; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; z-index: 60; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Internal-only ---------- */
+.ff { display: grid; }
+.fbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: 10px 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.fbar .grp { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); }
+.fbar #count { margin-left: auto; font: 400 .76rem var(--mono); color: var(--muted); }
+.twrap { overflow-x: auto; }
+table.t { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 640px; }
+table.t th, table.t td { text-align: left; vertical-align: top; padding: 11px 16px; border-top: 1px solid var(--line); }
+table.t th { border-top: 0; font: 500 .68rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+table.t td:first-child { font-weight: 500; }
+table.t td.mono, table.t td.sz { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
+table.t td.note { color: var(--ink-2); }
+.yes { color: var(--gap); font-weight: 600; } .no2 { color: var(--muted); }
+.stats5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 900px) { .stats, .stats5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats > div:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+.hlegend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: .84rem; color: var(--muted); }
+.hlegend span { display: inline-flex; gap: 8px; align-items: center; }
+.empty { display: none; color: var(--muted); padding: 24px 0; text-align: center; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1000px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: none; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 40; background: var(--brand); }
+  .mbar { display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--brand); color: #fff; }
+  .mbar summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); }
+  .mbar summary::-webkit-details-marker { display: none; }
+  .mbar .t { flex: 1; font-size: .86rem; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mbar .menu { font-size: .8rem; border: 1px solid var(--rail-line); border-radius: 6px; padding: 4px 10px; }
+  .mbar details[open] .menu { background: rgba(255,255,255,.12); }
+  .mbar nav { max-height: calc(100vh - 120px); overflow: auto; padding: 4px 12px 16px; border-top: 1px solid var(--rail-line); }
+  .page { padding-block: 28px 80px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  .fbar { position: static; }
+  .sec, .dgroup { scroll-margin-top: 66px; }
+  .mprog { display: flex; justify-content: space-between; gap: 12px; padding: 7px max(16px, env(safe-area-inset-right, 0px)) 9px max(16px, env(safe-area-inset-left, 0px)); font: 500 .76rem var(--mono); color: #fff; border-top: 1px solid var(--rail-line); text-decoration: none; }
+  .js .mprog.js-only { display: flex !important; }
+  .mprog span:last-child { color: var(--rail-ink); }
+  .mbar details[open] .menu { font-size: 0; }
+  .mbar details[open] .menu::after { content: "Close"; font-size: .8rem; }
+}
+@media (max-width: 720px) {
+  .flow { grid-template-columns: 1fr; gap: 14px; }
+  .flow li { padding: 0 0 0 44px; }
+  .flow li:not(:last-child)::after { top: 36px; bottom: -14px; left: 13px; right: auto; width: 2px; height: auto; }
+  .flow .dot { position: absolute; left: 0; top: 0; margin: 0; }
+  .f { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
+  .f-meta { justify-content: flex-start; }
+  .sec { padding-top: 44px; } .sec + .sec { margin-top: 44px; }
+}
+@media (max-width: 480px) { .stats b { font-size: 1.25rem; } .page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+
+/* ---------- Print ---------- */
+@page { size: A4 portrait; margin: 14mm 12mm; }
+@media print {
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] { color-scheme: light;
+    --bg: #fff; --surface: #fff; --surface-2: #f6f8fa; --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084; --line: #dfe4ea; --line-2: #cdd6e0; --field: #8794a5;
+    --accent: #087960; --accent-soft: #e5f3ee;
+    --p1: #087960; --p1-bg: #e5f3ee; --p2: #2350c8; --p2-bg: #e8eefc; --tbc: #8f5600; --tbc-bg: #fdf0d9; --no: #526071; --no-bg: #eceff3;
+    --built: #087960; --built-bg: #e5f3ee; --partial: #8f5600; --partial-bg: #fdf0d9; --unp: #6a3fc4; --unp-bg: #f0eafc; --gap: #b4261c; --gap-bg: #fdecea;
+    --l-p1: #087960; --l-p1-bg: #e5f3ee; --l-p2: #0b6f82; --l-p2-bg: #e1f3f6; --l-edge: #8f5600; --l-edge-bg: #fdf0d9;
+    --l-neg: #b4261c; --l-neg-bg: #fdecea; --l-na: #526071; --l-na-bg: #eceff3; }
+  pre.summary { max-height: none !important; overflow: visible !important; }
+  .js .js-only[hidden], .clear { display: none !important; }
+  :root, body { background: #fff !important; --bg: #fff; --surface: #fff; --surface-2: #f6f8fa; --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084; --line: #dfe4ea; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; transition: none !important; }
+  .rail, .mbar, .railcard, .js-only, .skip, .toast, .fbar, .seg, .answers .row, .linkbtn, .pf > input { display: none !important; }
+  body::before { display: none; }
+  .shell { display: block; }
+  .page { max-width: none; padding: 0; }
+  body { font-size: 10pt; }
+  .sec { padding-top: 22px; } .sec + .sec { margin-top: 22px; }
+  .sec-head, .kicker { break-after: avoid; }
+  .f, .persona, .phase, .step, .dec, .m, .box, .stats, .rater, .flow li, .fn { break-inside: avoid; }
+  .card, .box, .dec, .persona, .stats { box-shadow: none; }
+  .cm:not(.has) { display: none; }
+
+  .pgrid, .phases, .cols, .measures { grid-template-columns: 1fr 1fr; }
+  .persona[open], .persona { grid-column: auto; }
+  .pd { display: grid; grid-template-columns: 1fr; }
+  .dec:has(input:checked) .opt:not(:has(input:checked)) { display: none; }
+  .dec.answered .opt:not(:has(input:checked)) { display: none; }
+  .note:not(.has) { display: none; }
+  .page { orphans: 3; widows: 3; }
+}
+#st-gap:checked ~ .fwrap .f:not([data-status="gap"]) { display: none; }
+#st-gap:checked ~ .fwrap .sec:not(:has(.f[data-status="gap"])) { display: none; }
+#st-partial:checked ~ .fwrap .f:not([data-status="partial"]) { display: none; }
+#st-partial:checked ~ .fwrap .sec:not(:has(.f[data-status="partial"])) { display: none; }
+#st-unproven:checked ~ .fwrap .f:not([data-status="unproven"]) { display: none; }
+#st-unproven:checked ~ .fwrap .sec:not(:has(.f[data-status="unproven"])) { display: none; }
+#st-built:checked ~ .fwrap .f:not([data-status="built"]) { display: none; }
+#st-built:checked ~ .fwrap .sec:not(:has(.f[data-status="built"])) { display: none; }
+#ph-p1:checked ~ .fwrap .f:not([data-phase~="p1"]) { display: none; }
+#ph-p1:checked ~ .fwrap .sec:not(:has(.f[data-phase~="p1"])) { display: none; }
+#ph-p2:checked ~ .fwrap .f:not([data-phase~="p2"]) { display: none; }
+#ph-p2:checked ~ .fwrap .sec:not(:has(.f[data-phase~="p2"])) { display: none; }
+#ph-tbc:checked ~ .fwrap .f:not([data-phase~="tbc"]) { display: none; }
+#ph-tbc:checked ~ .fwrap .sec:not(:has(.f[data-phase~="tbc"])) { display: none; }
+#st-all:checked ~ .seg label[for="st-all"], #st-all:checked ~ .fbar label[for="st-all"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#st-all:focus-visible ~ .seg label[for="st-all"], #st-all:focus-visible ~ .fbar label[for="st-all"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#st-gap:checked ~ .seg label[for="st-gap"], #st-gap:checked ~ .fbar label[for="st-gap"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#st-gap:focus-visible ~ .seg label[for="st-gap"], #st-gap:focus-visible ~ .fbar label[for="st-gap"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#st-partial:checked ~ .seg label[for="st-partial"], #st-partial:checked ~ .fbar label[for="st-partial"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#st-partial:focus-visible ~ .seg label[for="st-partial"], #st-partial:focus-visible ~ .fbar label[for="st-partial"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#st-unproven:checked ~ .seg label[for="st-unproven"], #st-unproven:checked ~ .fbar label[for="st-unproven"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#st-unproven:focus-visible ~ .seg label[for="st-unproven"], #st-unproven:focus-visible ~ .fbar label[for="st-unproven"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#st-built:checked ~ .seg label[for="st-built"], #st-built:checked ~ .fbar label[for="st-built"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#st-built:focus-visible ~ .seg label[for="st-built"], #st-built:focus-visible ~ .fbar label[for="st-built"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#ph-all:checked ~ .seg label[for="ph-all"], #ph-all:checked ~ .fbar label[for="ph-all"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#ph-all:focus-visible ~ .seg label[for="ph-all"], #ph-all:focus-visible ~ .fbar label[for="ph-all"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#ph-p1:checked ~ .seg label[for="ph-p1"], #ph-p1:checked ~ .fbar label[for="ph-p1"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#ph-p1:focus-visible ~ .seg label[for="ph-p1"], #ph-p1:focus-visible ~ .fbar label[for="ph-p1"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#ph-p2:checked ~ .seg label[for="ph-p2"], #ph-p2:checked ~ .fbar label[for="ph-p2"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#ph-p2:focus-visible ~ .seg label[for="ph-p2"], #ph-p2:focus-visible ~ .fbar label[for="ph-p2"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+#ph-tbc:checked ~ .seg label[for="ph-tbc"], #ph-tbc:checked ~ .fbar label[for="ph-tbc"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(14,27,42,.12); font-weight: 500; }
+#ph-tbc:focus-visible ~ .seg label[for="ph-tbc"], #ph-tbc:focus-visible ~ .fbar label[for="ph-tbc"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+</style>
+</head>
+<body>
+<script>document.documentElement.classList.add("js");</script>
+<a class="skip" href="#main">Skip to content</a>
+<header class="mbar"><details><summary><span class="mark"></span><span class="t">Investor Scouting · internal</span><span class="menu">Menu</span></summary><nav class="toc" aria-label="Contents"><p class="th">Overview</p><a href="#summary"><span class="n"></span>Summary</a><a href="#decisions"><span class="n"></span>Decision register</a><a href="#lists"><span class="n"></span>SBC rated lists</a><a href="#meeting"><span class="n"></span>The meeting, cleaned</a><p class="th">Feature status</p><a href="#personas"><span class="n">1</span>Personas</a><a href="#sources"><span class="n">2</span>Sources</a><a href="#checks"><span class="n">3</span>Checks</a><a href="#rating"><span class="n">4</span>Rating</a><a href="#learning"><span class="n">5</span>Learning</a><a href="#review"><span class="n">6</span>Review</a><a href="#outputs"><span class="n">7</span>Outputs</a><a href="#form"><span class="n">8</span>One form and approval</a><a href="#limits"><span class="n">9</span>Limits and costs</a><p class="th">Plan</p><a href="#path"><span class="n"></span>Two-week path</a><a href="#build"><span class="n"></span>Build list</a><a href="#risks"><span class="n"></span>Risks</a><a href="#open"><span class="n"></span>Open with SBC</a></nav></details></header><div class="shell"><aside class="rail" id="rail"><div class="brandrow"><span class="mark"></span><span class="brand">AXION</span></div><div class="docname">Investor Scouting<small>Internal build plan · Draft</small></div><nav class="toc" aria-label="Contents"><p class="th">Overview</p><a href="#summary"><span class="n"></span>Summary</a><a href="#decisions"><span class="n"></span>Decision register</a><a href="#lists"><span class="n"></span>SBC rated lists</a><a href="#meeting"><span class="n"></span>The meeting, cleaned</a><p class="th">Feature status</p><a href="#personas"><span class="n">1</span>Personas</a><a href="#sources"><span class="n">2</span>Sources</a><a href="#checks"><span class="n">3</span>Checks</a><a href="#rating"><span class="n">4</span>Rating</a><a href="#learning"><span class="n">5</span>Learning</a><a href="#review"><span class="n">6</span>Review</a><a href="#outputs"><span class="n">7</span>Outputs</a><a href="#form"><span class="n">8</span>One form and approval</a><a href="#limits"><span class="n">9</span>Limits and costs</a><p class="th">Plan</p><a href="#path"><span class="n"></span>Two-week path</a><a href="#build"><span class="n"></span>Build list</a><a href="#risks"><span class="n"></span>Risks</a><a href="#open"><span class="n"></span>Open with SBC</a></nav><div class="railcard"><b>Answers</b><div class="bar"><i id="kq-bar"></i></div><span id="kq-progress" aria-live="polite">Answers save as you go</span></div></aside><div class="content"><main id="main" class="page" tabindex="-1"><header class="dochead"><span class="kicker">Investor Scouting · Internal build plan</span><h1>SBC Investor Scouting: locked decisions and build plan</h1><p class="lede">What is locked, what is built, and what the two-week handover needs, with the audited status of every feature. The client version hides status and build notes and asks SBC 32 decisions. Where status says Built, it rests on tests with fakes: nothing has run against a live Sales Navigator, Apollo, HubSpot or Jev account.</p><dl class="meta"><div><dt>Prepared</dt><dd>13 Nov 2026, after the 10 Nov meeting</dd></div><div><dt>Status</dt><dd>Draft, client version not yet sent</dd></div><div><dt>Build status</dt><dd>engine repo at 01ee792bc, audited in code 13 Nov 2026</dd></div></dl><div class="hlegend" aria-label="Key"><span><span class="badge p1">Phase 1</span> Week 1</span><span><span class="badge p2">Phase 2</span> Week 2</span><span><span class="badge built">Built</span> tested with fakes</span><span><span class="badge partial">Partial</span></span><span><span class="badge unproven">Unproven</span> no live run</span><span><span class="badge gap">Gap</span> not built</span><span><span class="badge no">Not included</span> out of scope</span><span><span class="badge tbc">To confirm</span> open with SBC</span></div><p class="kq-locked-note" role="status">You have submitted your answers. They are now read-only. Your host can reopen them if you need to change anything.</p></header><section class="sec" id="summary"><div class="sec-head"><span class="kicker">Overview</span><h2>Summary</h2><p class="lede">The persona, label, review, suppression and export foundation is built and tested with fakes. The gaps that matter for SBC are the ones they asked for most: tuning the rating on their 30–40 hand-rated lists with a measured agreement, suppression that works on masked Apollo rows, an approval before credits, and one guided form. Phase 1 (Week 1) closes the accuracy and checks gaps on SBC's own data. Phase 2 (Week 2) connects live sources and adds approval, the form and handover.</p></div><div class="stack"><div class="stats stats5"><div><b>14</b><span>rows Built</span></div><div><b>7</b><span>rows Partial</span></div><div><b>4</b><span>rows Unproven (no live run)</span></div><div><b>11</b><span>rows Gap</span></div><div><b>13</b><span>build items block handover</span></div></div><div class="phases"><div class="phase card"><div><span class="badge p1">Phase 1</span></div><h3>Week 1: rate them right</h3><ul class="checks"><li>B1 importer, B2 agreement report, B6 years fix, B7 gender guard, B8 Apollo names</li><li>B3 second suppression pass, B11 template into the SBC tenant, B18 end-to-end test</li><li>Review and exports checked; HubSpot import tested (B13 HubSpot proof)</li></ul></div><div class="phase card l2"><div><span class="badge p2">Phase 2</span></div><h3>Week 2: run it live, on one form</h3><ul class="checks"><li>B12 Sales Navigator seat and B13 live proofs (Sales Navigator, Apollo, Jev)</li><li>B4 approval before credits, B5 guided form, B9 live team-link</li><li>Training, guide, weekly measures (B15)</li></ul></div></div></div><div class="decisions"><article class="dec" id="q-summary-comments"><div class="dh"><span class="dn">Overall</span><h4><label for="t-summary-comments">Overall comments on this build plan</label></h4><span class="kq-tick" data-kqa-status="summary-comments" aria-hidden="true"></span></div><p class="ctx">Anything that changes the order of work, the handover or the decisions below.</p><textarea id="t-summary-comments" data-kqa="summary-comments" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article></div></section><section class="sec" id="decisions"><div class="sec-head"><span class="kicker">Overview</span><h2>Decision register</h2><p class="lede">Everything locked so far, and what is still with SBC. “Locked 13 Nov” were settled in this planning session. The earlier ones come from the roadmap document and the meeting.</p></div><div class="card twrap" tabindex="0" role="region" aria-label="Scrollable table"><table class="t"><thead><tr><th>Area</th><th>Decision</th><th>State</th><th>Source</th></tr></thead><tbody><tr><td>Model</td><td>Both lanes: Funds/Angels stay, a persona-driven people search is added.</td><td><span class="badge p1">Locked</span></td><td class="note">Roadmap, 11 Nov</td></tr><tr><td>Persona</td><td>Saved, tenant-wide Investor persona on /personalise with filters, rubric and project tag.</td><td><span class="badge p1">Locked</span></td><td class="note">Roadmap, 11 Nov</td></tr><tr><td>Scoring</td><td>Rules or AI per persona. AI Fast mode (Jev) is the AI default with LLM fallback. Starters ship as Rules.</td><td><span class="badge p1">Locked</span></td><td class="note">Roadmap; starters 13 Nov</td></tr><tr><td>Labels</td><td>P1, P2, Edge, Negative, NA with a reason. Defaults 80/60/40. Edge and NA reviewed in the run.</td><td><span class="badge p1">Locked</span></td><td class="note">Roadmap, 11 Nov</td></tr><tr><td>Suppression</td><td>HubSpot (email and LinkedIn URL) and team-link (CSV now, Unipile pull next). Read-only HubSpot.</td><td><span class="badge p1">Locked</span></td><td class="note">Roadmap, 11 Nov</td></tr><tr><td>Re-check</td><td>HubSpot and team-link checks run a second time right after the Apollo reveal.</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Approval</td><td>Run pauses after rating, before credits, with counts and a sample. Lands with the form in Week 2.</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Learning</td><td>Bulk importer for SBC's rated lists plus a per-label agreement report, built into the product.</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Exports</td><td>HubSpot import CSV, Review sheet CSV, Airtable Investor. No Dripify file; SBC is asked.</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Sources</td><td>Sales Navigator and Apollo. PitchBook and Crunchbase out. Firmable only if SBC asks.</td><td><span class="badge p1">Locked</span></td><td class="note">Meeting, 10 Nov</td></tr><tr><td>Old bot</td><td>Not fixed. The new rating replaces it.</td><td><span class="badge p1">Locked</span></td><td class="note">Meeting, 10 Nov</td></tr><tr><td>Gender</td><td>Platform never infers or scores it. How SBC's female-investor priority is handled is SBC's decision (D1).</td><td><span class="badge tbc">With SBC</span></td><td class="note">13 Nov</td></tr><tr><td>Wealth</td><td>Stand-in only (seniority, company size). SGD 100k and 2M unmodelled until SBC answers (D2).</td><td><span class="badge tbc">With SBC</span></td><td class="note">Roadmap; D2</td></tr><tr><td>Phasing</td><td>Week 1 (Phase 1): accuracy, checks, review, exports. Week 2 (Phase 2): live sources, approval, one form, handover. Weeks, not dates. This split is AXION's working assumption.</td><td><span class="badge tbc">Assumed</span></td><td class="note">13 Nov</td></tr><tr><td>Measures</td><td>Rating agreement, nobody contacted twice, meetings per week (tracked, not promised).</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Apollo credits</td><td>Out of the plan. The user is handling them separately.</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Client file</td><td>Interactive and local: pick an answer or “I have a question” on each decision, comments per row, copyable and downloadable summary. Nothing stored online.</td><td><span class="badge p1">Locked 13 Nov</span></td><td class="note">This session</td></tr><tr><td>Rating rules</td><td>Senior employees (Director, VP, Head, President) in scope for every persona. SBC moved 86% of the bot’s Negatives on that reason to a fit. AXION suggests yes (D3).</td><td><span class="badge tbc">With SBC</span></td><td class="note">ssf25 lists, 13 Nov</td></tr><tr><td>Rating marks</td><td>P1 versus P2, Edge, NA and sampling of Positives for the agreement report (D13–D16). Edge and sampling carry a suggestion.</td><td><span class="badge tbc">With SBC</span></td><td class="note">ssf25 lists, 13 Nov</td></tr><tr><td>Grey areas</td><td>Managers, industry, non-profits, recruiters, one-person firms, advisers, job seekers (D17–D23). Rules go into the rubric and the Rules terms once answered.</td><td><span class="badge tbc">With SBC</span></td><td class="note">ssf25 lists, 13 Nov</td></tr><tr><td>Persona rules</td><td>A starting rule per persona drawn from the lists (D24–D32). Each is confirm or change.</td><td><span class="badge tbc">With SBC</span></td><td class="note">ssf25 lists, 13 Nov</td></tr></tbody></table></div></section><section class="sec" id="lists"><div class="sec-head"><span class="kicker">Overview</span><h2>SBC’s rated lists (examples/ssf25)</h2><p class="lede">32 rated lists, 34,180 people, 26,225 with a mark from SBC’s reviewers, across nine of the ten personas. These are the real examples the importer (B1) and the agreement report (B2) must read. Counts only here: the files hold personal data and stay out of git.</p></div><div class="stack"><div class="box"><h3>What the files look like</h3><ul><li>One sheet, “Fresh List”, from the earlier bot: <code>linkedInProfileUrl</code>, <code>profileUrl</code>, <code>fullName</code>, <code>vmid</code>, <code>AI Rating</code>, <code>AI Reasoning</code>, <code>Feedback</code>, then the Sales Navigator profile columns (company, industry, title, location, tenure, past roles). The oldest list has no <code>AI Reasoning</code>.</li><li>Bot labels in <code>AI Rating</code>: Positive1, Positive2, Edge Case, Negative, NA, plus error text on 240 rows (230 in the Exited Founder list). SBC’s labels in <code>Feedback</code>: P1, P2, Negative, NA and <strong>P-Female</strong>. SBC never writes Edge.</li><li>34,098 of the 34,180 rows are located in Singapore (these are Singapore SPV lists). A separate <code>SalesNav Archives</code> folder holds the raw exports; the one stray Sales Navigator sheet has 33 rows and no rating.</li></ul></div><div class="card twrap"><table class="t ev"><caption class="sr">Bot rating against SBC mark, row counts</caption><thead><tr><th scope="col">Bot said</th><th scope="col" class="num">P1</th><th scope="col" class="num">P2</th><th scope="col" class="num">P-Female</th><th scope="col" class="num">Negative</th><th scope="col" class="num">NA</th><th scope="col" class="num">Unmarked</th><th scope="col" class="num">Total</th></tr></thead><tbody><tr><th scope='row'>Positive1</th><td class='num'>1,091</td><td class='num'>·</td><td class='num'>·</td><td class='num'>·</td><td class='num'>210</td><td class='num'>1,139</td><td class='num'><b>2,440</b></td></tr><tr><th scope='row'>Positive2</th><td class='num'>·</td><td class='num'>5,302</td><td class='num'>·</td><td class='num'>·</td><td class='num'>1,556</td><td class='num'>6,653</td><td class='num'><b>13,511</b></td></tr><tr><th scope='row'>Edge Case</th><td class='num'>135</td><td class='num'>752</td><td class='num'>246</td><td class='num'>671</td><td class='num'>93</td><td class='num'>12</td><td class='num'><b>1,909</b></td></tr><tr><th scope='row'>Negative</th><td class='num'>1,078</td><td class='num'>8,305</td><td class='num'>783</td><td class='num'>5,593</td><td class='num'>40</td><td class='num'>91</td><td class='num'><b>15,890</b></td></tr><tr><th scope='row'>NA</th><td class='num'>18</td><td class='num'>50</td><td class='num'>17</td><td class='num'>103</td><td class='num'>1</td><td class='num'>·</td><td class='num'><b>189</b></td></tr><tr><th scope='row'>API error or bad JSON</th><td class='num'>39</td><td class='num'>115</td><td class='num'>5</td><td class='num'>21</td><td class='num'>·</td><td class='num'>60</td><td class='num'><b>240</b></td></tr><tr><th scope='row'>Blank rating</th><td class='num'>·</td><td class='num'>·</td><td class='num'>·</td><td class='num'>1</td><td class='num'>·</td><td class='num'>·</td><td class='num'><b>1</b></td></tr><tr class='tot'><th scope='row'>Total</th><td class='num'>2,361</td><td class='num'>14,524</td><td class='num'>1,051</td><td class='num'>6,389</td><td class='num'>1,900</td><td class='num'>7,955</td><td class='num'>34,180</td></tr></tbody></table></div><div class="card twrap"><table class="t ev sm"><caption class="sr">By persona</caption><thead><tr><th scope="col">Persona</th><th scope="col" class="num">Lists</th><th scope="col" class="num">People</th><th scope="col" class="num">Marked</th><th scope="col" class="num">Bot Negatives</th><th scope="col" class="num">Moved</th><th scope="col" class="num">Positives marked</th><th scope="col" class="num">P-Female</th></tr></thead><tbody><tr><th scope='row'>Founder / Owner / CEO</th><td class='num'>9</td><td class='num'>7,114</td><td class='num'>7,110</td><td class='num'>584</td><td class='num'>277 (47%)</td><td class='num'>4,179 of 5,945</td><td class='num'>226</td></tr><tr><th scope='row'>Angel Investors</th><td class='num'>2</td><td class='num'>496</td><td class='num'>496</td><td class='num'>189</td><td class='num'>181 (96%)</td><td class='num'>278 of 278</td><td class='num'>67</td></tr><tr><th scope='row'>Partner</th><td class='num'>7</td><td class='num'>10,164</td><td class='num'>8,239</td><td class='num'>6,598</td><td class='num'>3,752 (57%)</td><td class='num'>1,265 of 3,190</td><td class='num'>542</td></tr><tr><th scope='row'>Entrepreneur / Founder / Executive in Residence</th><td class='num'>5</td><td class='num'>4,890</td><td class='num'>2,790</td><td class='num'>1,558</td><td class='num'>772 (50%)</td><td class='num'>671 of 2,770</td><td class='num'>192</td></tr><tr><th scope='row'>Director / VP</th><td class='num'>3</td><td class='num'>4,427</td><td class='num'>2,971</td><td class='num'>2,872</td><td class='num'>2,601 (91%)</td><td class='num'>0 of 1,456</td><td class='num'>4</td></tr><tr><th scope='row'>Strategic / Board / Senior Advisor</th><td class='num'>3</td><td class='num'>3,767</td><td class='num'>2,864</td><td class='num'>2,541</td><td class='num'>1,412 (56%)</td><td class='num'>0 of 903</td><td class='num'>2</td></tr><tr><th scope='row'>Investment Director / Head of Investments / Portfolio Manager</th><td class='num'>1</td><td class='num'>1,335</td><td class='num'>655</td><td class='num'>615</td><td class='num'>490 (80%)</td><td class='num'>0 of 680</td><td class='num'>0</td></tr><tr><th scope='row'>CFO / Finance Director / CTO</th><td class='num'>1</td><td class='num'>1,197</td><td class='num'>723</td><td class='num'>664</td><td class='num'>566 (85%)</td><td class='num'>0 of 474</td><td class='num'>1</td></tr><tr><th scope='row'>Exited Founder</th><td class='num'>1</td><td class='num'>790</td><td class='num'>377</td><td class='num'>138</td><td class='num'>115 (83%)</td><td class='num'>0 of 255</td><td class='num'>17</td></tr></tbody></table></div><div class="cols"><div class="box"><h3>What it means for the build</h3><ul><li><strong>Importer (B1):</strong> map Positive1 to P1, Positive2 to P2, Edge Case to Edge, Negative and NA as they are, error text to “unrated”, and carry P-Female as its own mark. Never learn from it as a gender signal (B7). The old note that SBC has four marks was wrong: they use five, and none is Edge.</li><li><strong>Agreement report (B2):</strong> report fit against not-fit first. Exact-label agreement is only measurable where SBC marked: all 6,393 marked bot Positives simply carry the bot’s own label, because nobody marks a Positive down, and another 1,766 were marked NA on one list. Treat that as an unchecked sample, not as accuracy (D16).</li><li><strong>Training value:</strong> the 10,166 Negatives SBC moved to a fit are the corrections the rating needs. The bot’s own reasons show the cause: “employee in a non-leadership role” leads the list.</li><li><strong>Failed ratings (B20):</strong> 240 rows came back as an API or JSON error and were left in the list. Retry, validate, and never export an unrated row as a rating.</li></ul></div><div class="box"><h3>Risks in the data</h3><ul><li>One list (1,900 rows) is marked NA throughout, including 1,556 the bot rated P2. Do not read it as a rating (D15).</li><li>Unmarked rows are 98% bot Positives, so SBC’s marks say almost nothing about Positives that are wrong (D16).</li><li>The 65% moved rate leans on two bulk-marked lists (one Partner, one Entrepreneur in Residence, 1,469 rows moved with no Negative left); without them it is about 61%. Per-list moved rates run from 13% to 100%, and reviewers differ widely, so read it as a pattern, not an error rate.</li><li>The lists are almost disjoint: 12 people appear twice, and 2 of them were marked a fit in one list and Negative in the other. P-Female is spread over 26 of 32 lists, but 322 of the 1,051 sit in one Partner list.</li><li>The keyword splits in the client file (non-profit, recruiters, one-person firms, advisers, job seekers) come from the bot’s reasoning text, so groups overlap and counts are indicative.</li><li><code>examples/ssf25/</code> and <code>examples/investors/</code> are untracked, not ignored. They hold personal data: add them to <code>.gitignore</code> before anyone runs <code>git add</code>.</li></ul></div></div></div></section><section class="sec" id="meeting"><div class="sec-head"><span class="kicker">Overview</span><h2>The meeting, cleaned</h2></div>
+<div class="cols">
+  <div class="box same"><h3>What SBC said (10 Nov, cleaned)</h3><ul>
+    <li>Target: entrepreneurial people with SGD 100k+ to invest and about 2M investable assets; not professional investors (Richard).</li>
+    <li>Sales Navigator (about 10 personas, Singapore) via PhantomBuster, and Apollo (SG, MY, TH, VN, ID). Most Sales Navigator lists and team-link sit on Ricardo's seat.</li>
+    <li>Old bot trained on one founder persona: about 200 of 1,000 rated correctly, 3–4 hours of review a list. Viktor holds 30–40 rated lists.</li>
+    <li>Reviewer marks: Negative, Good fit, Still a fit, and “right on the edge, but female” (priority for female investors). They exclude the two positives and review only Negative, Edge and NA.</li>
+    <li>Dripify reply about 25%, Apollo about 3%. Goal 30–40 meetings a week; tighter qualifying dropped it to 10–15.</li>
+    <li>Madison's form: project or fund, persona, preview and approve, outputs, export.</li>
+    <li>Ly and Madison declined patching the old bot. Firmable is a possible later test.</li>
+  </ul></div>
+  <div class="box q"><h3>Transcript noise corrected</h3><ul>
+    <li>Victor is Viktor, Lee is Ly, Maddie is Madison, Tripify is Dripify.</li>
+    <li>"ZoomMeeting" is ZoomInfo. "FirmMobile" is Firmable. "free messages" is three.</li>
+    <li>"Mo" is the previous AI lead who built the old bot.</li>
+    <li>"Exported to a portfolio of startups" most likely means "exposed to".</li>
+    <li>The SBC investor structure is an SPV, so SBC cannot advertise it; that limits what outreach can say.</li>
+  </ul></div>
+</div>
+</section><div class="ff"><input class="sr" type="radio" name="st" id="st-all" value="all" checked><input class="sr" type="radio" name="st" id="st-gap" value="gap"><input class="sr" type="radio" name="st" id="st-partial" value="partial"><input class="sr" type="radio" name="st" id="st-unproven" value="unproven"><input class="sr" type="radio" name="st" id="st-built" value="built"><input class="sr" type="radio" name="ph" id="ph-all" value="all" checked><input class="sr" type="radio" name="ph" id="ph-p1" value="p1"><input class="sr" type="radio" name="ph" id="ph-p2" value="p2"><input class="sr" type="radio" name="ph" id="ph-tbc" value="tbc"><div class="fbar"><div class="grp">Status<div class="seg"><label for="st-all">All</label><label for="st-gap">Gap</label><label for="st-partial">Partial</label><label for="st-unproven">Unproven</label><label for="st-built">Built</label></div></div><div class="grp">Phase<div class="seg"><label for="ph-all">All</label><label for="ph-p1">Phase 1</label><label for="ph-p2">Phase 2</label><label for="ph-tbc">To confirm</label></div></div><span id="count" aria-live="polite"></span></div><div class="fwrap"><section class="sec" id="personas"><div class="sec-head"><span class="kicker">Feature status · 1</span><h2>Personas</h2><p class="lede">Ten starter personas, an editor, and a preview that makes no external call.</p></div><ul class="feat card"><li class="f" data-status="built" data-phase="p1"><div><h3>Ten starter personas</h3><p>Founder/Owner/CEO, Angel, Partner, EIR, Director/VP, Advisor, Investment Director, CFO/CTO, Exited Founder, CIO/Innovation, from SBC's two persona documents.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>investor_starters.py</code> (10 entries, each validated against <code>PersonaFields</code>). All are Rules mode. Industries are LinkedIn labels, not Apollo's exact lowercase names, so the Apollo search may return nothing (B8).</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Edit and add personas, tenant-wide</h3><p>Titles, excluded titles, seniority, countries, industries, years, size; tagged to a fund or project.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>investor_routes.py:54-189</code>, about 35 tests. Only the starter library is gated (SBC tenant slug or <code>admin@axion.local</code>, <code>investor_routes.py:66</code>); CRUD is open to every tenant.</div></li><li class="f" data-status="partial" data-phase="p1"><div><h3>Preview the searches</h3><p>Exact Sales Navigator and Apollo searches, plus what a tool cannot express.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span>Editor and picker preview, no external call, no sample (<code>investor_resolver.py:98-170</code>). The approval gate is B4.</div></li><li class="f" data-status="partial" data-phase="p1"><div><h3>Help me guide on each persona</h3><p>What each tool will search, how people are rated, where the persona is used.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span><code>PersonaHelpModal.tsx:25</code>. No dedicated test.</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Countries per run</h3><p>Five countries by default on both tools, changeable per run. Client asked to say if Sales Navigator should stay Singapore-only.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span>Starters set all five (748aee819); SBC's Sales Navigator personas are Singapore only. The Region input maps to Apollo <code>person_locations</code> and Sales Navigator <code>locations</code>. See D12.</div></li><li class="f" data-status="gap" data-phase="p1"><div><h3>Years of experience (total career years)</h3><p>Counted as total years, as in SBC's document. We use Sales Navigator's total-years filter if it can be set through our connection; Apollo has none, and the preview says so.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>DEFECT: <code>years_min</code> maps to years in the current role (<code>investor_resolver.py:228-331</code>) and is a zero-on-match rule in scoring. <code>director-vp</code> scored 0 at 3 years in role and 100 at 12. Fix in B6: use Sales Navigator's total years of experience filter, if Unipile exposes one (calibration lists only <code>tenure</code>; unverified).</div></li></ul></section><section class="sec" id="sources"><div class="sec-head"><span class="kicker">Feature status · 2</span><h2>Sources</h2></div><ul class="feat card"><li class="f" data-status="unproven" data-phase="p2"><div><h3>Sales Navigator through the client's seat</h3><p>Searches run through Ricardo's seat with the persona's filters; PhantomBuster step goes away.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge unproven">Unproven</span></div><div class="fn"><span>Build note</span><code>linkedin_sales_navigator.py:87-93,1049-1085</code>. The seat is the tenant's own Unipile <code>account_id</code> saved on the Connectors card and must hold a Sales Navigator seat; no fallback to the workspace seat. Caps: recipe 200, code default 100, daily 500, ceiling 2,500, 24h <code>search_result</code> budget. Mocked HTTP only; <code>feature_connector_live_calls</code> off by default (<code>config.py:74</code>). How the client connects the account is unverified (B12).</div></li><li class="f" data-status="partial" data-phase="p2"><div><h3>Apollo, five countries, verified emails</h3><p>Free search; reveal uses credits with a per-run cap.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span><code>investor_runtime.py:114</code>. No verified-email filter is set anywhere (<code>contact_email_status</code>; B16), although the client file says verified emails only. Titles, excluded titles, seniority, headcount and location work. No years, past-title, company-keyword or excluded-industry filter (past titles and company keywords go into <code>q_keywords</code>; the rest applies in scoring only). Never run live. Credits: user said they will be handled separately.</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Client's own lists</h3><p>Upload any list as a source.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>upload_list</code> step; <code>dedupe_any_test.py</code>.</div></li><li class="f" data-status="gap" data-phase="tbc"><div><h3>Firmable</h3><p>APAC data provider Ricardo wants to test.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>Absent (<code>registry.py:34-47</code>). Dealroom, Specter, Harmonic, Crunchbase and PitchBook are compared in <code>Investor-scouting-providers.pdf</code> for AXION's own use.</div></li><li class="f" data-status="none" data-phase="no"><div><h3>PitchBook, Crunchbase and similar</h3><p>Left out: listed investors are approached by every startup (Richard, 10 Nov).</p></div><div class="f-meta"><span class="badge no">Not included</span><span class="badge none">n/a</span></div><div class="fn"><span>Build note</span>Decision from the meeting.</div></li></ul></section><section class="sec" id="checks"><div class="sec-head"><span class="kicker">Feature status · 3</span><h2>Checks</h2><p class="lede">Suppression order is the real problem: it runs before the Apollo reveal, when rows are masked.</p></div><ul class="feat card"><li class="f" data-status="unproven" data-phase="p1"><div><h3>HubSpot check</h3><p>Anyone already in HubSpot (email or LinkedIn page) is removed. Read-only.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge unproven">Unproven</span></div><div class="fn"><span>Build note</span><code>hubspot/check.py:111-180</code>, <code>connector.py:60</code>. Needs a private app token with <code>crm.objects.contacts.read</code>. LinkedIn match uses a configurable property, default <code>hs_linkedin_url</code>. Fakes only; never run on real HubSpot.</div></li><li class="f" data-status="gap" data-phase="p1"><div><h3>Checked again after reveal</h3><p>A second HubSpot and team-link check right after emails are revealed.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>LOCKED 13 Nov. Recipe runs <code>check_hubspot</code> and <code>skip_team_links</code> before scoring, so masked Apollo rows (first name only) pass unchecked. Add the same two checks after <code>deduplicate_final</code> (B3).</div></li><li class="f" data-status="partial" data-phase="p1 p2"><div><h3>Team-link check</h3><p>Anyone connected to SBC is removed. CSV in Week 1, live pull in Week 2.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge p2">Phase 2</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span>CSV, Airtable or saved-list route works through Skip Team Links (<code>skip_list.py:526</code>). The Unipile relations pull (<code>linkedin/connections.py</code>, 22 mocked tests) reads only the connected account's own first-degree connections, so teammates outside that seat still need the file. It is not in the recipe and cannot feed Skip List directly. Saved lists are dropped in the SBC tenant (<code>skip_list.py:545</code>), although the roadmap says they work (B9, B10).</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Duplicates across sources</h3><p>Same person from several sources becomes one row.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span>Keys <code>linkedin_url</code>, <code>work_email</code>, <code>full_name+company_name</code>, Any mode. The first Deduplicate cannot match masked Apollo rows; the second can, after Check People.</div></li><li class="f" data-status="gap" data-phase="tbc"><div><h3>Dripify blacklist</h3><p>Standing check on the blacklist.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>No Dripify code. A CSV with LinkedIn URLs or emails uploaded into Skip Team Links would work today.</div></li><li class="f" data-status="gap" data-phase="tbc"><div><h3>Apollo against Dripify</h3><p>Nobody reached on both.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>Structurally impossible for Apollo rows before reveal. Out unless SBC asks.</div></li></ul></section><section class="sec" id="rating"><div class="sec-head"><span class="kicker">Feature status · 4</span><h2>Rating</h2></div><ul class="feat card"><li class="f" data-status="built" data-phase="p1"><div><h3>Five labels with a reason</h3><p>P1, P2, Edge, Negative, NA, each with one sentence.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>labels.py:1-60</code>. Rule order: negative rule, then NA, then low confidence, then thresholds. Defaults 80/60/40.</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Excluded title always wins</h3><p>Analyst or Intern is Negative whatever the score.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>labels.py</code> rule 1; <code>labels_test.py</code>.</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Per-persona thresholds</h3><p>Adjustable.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span>Persona <code>thresholds</code>. Fast mode scores run high (P2 to P1): raise P1 to about 90 to 95 for AI Fast personas.</div></li><li class="f" data-status="unproven" data-phase="p1"><div><h3>Rules or AI, per persona</h3><p>Rules from terms and weights; AI reads the profile; Fast checks first.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge unproven">Unproven</span></div><div class="fn"><span>Build note</span>Jev is off by default (<code>jev_typesafe_scoring=False</code>). Probe, 114 synthetic rows: Rules 86% exact, Fast 85%, LLM-only 85%. No real SBC data yet. All starters are Rules.</div></li><li class="f" data-status="none" data-phase="tbc"><div><h3>Wealth</h3><p>SGD 100k and 2M cannot be checked; stand-in only.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge none">n/a</span></div><div class="fn"><span>Build note</span>No field. Company size is a search filter only. Decision D2.</div></li><li class="f" data-status="partial" data-phase="p1"><div><h3>Gender never scored</h3><p>The platform will not score or infer gender, and names are kept out of what the rating reads.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span>No gender or wealth field exists, but the only guard is one sentence in the AI goal (<code>investor_resolver.py:351</code>). First and last names still reach the scorer and no test asserts otherwise. B7.</div></li></ul></section><section class="sec" id="learning"><div class="sec-head"><span class="kicker">Feature status · 5</span><h2>Learning</h2><p class="lede">The biggest gap against SBC's main ask.</p></div><ul class="feat card"><li class="f" data-status="gap" data-phase="p1"><div><h3>Import SBC's rated lists</h3><p>Bulk import of marked lists into the right persona. SBC's marks are Negative, Good fit, Still a fit and a borderline mark (D1).</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>LOCKED 13 Nov. No importer, route or script. <code>PersonaUpdate</code> excludes <code>examples</code> (<code>investor_schema.py:26</code>). Examples are written only by in-run label changes; 40 stored, newest 10 go into the AI prompt (about 2,400 characters). A 1,000-row list cannot tune a persona today (B1).</div></li><li class="f" data-status="gap" data-phase="p1"><div><h3>Agreement, measured per label</h3><p>Held-back lists rated blind and compared with SBC's marks.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>LOCKED 13 Nov. Caution: SBC reviews only Negative, Edge and NA rows by hand (Viktor, 08:42), so the old bot's P1/P2 rows were never hand-checked and the ~200 of 1,000 baseline rests on unreviewed rows. <code>scripts/quality/investor_scouting_eval.py</code> scores the older Investor Scouting rubric on 90 fictional rows, binary investor/not. It never reads a persona, the five labels, AI or Jev, and gives no confusion matrix (B2).</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Corrections stick</h3><p>AI: examples on the next run. Rules: suggested term changes SBC approves.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>label_review.py</code>; <code>investor_feedback.py:65</code>; <code>POST /{id}/feedback/apply</code> returns <code>suggested_terms</code>. Check that the editor exposes the suggestions (B14).</div></li><li class="f" data-status="none" data-phase="p2"><div><h3>Keep tuning after handover</h3><p>New lists use the same import.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge none">n/a</span></div><div class="fn"><span>Build note</span>Follows B1.</div></li></ul></section><section class="sec" id="review"><div class="sec-head"><span class="kicker">Feature status · 6</span><h2>Review</h2></div><ul class="feat card"><li class="f" data-status="built" data-phase="p1"><div><h3>Review Edge and NA in the run</h3><p>Run pauses on held rows; relabel, add a note, continue.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span>Filter <code>review_labels</code>, <code>keep_labels</code>, <code>review_unresolved</code>. Fast-mode batch failure sends all handed-off rows to Edge (known).</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Review sheet CSV</h3><p>Every Edge, NA and Negative person with the reason.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>exporting.py</code>; fed by Rate Investors directly, not the final Deduplicate.</div></li><li class="f" data-status="gap" data-phase="tbc"><div><h3>Import a filled review sheet</h3><p>Bring offline corrections back in.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>Not built. Could reuse B1.</div></li></ul></section><section class="sec" id="outputs"><div class="sec-head"><span class="kicker">Feature status · 7</span><h2>Outputs</h2></div><ul class="feat card"><li class="f" data-status="built" data-phase="p1"><div><h3>HubSpot import CSV</h3><p>Name, email, title, company, LinkedIn page, persona, label, project.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>exporting.py:1137-1200</code>; header <code>HUBSPOT_LINKEDIN_HEADER</code>. Not imported into a real HubSpot yet.</div></li><li class="f" data-status="unproven" data-phase="p1"><div><h3>Airtable investor base</h3><p>One investor per row.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge unproven">Unproven</span></div><div class="fn"><span>Build note</span>Column match against SBC's base unconfirmed (calibration open item 3).</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>Saved list on the platform</h3><p>Record, filterable by project.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span>Save List step.</div></li><li class="f" data-status="gap" data-phase="tbc"><div><h3>Dripify-ready file</h3><p>File shaped for Dripify.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>Out by earlier lock (13 Nov re-confirmed: ask SBC, D8).</div></li><li class="f" data-status="none" data-phase="no"><div><h3>Sending messages</h3><p>Stays in Dripify.</p></div><div class="f-meta"><span class="badge no">Not included</span><span class="badge none">n/a</span></div><div class="fn"><span>Build note</span>Out of scope.</div></li></ul></section><section class="sec" id="form"><div class="sec-head"><span class="kicker">Feature status · 8</span><h2>One form and approval</h2></div><ul class="feat card"><li class="f" data-status="gap" data-phase="p2"><div><h3>Single guided form</h3><p>Project or fund, persona, preview and approve, outputs, export.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>Recipe inputs are <code>persona</code> and <code>region</code>. Real runs use the persona picker above a raw run-inputs JSON box (<code>StartFieldAssist.tsx</code>). No project or fund field (B5).</div></li><li class="f" data-status="gap" data-phase="p2"><div><h3>Approval before credits</h3><p>Run pauses after rating with counts and a sample; nothing spent until approved.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge gap">Gap</span></div><div class="fn"><span>Build note</span>LOCKED 13 Nov: after rating, before credits. No approval step exists. The only pause is Filter's Edge/NA review, which comes after search and scoring and before Check People, so a gate fits between <code>filter</code> and <code>check_people_apollo</code> (B4).</div></li><li class="f" data-status="none" data-phase="tbc"><div><h3>Fund and project list</h3><p>Needed by the form.</p></div><div class="f-meta"><span class="badge tbc">To confirm</span><span class="badge none">n/a</span></div><div class="fn"><span>Build note</span>Ask SBC (D11).</div></li></ul></section><section class="sec" id="limits"><div class="sec-head"><span class="kicker">Feature status · 9</span><h2>Limits and costs</h2></div><ul class="feat card"><li class="f" data-status="partial" data-phase="p2"><div><h3>Apollo credits</h3><p>Search free; reveal capped per run.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span>Recipe values 200 enrichments, email on, phone off. Code default and maximum are 1,000 (<code>people/check.py:53-54</code>). No per-run cost shown to the client.</div></li><li class="f" data-status="partial" data-phase="p2"><div><h3>LinkedIn daily limits</h3><p>Paced, budgeted per seat, never zero risk.</p></div><div class="f-meta"><span class="badge p2">Phase 2</span><span class="badge partial">Partial</span></div><div class="fn"><span>Build note</span><code>linkedin/budget.py:61</code>. Precedent: 12 Nov a staging seat was restricted by LinkedIn after about 170 reads. Compliance read on automated Sales Navigator access is still pending.</div></li><li class="f" data-status="built" data-phase="p1"><div><h3>AI use is measured</h3><p>Rules uses none.</p></div><div class="f-meta"><span class="badge p1">Phase 1</span><span class="badge built">Built</span></div><div class="fn"><span>Build note</span><code>ai_usage</code> tables; local dev DB lacks them; cache-token cost undercount is known.</div></li></ul></section><p class="empty" id="emptyMsg">No rows match these filters.</p></div></div><section class="sec" id="path"><div class="sec-head"><span class="kicker">Plan</span><h2>Two-week path</h2><p class="lede">No dates, by decision. Each step ends with something the client can see. A step does not start until the previous one has been seen.</p></div><div class="card twrap" tabindex="0" role="region" aria-label="Scrollable table"><table class="t"><thead><tr><th>Step</th><th>What</th><th>Build items</th><th>Done when</th><th>Phase</th></tr></thead><tbody><tr><td class="mono">1.1</td><td>Personas locked</td><td class="note">B8 (Apollo names), B6 (years)</td><td>Viktor and Madison confirm each preview with no credits spent.</td><td><span class="badge p1">Phase 1</span></td></tr><tr><td class="mono">1.2</td><td>Old lists imported</td><td class="note">B1</td><td>Importer loads the shared lists; per-persona counts reported, thin personas named.</td><td><span class="badge p1">Phase 1</span></td></tr><tr><td class="mono">1.3</td><td>Rating tuned and measured</td><td class="note">B2, B7</td><td>Per-label agreement before and after tuning on held-back lists; target agreed with SBC (D4).</td><td><span class="badge p1">Phase 1</span></td></tr><tr><td class="mono">1.4</td><td>Checks proven</td><td class="note">B3, B18, B13 (HubSpot proof)</td><td>A test list with known HubSpot contacts and team links comes out with none of them, from either source.</td><td><span class="badge p1">Phase 1</span></td></tr><tr><td class="mono">1.5</td><td>Review and exports</td><td class="note">B11, B14</td><td>A correction changes the next run; the HubSpot file imports into a HubSpot test import.</td><td><span class="badge p1">Phase 1</span></td></tr><tr><td class="mono">2.1</td><td>Sales Navigator connected</td><td class="note">B12, B13 (Sales Navigator, Jev)</td><td>Live persona search through the connected seat within the daily budget, team-link applied.</td><td><span class="badge p2">Phase 2</span></td></tr><tr><td class="mono">2.2</td><td>Apollo live</td><td class="note">B8, B13 (Apollo), B16</td><td>A list runs search to export inside the credit cap.</td><td><span class="badge p2">Phase 2</span></td></tr><tr><td class="mono">2.3</td><td>One form, with approval</td><td class="note">B4, B5, B9</td><td>Viktor runs a full list on the form, approves the shortlist, exports, unaided.</td><td><span class="badge p2">Phase 2</span></td></tr><tr><td class="mono">2.4</td><td>Handover</td><td class="note">B15, B17</td><td>Guide delivered, weekly measures reporting, next-step list captured.</td><td><span class="badge p2">Phase 2</span></td></tr></tbody></table></div></section><section class="sec" id="build"><div class="sec-head"><span class="kicker">Plan</span><h2>Build list</h2><p class="lede">Every Gap, Partial or Unproven item above that needs work, with a rough size that needs the team's sizing. The numbers are the build items referenced in the feature tables.</p></div><div class="card twrap" tabindex="0" role="region" aria-label="Scrollable table"><table class="t"><thead><tr><th>Item</th><th>Gap</th><th>Size</th><th>Blocks handover?</th></tr></thead><tbody><tr><td>B1 · Bulk labelled-list importer</td><td class="note">Load SBC's rated lists into a persona: column mapping (<code>AI Rating</code>, <code>AI Reasoning</code>, <code>Feedback</code>), SBC's real marks P1, P2, Negative, NA and P-Female (no Edge) mapped to P1/P2/Edge/Negative/NA with P-Female kept apart, per-persona assignment, representative example selection for AI, suggested terms for Rules. Needs a cap or sampling beyond 40 stored and 10 prompted. Do not learn from the female-priority marker (see Risks).</td><td class="sz">L</td><td><span class=yes>Yes</span></td></tr><tr><td>B2 · Per-label agreement report</td><td class="note">Extend <code>scripts/quality/investor_scouting_eval.py</code> beyond the binary old rubric: read a persona and the five labels, hold-out split, confusion matrix, exact and P1/P2 agreement per persona.</td><td class="sz">M</td><td><span class=yes>Yes</span></td></tr><tr><td>B3 · Second suppression pass after reveal</td><td class="note">Add HubSpot and team-link checks after <code>deduplicate_final</code> in the recipe; test with masked-then-revealed rows.</td><td class="sz">S–M</td><td><span class=yes>Yes</span></td></tr><tr><td>B4 · Approval gate before credits</td><td class="note">Review gate between <code>filter</code> and <code>check_people_apollo</code>: counts by label, estimated credits, a sample, approve or reject.</td><td class="sz">M</td><td><span class=yes>Yes</span></td></tr><tr><td>B5 · Single guided form</td><td class="note">Project or fund field, persona, preview, outputs, export in one flow; replace the raw run-inputs JSON box.</td><td class="sz">L</td><td><span class=yes>Yes</span></td></tr><tr><td>B6 · Years of experience fix</td><td class="note">Map <code>years_min/max</code> to Sales Navigator total years of experience, not years in position, if Unipile exposes that filter (calibration lists only <code>tenure</code>: check first); drop the tenure zero-on-match for years; keep Apollo's warning.</td><td class="sz">S</td><td><span class=yes>Yes</span></td></tr><tr><td>B7 · Gender guard</td><td class="note">Remove first and last name (and similar) from every scorer input in Rules, Fast and standard paths; add a test that no such field reaches a prompt.</td><td class="sz">S</td><td><span class=yes>Yes</span></td></tr><tr><td>B8 · Apollo industry names</td><td class="note">Map starter industries to Apollo's exact lowercase labels; confirm with a live search.</td><td class="sz">S</td><td><span class=yes>Yes</span></td></tr><tr><td>B9 · Live team-link pull into the template</td><td class="note">Wire the Unipile relations action as a team-link source without the Save List detour.</td><td class="sz">M</td><td><span class=no2>No</span></td></tr><tr><td>B10 · SBC saved-list suppression</td><td class="note">Find out why <code>skip_list.py:545</code> drops saved lists for the SBC tenant; fix or document.</td><td class="sz">S</td><td><span class=no2>No</span></td></tr><tr><td>B11 · Template visibility and refresh</td><td class="note">Investor Persona Search is <code>hidden_from_listing</code> and not auto-published; refresh it into the SBC tenant with the maintenance script.</td><td class="sz">S</td><td><span class=yes>Yes</span></td></tr><tr><td>B12 · Sales Navigator seat for SBC</td><td class="note">Connect the client's account as the tenant's own Unipile account; complete the compliance read; set conservative budgets.</td><td class="sz">M</td><td><span class=yes>Yes</span></td></tr><tr><td>B13 · Live proofs</td><td class="note">HubSpot in Week 1 (step 1.4 needs a real token and import test); Sales Navigator, Apollo and Jev in Week 2; record results in the calibration doc.</td><td class="sz">M</td><td><span class=yes>Yes</span></td></tr><tr><td>B14 · Rules-mode suggestion UI</td><td class="note">Make sure the editor shows and applies <code>suggested_terms</code>.</td><td class="sz">S</td><td><span class=no2>No</span></td></tr><tr><td>B15 · Weekly measures report</td><td class="note">Agreement, contacted-twice count, meetings per week (entered by hand).</td><td class="sz">M</td><td><span class=no2>No</span></td></tr><tr><td>B16 · Verified-email filter</td><td class="note">Set <code>contact_email_status=verified</code> on the Apollo persona search; the client file promises verified emails only.</td><td class="sz">S</td><td><span class=yes>Yes</span></td></tr><tr><td>B17 · Privacy wording</td><td class="note">Agree retention and deletion wording for investors' personal details with Ly before the client file is sent; the client file says it is to be agreed.</td><td class="sz">S</td><td><span class=no2>No</span></td></tr><tr><td>B18 · End-to-end persona-search test</td><td class="note">No test runs the whole workflow; the local probe script mentioned in docs is not in the repo.</td><td class="sz">M</td><td><span class=yes>Yes</span></td></tr><tr><td>B19 · Doc corrections</td><td class="note"><code>investor-personas.md</code> says the Skip List people-upload UI is not done (stale); roadmap says saved-list suppression works (false for SBC).</td><td class="sz">S</td><td><span class=no2>No</span></td></tr><tr><td>B20 · Retry and validate failed ratings</td><td class="note">The old bot left 240 rows as API or JSON error text. Retry with a bounded budget, validate the JSON, and keep a row unrated and out of exports until it has a label.</td><td class="sz">S</td><td><span class=no2>No</span></td></tr><tr><td>B21 · Sampled check of P1 and P2 for the agreement report</td><td class="note">Add a per-list sample of P1 and P2 to the review queue so false positives can be counted. Size and method depend on SBC’s answer to D16.</td><td class="sz">M</td><td><span class=no2>No</span></td></tr></tbody></table></div><div class="dgroup"><span class="gk">B1 to B21</span><h3>Team notes</h3><p>Add an owner, findings or the decision needed against each build item. The table above is unchanged.</p></div><div class="decisions"><article class="dec" id="q-b01-importer-note"><div class="dh"><span class="dn">B1</span><h4><label for="t-b01-importer-note">Bulk labelled-list importer: team note</label></h4><span class="kq-tick" data-kqa-status="b01-importer-note" aria-hidden="true"></span></div><p class="ctx">Size L. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b01-importer-note" data-kqa="b01-importer-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b02-agreement-note"><div class="dh"><span class="dn">B2</span><h4><label for="t-b02-agreement-note">Per-label agreement report: team note</label></h4><span class="kq-tick" data-kqa-status="b02-agreement-note" aria-hidden="true"></span></div><p class="ctx">Size M. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b02-agreement-note" data-kqa="b02-agreement-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b03-suppression-note"><div class="dh"><span class="dn">B3</span><h4><label for="t-b03-suppression-note">Second suppression pass after reveal: team note</label></h4><span class="kq-tick" data-kqa-status="b03-suppression-note" aria-hidden="true"></span></div><p class="ctx">Size S–M. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b03-suppression-note" data-kqa="b03-suppression-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b04-approval-note"><div class="dh"><span class="dn">B4</span><h4><label for="t-b04-approval-note">Approval gate before credits: team note</label></h4><span class="kq-tick" data-kqa-status="b04-approval-note" aria-hidden="true"></span></div><p class="ctx">Size M. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b04-approval-note" data-kqa="b04-approval-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b05-form-note"><div class="dh"><span class="dn">B5</span><h4><label for="t-b05-form-note">Single guided form: team note</label></h4><span class="kq-tick" data-kqa-status="b05-form-note" aria-hidden="true"></span></div><p class="ctx">Size L. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b05-form-note" data-kqa="b05-form-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b06-years-note"><div class="dh"><span class="dn">B6</span><h4><label for="t-b06-years-note">Years of experience fix: team note</label></h4><span class="kq-tick" data-kqa-status="b06-years-note" aria-hidden="true"></span></div><p class="ctx">Size S. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b06-years-note" data-kqa="b06-years-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b07-gender-note"><div class="dh"><span class="dn">B7</span><h4><label for="t-b07-gender-note">Gender guard: team note</label></h4><span class="kq-tick" data-kqa-status="b07-gender-note" aria-hidden="true"></span></div><p class="ctx">Size S. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b07-gender-note" data-kqa="b07-gender-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b08-industry-note"><div class="dh"><span class="dn">B8</span><h4><label for="t-b08-industry-note">Apollo industry names: team note</label></h4><span class="kq-tick" data-kqa-status="b08-industry-note" aria-hidden="true"></span></div><p class="ctx">Size S. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b08-industry-note" data-kqa="b08-industry-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b09-team-link-note"><div class="dh"><span class="dn">B9</span><h4><label for="t-b09-team-link-note">Live team-link pull into the template: team note</label></h4><span class="kq-tick" data-kqa-status="b09-team-link-note" aria-hidden="true"></span></div><p class="ctx">Size M. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b09-team-link-note" data-kqa="b09-team-link-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b10-saved-list-note"><div class="dh"><span class="dn">B10</span><h4><label for="t-b10-saved-list-note">SBC saved-list suppression: team note</label></h4><span class="kq-tick" data-kqa-status="b10-saved-list-note" aria-hidden="true"></span></div><p class="ctx">Size S. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b10-saved-list-note" data-kqa="b10-saved-list-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b11-template-note"><div class="dh"><span class="dn">B11</span><h4><label for="t-b11-template-note">Template visibility and refresh: team note</label></h4><span class="kq-tick" data-kqa-status="b11-template-note" aria-hidden="true"></span></div><p class="ctx">Size S. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b11-template-note" data-kqa="b11-template-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b12-seat-note"><div class="dh"><span class="dn">B12</span><h4><label for="t-b12-seat-note">Sales Navigator seat for SBC: team note</label></h4><span class="kq-tick" data-kqa-status="b12-seat-note" aria-hidden="true"></span></div><p class="ctx">Size M. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b12-seat-note" data-kqa="b12-seat-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b13-proofs-note"><div class="dh"><span class="dn">B13</span><h4><label for="t-b13-proofs-note">Live proofs: team note</label></h4><span class="kq-tick" data-kqa-status="b13-proofs-note" aria-hidden="true"></span></div><p class="ctx">Size M. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b13-proofs-note" data-kqa="b13-proofs-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b14-suggestions-note"><div class="dh"><span class="dn">B14</span><h4><label for="t-b14-suggestions-note">Rules-mode suggestion UI: team note</label></h4><span class="kq-tick" data-kqa-status="b14-suggestions-note" aria-hidden="true"></span></div><p class="ctx">Size S. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b14-suggestions-note" data-kqa="b14-suggestions-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b15-measures-note"><div class="dh"><span class="dn">B15</span><h4><label for="t-b15-measures-note">Weekly measures report: team note</label></h4><span class="kq-tick" data-kqa-status="b15-measures-note" aria-hidden="true"></span></div><p class="ctx">Size M. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b15-measures-note" data-kqa="b15-measures-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b16-email-note"><div class="dh"><span class="dn">B16</span><h4><label for="t-b16-email-note">Verified-email filter: team note</label></h4><span class="kq-tick" data-kqa-status="b16-email-note" aria-hidden="true"></span></div><p class="ctx">Size S. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b16-email-note" data-kqa="b16-email-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b17-privacy-note"><div class="dh"><span class="dn">B17</span><h4><label for="t-b17-privacy-note">Privacy wording: team note</label></h4><span class="kq-tick" data-kqa-status="b17-privacy-note" aria-hidden="true"></span></div><p class="ctx">Size S. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b17-privacy-note" data-kqa="b17-privacy-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b18-e2e-test-note"><div class="dh"><span class="dn">B18</span><h4><label for="t-b18-e2e-test-note">End-to-end persona-search test: team note</label></h4><span class="kq-tick" data-kqa-status="b18-e2e-test-note" aria-hidden="true"></span></div><p class="ctx">Size M. Blocks handover. Add an owner, findings or the decision needed.</p><textarea id="t-b18-e2e-test-note" data-kqa="b18-e2e-test-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b19-doc-note"><div class="dh"><span class="dn">B19</span><h4><label for="t-b19-doc-note">Doc corrections: team note</label></h4><span class="kq-tick" data-kqa-status="b19-doc-note" aria-hidden="true"></span></div><p class="ctx">Size S. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b19-doc-note" data-kqa="b19-doc-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b20-retry-note"><div class="dh"><span class="dn">B20</span><h4><label for="t-b20-retry-note">Retry and validate failed ratings: team note</label></h4><span class="kq-tick" data-kqa-status="b20-retry-note" aria-hidden="true"></span></div><p class="ctx">Size S. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b20-retry-note" data-kqa="b20-retry-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article><article class="dec" id="q-b21-sampling-note"><div class="dh"><span class="dn">B21</span><h4><label for="t-b21-sampling-note">Sampled check of P1 and P2 for the agreement report: team note</label></h4><span class="kq-tick" data-kqa-status="b21-sampling-note" aria-hidden="true"></span></div><p class="ctx">Size M. Does not block handover. Add an owner, findings or the decision needed.</p><textarea id="t-b21-sampling-note" data-kqa="b21-sampling-note" rows="3" placeholder="Owner, findings or the decision needed"></textarea></article></div></section><section class="sec" id="risks"><div class="sec-head"><span class="kicker">Plan</span><h2>Risks</h2></div>
+<div class="cols">
+  <div class="box warn"><h3>Delivery</h3><ul>
+    <li>Week 1 carries B1 (L) and B2 (M) plus several small builds, and depends on SBC sharing the rated lists in time.</li>
+    <li>Nothing has run live. Sales Navigator, Apollo, HubSpot and Jev are all fakes or mocks, and live calls are off by default.</li>
+    <li>Week 1 step 1.4 needs a real HubSpot token and Apollo credits (being handled) for the reveal test; Week 2 needs the client's seat. All sit outside our control.</li>
+    <li>Written and verbal claims in the client file about LinkedIn account restriction need a compliance read before any seat is connected.</li>
+    <li>Jev is off by default and Fast scores run high, so P1 thresholds need re-tuning on real people.</li>
+    <li>No end-to-end test of the persona-search workflow exists.</li>
+  </ul></div>
+  <div class="box warn"><h3>Data, safety and people</h3><ul>
+    <li>LinkedIn can restrict a seat: one staging seat was restricted on 12 Nov after about 170 reads. Keep budgets conservative and tell SBC first.</li>
+    <li>Only Negative, Edge and NA rows were reviewed by hand, so the bot's P1/P2 rows are unchecked and the old baseline is soft; ask SBC which marks were reviewed.</li>
+    <li>Training labels may encode gender: the "edge, but female" marks are positives chosen for a gender reason. Import them as Edge or P2 without the marker and keep gender out of terms, until SBC answers D1.</li>
+    <li>Some personas are thin: Angel Investors, Investment Director, CFO/CTO and Exited Founder have one list each in SBC's document; agreement on them may be unreliable.</li>
+    <li>Reveal credits are spent on known people unless the pre-check is added; accepted (re-check after reveal).</li>
+    <li>Starter industries are LinkedIn names; Apollo may return nothing until B8.</li>
+  </ul></div>
+</div>
+</section><section class="sec" id="open"><div class="sec-head"><span class="kicker">Plan</span><h2>Open with SBC</h2></div>
+<div class="cols"><div class="box q"><h3>Added 13 Nov from the rated lists (D13–D32)</h3><ul><li>D13–D16 P1 versus P2, Edge, NA, sampling of Positives</li><li>D17–D23 grey areas: managers, industry, non-profits, recruiters, one-person firms, advisers, job seekers</li><li>D24–D32 a starting rule for each of the nine personas that has a rated list</li><li>D1 (P-Female meaning and priority, merged) and D3 (senior employees) now carry the evidence from the lists</li></ul></div>
+  <div class="box q"><h3>Decisions with SBC (D1–D12 in the client file)</h3><ul>
+    <li>D1 gender priority · D2 SGD 100k and 2M · D3 C-suite scope · D4 agreement target</li>
+    <li>D5 Rules or AI · D6 Dripify blacklist · D7 Apollo against Dripify · D8 Dripify-ready file</li>
+    <li>D9 Firmable trial · D10 Sales Navigator seat(s) · D11 funds and projects · D12 Sales Navigator countries</li>
+  </ul></div>
+  <div class="box good"><h3>Information we need</h3><ul>
+    <li>The 30–40 rated lists (Viktor's folder, shared with Ly)</li>
+    <li>HubSpot read-only token and the LinkedIn property name</li>
+    <li>The Sales Navigator team-link CSV; Ricardo's seat connected</li>
+    <li>The Dripify blacklist, if wanted as a check</li>
+    <li>Confirmation that the two persona documents are current</li>
+  </ul></div>
+</div>
+<div class="dgroup"><span class="gk">Record the answers</span><h3>Decisions for SBC</h3><p>Choose the outcome for each decision and add a note with the detail. Answers save as you go, and the same private link opens them again.</p></div><div class="dgroup"><span class="gk">D1 to D12</span><h3>Decisions with SBC</h3><p>The decisions in the client file. Record what SBC answered, and anything still open.</p></div><div class="decisions"><article class="dec" id="q-d01-p-female-priority"><div class="dh"><span class="dn">D1</span><h4>How should SBC&#x27;s female-investor priority (P-Female) be handled?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d01-p-female-priority" aria-hidden="true"></span></div><p class="ctx">The platform never infers or scores gender. How SBC&#x27;s female-investor priority is handled is SBC&#x27;s decision. Do not learn from the marker until it is answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D1 · How should SBC&#x27;s female-investor priority (P-Female) be handled?</legend><label class="opt"><input type="radio" name="d01-p-female-priority" data-kqa="d01-p-female-priority" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d01-p-female-priority" data-kqa="d01-p-female-priority" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d01-p-female-priority" data-kqa="d01-p-female-priority" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d01-p-female-priority" aria-label="Clear the answer to D1">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d01-p-female-priority" rows="2" placeholder="Optional" aria-label="Note for: D1 · How should SBC&#x27;s female-investor priority (P-Female) be handled?"></textarea></details></article><article class="dec" id="q-d02-wealth-thresholds"><div class="dh"><span class="dn">D2</span><h4>How should the SGD 100k and SGD 2M wealth thresholds be handled?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d02-wealth-thresholds" aria-hidden="true"></span></div><p class="ctx">Only a stand-in (seniority and company size) is used now. The SGD 100k and 2M thresholds are not modelled until SBC answers.</p><fieldset class="opts kq-options"><legend class="kq-sr">D2 · How should the SGD 100k and SGD 2M wealth thresholds be handled?</legend><label class="opt"><input type="radio" name="d02-wealth-thresholds" data-kqa="d02-wealth-thresholds" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d02-wealth-thresholds" data-kqa="d02-wealth-thresholds" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d02-wealth-thresholds" data-kqa="d02-wealth-thresholds" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d02-wealth-thresholds" aria-label="Clear the answer to D2">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d02-wealth-thresholds" rows="2" placeholder="Optional" aria-label="Note for: D2 · How should the SGD 100k and SGD 2M wealth thresholds be handled?"></textarea></details></article><article class="dec" id="q-d03-senior-scope"><div class="dh"><span class="dn">D3</span><h4>Should senior employees (Director, VP, Head, President) be in scope for every persona?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d03-senior-scope" aria-hidden="true"></span></div><p class="ctx">SBC moved 86% of the old bot&#x27;s Negatives on that reason to a fit. AXION suggests yes.</p><fieldset class="opts kq-options"><legend class="kq-sr">D3 · Should senior employees (Director, VP, Head, President) be in scope for every persona?</legend><label class="opt"><input type="radio" name="d03-senior-scope" data-kqa="d03-senior-scope" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d03-senior-scope" data-kqa="d03-senior-scope" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d03-senior-scope" data-kqa="d03-senior-scope" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d03-senior-scope" aria-label="Clear the answer to D3">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d03-senior-scope" rows="2" placeholder="Optional" aria-label="Note for: D3 · Should senior employees (Director, VP, Head, President) be in scope for every persona?"></textarea></details></article><article class="dec" id="q-d04-agreement-target"><div class="dh"><span class="dn">D4</span><h4>What agreement target should the rating be measured against?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d04-agreement-target" aria-hidden="true"></span></div><p class="ctx">The rating&#x27;s agreement target, to be agreed with SBC. Needed for step 1.3 of the two-week path.</p><fieldset class="opts kq-options"><legend class="kq-sr">D4 · What agreement target should the rating be measured against?</legend><label class="opt"><input type="radio" name="d04-agreement-target" data-kqa="d04-agreement-target" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d04-agreement-target" data-kqa="d04-agreement-target" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d04-agreement-target" data-kqa="d04-agreement-target" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d04-agreement-target" aria-label="Clear the answer to D4">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d04-agreement-target" rows="2" placeholder="Optional" aria-label="Note for: D4 · What agreement target should the rating be measured against?"></textarea></details></article><article class="dec" id="q-d05-rules-or-ai"><div class="dh"><span class="dn">D5</span><h4>Should each persona be rated by Rules or by AI?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d05-rules-or-ai" aria-hidden="true"></span></div><p class="ctx">Rules or AI per persona. AI Fast mode (Jev) is the AI default with LLM fallback. All starters ship as Rules.</p><fieldset class="opts kq-options"><legend class="kq-sr">D5 · Should each persona be rated by Rules or by AI?</legend><label class="opt"><input type="radio" name="d05-rules-or-ai" data-kqa="d05-rules-or-ai" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d05-rules-or-ai" data-kqa="d05-rules-or-ai" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d05-rules-or-ai" data-kqa="d05-rules-or-ai" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d05-rules-or-ai" aria-label="Clear the answer to D5">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d05-rules-or-ai" rows="2" placeholder="Optional" aria-label="Note for: D5 · Should each persona be rated by Rules or by AI?"></textarea></details></article><article class="dec" id="q-d06-dripify-blacklist"><div class="dh"><span class="dn">D6</span><h4>Should a Dripify blacklist be checked as a standing suppression?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d06-dripify-blacklist" aria-hidden="true"></span></div><p class="ctx">No Dripify code exists. A CSV of LinkedIn URLs or emails uploaded into Skip Team Links would work today.</p><fieldset class="opts kq-options"><legend class="kq-sr">D6 · Should a Dripify blacklist be checked as a standing suppression?</legend><label class="opt"><input type="radio" name="d06-dripify-blacklist" data-kqa="d06-dripify-blacklist" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d06-dripify-blacklist" data-kqa="d06-dripify-blacklist" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d06-dripify-blacklist" data-kqa="d06-dripify-blacklist" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d06-dripify-blacklist" aria-label="Clear the answer to D6">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d06-dripify-blacklist" rows="2" placeholder="Optional" aria-label="Note for: D6 · Should a Dripify blacklist be checked as a standing suppression?"></textarea></details></article><article class="dec" id="q-d07-apollo-vs-dripify"><div class="dh"><span class="dn">D7</span><h4>Should Apollo rows be checked against Dripify?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d07-apollo-vs-dripify" aria-hidden="true"></span></div><p class="ctx">Nobody reached on both. Structurally impossible for Apollo rows before reveal. Out unless SBC asks.</p><fieldset class="opts kq-options"><legend class="kq-sr">D7 · Should Apollo rows be checked against Dripify?</legend><label class="opt"><input type="radio" name="d07-apollo-vs-dripify" data-kqa="d07-apollo-vs-dripify" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d07-apollo-vs-dripify" data-kqa="d07-apollo-vs-dripify" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d07-apollo-vs-dripify" data-kqa="d07-apollo-vs-dripify" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d07-apollo-vs-dripify" aria-label="Clear the answer to D7">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d07-apollo-vs-dripify" rows="2" placeholder="Optional" aria-label="Note for: D7 · Should Apollo rows be checked against Dripify?"></textarea></details></article><article class="dec" id="q-d08-dripify-file"><div class="dh"><span class="dn">D8</span><h4>Should a file shaped for Dripify be produced?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d08-dripify-file" aria-hidden="true"></span></div><p class="ctx">Out by an earlier lock, re-confirmed on 13 Nov: ask SBC.</p><fieldset class="opts kq-options"><legend class="kq-sr">D8 · Should a file shaped for Dripify be produced?</legend><label class="opt"><input type="radio" name="d08-dripify-file" data-kqa="d08-dripify-file" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d08-dripify-file" data-kqa="d08-dripify-file" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d08-dripify-file" data-kqa="d08-dripify-file" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d08-dripify-file" aria-label="Clear the answer to D8">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d08-dripify-file" rows="2" placeholder="Optional" aria-label="Note for: D8 · Should a file shaped for Dripify be produced?"></textarea></details></article><article class="dec" id="q-d09-firmable-trial"><div class="dh"><span class="dn">D9</span><h4>Should Firmable be trialled as an APAC data source?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d09-firmable-trial" aria-hidden="true"></span></div><p class="ctx">Firmable is absent from the code. A possible later test, if SBC asks.</p><fieldset class="opts kq-options"><legend class="kq-sr">D9 · Should Firmable be trialled as an APAC data source?</legend><label class="opt"><input type="radio" name="d09-firmable-trial" data-kqa="d09-firmable-trial" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d09-firmable-trial" data-kqa="d09-firmable-trial" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d09-firmable-trial" data-kqa="d09-firmable-trial" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d09-firmable-trial" aria-label="Clear the answer to D9">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d09-firmable-trial" rows="2" placeholder="Optional" aria-label="Note for: D9 · Should Firmable be trialled as an APAC data source?"></textarea></details></article><article class="dec" id="q-d10-sales-nav-seats"><div class="dh"><span class="dn">D10</span><h4>Which Sales Navigator seat or seats should the searches run through?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d10-sales-nav-seats" aria-hidden="true"></span></div><p class="ctx">Most Sales Navigator lists and team-link sit on Ricardo&#x27;s seat. The tenant&#x27;s connected account must hold a Sales Navigator seat.</p><fieldset class="opts kq-options"><legend class="kq-sr">D10 · Which Sales Navigator seat or seats should the searches run through?</legend><label class="opt"><input type="radio" name="d10-sales-nav-seats" data-kqa="d10-sales-nav-seats" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d10-sales-nav-seats" data-kqa="d10-sales-nav-seats" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d10-sales-nav-seats" data-kqa="d10-sales-nav-seats" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d10-sales-nav-seats" aria-label="Clear the answer to D10">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d10-sales-nav-seats" rows="2" placeholder="Optional" aria-label="Note for: D10 · Which Sales Navigator seat or seats should the searches run through?"></textarea></details></article><article class="dec" id="q-d11-funds-projects"><div class="dh"><span class="dn">D11</span><h4>Which funds and projects should the single guided form offer?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d11-funds-projects" aria-hidden="true"></span></div><p class="ctx">The guided form (B5) needs the list of funds and projects.</p><fieldset class="opts kq-options"><legend class="kq-sr">D11 · Which funds and projects should the single guided form offer?</legend><label class="opt"><input type="radio" name="d11-funds-projects" data-kqa="d11-funds-projects" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d11-funds-projects" data-kqa="d11-funds-projects" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d11-funds-projects" data-kqa="d11-funds-projects" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d11-funds-projects" aria-label="Clear the answer to D11">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d11-funds-projects" rows="2" placeholder="Optional" aria-label="Note for: D11 · Which funds and projects should the single guided form offer?"></textarea></details></article><article class="dec" id="q-d12-sales-nav-countries"><div class="dh"><span class="dn">D12</span><h4>Should Sales Navigator searches stay Singapore-only?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d12-sales-nav-countries" aria-hidden="true"></span></div><p class="ctx">Starters search five countries on both tools. SBC&#x27;s Sales Navigator personas are Singapore only.</p><fieldset class="opts kq-options"><legend class="kq-sr">D12 · Should Sales Navigator searches stay Singapore-only?</legend><label class="opt"><input type="radio" name="d12-sales-nav-countries" data-kqa="d12-sales-nav-countries" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d12-sales-nav-countries" data-kqa="d12-sales-nav-countries" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d12-sales-nav-countries" data-kqa="d12-sales-nav-countries" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d12-sales-nav-countries" aria-label="Clear the answer to D12">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d12-sales-nav-countries" rows="2" placeholder="Optional" aria-label="Note for: D12 · Should Sales Navigator searches stay Singapore-only?"></textarea></details></article></div><div class="dgroup"><span class="gk">D13 to D16</span><h3>Rating marks</h3><p>P1 and P2, Edge, NA and sampling of Positives for the agreement report. Record SBC&#x27;s answer to each.</p></div><div class="decisions"><article class="dec" id="q-d13-p1-p2-marks"><div class="dh"><span class="dn">D13</span><h4>How should SBC&#x27;s P1 and P2 marks be read for the agreement report?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d13-p1-p2-marks" aria-hidden="true"></span></div><p class="ctx">This sets how SBC&#x27;s P1 and P2 marks are read, which the agreement report (B2) depends on.</p><fieldset class="opts kq-options"><legend class="kq-sr">D13 · How should SBC&#x27;s P1 and P2 marks be read for the agreement report?</legend><label class="opt"><input type="radio" name="d13-p1-p2-marks" data-kqa="d13-p1-p2-marks" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d13-p1-p2-marks" data-kqa="d13-p1-p2-marks" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d13-p1-p2-marks" data-kqa="d13-p1-p2-marks" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d13-p1-p2-marks" aria-label="Clear the answer to D13">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d13-p1-p2-marks" rows="2" placeholder="Optional" aria-label="Note for: D13 · How should SBC&#x27;s P1 and P2 marks be read for the agreement report?"></textarea></details></article><article class="dec" id="q-d14-edge-mark"><div class="dh"><span class="dn">D14</span><h4>How should the Edge label be treated, given SBC never marks Edge?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d14-edge-mark" aria-hidden="true"></span></div><p class="ctx">SBC&#x27;s marks never include Edge (see B1). Record whether the Edge label is kept, and why.</p><fieldset class="opts kq-options"><legend class="kq-sr">D14 · How should the Edge label be treated, given SBC never marks Edge?</legend><label class="opt"><input type="radio" name="d14-edge-mark" data-kqa="d14-edge-mark" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d14-edge-mark" data-kqa="d14-edge-mark" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d14-edge-mark" data-kqa="d14-edge-mark" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d14-edge-mark" aria-label="Clear the answer to D14">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d14-edge-mark" rows="2" placeholder="Optional" aria-label="Note for: D14 · How should the Edge label be treated, given SBC never marks Edge?"></textarea></details></article><article class="dec" id="q-d15-na-mark"><div class="dh"><span class="dn">D15</span><h4>How should the NA label be treated for the list marked NA throughout?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d15-na-mark" aria-hidden="true"></span></div><p class="ctx">One list (1,900 rows) is marked NA throughout, including 1,556 the bot rated P2. Do not read it as a rating.</p><fieldset class="opts kq-options"><legend class="kq-sr">D15 · How should the NA label be treated for the list marked NA throughout?</legend><label class="opt"><input type="radio" name="d15-na-mark" data-kqa="d15-na-mark" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d15-na-mark" data-kqa="d15-na-mark" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d15-na-mark" data-kqa="d15-na-mark" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d15-na-mark" aria-label="Clear the answer to D15">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d15-na-mark" rows="2" placeholder="Optional" aria-label="Note for: D15 · How should the NA label be treated for the list marked NA throughout?"></textarea></details></article><article class="dec" id="q-d16-positive-sampling"><div class="dh"><span class="dn">D16</span><h4>Should a sample of Positives be checked by hand for the agreement report?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d16-positive-sampling" aria-hidden="true"></span></div><p class="ctx">Unmarked rows are 98% bot Positives, so SBC&#x27;s marks say little about Positives that are wrong. Treat marked Positives as an unchecked sample, not as accuracy. The sampling build item is B21.</p><fieldset class="opts kq-options"><legend class="kq-sr">D16 · Should a sample of Positives be checked by hand for the agreement report?</legend><label class="opt"><input type="radio" name="d16-positive-sampling" data-kqa="d16-positive-sampling" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d16-positive-sampling" data-kqa="d16-positive-sampling" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d16-positive-sampling" data-kqa="d16-positive-sampling" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d16-positive-sampling" aria-label="Clear the answer to D16">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d16-positive-sampling" rows="2" placeholder="Optional" aria-label="Note for: D16 · Should a sample of Positives be checked by hand for the agreement report?"></textarea></details></article></div><div class="dgroup"><span class="gk">D17 to D23</span><h3>Grey areas</h3><p>Groups the rated lists could not place cleanly. Rules go into the rubric once answered.</p></div><div class="decisions"><article class="dec" id="q-d17-managers"><div class="dh"><span class="dn">D17</span><h4>How should managers be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d17-managers" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D17 · How should managers be rated?</legend><label class="opt"><input type="radio" name="d17-managers" data-kqa="d17-managers" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d17-managers" data-kqa="d17-managers" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d17-managers" data-kqa="d17-managers" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d17-managers" aria-label="Clear the answer to D17">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d17-managers" rows="2" placeholder="Optional" aria-label="Note for: D17 · How should managers be rated?"></textarea></details></article><article class="dec" id="q-d18-industry-roles"><div class="dh"><span class="dn">D18</span><h4>How should people in industry roles be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d18-industry-roles" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D18 · How should people in industry roles be rated?</legend><label class="opt"><input type="radio" name="d18-industry-roles" data-kqa="d18-industry-roles" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d18-industry-roles" data-kqa="d18-industry-roles" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d18-industry-roles" data-kqa="d18-industry-roles" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d18-industry-roles" aria-label="Clear the answer to D18">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d18-industry-roles" rows="2" placeholder="Optional" aria-label="Note for: D18 · How should people in industry roles be rated?"></textarea></details></article><article class="dec" id="q-d19-non-profits"><div class="dh"><span class="dn">D19</span><h4>How should people from non-profits be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d19-non-profits" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D19 · How should people from non-profits be rated?</legend><label class="opt"><input type="radio" name="d19-non-profits" data-kqa="d19-non-profits" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d19-non-profits" data-kqa="d19-non-profits" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d19-non-profits" data-kqa="d19-non-profits" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d19-non-profits" aria-label="Clear the answer to D19">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d19-non-profits" rows="2" placeholder="Optional" aria-label="Note for: D19 · How should people from non-profits be rated?"></textarea></details></article><article class="dec" id="q-d20-recruiters"><div class="dh"><span class="dn">D20</span><h4>How should recruiters be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d20-recruiters" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D20 · How should recruiters be rated?</legend><label class="opt"><input type="radio" name="d20-recruiters" data-kqa="d20-recruiters" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d20-recruiters" data-kqa="d20-recruiters" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d20-recruiters" data-kqa="d20-recruiters" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d20-recruiters" aria-label="Clear the answer to D20">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d20-recruiters" rows="2" placeholder="Optional" aria-label="Note for: D20 · How should recruiters be rated?"></textarea></details></article><article class="dec" id="q-d21-one-person-firms"><div class="dh"><span class="dn">D21</span><h4>How should people running one-person firms be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d21-one-person-firms" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D21 · How should people running one-person firms be rated?</legend><label class="opt"><input type="radio" name="d21-one-person-firms" data-kqa="d21-one-person-firms" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d21-one-person-firms" data-kqa="d21-one-person-firms" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d21-one-person-firms" data-kqa="d21-one-person-firms" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d21-one-person-firms" aria-label="Clear the answer to D21">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d21-one-person-firms" rows="2" placeholder="Optional" aria-label="Note for: D21 · How should people running one-person firms be rated?"></textarea></details></article><article class="dec" id="q-d22-advisers"><div class="dh"><span class="dn">D22</span><h4>How should advisers be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d22-advisers" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D22 · How should advisers be rated?</legend><label class="opt"><input type="radio" name="d22-advisers" data-kqa="d22-advisers" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d22-advisers" data-kqa="d22-advisers" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d22-advisers" data-kqa="d22-advisers" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d22-advisers" aria-label="Clear the answer to D22">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d22-advisers" rows="2" placeholder="Optional" aria-label="Note for: D22 · How should advisers be rated?"></textarea></details></article><article class="dec" id="q-d23-job-seekers"><div class="dh"><span class="dn">D23</span><h4>How should job seekers be rated?</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d23-job-seekers" aria-hidden="true"></span></div><p class="ctx">A grey area from the rated lists. The keyword groups come from the bot&#x27;s reasoning text, so counts are indicative. Rules go into the rubric and the Rules terms once answered.</p><fieldset class="opts kq-options"><legend class="kq-sr">D23 · How should job seekers be rated?</legend><label class="opt"><input type="radio" name="d23-job-seekers" data-kqa="d23-job-seekers" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d23-job-seekers" data-kqa="d23-job-seekers" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d23-job-seekers" data-kqa="d23-job-seekers" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d23-job-seekers" aria-label="Clear the answer to D23">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d23-job-seekers" rows="2" placeholder="Optional" aria-label="Note for: D23 · How should job seekers be rated?"></textarea></details></article></div><div class="dgroup"><span class="gk">D24 to D32</span><h3>Persona starting rules</h3><p>One starting rule per persona with a rated list. Confirm or change each.</p></div><div class="decisions"><article class="dec" id="q-d24-persona-founder-ceo"><div class="dh"><span class="dn">D24</span><h4>Confirm or change the starting rule for Founder / Owner / CEO</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d24-persona-founder-ceo" aria-hidden="true"></span></div><p class="ctx">Drawn from 9 rated lists with 7,114 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D24 · Confirm or change the starting rule for Founder / Owner / CEO</legend><label class="opt"><input type="radio" name="d24-persona-founder-ceo" data-kqa="d24-persona-founder-ceo" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d24-persona-founder-ceo" data-kqa="d24-persona-founder-ceo" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d24-persona-founder-ceo" data-kqa="d24-persona-founder-ceo" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d24-persona-founder-ceo" aria-label="Clear the answer to D24">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d24-persona-founder-ceo" rows="2" placeholder="Optional" aria-label="Note for: D24 · Confirm or change the starting rule for Founder / Owner / CEO"></textarea></details></article><article class="dec" id="q-d25-persona-angel"><div class="dh"><span class="dn">D25</span><h4>Confirm or change the starting rule for Angel Investors</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d25-persona-angel" aria-hidden="true"></span></div><p class="ctx">Drawn from 2 rated lists with 496 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D25 · Confirm or change the starting rule for Angel Investors</legend><label class="opt"><input type="radio" name="d25-persona-angel" data-kqa="d25-persona-angel" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d25-persona-angel" data-kqa="d25-persona-angel" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d25-persona-angel" data-kqa="d25-persona-angel" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d25-persona-angel" aria-label="Clear the answer to D25">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d25-persona-angel" rows="2" placeholder="Optional" aria-label="Note for: D25 · Confirm or change the starting rule for Angel Investors"></textarea></details></article><article class="dec" id="q-d26-persona-partner"><div class="dh"><span class="dn">D26</span><h4>Confirm or change the starting rule for Partner</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d26-persona-partner" aria-hidden="true"></span></div><p class="ctx">Drawn from 7 rated lists with 10,164 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D26 · Confirm or change the starting rule for Partner</legend><label class="opt"><input type="radio" name="d26-persona-partner" data-kqa="d26-persona-partner" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d26-persona-partner" data-kqa="d26-persona-partner" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d26-persona-partner" data-kqa="d26-persona-partner" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d26-persona-partner" aria-label="Clear the answer to D26">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d26-persona-partner" rows="2" placeholder="Optional" aria-label="Note for: D26 · Confirm or change the starting rule for Partner"></textarea></details></article><article class="dec" id="q-d27-persona-eir"><div class="dh"><span class="dn">D27</span><h4>Confirm or change the starting rule for Entrepreneur / Founder / Executive in Residence</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d27-persona-eir" aria-hidden="true"></span></div><p class="ctx">Drawn from 5 rated lists with 4,890 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D27 · Confirm or change the starting rule for Entrepreneur / Founder / Executive in Residence</legend><label class="opt"><input type="radio" name="d27-persona-eir" data-kqa="d27-persona-eir" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d27-persona-eir" data-kqa="d27-persona-eir" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d27-persona-eir" data-kqa="d27-persona-eir" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d27-persona-eir" aria-label="Clear the answer to D27">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d27-persona-eir" rows="2" placeholder="Optional" aria-label="Note for: D27 · Confirm or change the starting rule for Entrepreneur / Founder / Executive in Residence"></textarea></details></article><article class="dec" id="q-d28-persona-director-vp"><div class="dh"><span class="dn">D28</span><h4>Confirm or change the starting rule for Director / VP</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d28-persona-director-vp" aria-hidden="true"></span></div><p class="ctx">Drawn from 3 rated lists with 4,427 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D28 · Confirm or change the starting rule for Director / VP</legend><label class="opt"><input type="radio" name="d28-persona-director-vp" data-kqa="d28-persona-director-vp" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d28-persona-director-vp" data-kqa="d28-persona-director-vp" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d28-persona-director-vp" data-kqa="d28-persona-director-vp" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d28-persona-director-vp" aria-label="Clear the answer to D28">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d28-persona-director-vp" rows="2" placeholder="Optional" aria-label="Note for: D28 · Confirm or change the starting rule for Director / VP"></textarea></details></article><article class="dec" id="q-d29-persona-strategic-board"><div class="dh"><span class="dn">D29</span><h4>Confirm or change the starting rule for Strategic / Board / Senior Advisor</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d29-persona-strategic-board" aria-hidden="true"></span></div><p class="ctx">Drawn from 3 rated lists with 3,767 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D29 · Confirm or change the starting rule for Strategic / Board / Senior Advisor</legend><label class="opt"><input type="radio" name="d29-persona-strategic-board" data-kqa="d29-persona-strategic-board" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d29-persona-strategic-board" data-kqa="d29-persona-strategic-board" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d29-persona-strategic-board" data-kqa="d29-persona-strategic-board" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d29-persona-strategic-board" aria-label="Clear the answer to D29">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d29-persona-strategic-board" rows="2" placeholder="Optional" aria-label="Note for: D29 · Confirm or change the starting rule for Strategic / Board / Senior Advisor"></textarea></details></article><article class="dec" id="q-d30-persona-investment-director"><div class="dh"><span class="dn">D30</span><h4>Confirm or change the starting rule for Investment Director / Head of Investments / Portfolio Manager</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d30-persona-investment-director" aria-hidden="true"></span></div><p class="ctx">Drawn from 1 rated list with 1,335 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D30 · Confirm or change the starting rule for Investment Director / Head of Investments / Portfolio Manager</legend><label class="opt"><input type="radio" name="d30-persona-investment-director" data-kqa="d30-persona-investment-director" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d30-persona-investment-director" data-kqa="d30-persona-investment-director" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d30-persona-investment-director" data-kqa="d30-persona-investment-director" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d30-persona-investment-director" aria-label="Clear the answer to D30">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d30-persona-investment-director" rows="2" placeholder="Optional" aria-label="Note for: D30 · Confirm or change the starting rule for Investment Director / Head of Investments / Portfolio Manager"></textarea></details></article><article class="dec" id="q-d31-persona-cfo-cto"><div class="dh"><span class="dn">D31</span><h4>Confirm or change the starting rule for CFO / Finance Director / CTO</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d31-persona-cfo-cto" aria-hidden="true"></span></div><p class="ctx">Drawn from 1 rated list with 1,197 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D31 · Confirm or change the starting rule for CFO / Finance Director / CTO</legend><label class="opt"><input type="radio" name="d31-persona-cfo-cto" data-kqa="d31-persona-cfo-cto" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d31-persona-cfo-cto" data-kqa="d31-persona-cfo-cto" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d31-persona-cfo-cto" data-kqa="d31-persona-cfo-cto" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d31-persona-cfo-cto" aria-label="Clear the answer to D31">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d31-persona-cfo-cto" rows="2" placeholder="Optional" aria-label="Note for: D31 · Confirm or change the starting rule for CFO / Finance Director / CTO"></textarea></details></article><article class="dec" id="q-d32-persona-exited-founder"><div class="dh"><span class="dn">D32</span><h4>Confirm or change the starting rule for Exited Founder</h4><span class="ans">Answered</span><span class="kq-tick" data-kqa-status="d32-persona-exited-founder" aria-hidden="true"></span></div><p class="ctx">Drawn from 1 rated list with 790 people in SBC&#x27;s examples. Confirm or change it.</p><fieldset class="opts kq-options"><legend class="kq-sr">D32 · Confirm or change the starting rule for Exited Founder</legend><label class="opt"><input type="radio" name="d32-persona-exited-founder" data-kqa="d32-persona-exited-founder" value="agreed"><span>Agreed with SBC</span></label><label class="opt"><input type="radio" name="d32-persona-exited-founder" data-kqa="d32-persona-exited-founder" value="changed"><span>SBC chose a different answer (see note)</span></label><label class="opt"><input type="radio" name="d32-persona-exited-founder" data-kqa="d32-persona-exited-founder" value="open"><span>Still open with SBC</span></label></fieldset><div><button type="button" class="linkbtn" data-clear-answer="d32-persona-exited-founder" aria-label="Clear the answer to D32">Clear answer</button></div><details class="note"><summary>Add a note</summary><textarea data-kqa-note="d32-persona-exited-founder" rows="2" placeholder="Optional" aria-label="Note for: D32 · Confirm or change the starting rule for Exited Founder"></textarea></details></article></div></section><footer style="margin-top:56px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:.84rem">Sources: SBC meeting 10 Nov 2026 (<code>meeting-10-11.md</code>); <code>docs/engines/sbc-investor-roadmap.md</code>, <code>investor-personas.md</code>, <code>investor-scouting-calibration.md</code>; SBC Sales Navigator and Apollo persona documents (<code>examples/investors</code>); <code>docs/sbc/investor/Investor-scouting-providers.pdf</code>; code audit of the engine repo at 01ee792bc, 13 Nov 2026. The AXION SharePoint knowledge library could not be reached on 13 Nov (Graph returned 502), so company-wide instructions are unverified.</footer></main></div></div>
+
+<script>
+(function () {
+  var doc = document;
+  function $(s, r) { return (r || doc).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || doc).querySelectorAll(s)); }
+
+  /* Presentation only: contents highlight, mobile menu, row filter count. Answers are owned by KQA. */
+  var links = $$(".toc a, .mbar nav a");
+  function setCurrent(id) {
+    links.forEach(function (a) { if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current"); });
+  }
+  links.forEach(function (a) { a.addEventListener("click", function () { var md = a.closest(".mbar details"); if (md) md.open = false; }); });
+  var secs = $$("main .sec[id], main .dochead[id]");
+  function spy() {
+    var best = null;
+    secs.forEach(function (s) { if (!s.hidden && s.getBoundingClientRect().top <= 120) best = s; });
+    if (best) setCurrent(best.id);
+  }
+  var ticking = false;
+  window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(function () { ticking = false; spy(); }); } }, { passive: true });
+  spy();
+
+  var ff = $(".ff"), count = $("#count"), rows = ff ? $$(".f", ff) : [], empty = $("#emptyMsg");
+  function applyFilter() {
+    $$(".fwrap .sec", ff).forEach(function (s) { s.hidden = false; });
+    var shown = rows.filter(function (r) { return r.offsetParent !== null; }).length;
+    if (count) count.textContent = shown + " of " + rows.length + " rows";
+    $$(".fwrap .sec", ff).forEach(function (s) { s.hidden = !$$(".f", s).some(function (r) { return r.offsetParent !== null; }); });
+    if (empty) empty.style.display = shown ? "none" : "block";
+  }
+  if (ff) {
+    $$("input.sr", ff).forEach(function (i) { i.addEventListener("change", function () { setTimeout(applyFilter, 0); }); });
+    applyFilter();
+  }
+
+  /* Answers: the Clear buttons only call KQA.clear. Progress reads KQA.progress(). */
+  var clears = $$("button[data-clear-answer]");
+  clears.forEach(function (b) {
+    b.addEventListener("click", function () { if (window.KQA && !KQA.locked) KQA.clear(b.getAttribute("data-clear-answer")); });
+  });
+  var bar = $("#kq-bar"), prog = $("#kq-progress");
+  function refresh() {
+    if (!window.KQA) return;
+    var p = KQA.progress();
+    if (prog) prog.textContent = p.answered + " of " + p.total + " answered";
+    if (bar) bar.style.width = (p.total ? Math.round(100 * p.answered / p.total) : 0) + "%";
+    clears.forEach(function (b) { b.disabled = !!KQA.locked; });
+  }
+  if (window.KQA) { KQA.on("ready", refresh); KQA.on("change", refresh); KQA.on("lock", refresh); refresh(); }
+})();
+</script>
+</body>
+</html>

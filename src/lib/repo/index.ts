@@ -1,0 +1,342 @@
+import { createHash } from "node:crypto";
+import { ObjectId } from "mongodb";
+import { col } from "../db";
+import { progress, validateAnswer } from "../format/answers";
+import { LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
+import { newToken } from "../tokens";
+import type { InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
+
+export type { InterviewSummary, ParticipantView } from "./types";
+
+const iso = (d?: Date) => (d ? d.toISOString() : undefined);
+
+export function toOid(id: string): ObjectId | null {
+  return /^[0-9a-f]{24}$/i.test(id) ? new ObjectId(id) : null;
+}
+
+function participantView(p: ParticipantDoc): ParticipantView {
+  return {
+    id: p._id.toHexString(), interviewId: p.interviewId.toHexString(), token: p.token, name: p.name, note: p.note, status: p.status, answers: p.answers ?? {},
+    revision: p.revision, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), lastSeenAt: iso(p.lastSeenAt), lastSavedAt: iso(p.lastSavedAt), submittedAt: iso(p.submittedAt),
+  };
+}
+
+function logEvent(interviewId: ObjectId, type: string, participantId?: ObjectId, meta?: Record<string, unknown>) {
+  // Fire and forget: the audit trail must never slow down or break an answer being saved.
+  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {});
+}
+
+// ------------------------------------------------------------------------------------------ interviews
+export async function listInterviews(): Promise<InterviewSummary[]> {
+  const [interviews, participants] = await Promise.all([col.interviews(), col.participants()]);
+  const docs = await interviews.find({}).sort({ updatedAt: -1 }).toArray();
+  const agg = await participants
+    .aggregate<{ _id: { i: ObjectId; s: ParticipantStatus }; n: number; last: Date }>([
+      { $group: { _id: { i: "$interviewId", s: "$status" }, n: { $sum: 1 }, last: { $max: "$updatedAt" } } },
+    ])
+    .toArray();
+  return docs.map((d) => {
+    const mine = agg.filter((a) => a._id.i.equals(d._id));
+    const get = (s: ParticipantStatus) => mine.find((a) => a._id.s === s)?.n ?? 0;
+    const last = mine.reduce<Date | undefined>((m, a) => (!m || a.last > m ? a.last : m), undefined);
+    return {
+      id: d._id.toHexString(), name: d.name, description: d.description, mode: d.mode, status: d.status, currentVersion: d.currentVersion,
+      createdAt: d.createdAt.toISOString(), updatedAt: d.updatedAt.toISOString(),
+      counts: { people: get("invited") + get("in_progress") + get("submitted"), invited: get("invited"), inProgress: get("in_progress"), submitted: get("submitted") },
+      lastActivityAt: iso(last),
+    };
+  });
+}
+
+export async function getInterview(id: string): Promise<InterviewDoc | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  return (await col.interviews()).findOne({ _id: oid });
+}
+
+export async function getVersion(interviewId: ObjectId, version: number): Promise<SurveyVersionDoc | null> {
+  return (await col.versions()).findOne({ interviewId, version });
+}
+
+export async function listVersions(interviewId: ObjectId): Promise<Omit<SurveyVersionDoc, "html">[]> {
+  return (await col.versions()).find({ interviewId }, { projection: { html: 0 } }).sort({ version: -1 }).toArray();
+}
+
+export interface NewSurvey {
+  html: string;
+  manifest: Manifest;
+  fileName?: string;
+  check: SurveyVersionDoc["check"];
+}
+
+function versionDoc(interviewId: ObjectId, version: number, s: NewSurvey): SurveyVersionDoc {
+  return {
+    _id: new ObjectId(), interviewId, version, fileName: s.fileName, html: s.html, htmlSha256: createHash("sha256").update(s.html).digest("hex"),
+    bytes: Buffer.byteLength(s.html, "utf8"), manifest: s.manifest, check: s.check, createdAt: new Date(),
+  };
+}
+
+export async function createInterview(input: { name: string; description?: string; mode: InterviewMode; survey: NewSurvey }): Promise<InterviewDoc> {
+  const now = new Date();
+  const doc: InterviewDoc = { _id: new ObjectId(), name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1, createdAt: now, updatedAt: now };
+  await (await col.interviews()).insertOne(doc);
+  await (await col.versions()).insertOne(versionDoc(doc._id, 1, input.survey));
+  if (input.mode === "single") await addParticipants(doc._id.toHexString(), [{ name: "Respondent" }]);
+  logEvent(doc._id, "created");
+  return doc;
+}
+
+export async function updateInterview(id: string, patch: { name?: string; description?: string | null; status?: InterviewStatus }): Promise<InterviewDoc | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const set: Partial<InterviewDoc> = { updatedAt: new Date() };
+  const unset: Record<string, ""> = {};
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.description !== undefined) {
+    if (patch.description === null || patch.description === "") unset.description = "";
+    else set.description = patch.description;
+  }
+  if (patch.status !== undefined) set.status = patch.status;
+  const update: Record<string, unknown> = { $set: set };
+  if (Object.keys(unset).length) update.$unset = unset;
+  const res = await (await col.interviews()).findOneAndUpdate({ _id: oid }, update, { returnDocument: "after" });
+  if (res && patch.status) logEvent(oid, "status", undefined, { status: patch.status });
+  return res;
+}
+
+export async function addVersion(id: string, survey: NewSurvey): Promise<number | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const interviews = await col.interviews();
+  const cur = await interviews.findOne({ _id: oid });
+  if (!cur) return null;
+  const next = cur.currentVersion + 1;
+  await (await col.versions()).insertOne(versionDoc(oid, next, survey));
+  await interviews.updateOne({ _id: oid }, { $set: { currentVersion: next, updatedAt: new Date() } });
+  logEvent(oid, "version", undefined, { version: next });
+  return next;
+}
+
+export async function deleteInterview(id: string): Promise<boolean> {
+  const oid = toOid(id);
+  if (!oid) return false;
+  const res = await (await col.interviews()).deleteOne({ _id: oid });
+  if (!res.deletedCount) return false;
+  await Promise.all([(await col.versions()).deleteMany({ interviewId: oid }), (await col.participants()).deleteMany({ interviewId: oid }), (await col.events()).deleteMany({ interviewId: oid })]);
+  return true;
+}
+
+// ------------------------------------------------------------------------------------------ participants
+export async function listParticipants(interviewId: string): Promise<ParticipantView[]> {
+  const oid = toOid(interviewId);
+  if (!oid) return [];
+  const docs = await (await col.participants()).find({ interviewId: oid }).sort({ createdAt: 1 }).toArray();
+  return docs.map(participantView);
+}
+
+export async function addParticipants(interviewId: string, people: { name: string; note?: string }[]): Promise<ParticipantView[]> {
+  const oid = toOid(interviewId);
+  if (!oid || people.length === 0) return [];
+  const now = new Date();
+  const docs: ParticipantDoc[] = people.map((p, i) => ({
+    _id: new ObjectId(), interviewId: oid, token: newToken(), name: p.name.trim().slice(0, 120) || "Respondent", note: p.note?.trim().slice(0, 1000) || undefined,
+    status: "invited", answers: {}, revision: 0, createdAt: new Date(now.getTime() + i), updatedAt: now,
+  }));
+  await (await col.participants()).insertMany(docs);
+  await (await col.interviews()).updateOne({ _id: oid }, { $set: { updatedAt: now } });
+  return docs.map(participantView);
+}
+
+export async function updateParticipant(id: string, patch: { name?: string; note?: string | null }): Promise<ParticipantView | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const set: Partial<ParticipantDoc> = { updatedAt: new Date() };
+  const unset: Record<string, ""> = {};
+  if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120) || "Respondent";
+  if (patch.note !== undefined) {
+    if (patch.note === null || patch.note.trim() === "") unset.note = "";
+    else set.note = patch.note.trim().slice(0, 1000);
+  }
+  const update: Record<string, unknown> = { $set: set };
+  if (Object.keys(unset).length) update.$unset = unset;
+  const res = await (await col.participants()).findOneAndUpdate({ _id: oid }, update, { returnDocument: "after" });
+  return res ? participantView(res) : null;
+}
+
+export async function deleteParticipant(id: string): Promise<boolean> {
+  const oid = toOid(id);
+  if (!oid) return false;
+  return ((await (await col.participants()).deleteOne({ _id: oid })).deletedCount ?? 0) > 0;
+}
+
+export async function regenerateToken(id: string): Promise<string | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const token = newToken();
+  const res = await (await col.participants()).updateOne({ _id: oid }, { $set: { token, updatedAt: new Date() } });
+  return res.matchedCount ? token : null;
+}
+
+export async function reopenParticipant(id: string): Promise<ParticipantView | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const res = await (await col.participants()).findOneAndUpdate({ _id: oid, status: "submitted" }, { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" } }, { returnDocument: "after" });
+  if (res) logEvent(res.interviewId, "reopen", res._id);
+  return res ? participantView(res) : null;
+}
+
+// ------------------------------------------------------------------------------------------ respondent side
+export interface RespondentContext {
+  participant: ParticipantView;
+  interview: { id: string; name: string; description?: string; mode: InterviewMode; status: InterviewStatus };
+  version: SurveyVersionDoc;
+}
+
+export async function loadByToken(token: string, opts: { touch?: boolean } = {}): Promise<RespondentContext | null> {
+  const participants = await col.participants();
+  const p = await participants.findOne({ token });
+  if (!p) return null;
+  const interview = await (await col.interviews()).findOne({ _id: p.interviewId });
+  if (!interview) return null;
+  const version = await getVersion(p.interviewId, interview.currentVersion);
+  if (!version) return null;
+  if (opts.touch) {
+    const now = new Date();
+    void participants.updateOne({ _id: p._id }, { $set: { lastSeenAt: now } }).catch(() => {});
+    if (!p.lastSeenAt || now.getTime() - p.lastSeenAt.getTime() > 10 * 60 * 1000) logEvent(p.interviewId, "open", p._id);
+  }
+  return {
+    participant: participantView(p),
+    interview: { id: interview._id.toHexString(), name: interview.name, description: interview.description, mode: interview.mode, status: interview.status },
+    version,
+  };
+}
+
+export type SaveResult =
+  | { ok: true; revision: number; savedAt: string; status: ParticipantStatus }
+  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; details?: { id: string; reason: string }[] };
+
+export interface AnswerPatch {
+  [questionId: string]: { value?: unknown; note?: unknown };
+}
+
+/** Validate a patch against the manifest and apply it. Unknown ids and invalid values are rejected, never stored. */
+export async function saveAnswers(token: string, patch: AnswerPatch): Promise<SaveResult> {
+  const ids = Object.keys(patch);
+  if (ids.length === 0) return { ok: false, status: 400, error: "Nothing to save." };
+  if (ids.length > 200) return { ok: false, status: 413, error: "Too many answers in one request." };
+  const ctx = await loadByToken(token);
+  if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
+  if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
+  if (ctx.participant.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them." };
+
+  const byId = new Map<string, Question>(ctx.version.manifest.questions.map((q) => [q.id, q]));
+  const problems: { id: string; reason: string }[] = [];
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const next: AnswerMap = { ...ctx.participant.answers };
+  for (const id of ids) {
+    const q = byId.get(id);
+    if (!q) {
+      problems.push({ id, reason: "not a question in this interview" });
+      continue;
+    }
+    const entry = patch[id] ?? {};
+    const cur = next[id] ?? { updatedAt: nowIso };
+    const merged = { ...cur, updatedAt: nowIso };
+    if ("value" in entry) {
+      const v = validateAnswer(q, entry.value);
+      if (!v.ok) {
+        problems.push({ id, reason: v.reason });
+        continue;
+      }
+      if (v.value === null) delete merged.value;
+      else merged.value = v.value;
+    }
+    if ("note" in entry) {
+      const cfg = noteConfig(q);
+      if (!cfg.enabled) {
+        problems.push({ id, reason: "this question does not take a note" });
+        continue;
+      }
+      const note = entry.note;
+      if (note === null || note === undefined || note === "") delete merged.note;
+      else if (typeof note !== "string") {
+        problems.push({ id, reason: "the note must be text" });
+        continue;
+      } else if (note.length > cfg.maxLength) {
+        problems.push({ id, reason: `the note is ${note.length} characters, the limit is ${cfg.maxLength}` });
+        continue;
+      } else merged.note = note;
+    }
+    if (merged.value === undefined && merged.note === undefined) delete next[id];
+    else next[id] = merged;
+  }
+  if (problems.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems };
+  if (JSON.stringify(next).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };
+
+  // Update only the answers that were sent, by path, so two saves in flight at once cannot overwrite each other's questions.
+  const $set: Record<string, unknown> = { status: "in_progress", updatedAt: now, lastSavedAt: now, lastSeenAt: now };
+  const $unset: Record<string, ""> = {};
+  for (const id of ids) {
+    if (next[id]) $set[`answers.${id}`] = next[id];
+    else $unset[`answers.${id}`] = "";
+  }
+  const participants = await col.participants();
+  const res = await participants.findOneAndUpdate(
+    { _id: new ObjectId(ctx.participant.id), status: { $ne: "submitted" } },
+    { $set, ...(Object.keys($unset).length ? { $unset } : {}), $inc: { revision: 1 } },
+    { returnDocument: "after" },
+  );
+  if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked." };
+  logEvent(res.interviewId, "save", res._id, { ids: ids.slice(0, 20) });
+  return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status };
+}
+
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 422; error: string; missing?: { id: string; label: string }[] };
+
+export async function submitAnswers(token: string): Promise<SubmitResult> {
+  const ctx = await loadByToken(token);
+  if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
+  if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
+  if (ctx.participant.status === "submitted") return { ok: true, submittedAt: ctx.participant.submittedAt ?? new Date().toISOString() };
+  const pr = progress(ctx.version.manifest, ctx.participant.answers);
+  if (pr.missingRequired.length) {
+    const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
+    return { ok: false, status: 422, error: `${pr.missingRequired.length} required ${pr.missingRequired.length === 1 ? "question is" : "questions are"} not answered yet.`, missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })) };
+  }
+  const now = new Date();
+  const res = await (await col.participants()).findOneAndUpdate({ _id: new ObjectId(ctx.participant.id) }, { $set: { status: "submitted", submittedAt: now, updatedAt: now } }, { returnDocument: "after" });
+  if (res) logEvent(res.interviewId, "submit", res._id);
+  return { ok: true, submittedAt: now.toISOString() };
+}
+
+// ------------------------------------------------------------------------------------------ login throttling
+const LOGIN_WINDOW_MIN = 15;
+
+/** True when this key has used up its failed attempts in the window. The caller decides what to do if the check itself fails. */
+export async function loginBlocked(key: string, maxFails = 8): Promise<boolean> {
+  const since = new Date(Date.now() - LOGIN_WINDOW_MIN * 60 * 1000);
+  return (await (await col.logins()).countDocuments({ key, at: { $gte: since } })) >= maxFails;
+}
+
+export async function revokeSession(sid: string, exp: number): Promise<void> {
+  await (await col.revoked()).updateOne({ sid }, { $setOnInsert: { _id: new ObjectId(), sid, expireAt: new Date(exp * 1000) } }, { upsert: true });
+}
+export async function isSessionRevoked(sid: string): Promise<boolean> {
+  return !!(await (await col.revoked()).findOne({ sid }, { projection: { _id: 1 } }));
+}
+export async function recordLoginFailure(key: string): Promise<void> {
+  await (await col.logins()).insertOne({ _id: new ObjectId(), key, at: new Date() });
+}
+export async function clearLoginFailures(key: string): Promise<void> {
+  await (await col.logins()).deleteMany({ key });
+}
+
+// ------------------------------------------------------------------------------------------ export input
+export async function recentEvents(interviewId: string, limit = 30) {
+  const oid = toOid(interviewId);
+  if (!oid) return [];
+  const docs = await (await col.events()).find({ interviewId: oid }).sort({ at: -1 }).limit(limit).toArray();
+  return docs.map((e) => ({ id: e._id.toHexString(), type: e.type, at: e.at.toISOString(), participantId: e.participantId?.toHexString(), meta: e.meta }));
+}
