@@ -1,18 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, BrandMark, Icon } from "./ui";
 
 const LINKS = [
-  { href: "/admin", label: "Interviews", match: (p: string) => p === "/admin" || p.startsWith("/admin/interviews") || p === "/admin/new" },
-  { href: "/admin/check", label: "Check a file", match: (p: string) => p.startsWith("/admin/check") },
-  { href: "/admin/docs", label: "Format guide", match: (p: string) => p.startsWith("/admin/docs") },
+  { href: "/admin", label: "Interview", match: (p: string) => p === "/admin" || p.startsWith("/admin/interviews") || p === "/admin/new" },
+  { href: "/admin/check", label: "Checking", match: (p: string) => p.startsWith("/admin/check") },
+  { href: "/admin/docs", label: "Guide", match: (p: string) => p.startsWith("/admin/docs") },
+  { href: "/admin/settings", label: "Settings", match: (p: string) => p.startsWith("/admin/settings") },
 ];
 
 export function AdminNav({ email }: { email: string }) {
   const path = usePathname();
   const router = useRouter();
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current?.querySelector<HTMLElement>("[aria-current='page']")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [path]);
   return (
     <header className="topbar">
       <div className="topbar-in">
@@ -20,7 +26,7 @@ export function AdminNav({ email }: { email: string }) {
           <BrandMark />
           <span>KQA <small>Host</small></span>
         </Link>
-        <nav className="nav" aria-label="Main">
+        <nav className="nav" aria-label="Main" ref={navRef}>
           {LINKS.map((l) => (
             <Link key={l.href} href={l.href} aria-current={l.match(path) ? "page" : undefined}>{l.label}</Link>
           ))}

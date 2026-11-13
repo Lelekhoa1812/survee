@@ -32,4 +32,11 @@ describe("MCP auth", () => {
     for (const res of [missing, wrong, query, cookie]) expect(res.status).toBe(401);
     expect(touch).not.toHaveBeenCalled();
   });
+
+  it("looks up a long unknown bearer and still returns 401", async () => {
+    touch.mockClear();
+    const res = await post({ authorization: `Bearer ${"x".repeat(40)}` });
+    expect(res.status).toBe(401);
+    expect(touch).toHaveBeenCalled();
+  });
 });

@@ -1,0 +1,135 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { ObjectId } from "mongodb";
+import { col } from "../db";
+import { mcpToken } from "../env";
+import type { ApiKeyDoc, ApiKeyView } from "./types";
+
+const MIN_SECRET = 32;
+const MAX_SECRET = 256;
+
+export function hashKey(secret: string): string {
+  return createHash("sha256").update(secret, "utf8").digest("hex");
+}
+
+/** 256 bits, prefixed so a host can tell a KQA key from another secret. */
+export function generateKeySecret(): string {
+  return `kqa_${randomBytes(32).toString("base64url")}`;
+}
+
+export function splitSecret(secret: string): { prefix: string; suffix: string } {
+  return { prefix: secret.slice(0, 12), suffix: secret.slice(-4) };
+}
+
+export function validateKeySecret(secret: string): string | null {
+  if (secret.length < MIN_SECRET) return `A key value needs at least ${MIN_SECRET} characters.`;
+  if (secret.length > MAX_SECRET) return `A key value must be ${MAX_SECRET} characters or fewer.`;
+  if (/\s/.test(secret)) return "A key value cannot contain spaces.";
+  const env = mcpToken();
+  if (env && secret.length === env.length) {
+    const same = timingSafeEqual(Buffer.from(secret), Buffer.from(env));
+    if (same) return "That value is the server token. Choose a different key.";
+  }
+  return null;
+}
+
+function statusOf(doc: ApiKeyDoc, now = Date.now()): ApiKeyView["status"] {
+  if (doc.revokedAt) return "revoked";
+  if (doc.expiresAt && doc.expiresAt.getTime() <= now) return "expired";
+  return "active";
+}
+
+export function toKeyView(doc: ApiKeyDoc): ApiKeyView {
+  return {
+    id: doc._id.toHexString(),
+    name: doc.name,
+    note: doc.note ?? "",
+    prefix: doc.prefix,
+    suffix: doc.suffix,
+    createdAt: doc.createdAt.toISOString(),
+    createdBy: doc.createdBy,
+    lastUsedAt: doc.lastUsedAt ? doc.lastUsedAt.toISOString() : null,
+    expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
+    revokedAt: doc.revokedAt ? doc.revokedAt.toISOString() : null,
+    status: statusOf(doc),
+  };
+}
+
+export async function listApiKeys(): Promise<ApiKeyView[]> {
+  const docs = await (await col.apiKeys()).find({}).sort({ createdAt: -1 }).toArray();
+  return docs.map(toKeyView);
+}
+
+export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
+  const problem = validateKeySecret(input.secret);
+  if (problem) return { ok: false, error: problem };
+  const { prefix, suffix } = splitSecret(input.secret);
+  const doc: ApiKeyDoc = {
+    _id: new ObjectId(),
+    name: input.name,
+    note: input.note || undefined,
+    prefix,
+    suffix,
+    hash: hashKey(input.secret),
+    createdAt: new Date(),
+    createdBy: input.createdBy,
+    expiresAt: input.expiresAt ?? undefined,
+  };
+  try {
+    await (await col.apiKeys()).insertOne(doc);
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && (e as { code: number }).code === 11000) {
+      return { ok: false, error: "A key with that value already exists." };
+    }
+    throw e;
+  }
+  return { ok: true, key: toKeyView(doc), secret: input.secret };
+}
+
+export async function updateApiKey(id: string, patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean }): Promise<{ ok: true; key: ApiKeyView } | { ok: false; error: string }> {
+  if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
+  const c = await col.apiKeys();
+  const existing = await c.findOne({ _id: new ObjectId(id) });
+  if (!existing) return { ok: false, error: "Key not found." };
+  const $set: Partial<ApiKeyDoc> = {};
+  const $unset: Record<string, ""> = {};
+  if (patch.name !== undefined) $set.name = patch.name;
+  if (patch.note !== undefined) {
+    if (patch.note) $set.note = patch.note;
+    else $unset.note = "";
+  }
+  if (patch.expiresAt !== undefined) {
+    if (patch.expiresAt) $set.expiresAt = patch.expiresAt;
+    else $unset.expiresAt = "";
+  }
+  if (patch.revoked === true && !existing.revokedAt) $set.revokedAt = new Date();
+  if (patch.revoked === false) $unset.revokedAt = "";
+  const update: { $set?: Partial<ApiKeyDoc>; $unset?: Record<string, ""> } = {};
+  if (Object.keys($set).length) update.$set = $set;
+  if (Object.keys($unset).length) update.$unset = $unset;
+  if (update.$set || update.$unset) await c.updateOne({ _id: existing._id }, update);
+  const next = await c.findOne({ _id: existing._id });
+  if (!next) return { ok: false, error: "Key not found." };
+  return { ok: true, key: toKeyView(next) };
+}
+
+export async function deleteApiKey(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
+  const result = await (await col.apiKeys()).deleteOne({ _id: new ObjectId(id) });
+  if (!result.deletedCount) return { ok: false, error: "Key not found." };
+  return { ok: true };
+}
+
+/**
+ * True only for a stored key that is not revoked and not past its expiry.
+ * Updates last-used at most once a minute. Callers treat false and a database error the same: unauthorized.
+ */
+export async function authenticateApiKey(secret: string): Promise<boolean> {
+  if (secret.length < MIN_SECRET || secret.length > MAX_SECRET || /\s/.test(secret)) return false;
+  const c = await col.apiKeys();
+  const doc = await c.findOne({ hash: hashKey(secret) });
+  if (!doc || doc.revokedAt) return false;
+  if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return false;
+  const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
+  if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
+  return true;
+}

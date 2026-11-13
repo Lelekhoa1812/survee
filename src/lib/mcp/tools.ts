@@ -30,6 +30,7 @@ import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
+import { validateToolArgs } from "./validate";
 
 export interface ToolResult {
   content: { type: "text"; text: string }[];
@@ -41,6 +42,8 @@ interface ToolDef {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** A refusal that should win over the generic unknown-field error. */
+  guard?: (args: Record<string, unknown>) => ToolResult | null;
   run: (args: Record<string, unknown>) => Promise<ToolResult>;
 }
 
@@ -151,13 +154,17 @@ const TOOLS: ToolDef[] = [
   {
     name: "get_survey_html",
     description: "Read a stored questionnaire file.",
-    inputSchema: obj({ interviewId: str, version: { type: "integer" } }, ["interviewId"]),
+    inputSchema: obj({ interviewId: str, version: { type: "integer", minimum: 1 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
-      const versionNo = typeof args.version === "number" && Number.isInteger(args.version) ? args.version : interview.currentVersion;
+      let versionNo = interview.currentVersion;
+      if (args.version !== undefined) {
+        if (typeof args.version !== "number" || !Number.isInteger(args.version) || args.version < 1) return err("version must be an integer of at least 1.");
+        versionNo = args.version;
+      }
       const version = await getVersion(interview._id, versionNo);
       if (!version) return err("Survey version not found.", "not_found");
       return ok({ version: version.version, fileName: version.fileName ?? null, html: version.html, manifest: version.manifest });
@@ -267,12 +274,16 @@ const TOOLS: ToolDef[] = [
   {
     name: "list_events",
     description: "Recent audit events for an interview.",
-    inputSchema: obj({ interviewId: str, limit: { type: "integer" } }, ["interviewId"]),
+    inputSchema: obj({ interviewId: str, limit: { type: "integer", minimum: 1 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       if (!(await getInterview(id))) return err("Interview not found.", "not_found");
-      const limit = typeof args.limit === "number" && args.limit > 0 ? Math.min(50, Math.floor(args.limit)) : 30;
+      let limit = 30;
+      if (args.limit !== undefined) {
+        if (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1) return err("limit must be an integer of at least 1.");
+        limit = Math.min(50, args.limit);
+      }
       return ok({ events: await recentEvents(id, limit) });
     },
   },
@@ -501,6 +512,10 @@ const TOOLS: ToolDef[] = [
     name: "send_invite",
     description: "Email one person their private link. Refuses when they have no email, the interview is closed, or the public URL is unset. Does not send a second message unless resend is true.",
     inputSchema: obj({ personId: str, resend: bool }, ["personId"]),
+    guard(args) {
+      if ("personIds" in args || Array.isArray(args.personId)) return err("Send to one person at a time.");
+      return null;
+    },
     async run(args) {
       if ("personIds" in args || Array.isArray(args.personId)) return err("Send to one person at a time.");
       const id = asString(args.personId, 40);
@@ -514,6 +529,12 @@ const TOOLS: ToolDef[] = [
     name: "check_invite_delivery",
     description: "Connect briefly over IMAP and look up only the message id KQA stored for this person's current invite. Returns delivered, bounced, or unknown.",
     inputSchema: obj({ personId: str }, ["personId"]),
+    guard(args) {
+      if ("query" in args || "mailbox" in args || "search" in args || "messageId" in args) {
+        return err("Delivery checks only the invites KQA has sent for this person. It does not search a mailbox.");
+      }
+      return null;
+    },
     async run(args) {
       if ("query" in args || "mailbox" in args || "search" in args || "messageId" in args) {
         return err("Delivery checks only the invites KQA has sent for this person. It does not search a mailbox.");
@@ -532,18 +553,25 @@ export function listToolDefs() {
   return TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }));
 }
 
+async function finish(tool: string, result: ToolResult, interviewId?: string): Promise<ToolResult> {
+  const fromResult = typeof result.structuredContent.interviewId === "string" ? result.structuredContent.interviewId : interviewId;
+  await noteMcp(tool, !result.isError, fromResult).catch(() => {});
+  return result;
+}
+
 export async function dispatchTool(name: string, args: unknown): Promise<ToolResult> {
   const tool = TOOLS.find((item) => item.name === name);
   if (!tool) return err(`Unknown tool: ${name}`);
-  const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
-  const interviewId = typeof record.interviewId === "string" ? record.interviewId : undefined;
+  const record = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
+  const interviewId = record && typeof record.interviewId === "string" ? record.interviewId : undefined;
+  if (!record) return finish(tool.name, err("arguments must be an object.", "invalid_args"), interviewId);
+  const guarded = tool.guard?.(record);
+  if (guarded) return finish(tool.name, guarded, interviewId);
+  const problem = validateToolArgs(tool.inputSchema, record);
+  if (problem) return finish(tool.name, err(problem, "invalid_args"), interviewId);
   try {
-    const result = await tool.run(record);
-    const fromResult = typeof result.structuredContent.interviewId === "string" ? result.structuredContent.interviewId : interviewId;
-    await noteMcp(tool.name, !result.isError, fromResult).catch(() => {});
-    return result;
+    return await finish(tool.name, await tool.run(record), interviewId);
   } catch {
-    await noteMcp(tool.name, false, interviewId).catch(() => {});
-    return err("That could not be done.");
+    return finish(tool.name, err("That could not be done."), interviewId);
   }
 }

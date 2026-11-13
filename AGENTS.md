@@ -12,4 +12,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 This app hosts interviews. Questionnaires are HTML files (`docs/AGENT_PLAYBOOK.md`, `docs/FORMAT.md`): single choice, checkboxes, short text, paragraphs, and also dropdown, number, scale, and date. There is no in-app question builder and no scoring.
 
-Host actions for a live interview go through the MCP server in `docs/MCP.md` at `POST /api/mcp`, with a `KQA_MCP_TOKEN` bearer. `/_next/mcp` is the Next.js dev diagnostics endpoint and does not operate interviews.
+Host actions for a live interview go through the MCP server in `docs/MCP.md` at `POST /api/mcp`, with a bearer that is either `KQA_MCP_TOKEN` or an active key from Settings. `/_next/mcp` is the Next.js dev diagnostics endpoint and does not operate interviews.

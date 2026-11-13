@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Uploader } from "@/components/Uploader";
 
-export const metadata = { title: "Check a file" };
+export const metadata = { title: "Checking" };
 
 export default function CheckPage() {
   return (
     <main className="page narrow">
       <div className="page-head">
         <div>
-          <h1>Check a file</h1>
+          <h1>Checking</h1>
           <p>Find every problem before anyone sees the questionnaire. Nothing is saved. When something fails, copy the report and paste it to the AI agent that wrote the file.</p>
         </div>
       </div>

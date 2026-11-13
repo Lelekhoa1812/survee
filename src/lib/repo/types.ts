@@ -103,6 +103,35 @@ export interface RevokedSessionDoc {
   expireAt: Date;
 }
 
+/** collection: api_keys. The secret is stored only as a SHA-256 hash. prefix and suffix are for the host to recognize a key. */
+export interface ApiKeyDoc {
+  _id: ObjectId;
+  name: string;
+  note?: string;
+  prefix: string;
+  suffix: string;
+  hash: string;
+  createdAt: Date;
+  createdBy: string;
+  lastUsedAt?: Date;
+  expiresAt?: Date;
+  revokedAt?: Date;
+}
+
+export interface ApiKeyView {
+  id: string;
+  name: string;
+  note: string;
+  prefix: string;
+  suffix: string;
+  createdAt: string;
+  createdBy: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  status: "active" | "revoked" | "expired";
+}
+
 // ---- shapes handed to pages and APIs (plain JSON, ids and dates as strings)
 export interface InterviewSummary {
   id: string;

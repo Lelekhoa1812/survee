@@ -5,7 +5,7 @@ import { CopyBundle } from "@/components/CopyBundle";
 import { Icon } from "@/components/ui";
 import { buildBundle, DOCS, readDoc } from "@/lib/docs";
 
-export const metadata = { title: "Format guide" };
+export const metadata = { title: "Guide" };
 export const dynamic = "force-dynamic";
 
 function slugify(s: string) {
@@ -32,7 +32,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug?: st
     <main className="page">
       <div className="page-head">
         <div>
-          <h1>Format guide</h1>
+          <h1>Guide</h1>
           <p>Everything needed to write a questionnaire file that KQA accepts. Give an AI agent the bundle and it can produce one that passes first time.</p>
         </div>
         <div className="right row wrap">

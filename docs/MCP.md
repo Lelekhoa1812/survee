@@ -14,15 +14,17 @@ Stateless Streamable HTTP. One JSON-RPC request, one JSON response. There is no 
 |---|---|
 | URL | `https://<your-host>/api/mcp` |
 | Method | `POST` |
-| Header | `Authorization: Bearer <KQA_MCP_TOKEN>` |
+| Header | `Authorization: Bearer <key or KQA_MCP_TOKEN>` |
 | Accept | `application/json, text/event-stream` |
 | Body | A single JSON-RPC 2.0 message |
 
 `GET` and `DELETE` answer 405. This server does not open an SSE channel and does not keep a session.
 
-The token is the `KQA_MCP_TOKEN` environment variable. It is not the admin password, not the session cookie, and not a respondent link. Send it only in the Authorization header. A token in the query string is rejected. A missing or wrong token is HTTP 401 and does not touch the database.
+Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is the server token. A host can also create named keys under Settings. Each key has a name, a note, an optional expiry, and a value. The value is shown once. The database stores a SHA-256 hash plus a short fingerprint. A key can be revoked, restored, or deleted. Revoked, expired, and deleted keys are rejected.
 
-The same token can read and write. Anyone who has it can delete interviews. Treat it like the session secret.
+Neither credential is the admin password, the session cookie, or a respondent link. Send it only in the Authorization header. A token in the query string is rejected. A missing bearer, the admin cookie, or a query-string token is HTTP 401 and does not touch the database. The server token is compared before any database call. Any other bearer is one lookup by hash. A failed lookup is the same HTTP 401.
+
+A valid server token or an active key can read and write. Anyone who has one can delete interviews. Treat both like the session secret.
 
 Locally the value lives in `.env` (gitignored). Production on Vercel needs the same name, plus `KQA_PUBLIC_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `IMAP_HOST`, and `IMAP_PORT`. Set those in the Vercel project. Do not paste the values into a chat, a doc, or a commit.
 
@@ -41,7 +43,7 @@ Example client entry (no secret in the file; the client reads the env var):
 
 ## What the tools do
 
-Every tool uses the same bearer check. Inputs that fail validation return a short error, not a stack trace. The questionnaire HTML is never put in an email. There is no score.
+Every tool uses the same bearer check. Arguments are checked against the published schema before the tool runs: required fields, types, enums, and unknown fields. A string sent where an integer is required is rejected, and `list_events` rejects a limit below 1. An omitted `version` or `limit` still means the current version or the default of 30. Failures are a short error, not a stack trace. The questionnaire HTML is never put in an email. There is no score.
 
 | Tool | What it does |
 |---|---|

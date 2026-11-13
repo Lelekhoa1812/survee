@@ -86,7 +86,7 @@ async function handleOne(msg: RpcRequest): Promise<unknown | null> {
 
 /** Stateless Streamable HTTP: one JSON-RPC response, no session, no open stream. Auth runs before any tool. */
 export async function handleMcp(req: Request): Promise<Response> {
-  const auth = authorizeMcp(req);
+  const auth = await authorizeMcp(req);
   if (!auth.ok) return new Response(JSON.stringify({ error: auth.error }), { status: 401, headers: JSON_HEADERS });
   if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
   const body = await readBody(req);
