@@ -243,13 +243,15 @@ describe("MCP tools", () => {
       policyVersion?: string;
       principles?: { id: string; guidance: string }[];
       sources?: { name: string; url?: string }[];
-      designPlan?: { output?: { fields?: string[] }; guardrails?: string[] };
+      designPlan?: { output?: { fields?: string[] }; guardrails?: string[]; accessibilityEvaluationMethodology?: { source?: string; status?: string; steps?: string[] } };
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/6");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/7");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
+    expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.steps?.join(" ")).toContain("representative sample");
+    expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.status).toContain("informative process guidance");
     expect(body.result.structuredContent.visualProfile).toHaveProperty("questionnaire");
     expect(body.result.structuredContent.visualProfile).not.toHaveProperty("host");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("question-clarity");
@@ -259,6 +261,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.principles?.find((p) => p.id === "accessible-interaction")?.guidance).toContain("WCAG 2.4.11");
     expect(body.result.structuredContent.principles?.find((p) => p.id === "accessible-interaction")?.guidance).toContain("non-drag alternative");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 Quick Reference");
+    expect(body.result.structuredContent.sources?.find((source) => source.name === "WCAG Evaluation Methodology (WCAG-EM) 2.0")?.url).toBe("https://www.w3.org/TR/wcag-em-2/");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 SC 2.5.8: Target Size (Minimum)");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI-ARIA Authoring Practices Guide: Radio Group");

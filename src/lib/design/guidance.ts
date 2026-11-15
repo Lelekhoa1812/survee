@@ -14,6 +14,19 @@ const PRINCIPLES = [
   { id: "privacy", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Minimize exposure of answer data", guidance: "Aggregate by default, reveal person-level answers only for an explicit review task, and avoid putting private respondent links or raw answers into analytics, logs, or unrelated exports." },
 ];
 
+const ACCESSIBILITY_EVALUATION_METHOD = {
+  name: "WCAG Evaluation Methodology (WCAG-EM) 2.0",
+  source: "https://www.w3.org/TR/wcag-em-2/",
+  status: "W3C Group Note published 23 July 2026 with informative process guidance; it is not a normative WCAG success criterion or a claim of conformance.",
+  steps: [
+    "Define the product, routes, themes, technologies, user groups, and conformance target in scope.",
+    "Explore the product's essential functionality and identify representative views, states, and complete task paths, including important branches and errors.",
+    "Select and record a representative sample; include different content types, interaction patterns, and process branches rather than relying on a single screenshot.",
+    "Evaluate each selected sample against the chosen WCAG criteria using appropriate automated and manual checks, recording the evidence and limitations for each finding.",
+    "Report the scope, sample, methods, findings, and unresolved gaps. Do not claim full-product conformance from a static scan, checklist, or unrepresentative sample.",
+  ],
+} as const;
+
 const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text: string }[] = [
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check the primary task, next action, and outcome are clear without relying on color or animation." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check semantic labels, keyboard-only operation, focus visibility, validation messages, and save/submission announcements." },
@@ -28,12 +41,14 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire"], text: "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden." },
   { surfaces: ["analytics"], text: "For analytics, verify survey version, participant scope, cohort n, no-answer count, valid n, and multi-select denominator; state that KQA does not track item-level display eligibility." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "For a conformance evaluation, define the scope, explore essential task paths, select and record representative views, states, and branches, evaluate each against the target criteria, and report findings and remaining gaps." },
 ];
 
 export const DESIGN_REVIEW_CHECKLIST = REVIEW_CHECKLIST_ITEMS.map(({ text }) => text);
 
 const SOURCES = [
   { name: "WCAG 2.2 Quick Reference", url: "https://www.w3.org/WAI/WCAG22/quickref/", role: "Normative accessibility success criteria; target WCAG 2.2 AA." },
+  { name: "WCAG Evaluation Methodology (WCAG-EM) 2.0", url: "https://www.w3.org/TR/wcag-em-2/", role: "W3C Group Note published 23 July 2026 with informative, technology-agnostic process guidance for defining scope, exploring a product, selecting representative samples, evaluating them, and reporting findings; it is not a normative conformance criterion." },
   { name: "WCAG 2.2 SC 2.5.8: Target Size (Minimum)", url: "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html", role: "Explains the Level AA 24 × 24 CSS pixel target-size criterion and its exceptions." },
   { name: "WAI-ARIA Authoring Practices Guide: Tabs", url: "https://www.w3.org/WAI/ARIA/apg/patterns/tabs/", role: "Implementation guidance for accessible tab interactions; not a conformance standard." },
   { name: "WAI-ARIA Authoring Practices Guide: Radio Group", url: "https://www.w3.org/WAI/ARIA/apg/patterns/radio/", role: "Keyboard interaction guidance for custom radio groups; native radio controls remain preferable." },
@@ -56,13 +71,16 @@ const DESIGN_PLAN = {
     "Describe information hierarchy, layout at narrow and wide widths, key components, and loading, empty, error, success, and disabled states relevant to the task.",
     "Use motion only when it clarifies a user action or state change; preserve the same meaning with prefers-reduced-motion enabled.",
     "Build, then critique against the brief and review checklist. Inspect rendered narrow and wide layouts, keyboard operation, focus, contrast, and relevant non-happy-path states; report what was checked and what remains uncertain.",
+    "For a WCAG conformance evaluation, follow the accessibility evaluation methodology below: define scope, explore essential functionality, select representative views and states, evaluate the sample against the target criteria, and document the findings and limits.",
   ],
+  accessibilityEvaluationMethodology: ACCESSIBILITY_EVALUATION_METHOD,
   output: {
-    fields: ["briefSummary", "visualDirection", "tokenMapping", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "reviewEvidence", "openQuestions"],
+    fields: ["briefSummary", "visualDirection", "tokenMapping", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
     evidenceRule: "State concrete checks and their results. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality.",
   },
   guardrails: [
     "WCAG 2.2 AA is the accessibility target; subjective taste heuristics never override it or the user's explicit direction.",
+    "Do not claim full-product WCAG conformance based only on a static scan, checklist, screenshot, or unrepresentative sample; record the evaluated scope, sample, criteria, findings, and unresolved gaps.",
     "Do not add motion, gradients, cards, display type, or decorative labels merely because a design heuristic suggests them; use only when justified by this brief and task.",
     "Do not invent brand facts or claim user research occurred when it did not.",
   ],
@@ -131,7 +149,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/6",
+    policyVersion: "kqa-design/7",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

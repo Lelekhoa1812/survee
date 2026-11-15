@@ -1,10 +1,10 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/6` · reviewed 16 November 2026
+Version: `kqa-design/7` · reviewed 16 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
-The tool also returns a structured `designPlan` contract for moving from a user brief through design, implementation, and critique. Its `inputs`, `steps`, `output.fields`, and `guardrails` are intended to make agent work repeatable and reviewable. Visual-taste guidance is heuristic: preserve the user's explicit direction and product context, and do not present a subjective preference as a standard. WCAG 2.2 AA remains the accessibility target.
+The tool also returns a structured `designPlan` contract for moving from a user brief through design, implementation, and critique. Its `inputs`, `steps`, `output.fields`, `guardrails`, and WCAG-EM evaluation method are intended to make agent work repeatable and reviewable. Visual-taste guidance is heuristic: preserve the user's explicit direction and product context, and do not present a subjective preference as a standard. WCAG 2.2 AA remains the accessibility target.
 
 For host surfaces, `visualProfile.host` exposes the default KQA visual direction, semantic token names, and core light/dark token values from `src/app/globals.css`. The default is a heuristic when the user has not supplied a different brand or theme; it is not a template to force onto every interview. Contrast still needs verification for the actual foreground/background pairing. The stylesheet does not currently define a shared spacing scale. Questionnaire guidance is separate because its HTML runs in a sandboxed iframe and does not inherit host CSS variables; `visualProfile.questionnaire` exposes tokens and layout conventions from [`template/starter.kqa.html`](template/starter.kqa.html), while [`FORMAT.md`](FORMAT.md) documents the supported controls and runtime. Analytics guidance emphasizes legible labels, provenance, denominators, non-color chart alternatives, and singleton disclosure signals; KQA does not suppress small groups by default.
 
@@ -45,10 +45,12 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 - Are ids stable, required questions visible, and data-impacting survey changes explained?
 - For every analytic figure, are survey version, cohort, valid n, no-answer count, and multi-select denominator clear, with KQA's item-eligibility limit stated?
 - Are static checker results described only as evidence for the individual checks they cover? They do not judge wording quality, prove visual quality, or establish full WCAG conformance.
+- For a conformance evaluation, are the product scope, essential task paths, representative views/states/branches, target criteria, findings, and unresolved gaps documented?
 
 ## Research basis and limits
 
 - [WCAG 2.2 Quick Reference](https://www.w3.org/WAI/WCAG22/quickref/) provides the normative accessibility criteria. KQA targets Level AA.
+- [WCAG Evaluation Methodology (WCAG-EM) 2.0](https://www.w3.org/TR/wcag-em-2/) is a W3C Group Note published 23 July 2026 with informative, technology-agnostic process guidance: define scope, explore essential functionality, select representative samples, evaluate them, and report findings. It is not a normative success criterion or a claim of conformance.
 - [WCAG 2.2 SC 2.5.8: Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) explains the 24 × 24 CSS-pixel minimum and its exceptions.
 - [WAI-ARIA Authoring Practices Guide: Tabs](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/) provides implementation patterns for tab interactions; it is guidance, not a conformance standard.
 - [WAI-ARIA Authoring Practices Guide: Radio Group](https://www.w3.org/WAI/ARIA/apg/patterns/radio/) describes the keyboard behavior expected of custom radio groups; native radio controls are preferable when they fit.

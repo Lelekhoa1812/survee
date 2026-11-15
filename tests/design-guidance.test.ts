@@ -5,12 +5,16 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/6");
+    expect(guidance.policyVersion).toBe("kqa-design/7");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
     expect(guidance.designPlan.guardrails.join(" ")).toContain("WCAG 2.2 AA");
     expect(guidance.designPlan.guardrails.join(" ")).toContain("subjective taste heuristics");
+    expect(guidance.designPlan.output.fields).toContain("representativeSamplesAndStates");
+    expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("representative sample");
+    expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
+    expect(guidance.sources.find((source) => source.name === "WCAG Evaluation Methodology (WCAG-EM) 2.0")?.url).toBe("https://www.w3.org/TR/wcag-em-2/");
   });
 
   it("scopes the visual profile to the host, questionnaire, and analytics surfaces", () => {
