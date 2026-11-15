@@ -9,8 +9,9 @@ function profile(source: string, format: "css" | "json" = "css") {
     profileVersion: string;
     policyVersion: string;
     sourceSha256: string;
-    extractedTokens: { name: string; value: string; scope: string; sourceContext: string; line: number | null }[];
-    proposedMappings: { role: string; sourceToken: string; targetToken: string; scope: string; confidence: string; valueCheck: string }[];
+    tokenFormat?: { name: string; status: string; supported: string[]; limitations: string[] };
+    extractedTokens: { name: string; value: string; scope: string; sourceContext: string; line: number | null; sourceType?: string }[];
+    proposedMappings: { role: string; sourceToken: string; sourceType?: string; targetToken: string; scope: string; confidence: string; valueCheck: string }[];
     ambiguousMappings: { role: string; scope: string; sourceTokens: string[] }[];
     unmappedTokens: { token: string; value: string }[];
     contrastChecks: { scope: string; ratio?: number; status: string; wcagAaNormalText?: boolean; pairing?: string; caveat?: string }[];
@@ -25,7 +26,7 @@ describe("user-supplied design profile extraction", () => {
   it("extracts default and dark CSS tokens with source provenance and safe overlay proposals", () => {
     const result = profile(`:root {\n  --bg: #ffffff;\n  --ink: #111111;\n  --brand: #155eef;\n}\n@media (prefers-color-scheme: dark) { :root { --bg: #000000; --ink: #ffffff; } }`);
 
-    expect(result).toMatchObject({ profileVersion: "kqa-design-profile/1", policyVersion: "kqa-design/13", themeCoverage: { hasDarkTokens: true } });
+    expect(result).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/13", themeCoverage: { hasDarkTokens: true } });
     expect(result.sourceSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(result.extractedTokens.find((token) => token.name === "--bg" && token.scope === "default")).toMatchObject({ value: "#ffffff", line: 2, sourceContext: ":root" });
     expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "color.canvas", targetToken: "--bg", scope: "default", confidence: "high" }));
@@ -90,6 +91,123 @@ describe("user-supplied design profile extraction", () => {
     expect(result.ambiguousMappings).toContainEqual(expect.objectContaining({ scope: "light", role: "color.canvas", sourceTokens: ["colors.background", "colors.canvas"] }));
     expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "text.primary", scope: "dark", sourceToken: "colors.text" }));
     expect(result.integrationProposal.cssOverlay).toContain("@media (prefers-color-scheme: light)");
+  });
+
+  it("imports the bounded DTCG 2025.10 subset with inherited types and typed value normalization", () => {
+    const result = profile(JSON.stringify({
+      $schema: "https://www.designtokens.org/schemas/2025.10/format.json",
+      colors: {
+        $type: "color",
+        canvas: { $value: { colorSpace: "srgb", components: [1, 1, 1], alpha: 1 } },
+        ink: { $value: "#111111" },
+      },
+      spacing: { $type: "dimension", radius: { $value: { value: 8, unit: "px" } } },
+      typeface: { $type: "fontFamily", body: { $value: ["Inter", "sans-serif"] } },
+    }), "json");
+
+    expect(result.profileVersion).toBe("kqa-design-profile/2");
+    expect(result.tokenFormat).toMatchObject({
+      name: "Design Tokens Format Module 2025.10 (bounded subset)",
+      status: "W3C Design Tokens Community Group specification; not a W3C Standard.",
+    });
+    expect(result.extractedTokens).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "colors.canvas", value: "#ffffff", sourceType: "color" }),
+      expect.objectContaining({ name: "spacing.radius", value: "8px", sourceType: "dimension" }),
+      expect.objectContaining({ name: "typeface.body", value: "Inter, sans-serif", sourceType: "fontFamily" }),
+    ]));
+    expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "color.canvas", confidence: "high", sourceType: "color" }));
+    expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "shape.radius", confidence: "high", sourceType: "dimension" }));
+    expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "type.body", confidence: "high", sourceType: "fontFamily" }));
+    expect(result.integrationProposal.status).toBe("proposal_only");
+  });
+
+  it("resolves curly aliases, $root token paths, and inline JSON Pointer references", () => {
+    const result = profile(JSON.stringify({
+      palette: {
+        $type: "color",
+        $root: { $value: "#ffffff" },
+        brand: { $value: "#155eef" },
+      },
+      semantic: {
+        $type: "color",
+        canvas: { $value: "{palette}" },
+        brandCopy: { $value: "{palette.brand}" },
+        surface: { $value: { $ref: "#/palette/$root/$value" } },
+      },
+    }), "json");
+
+    expect(result.extractedTokens).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "semantic.canvas", value: "#ffffff" }),
+      expect.objectContaining({ name: "semantic.brandCopy", value: "#155eef" }),
+      expect.objectContaining({ name: "semantic.surface", value: "#ffffff" }),
+    ]));
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("keeps unresolved and circular aliases visible for manual review", () => {
+    const result = profile(JSON.stringify({
+      colors: {
+        $type: "color",
+        canvas: { $value: "{colors.missing}" },
+        pointer: { $value: { $ref: "#/colors/not-found/$value" } },
+        other: { $value: "{colors.loop}" },
+        loop: { $value: "{colors.other}" },
+      },
+    }), "json");
+
+    expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "color.canvas", confidence: "review", valueCheck: "manual_review" }));
+    expect(result.diagnostics.join(" ")).toContain("references unresolved token {colors.missing}");
+    expect(result.diagnostics.join(" ")).toContain("references unresolved JSON Pointer #/colors/not-found/$value");
+    expect(result.diagnostics.join(" ")).toContain("Circular DTCG token reference");
+  });
+
+  it("keeps multi-theme aliases scoped and marks unresolved ambiguous references for review", () => {
+    const result = profile(JSON.stringify({
+      dark: {
+        colors: { $type: "color", canvas: { $value: "#000000" } },
+        semantic: { $type: "color", canvasCopy: { $value: "{colors.canvas}" } },
+      },
+      light: {
+        colors: { $type: "color", canvas: { $value: "#ffffff" } },
+        semantic: { $type: "color", canvasCopy: { $value: "{colors.canvas}" } },
+      },
+      semantic: { $type: "color", canvas: { $value: "{colors.canvas}" } },
+    }), "json");
+
+    expect(result.extractedTokens).toContainEqual(expect.objectContaining({ name: "semantic.canvas", scope: "default", value: "{colors.canvas}" }));
+    expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "color.canvas", scope: "default", valueCheck: "manual_review" }));
+    expect(result.diagnostics.join(" ")).toContain("references ambiguous token path {colors.canvas}");
+    expect(result.extractedTokens).toContainEqual(expect.objectContaining({ name: "semantic.canvasCopy", scope: "dark", value: "#000000" }));
+    expect(result.extractedTokens).toContainEqual(expect.objectContaining({ name: "semantic.canvasCopy", scope: "light", value: "#ffffff" }));
+  });
+
+  it("preserves deterministic token order and source hashes and flags conflicting role candidates", () => {
+    const source = JSON.stringify({
+      $type: "color",
+      background: { $value: "#ffffff" },
+      canvas: { $value: "#eeeeee" },
+    });
+    const first = profile(source, "json");
+    const second = profile(source, "json");
+
+    expect(first.extractedTokens.map((token) => token.name)).toEqual(["background", "canvas"]);
+    expect(first.sourceSha256).toBe(second.sourceSha256);
+    expect(first.extractedTokens).toEqual(second.extractedTokens);
+    expect(first.ambiguousMappings).toContainEqual(expect.objectContaining({ scope: "default", role: "color.canvas", sourceTokens: ["background", "canvas"] }));
+  });
+
+  it("keeps semantically mismatched DTCG types at manual review confidence", () => {
+    const result = profile(JSON.stringify({
+      $type: "dimension",
+      canvas: { $value: { value: 4, unit: "px" } },
+    }), "json");
+
+    expect(result.proposedMappings).toContainEqual(expect.objectContaining({
+      role: "color.canvas",
+      sourceType: "dimension",
+      confidence: "review",
+      valueCheck: "manual_review",
+    }));
   });
 
   it("does not evaluate alpha colors, gradients, or unsupported color syntax", () => {

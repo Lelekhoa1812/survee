@@ -17,6 +17,8 @@ interface DesignToken {
   sourceContext: string;
   line: number | null;
   path?: string;
+  sourceType?: string;
+  requiresReview?: boolean;
 }
 
 interface RoleCandidate {
@@ -28,6 +30,7 @@ interface RoleCandidate {
 
 interface Mapping extends RoleCandidate {
   sourceToken: string;
+  sourceType?: string;
   scope: string;
   value: string;
   confidence: "high" | "review";
@@ -99,14 +102,277 @@ function collectCss(source: string): { tokens: DesignToken[]; diagnostics: strin
   return { tokens, diagnostics };
 }
 
-function collectJson(source: string): { tokens: DesignToken[]; diagnostics: string[] } | null {
-  let parsed: unknown;
+interface JsonTokenExtraction {
+  tokens: DesignToken[];
+  diagnostics: string[];
+  format: "legacy" | "dtcg-2025.10";
+}
+
+interface DtcgTokenRecord {
+  path: string[];
+  scope: string;
+  name: string;
+  rawValue: unknown;
+  sourceType?: string;
+  requiresReview: boolean;
+}
+
+const DTCG_FORMAT_URL = "https://www.w3.org/community/reports/design-tokens/CG-FINAL-format-20251028/";
+const DTCG_METADATA_KEYS = new Set(["$schema", "$type", "$description", "$extensions", "$deprecated"]);
+
+function detectDtcg(value: unknown, depth = 0, budget = { visited: 0 }): boolean {
+  if (depth > 8 || budget.visited++ > 1500) return false;
+  if (!isRecord(value)) return false;
+  if (typeof value.$schema === "string" && /design.?tokens/i.test(value.$schema)) return true;
+  if (Object.prototype.hasOwnProperty.call(value, "$value")
+    || Object.prototype.hasOwnProperty.call(value, "$type")
+    || Object.prototype.hasOwnProperty.call(value, "$extends")) return true;
+  return Object.values(value).some((child) => detectDtcg(child, depth + 1, budget));
+}
+
+function pointerSegments(pointer: string): string[] | null {
+  if (pointer === "#") return [];
+  if (!pointer.startsWith("#/")) return null;
   try {
-    parsed = JSON.parse(source);
+    return pointer.slice(2).split("/").map((segment) => decodeURIComponent(segment).replace(/~1/g, "/").replace(/~0/g, "~"));
   } catch {
     return null;
   }
-  if (!isRecord(parsed)) return null;
+}
+
+function pointerKey(path: string[]): string {
+  return JSON.stringify(path);
+}
+
+function normalizedDtcgValue(value: unknown, type?: string): string | null {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (type === "fontFamily" && Array.isArray(value) && value.every((item) => typeof item === "string")) {
+    return value.map((family) => /^[a-z-]+$/i.test(family) ? family : JSON.stringify(family)).join(", ");
+  }
+  if (isRecord(value) && type === "dimension" && typeof value.value === "number" && Number.isFinite(value.value)
+    && typeof value.unit === "string" && /^[A-Za-z%]+$/.test(value.unit)) {
+    return `${value.value}${value.unit}`;
+  }
+  if (isRecord(value) && type === "color") {
+    if (typeof value.hex === "string") return value.hex;
+    if (value.colorSpace === "srgb" && Array.isArray(value.components) && value.components.length === 3
+      && value.components.every((component) => typeof component === "number" && Number.isFinite(component) && component >= 0 && component <= 1)
+      && (value.alpha === undefined || value.alpha === 1)) {
+      return `#${value.components.map((component) => Math.round((component as number) * 255).toString(16).padStart(2, "0")).join("")}`;
+    }
+  }
+  try {
+    return JSON.stringify(value) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function collectDtcg(parsed: Record<string, unknown>): JsonTokenExtraction {
+  const records: DtcgTokenRecord[] = [];
+  const diagnostics: string[] = [];
+  const diagnosticSet = new Set<string>();
+  let visited = 0;
+  let traversalCapped = false;
+  const addDiagnostic = (message: string) => {
+    if (diagnosticSet.has(message)) return;
+    diagnosticSet.add(message);
+    diagnostics.push(message);
+  };
+
+  const addRecord = (path: string[], rawValue: unknown, inheritedType: string | undefined, explicitType: unknown) => {
+    if (!path.length) {
+      addDiagnostic("A token at the JSON root was skipped because it has no token name.");
+      return;
+    }
+    if (records.length >= MAX_TOKENS) return;
+    const sourcePath = path.join(".");
+    const modeIndex = path.length > 1 && ["dark", "light"].includes(path[0]!.toLowerCase()) ? 0 : -1;
+    const scope = modeIndex >= 0 ? path[modeIndex]!.toLowerCase() : "default";
+    const tokenPath = modeIndex >= 0 ? path.slice(1) : path;
+    if (modeIndex >= 0 && tokenPath.some((part) => ["dark", "light"].includes(part.toLowerCase()))) {
+      addDiagnostic(`${sourcePath} contains a nested light/dark path segment; only top-level light/dark groups are treated as theme scopes.`);
+    }
+    const name = tokenPath.filter((part) => part !== "$root").join(".");
+    if (!safeTokenName(name)) {
+      addDiagnostic(`${sourcePath} was skipped because its token path is empty, too long, or contains control characters.`);
+      return;
+    }
+    const tokenType = typeof explicitType === "string" ? explicitType : inheritedType;
+    const requiresReview = (explicitType !== undefined && typeof explicitType !== "string")
+      || typeof tokenType !== "string"
+      || !tokenType;
+    if (requiresReview) addDiagnostic(`${sourcePath} has no explicit or inherited $type; its semantic role needs manual review.`);
+    records.push({ path, scope, name, rawValue, ...(tokenType ? { sourceType: tokenType } : {}), requiresReview });
+  };
+
+  const visit = (value: unknown, path: string[], inheritedType: string | undefined, depth: number) => {
+    visited += 1;
+    if (visited > 1500) {
+      traversalCapped = true;
+      return;
+    }
+    if (records.length >= MAX_TOKENS) return;
+    if (depth > 8) {
+      addDiagnostic("Nested token data deeper than eight levels was skipped.");
+      return;
+    }
+    if (!isRecord(value)) {
+      if (path.length && value !== null) addDiagnostic(`${path.join(".")} was skipped because a DTCG group or token must be an object.`);
+      return;
+    }
+
+    const explicitType = value.$type;
+    if (explicitType !== undefined && typeof explicitType !== "string") {
+      addDiagnostic(`${path.join(".") || "root"} has a non-string $type; inherited type information was used where available.`);
+    }
+    const tokenType = typeof explicitType === "string" ? explicitType : inheritedType;
+    if (Object.prototype.hasOwnProperty.call(value, "$value")) {
+      const extraKeys = Object.keys(value).filter((key) => key !== "$value" && key !== "$root" && !DTCG_METADATA_KEYS.has(key));
+      if (Object.prototype.hasOwnProperty.call(value, "$root")) {
+        addDiagnostic(`${path.join(".")} contains both $value and $root; the invalid token/group was skipped.`);
+        return;
+      }
+      if (extraKeys.length) {
+        addDiagnostic(`${path.join(".")} contains both $value and child data; the invalid token/group was skipped.`);
+        return;
+      }
+      addRecord(path, value.$value, inheritedType, explicitType);
+      return;
+    }
+
+    if (typeof value.$ref === "string" && Object.keys(value).every((key) => key === "$ref" || DTCG_METADATA_KEYS.has(key))) {
+      addRecord(path, { $ref: value.$ref }, inheritedType, explicitType);
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(value, "$extends")) {
+      addDiagnostic(`${path.join(".") || "root"} uses $extends group inheritance, which this bounded importer does not resolve.`);
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "$root") {
+        visit(child, [...path, key], tokenType, depth + 1);
+        continue;
+      }
+      if (key.startsWith("$")) {
+        if (!DTCG_METADATA_KEYS.has(key) && key !== "$extends") addDiagnostic(`Unsupported DTCG metadata ${key} at ${path.join(".") || "root"} was ignored.`);
+        continue;
+      }
+      visit(child, [...path, key], tokenType, depth + 1);
+    }
+  };
+
+  visit(parsed, [], undefined, 0);
+  if (traversalCapped) addDiagnostic("JSON traversal is capped at 1,500 nodes.");
+  if (records.length >= MAX_TOKENS) addDiagnostic(`Token extraction is capped at ${MAX_TOKENS} values.`);
+
+  const byPointer = new Map<string, DtcgTokenRecord>();
+  const byCurlyPath = new Map<string, DtcgTokenRecord[]>();
+  for (const record of records) {
+    byPointer.set(pointerKey(record.path), record);
+    byPointer.set(pointerKey([...record.path, "$value"]), record);
+    byCurlyPath.set(record.name, [...(byCurlyPath.get(record.name) ?? []), record]);
+  }
+  const cache = new Map<DtcgTokenRecord, { value: unknown; unresolved: boolean }>();
+  let resolvedValueNodes = 0;
+  const resolvePointer = (pointer: string, stack: DtcgTokenRecord[]): { found: boolean; value?: unknown; unresolved: boolean } => {
+    const segments = pointerSegments(pointer);
+    if (!segments) return { found: false, unresolved: true };
+    const token = byPointer.get(pointerKey(segments));
+    if (token) return { found: true, ...resolveToken(token, stack) };
+    let current: unknown = parsed;
+    for (const segment of segments) {
+      if (Array.isArray(current) && /^(0|[1-9]\d*)$/.test(segment)) current = current[Number(segment)];
+      else if (isRecord(current) && Object.prototype.hasOwnProperty.call(current, segment)) current = current[segment];
+      else return { found: false, unresolved: true };
+    }
+    const resolved = resolveValue(current, stack);
+    return { found: true, value: resolved.value, unresolved: resolved.unresolved };
+  };
+  const resolveValue = (value: unknown, stack: DtcgTokenRecord[], depth = 0): { value: unknown; unresolved: boolean } => {
+    resolvedValueNodes += 1;
+    if (depth > 8 || resolvedValueNodes > 1500) {
+      addDiagnostic("Alias value traversal is capped at eight nested levels and 1,500 nodes; affected tokens need manual review.");
+      return { value, unresolved: true };
+    }
+    if (typeof value === "string") {
+      const alias = /^\{([^{}]+)\}$/.exec(value.trim());
+      if (!alias) {
+        if (value.includes("{") || value.includes("}")) return { value, unresolved: true };
+        return { value, unresolved: false };
+      }
+      const candidates = byCurlyPath.get(alias[1]!);
+      if (!candidates?.length) {
+        addDiagnostic(`${stack.at(-1)?.path.join(".") ?? "A token"} references unresolved token {${alias[1]}}.`);
+        return { value, unresolved: true };
+      }
+      const currentScope = stack.at(-1)?.scope ?? "default";
+      const sameScope = candidates.filter((candidate) => candidate.scope === currentScope);
+      const defaults = candidates.filter((candidate) => candidate.scope === "default");
+      const resolvedCandidates = sameScope.length ? sameScope : defaults.length ? defaults : candidates;
+      if (resolvedCandidates.length > 1) {
+        addDiagnostic(`${stack.at(-1)?.path.join(".") ?? "A token"} references ambiguous token path {${alias[1]}}.`);
+        return { value, unresolved: true };
+      }
+      return resolveToken(resolvedCandidates[0]!, stack);
+    }
+    if (isRecord(value) && typeof value.$ref === "string" && Object.keys(value).length === 1) {
+      const reference = resolvePointer(value.$ref, stack);
+      if (!reference.found) {
+        addDiagnostic(`${stack.at(-1)?.path.join(".") ?? "A token"} references unresolved JSON Pointer ${value.$ref}.`);
+        return { value, unresolved: true };
+      }
+      return { value: reference.value, unresolved: reference.unresolved };
+    }
+    if (Array.isArray(value)) {
+      const children = value.map((child) => resolveValue(child, stack, depth + 1));
+      return { value: children.map((child) => child.value), unresolved: children.some((child) => child.unresolved) };
+    }
+    if (isRecord(value)) {
+      const entries = Object.entries(value).map(([key, child]) => [key, resolveValue(child, stack, depth + 1)] as const);
+      return {
+        value: Object.fromEntries(entries.map(([key, child]) => [key, child.value])),
+        unresolved: entries.some(([, child]) => child.unresolved),
+      };
+    }
+    return { value, unresolved: false };
+  };
+  const resolveToken = (record: DtcgTokenRecord, stack: DtcgTokenRecord[]): { value: unknown; unresolved: boolean } => {
+    const cycleAt = stack.indexOf(record);
+    if (cycleAt >= 0) {
+      const cycle = [...stack.slice(cycleAt), record].map((item) => item.path.join(".")).join(" -> ");
+      addDiagnostic(`Circular DTCG token reference: ${cycle}.`);
+      return { value: record.rawValue, unresolved: true };
+    }
+    const cached = cache.get(record);
+    if (cached) return cached;
+    const result = resolveValue(record.rawValue, [...stack, record]);
+    cache.set(record, result);
+    return result;
+  };
+
+  const tokens: DesignToken[] = [];
+  for (const record of records) {
+    const resolved = resolveToken(record, []);
+    const value = normalizedDtcgValue(resolved.value, record.sourceType);
+    if (value === null || !value.trim() || value.length > MAX_TOKEN_VALUE || /[\u0000-\u001f\u007f]/.test(value)) {
+      addDiagnostic(`${record.path.join(".")} was skipped because its resolved value is empty, too long, or unsupported.`);
+      continue;
+    }
+    tokens.push({
+      name: record.name,
+      value,
+      scope: record.scope,
+      sourceContext: `DTCG JSON path ${record.path.join(".")}`.slice(0, 240),
+      line: null,
+      path: record.path.join("."),
+      ...(record.sourceType ? { sourceType: record.sourceType } : {}),
+      requiresReview: record.requiresReview || resolved.unresolved,
+    });
+  }
+  return { tokens, diagnostics, format: "dtcg-2025.10" };
+}
+
+function collectLegacyJson(parsed: Record<string, unknown>): JsonTokenExtraction {
   const tokens: DesignToken[] = [];
   const diagnostics: string[] = [];
   const ignoredKeys = new Set(["$schema", "$description", "description", "version", "type", "metadata"]);
@@ -160,7 +426,18 @@ function collectJson(source: string): { tokens: DesignToken[]; diagnostics: stri
   visit(parsed, [], 0);
   if (traversalCapped) diagnostics.push("JSON traversal is capped at 1,500 nodes.");
   if (tokens.length >= MAX_TOKENS) diagnostics.push(`Token extraction is capped at ${MAX_TOKENS} values.`);
-  return { tokens, diagnostics };
+  return { tokens, diagnostics, format: "legacy" };
+}
+
+function collectJson(source: string): JsonTokenExtraction | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  return detectDtcg(parsed) ? collectDtcg(parsed) : collectLegacyJson(parsed);
 }
 
 function roleCandidate(tokenName: string): RoleCandidate | null {
@@ -218,6 +495,14 @@ function recognizedValue(category: RoleCandidate["category"], value: string): bo
   if (category === "length") return /^(?:0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|ch|vw|vh))$/i.test(value.trim());
   if (category === "font") return value.length <= 160 && /^[A-Za-z0-9\s,"'_()-]+$/.test(value) && !/url|expression/i.test(value);
   return value === "none" || /^(?:-?\d+(?:\.\d+)?(?:px|rem|em)?[\s,]*){1,8}$/i.test(value.trim());
+}
+
+function matchesDtcgType(category: RoleCandidate["category"], sourceType: string | undefined): boolean {
+  if (!sourceType) return true;
+  if (category === "color") return sourceType === "color";
+  if (category === "font") return sourceType === "fontFamily" || sourceType === "fontWeight";
+  if (category === "length") return sourceType === "dimension";
+  return sourceType === "shadow";
 }
 
 function contrastRatio(foreground: string, background: string): number | null {
@@ -292,6 +577,7 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
   if (Buffer.byteLength(input.source, "utf8") > MAX_SOURCE_BYTES) return fail("too_large", `Design input must be no more than ${MAX_SOURCE_BYTES} UTF-8 bytes.`);
 
   let extracted: { tokens: DesignToken[]; diagnostics: string[] };
+  let jsonFormat: JsonTokenExtraction["format"] | null = null;
   if (input.format === "css") {
     try {
       extracted = collectCss(input.source);
@@ -303,6 +589,7 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
     const parsed = collectJson(input.source);
     if (!parsed) return fail("invalid_json", "Send a JSON object containing string or number design tokens.");
     extracted = parsed;
+    jsonFormat = parsed.format;
   }
   if (!extracted.tokens.length) return fail("no_tokens", "No supported custom properties or token values were found.");
 
@@ -327,10 +614,13 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
       continue;
     }
     const { token, candidate } = candidates[0]!;
-    const recognized = recognizedValue(candidate.category, token.value);
+    const recognized = !token.requiresReview
+      && matchesDtcgType(candidate.category, token.sourceType)
+      && recognizedValue(candidate.category, token.value);
     mappings.push({
       ...candidate,
       sourceToken: token.name,
+      ...(token.sourceType ? { sourceType: token.sourceType } : {}),
       scope: token.scope,
       value: token.value,
       confidence: recognized ? "high" : "review",
@@ -343,10 +633,19 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
   const sourceHash = createHash("sha256").update(input.source).digest("hex");
   const darkTokenCount = extracted.tokens.filter((token) => token.scope === "dark").length;
   const profile = {
-    profileVersion: "kqa-design-profile/1",
+    profileVersion: "kqa-design-profile/2",
     policyVersion: "kqa-design/13",
     surface: input.surface,
     sourceFormat: input.format,
+    ...(jsonFormat === "dtcg-2025.10" ? {
+      tokenFormat: {
+        name: "Design Tokens Format Module 2025.10 (bounded subset)",
+        source: DTCG_FORMAT_URL,
+        status: "W3C Design Tokens Community Group specification; not a W3C Standard.",
+        supported: ["Nested groups and group $root tokens", "$value", "Inherited $type", "Color, dimension, and font-family normalization", "Curly-brace aliases", "Inline JSON Pointer references", "Top-level light/dark scope groups"],
+        limitations: ["Group $extends inheritance and resolver-file permutations are not resolved.", "External file or URL references are not fetched.", "Only inline token data is inspected; profile output remains proposal-only."],
+      },
+    } : {}),
     sourceSha256: sourceHash,
     extractedTokens: extracted.tokens,
     proposedMappings: mappings,
@@ -367,6 +666,7 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
     diagnostics: extracted.diagnostics,
     limits: [
       "CSS and JSON are treated as inert, user-supplied text. No URL is fetched and no stylesheet code is executed.",
+      ...(jsonFormat === "dtcg-2025.10" ? ["DTCG import is a bounded subset: $extends groups, resolver-file permutations, and external references are reported or left unresolved rather than fetched or applied."] : []),
       "Only uniquely mapped tokens are proposed. Name-based roles are suggestions, not proof of intended use.",
       "Contrast checks cover inferred token pairs with supported solid colors only; they do not inspect rendered UI, alpha compositing, gradients, images, typography, or every state.",
       "For questionnaire themes, host CSS variables do not cross the sandboxed iframe; integrate the proposal inside the questionnaire HTML and preview it before publishing.",
