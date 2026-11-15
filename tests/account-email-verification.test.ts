@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const store = vi.hoisted(() => ({ users: [] as any[], changes: [] as any[] }));
+const store = vi.hoisted(() => ({ users: [] as any[], changes: [] as any[], updateError: false, unmatchedUpdate: false }));
 
 vi.mock("../src/lib/db", () => ({
   col: {
@@ -13,7 +13,10 @@ vi.mock("../src/lib/db", () => ({
         return false;
       }) ?? null,
       updateOne: async (query: Record<string, any>, update: Record<string, any>) => {
-        const user = store.users.find((item) => item._id.toHexString() === query._id.toHexString());
+        if (store.updateError) throw new Error("account write failed");
+        if (store.unmatchedUpdate) return { matchedCount: 0 };
+        const user = store.users.find((item) => item._id.toHexString() === query._id.toHexString()
+          && (!query.email || item.email === query.email));
         if (!user) return { matchedCount: 0 };
         Object.assign(user, update.$set);
         for (const key of Object.keys(update.$unset ?? {})) delete user[key];
@@ -42,6 +45,8 @@ describe("email verification links", () => {
   beforeEach(() => {
     store.users.splice(0);
     store.changes.splice(0);
+    store.updateError = false;
+    store.unmatchedUpdate = false;
   });
 
   function seed(token: string) {
@@ -73,6 +78,34 @@ describe("email verification links", () => {
 
     expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(store.users[0].email).toBe("owner@new.example");
+    expect(store.changes).toHaveLength(0);
+  });
+
+  it("keeps the link retryable when the account write fails", async () => {
+    const token = "retryable-email-token";
+    seed(token);
+    store.updateError = true;
+
+    await expect(completeEmailChange(token)).rejects.toThrow("account write failed");
+    expect(store.changes).toHaveLength(1);
+    expect(store.users[0].email).toBe("owner@old.example");
+
+    store.updateError = false;
+    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example" });
+    expect(store.changes).toHaveLength(0);
+  });
+
+  it("does not consume the link or report success when the account compare-and-set fails", async () => {
+    const token = "unmatched-email-token";
+    seed(token);
+    store.unmatchedUpdate = true;
+
+    await expect(completeEmailChange(token)).resolves.toMatchObject({ ok: false });
+    expect(store.changes).toHaveLength(1);
+    expect(store.users[0].email).toBe("owner@old.example");
+
+    store.unmatchedUpdate = false;
+    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example" });
     expect(store.changes).toHaveLength(0);
   });
 });

@@ -404,17 +404,20 @@ export async function completeEmailChange(token: string): Promise<{ ok: true; em
   if (!owner) return { ok: false, error: "This account could not be verified." };
   const duplicate = await users.findOne({ email: pending.email }, { projection: { _id: 1 } });
   if (duplicate && !duplicate._id.equals(owner._id)) return { ok: false, error: "That address is already in use. Request a different one." };
-  // A verification token is single-use even if its link is opened in multiple tabs.
-  const claimed = await changes.deleteOne({ _id: pending._id, tokenHash, expiresAt: { $gt: new Date() } });
-  if (claimed.deletedCount !== 1) return { ok: false, error: "That verification link is invalid or has expired. Request a new one." };
   try {
-    await users.updateOne(
-      { _id: owner._id },
+    const updated = await users.updateOne(
+      { _id: owner._id, email: owner.email },
       { $set: { email: pending.email, emailVerifiedAt: new Date(), updatedAt: new Date() }, $unset: { legacyBootstrap: "" } },
     );
+    if (updated.matchedCount !== 1) return { ok: false, error: "This account changed while verifying the address. Request a new link." };
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === 11000) return { ok: false, error: "That address is already in use. Request a different one." };
     throw error;
   }
+  // Update first, then consume. If the account write fails, the link remains
+  // retryable; concurrent opens may update the same address, but only one can
+  // consume the single-use token and report success.
+  const claimed = await changes.deleteOne({ _id: pending._id, tokenHash, expiresAt: { $gt: new Date() } });
+  if (claimed.deletedCount !== 1) return { ok: false, error: "That verification link is invalid or has expired. Request a new one." };
   return { ok: true, email: pending.email };
 }
