@@ -14,19 +14,21 @@ const PRINCIPLES = [
   { id: "privacy", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Minimize exposure of answer data", guidance: "Aggregate by default, reveal person-level answers only for an explicit review task, and avoid putting private respondent links or raw answers into analytics, logs, or unrelated exports." },
 ];
 
-export const DESIGN_REVIEW_CHECKLIST = [
-  "Check the primary task, next action, and outcome are clear without relying on color or animation.",
-  "Check semantic labels, keyboard-only operation, focus visibility, validation messages, and save/submission announcements.",
-  "Check pointer targets are at least 24 × 24 CSS px or meet a WCAG 2.2 SC 2.5.8 exception such as sufficient spacing.",
-  "Check WCAG 2.2 AA contrast and reflow; test at 320 CSS px and at KQA's 360/390 px questionnaire widths.",
-  "Check empty, loading, saving, success, error, submitted, long-content, dark-theme, and reduced-motion states.",
-  "Review question wording for one clear idea, neutral language, specific reference periods, and respondent-appropriate terms; this is a content judgment, not a static checker result.",
-  "For closed questions, check options are distinct and cover reasonable answers, scales read consistently, and option ordering is intentional.",
-  "Pretest new or high-impact questions with people like the intended respondents when feasible; record uncertainty that remains.",
-  "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden.",
-  "For analytics, verify survey version, respondent scope, cohort n, no-answer count, valid n, and multi-select denominator; state that KQA does not track item-level display eligibility.",
-  "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality.",
+const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text: string }[] = [
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Check the primary task, next action, and outcome are clear without relying on color or animation." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Check semantic labels, keyboard-only operation, focus visibility, validation messages, and save/submission announcements." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Check pointer targets are at least 24 × 24 CSS px or meet a WCAG 2.2 SC 2.5.8 exception such as sufficient spacing." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Check WCAG 2.2 AA contrast and reflow at 320 CSS px; also check questionnaire layouts at KQA's 360/390 px widths." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Check empty, loading, saving, success, error, submitted, long-content, dark-theme, and reduced-motion states." },
+  { surfaces: ["questionnaire"], text: "Review question wording for one clear idea, neutral language, specific reference periods, and respondent-appropriate terms; this is a content judgment, not a static checker result." },
+  { surfaces: ["questionnaire"], text: "For closed questions, check options are distinct and cover reasonable answers, scales read consistently, and option ordering is intentional." },
+  { surfaces: ["questionnaire"], text: "Pretest new or high-impact questions with people like the intended respondents when feasible; record uncertainty that remains." },
+  { surfaces: ["questionnaire"], text: "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden." },
+  { surfaces: ["analytics"], text: "For analytics, verify survey version, participant scope, cohort n, no-answer count, valid n, and multi-select denominator; state that KQA does not track item-level display eligibility." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality." },
 ];
+
+export const DESIGN_REVIEW_CHECKLIST = REVIEW_CHECKLIST_ITEMS.map(({ text }) => text);
 
 const SOURCES = [
   { name: "WCAG 2.2 Quick Reference", url: "https://www.w3.org/WAI/WCAG22/quickref/", role: "Normative accessibility success criteria; target WCAG 2.2 AA." },
@@ -41,7 +43,7 @@ const SOURCES = [
 
 export function getDesignGuidance(surface: DesignSurface = "all") {
   return {
-    policyVersion: "kqa-design/3",
+    policyVersion: "kqa-design/4",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
@@ -50,7 +52,9 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
       "Keep original question and option ids stable when revising a live interview; explain data-compatibility findings before applying a new version.",
     ],
     principles: PRINCIPLES.filter((principle) => surface === "all" || principle.surfaces.includes(surface)),
-    reviewChecklist: DESIGN_REVIEW_CHECKLIST,
+    reviewChecklist: REVIEW_CHECKLIST_ITEMS
+      .filter((item) => surface === "all" || item.surfaces.includes(surface))
+      .map(({ text }) => text),
     sources: SOURCES,
   };
 }

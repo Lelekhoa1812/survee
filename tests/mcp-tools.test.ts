@@ -151,7 +151,7 @@ describe("MCP tools", () => {
     const res = await call("get_design_guidance", { surface: "questionnaire" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string; guidance: string }[]; sources?: { name: string }[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/3");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/4");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("question-clarity");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("response-options");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("pretest");
@@ -159,6 +159,27 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 Quick Reference");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 SC 2.5.8: Target Size (Minimum)");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
+  });
+
+  it("returns review checklists scoped to the requested surface", async () => {
+    const hostResponse = await call("get_design_guidance", { surface: "host" });
+    const hostBody = await hostResponse.json() as { result: { structuredContent: { reviewChecklist: string[] } } };
+    const hostChecklist = hostBody.result.structuredContent.reviewChecklist.join(" ");
+    expect(hostChecklist).toContain("semantic labels");
+    expect(hostChecklist).not.toContain("question wording");
+    expect(hostChecklist).not.toContain("For analytics");
+
+    const analyticsResponse = await call("get_design_guidance", { surface: "analytics" });
+    const analyticsBody = await analyticsResponse.json() as { result: { structuredContent: { reviewChecklist: string[] } } };
+    const analyticsChecklist = analyticsBody.result.structuredContent.reviewChecklist.join(" ");
+    expect(analyticsChecklist).toContain("For analytics");
+    expect(analyticsChecklist).not.toContain("Pretest new or high-impact questions");
+
+    const allResponse = await call("get_design_guidance", { surface: "all" });
+    const allBody = await allResponse.json() as { result: { structuredContent: { reviewChecklist: string[] } } };
+    const allChecklist = allBody.result.structuredContent.reviewChecklist.join(" ");
+    expect(allChecklist).toContain("For analytics");
+    expect(allChecklist).toContain("Pretest new or high-impact questions");
   });
 
   it("returns static design findings with a separate visual-review checklist", async () => {

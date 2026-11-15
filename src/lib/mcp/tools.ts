@@ -3,7 +3,7 @@ import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
 import { createQuestionSummaryAccumulator, summarizeQuestionCohorts, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
-import { DESIGN_REVIEW_CHECKLIST, getDesignGuidance, type DesignSurface } from "../design/guidance";
+import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
@@ -182,7 +182,7 @@ const TOOLS: ToolDef[] = [
         counts: prepared.report.counts,
         diagnostics: prepared.report.diagnostics,
         report: prepared.markdown,
-        reviewChecklist: DESIGN_REVIEW_CHECKLIST,
+        reviewChecklist: getDesignGuidance("questionnaire").reviewChecklist,
         limits: ["Static inspection cannot judge question wording or pretesting. It also cannot verify rendered contrast, responsive layout, keyboard operation, motion behavior, or assistive-technology announcements."],
       });
     },

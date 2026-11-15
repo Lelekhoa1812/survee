@@ -1,8 +1,8 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/3` · reviewed 15 November 2026
+Version: `kqa-design/4` · reviewed 15 November 2026
 
-This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
+This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
 ## Product constraints
 
@@ -22,7 +22,7 @@ This is the product-specific design policy for KQA's host console, respondent qu
 7. **Make every interaction operable.** Use semantic controls, programmatic labels, keyboard support, visible focus, and announced status and errors. Meet WCAG 2.2 AA, including the 24 × 24 CSS-pixel minimum target size or a documented exception such as sufficient spacing. Verify keyboard and assistive-technology behavior.
 8. **Design for narrow screens and long content.** Reflow at 320 CSS px where WCAG requires it. KQA questionnaires must work from 360 px and should be checked at 390 px. Test long labels, validation, tables, zoom, empty states, and errors.
 9. **Use motion to clarify change.** Animate to communicate state or continuity. Keep motion brief, and ensure `prefers-reduced-motion` leaves the interface fully understandable.
-10. **Show how every number was made.** State survey version, respondent status scope, time window when used, status-cohort denominator, no-answer count, and valid n. KQA does not track whether conditional questions were shown; do not present cohort counts as item eligibility or no-answer counts as item-level missingness. For ordinal scales show distributions rather than means. For multi-select, make clear that percentages use respondents and can sum above 100%. Separate observed facts from interpretation; do not imply causality, statistical significance, or a score.
+10. **Show how every number was made.** State survey version, participant status scope, time window when used, status-cohort denominator, no-answer count, and valid n. KQA does not track whether conditional questions were shown; do not present cohort counts as item eligibility or no-answer counts as item-level missingness. For ordinal scales show distributions rather than means. For multi-select, make clear that percentages use valid respondents and can sum above 100%. Separate observed facts from interpretation; do not imply causality, statistical significance, or a score.
 11. **Minimize answer exposure.** Aggregate by default. Show person-level answers only for an explicit review task. Do not expose private links or raw answers in analytics, logs, or unrelated exports.
 
 ## Review checklist
