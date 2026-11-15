@@ -48,6 +48,31 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     for (var i = 0; i < all.length; i++) if (all[i].getAttribute("data-kqa") === id) out.push(all[i]);
     return out;
   }
+  function canFocus(el) {
+    if (!el || !el.isConnected || el.disabled || el.type === "hidden" || el.tabIndex < 0) return false;
+    var node = el;
+    while (node && node.nodeType === 1) {
+      if (node.hidden || node.inert || node.getAttribute("aria-hidden") === "true") return false;
+      var style = window.getComputedStyle ? window.getComputedStyle(node) : null;
+      if (style && (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse")) return false;
+      node = node.parentElement;
+    }
+    return typeof el.getClientRects !== "function" || el.getClientRects().length > 0;
+  }
+  function focusQuestion(id) {
+    if (!q(id)) return;
+    var els = controls(id);
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!canFocus(el)) continue;
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+      if (typeof el.scrollIntoView === "function") {
+        var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+      }
+      return;
+    }
+  }
   function noteControls(id) {
     var out = [];
     var all = document.querySelectorAll("[data-kqa-note]");
@@ -192,6 +217,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       emit("lock", { locked: state.locked });
     } else if (m.type === "offline") {
       if (state.ready && !state.locked) setHtmlState(m.offline ? "offline" : "ready");
+    } else if (m.type === "focus-question" && typeof m.id === "string") {
+      focusQuestion(m.id);
     }
   });
 

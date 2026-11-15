@@ -34,6 +34,7 @@ export function RespondentShell({ token }: { token: string }) {
   const answers = useRef<AnswerMap>({});
   const questions = useRef<Question[]>([]);
   const pending = useRef<Patch>({});
+  const focusQuestionAfterClose = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inflight = useRef(false);
@@ -47,6 +48,13 @@ export function RespondentShell({ token }: { token: string }) {
   }, []);
 
   const post = useCallback((msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ kqa: 1, ...msg }, "*"), []);
+
+  useEffect(() => {
+    if (confirming || !focusQuestionAfterClose.current) return;
+    const id = focusQuestionAfterClose.current;
+    focusQuestionAfterClose.current = null;
+    post({ type: "focus-question", id });
+  }, [confirming, post]);
 
   const applyLock = useCallback((v: boolean) => { lockedRef.current = v; setLocked(v); post({ type: "lock", locked: v }); }, [post]);
 
@@ -256,7 +264,7 @@ export function RespondentShell({ token }: { token: string }) {
           onClose={() => !submitting && setConfirming(false)}
           actions={
             counts.missing.length ? (
-              <button className="btn primary" onClick={() => setConfirming(false)}>Go back and answer</button>
+              <button className="btn primary" onClick={() => { focusQuestionAfterClose.current = counts.missing[0]?.id ?? null; setConfirming(false); }}>Go back and answer</button>
             ) : (
               <>
                 <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>Keep editing</button>
