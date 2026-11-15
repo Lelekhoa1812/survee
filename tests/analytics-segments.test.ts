@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeAnswerSegments } from "../src/lib/analytics/segments";
+import { canSegmentByAnswer, summarizeAnswerSegments } from "../src/lib/analytics/segments";
 import type { CohortAnalyticsRespondent } from "../src/lib/analytics/summary";
 import type { Question } from "../src/lib/format/schema";
 
@@ -73,6 +73,30 @@ describe("answer-segment analytics", () => {
     expect(result.segments.map((group) => group.label)).toEqual(["2", "3", "Unmapped answer"]);
     expect(result.segments[0]).toMatchObject({ participantCount: 1, summaries: { outcome: { cohortCount: 1 } } });
     expect(result.segments[2]).toMatchObject({ kind: "unmapped", participantCount: 1 });
+  });
+
+  it("retains every zero-count scale value at the 20-step limit", async () => {
+    const scale: Question = { id: "rating", type: "scale", label: "Rating", min: 1, max: 21 };
+    expect(canSegmentByAnswer(scale)).toBe(true);
+
+    const result = await summarizeAnswerSegments(scale, [outcome], (async function* () {})());
+
+    expect(result.segments).toHaveLength(21);
+    expect(result.segments.map((group) => group.label)).toEqual(Array.from({ length: 21 }, (_, index) => String(index + 1)));
+    expect(result.segments.every((group) => group.kind === "answer" && group.participantCount === 0)).toBe(true);
+  });
+
+  it("rejects over-limit scale segmentation before scanning respondents", async () => {
+    const scale: Question = { id: "rating", type: "scale", label: "Rating", min: 1, max: 22 };
+    let scans = 0;
+    async function* participants() {
+      scans += 1;
+      yield respondent("submitted", { rating: { value: 1, updatedAt: at } });
+    }
+
+    expect(canSegmentByAnswer(scale)).toBe(false);
+    await expect(summarizeAnswerSegments(scale, [outcome], participants())).rejects.toThrow("at most 21 integer answer groups");
+    expect(scans).toBe(0);
   });
 
   it("keeps exact numeric Type-7 summaries when status observations are combined", async () => {

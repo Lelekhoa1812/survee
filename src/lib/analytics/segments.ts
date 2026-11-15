@@ -1,5 +1,5 @@
 import { isAnswered, validateAnswer } from "../format/answers";
-import { scaleBounds, type Question } from "../format/schema";
+import { LIMITS, scaleBounds, type Question } from "../format/schema";
 import type { ParticipantStatus } from "../repo/types";
 import { ANALYTICS_STATUSES } from "./cohorts";
 import { createQuestionSummaryAccumulator, type CohortAnalyticsRespondent, type QuestionSummary, type QuestionSummaryAccumulator } from "./summary";
@@ -47,6 +47,18 @@ interface MutableSegment extends SegmentDefinition {
   byStatus?: Partial<Record<ParticipantStatus, Map<string, QuestionSummaryAccumulator>>>;
 }
 
+const MAX_SCALE_SEGMENT_VALUES = LIMITS.scaleSpanMax + 1;
+
+function hasBoundedScaleSegments(question: Question): boolean {
+  const bounds = scaleBounds(question);
+  const count = Math.floor(bounds.max) - Math.ceil(bounds.min) + 1;
+  return Number.isFinite(count) && count <= MAX_SCALE_SEGMENT_VALUES;
+}
+
+function scaleSegmentationError(): string {
+  return `Scale segmentation supports at most ${MAX_SCALE_SEGMENT_VALUES} integer answer groups. Update the scale range before analyzing it.`;
+}
+
 function definitions(question: Question): SegmentDefinition[] {
   const bounds = question.type === "scale" ? scaleBounds(question) : null;
   const values = bounds
@@ -85,6 +97,9 @@ export async function summarizeAnswerSegments(
   statuses: ParticipantStatus[] = [...ANALYTICS_STATUSES],
   compareStatuses = false,
 ): Promise<AnswerSegmentAnalysis> {
+  if (segmentQuestion.type === "scale" && !hasBoundedScaleSegments(segmentQuestion)) {
+    throw new Error(scaleSegmentationError());
+  }
   const groups: MutableSegment[] = definitions(segmentQuestion).map((definition) => ({
     ...definition,
     participantCount: 0,
@@ -157,5 +172,12 @@ export async function summarizeAnswerSegments(
 }
 
 export function canSegmentByAnswer(question: Question | undefined): question is Question & { type: "single" | "select" | "multi" | "scale" } {
-  return !!question && ["single", "select", "multi", "scale"].includes(question.type);
+  return !!question
+    && ["single", "select", "multi", "scale"].includes(question.type)
+    && (question.type !== "scale" || hasBoundedScaleSegments(question));
+}
+
+export function answerSegmentationError(question: Question | undefined): string {
+  if (question?.type === "scale" && !hasBoundedScaleSegments(question)) return scaleSegmentationError();
+  return "Segment by a single-choice, dropdown, checkbox, or scale question. Text, date, and free-form number questions cannot define groups.";
 }

@@ -1,5 +1,5 @@
 import { ANALYTICS_STATUSES } from "@/lib/analytics/cohorts";
-import { canSegmentByAnswer, summarizeAnswerSegments } from "@/lib/analytics/segments";
+import { answerSegmentationError, canSegmentByAnswer, summarizeAnswerSegments } from "@/lib/analytics/segments";
 import { fail, guardAdmin, json } from "@/lib/http";
 import { getInterview, getVersion, iterateAnalyticsParticipants } from "@/lib/repo";
 import type { ParticipantStatus } from "@/lib/repo/types";
@@ -32,7 +32,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews
   if (!segmentQuestion) return fail(404, "Segmentation question not found in the current survey version.");
   if (outcomes.some((question) => !question)) return fail(404, "An outcome question was not found in the current survey version.");
   if (outcomeIds.includes(segmentQuestion.id)) return fail(400, "Choose outcome questions other than the segmentation question.");
-  if (!canSegmentByAnswer(segmentQuestion)) return fail(400, "Segment by a single-choice, dropdown, checkbox, or scale question. Text, date, and free-form number questions cannot define groups.");
+  if (!canSegmentByAnswer(segmentQuestion)) return fail(400, answerSegmentationError(segmentQuestion));
 
   const requested = (url.searchParams.get("statuses") ?? ANALYTICS_STATUSES.join(",")).split(",").map((status) => status.trim());
   if (!requested.length || requested.some((status) => !ANALYTICS_STATUSES.includes(status as ParticipantStatus))) {

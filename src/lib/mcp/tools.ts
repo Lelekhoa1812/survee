@@ -1,7 +1,7 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
-import { canSegmentByAnswer, summarizeAnswerSegments } from "../analytics/segments";
+import { answerSegmentationError, canSegmentByAnswer, summarizeAnswerSegments } from "../analytics/segments";
 import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
@@ -477,7 +477,7 @@ const TOOLS: ToolDef[] = [
       const segmentById = asString(args.segmentBy, 64);
       const segmentQuestion = segmentById ? questions.find((item) => item.id === segmentById) : undefined;
       if (segmentById && !segmentQuestion) return err("Segmentation question not found in the current survey version.", "not_found");
-      if (segmentById && !canSegmentByAnswer(segmentQuestion)) return err("Segment by a single-choice, dropdown, checkbox, or scale question. Text, date, and free-form number questions cannot define groups.");
+      if (segmentById && !canSegmentByAnswer(segmentQuestion)) return err(answerSegmentationError(segmentQuestion));
       if (requestedQuestionIds !== undefined) {
         if (!segmentById) return err("questionIds can only be used with segmentBy.");
         if (questionId) return err("Use either questionId or questionIds, not both.");
