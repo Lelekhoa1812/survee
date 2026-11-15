@@ -1,4 +1,4 @@
-import { ObjectId } from "mongodb";
+import { ObjectId, type ClientSession } from "mongodb";
 import { col } from "../db";
 import type { MailRecord } from "../mail/state";
 import type { MailMessageDoc } from "./types";
@@ -45,10 +45,10 @@ export async function updateMailDelivery(id: ObjectId, patch: Pick<MailMessageDo
   await (await col.mail()).updateOne(tenantFilter(tenantId, { _id: id }), { $set: patch });
 }
 
-export async function deleteMailForInterview(interviewId: ObjectId): Promise<void> {
+export async function deleteMailForInterview(interviewId: ObjectId, session?: ClientSession): Promise<void> {
   const tenantId = await currentTenantId();
   if (!tenantId) return;
-  await (await col.mail()).deleteMany(tenantFilter(tenantId, { interviewId }));
+  await (await col.mail()).deleteMany(tenantFilter(tenantId, { interviewId }), { session });
 }
 
 export async function deleteMailForPerson(participantId: ObjectId): Promise<void> {

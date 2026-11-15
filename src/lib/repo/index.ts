@@ -184,16 +184,19 @@ export async function deleteInterview(id: string): Promise<boolean> {
   if (!oid) return false;
   const tenantId = await currentTenantId();
   if (!tenantId) return false;
-  const res = await (await col.interviews()).deleteOne(tenantFilter(tenantId, { _id: oid }));
-  if (!res.deletedCount) return false;
-  await Promise.all([
-    (await col.versions()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
-    (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
-    (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
-    (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }),
-    deleteMailForInterview(oid),
-  ]);
-  return true;
+  return withMongoTransaction(async (session) => {
+    const res = await (await col.interviews()).deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
+    if (!res.deletedCount) return false;
+
+    // MongoDB does not support parallel operations in one transaction. Keep the cascade
+    // sequential so a failed dependent delete rolls the parent removal back as well.
+    await (await col.versions()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
+    await (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
+    await (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
+    await (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }, { session });
+    await deleteMailForInterview(oid, session);
+    return true;
+  });
 }
 
 // ------------------------------------------------------------------------------------------ participants

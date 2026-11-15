@@ -43,6 +43,6 @@ export async function DELETE(req: Request, { params }: Ctx) {
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
   if (body.data.confirmName !== interview.name) return fail(400, "Type the interview name exactly to confirm deleting it.");
-  await deleteInterview(id);
-  return json({ ok: true });
+  const deleted = await deleteInterview(id);
+  return deleted ? json({ ok: true }) : fail(404, "Interview not found.");
 }

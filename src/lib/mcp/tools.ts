@@ -815,8 +815,8 @@ const TOOLS: ToolDef[] = [
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.");
-      await deleteInterview(id);
-      return ok({ ok: true });
+      const deleted = await deleteInterview(id);
+      return deleted ? ok({ ok: true }) : err("Interview not found.", "not_found");
     },
   },
   {
@@ -1534,7 +1534,10 @@ export function listToolDefs(capabilities?: readonly McpCapability[]) {
 
 async function finish(tool: string, result: ToolResult, interviewId?: string): Promise<ToolResult> {
   const fromResult = typeof result.structuredContent.interviewId === "string" ? result.structuredContent.interviewId : interviewId;
-  await noteMcp(tool, !result.isError, fromResult).catch(() => {});
+  // A successful delete is audited at tenant scope so it does not recreate an event
+  // attached to the interview that was just removed.
+  const auditInterviewId = tool === "delete_interview" && !result.isError ? undefined : fromResult;
+  await noteMcp(tool, !result.isError, auditInterviewId).catch(() => {});
   return result;
 }
 

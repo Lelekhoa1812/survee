@@ -78,7 +78,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `check_questionnaire` | Run the checker. Nothing is stored |
 | `create_interview` | Create from HTML. A failed check stores nothing |
 | `update_interview` | Rename, notes, open, or close |
-| `delete_interview` | Delete the interview, people, answers, and invite history. `confirmName` must match |
+| `delete_interview` | Atomically delete the interview, versions, people, answers, events, analytics runs, and invite history. `confirmName` must match |
 | `upload_survey_version` | Legacy upload for compatible changes; answer-impact findings return a signed preview and require acknowledgement |
 | `preview_questionnaire_version_patch` | Check a complete candidate HTML file against the current version and saved answers; returns a short-lived token and stores nothing |
 | `apply_questionnaire_version_patch` | Publish a previewed complete HTML file with a signed preview token, version/hash checks, and compatibility acknowledgement |

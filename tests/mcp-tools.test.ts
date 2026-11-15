@@ -108,6 +108,7 @@ vi.mock("../src/lib/repo", async () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     })),
+    deleteInterview: vi.fn(async () => true),
     getVersion: vi.fn(async () => ({ version: 1, manifest: analyticsManifest })),
     createAnalyticsRun: vi.fn(async (_interviewId: string, _surveyVersion: number, result: Record<string, unknown>) => {
       const id = "111111111111111111111111";
@@ -143,7 +144,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { getVersion, iterateAnalyticsParticipants, noteMcp, publishVersionIfCurrent } from "../src/lib/repo";
+import { deleteInterview, getVersion, iterateAnalyticsParticipants, noteMcp, publishVersionIfCurrent } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -163,6 +164,7 @@ beforeEach(() => {
   sent.length = 0;
   searches.length = 0;
   vi.mocked(noteMcp).mockClear();
+  vi.mocked(deleteInterview).mockReset().mockResolvedValue(true);
 });
 
 describe("MCP tools", () => {
@@ -170,6 +172,21 @@ describe("MCP tools", () => {
     const res = await call("list_events", { interviewId });
     const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[] } } };
     expect(body.result.structuredContent.events[0].meta).toEqual({ tool: "get_design_guidance", ok: true });
+  });
+
+  it("reports not found when an interview disappears before the delete completes", async () => {
+    vi.mocked(deleteInterview).mockResolvedValueOnce(false);
+    const res = await call("delete_interview", { interviewId, confirmName: "Investor interview" });
+    const body = await res.json() as { result: { isError: boolean; structuredContent: { error?: string; code?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toMatchObject({ error: "Interview not found.", code: "not_found" });
+  });
+
+  it("keeps a successful deletion audit at tenant scope", async () => {
+    const res = await call("delete_interview", { interviewId, confirmName: "Investor interview" });
+    const body = await res.json() as { result: { isError: boolean } };
+    expect(body.result.isError).toBe(false);
+    expect(noteMcp).toHaveBeenCalledWith("delete_interview", true, undefined);
   });
 
   it("documents every registered tool", () => {
