@@ -82,7 +82,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `upload_survey_version` | Legacy upload for compatible changes; answer-impact findings return a signed preview and require acknowledgement |
 | `preview_questionnaire_version_patch` | Check a complete candidate HTML file against the current version and saved answers; returns a short-lived token and stores nothing |
 | `apply_questionnaire_version_patch` | Publish a previewed complete HTML file with a signed preview token, version/hash checks, and compatibility acknowledgement |
-| `preview_questionnaire_block_patch` | Preview up to 50 add/update/delete/move operations for marked ordinary questions; preserves unrelated HTML bytes and stores nothing |
+| `preview_questionnaire_block_patch` | Preview up to 500 add/update/delete/move operations for marked ordinary questions; preserves unrelated HTML bytes and stores nothing |
 | `apply_questionnaire_block_patch` | Publish the reviewed question block operations with a signed preview token and compatibility acknowledgement |
 | `preview_questionnaire_required_patch` | Preview 1–500 required/optional changes by question ID; edits only manifest booleans and stores nothing |
 | `apply_questionnaire_required_patch` | Publish the reviewed required/optional changes with a signed preview token and compatibility acknowledgement |

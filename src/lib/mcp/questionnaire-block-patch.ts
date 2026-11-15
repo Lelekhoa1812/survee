@@ -46,7 +46,9 @@ function safeFragment(fragment: string, id: string): { start: number; end: numbe
 /** Patch only question manifest entries and their explicitly marked HTML blocks. */
 export function patchQuestionnaireBlocks(html: string, operations: readonly QuestionnaireBlockOperation[]):
   { ok: true; html: string; changes: QuestionnaireBlockSummary[] } | { ok: false; error: string } {
-  if (!Array.isArray(operations) || operations.length < 1 || operations.length > 50) return { ok: false, error: "Provide between 1 and 50 question operations." };
+  if (!Array.isArray(operations) || operations.length < 1 || operations.length > LIMITS.maxQuestions) {
+    return { ok: false, error: `Provide between 1 and ${LIMITS.maxQuestions} question operations.` };
+  }
   if (typeof html !== "string") return { ok: false, error: "The questionnaire HTML must be a string." };
   if (Buffer.byteLength(html, "utf8") > LIMITS.maxFileBytes) return { ok: false, error: "The questionnaire exceeds the file size limit." };
   const seen = new Set<string>();

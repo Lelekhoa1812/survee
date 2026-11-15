@@ -102,7 +102,7 @@ const questionnaireQuestion = obj({
 const questionnaireBlockOperations = {
   type: "array",
   minItems: 1,
-  maxItems: 50,
+  maxItems: LIMITS.maxQuestions,
   items: obj({
     op: { type: "string", enum: ["add", "update", "delete", "move"] },
     questionId: str,
@@ -1097,7 +1097,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_block_patch",
-    description: "Preview a batch of add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed.",
+    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed.`,
     inputSchema: obj({ interviewId: str, operations: questionnaireBlockOperations }, ["interviewId", "operations"]),
     async run(args) {
       const id = asString(args.interviewId, 40);

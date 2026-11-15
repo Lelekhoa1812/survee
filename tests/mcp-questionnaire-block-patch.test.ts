@@ -60,6 +60,53 @@ describe("questionnaire block patch", () => {
     }
   });
 
+  it("accepts patch batches larger than the previous 50-operation limit", () => {
+    const operations = Array.from({ length: 51 }, (_, index) => {
+      const id = `q-${index}`;
+      return {
+        op: "add" as const,
+        question: { id, type: "text" as const, label: `Question ${index}` },
+        html: `<section data-kqa-question-id="${id}">Question ${index}</section>`,
+      };
+    });
+
+    const result = patchQuestionnaireBlocks(base, operations);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.changes).toHaveLength(51);
+      expect(questionIds(result.html)).toHaveLength(52);
+    }
+  });
+
+  it("accepts the maximum 500-operation batch against a full-size questionnaire", () => {
+    const questions = Array.from({ length: 500 }, (_, index) => ({
+      id: `q-${index}`,
+      type: "text" as const,
+      label: `Question ${index}`,
+    }));
+    const html = `<!doctype html><html><head><script id="kqa-manifest" type="application/json">${JSON.stringify({ format: "kqa/1", title: "T", questions })}</script></head><body><div data-kqa-question-list="">${questions.map(({ id, label }) => `<section data-kqa-question-id="${id}"><label>${label}</label></section>`).join("")}</div></body></html>`;
+    const operations = [
+      { op: "update" as const, questionId: "q-0", question: { id: "q-0", type: "text" as const, label: "Revised" }, html: '<section data-kqa-question-id="q-0"><label>Revised</label></section>' },
+      ...questions.slice(1).map(({ id }) => ({ op: "delete" as const, questionId: id })),
+    ];
+
+    const result = patchQuestionnaireBlocks(html, operations);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.changes).toHaveLength(500);
+      expect(questionIds(result.html)).toEqual(["q-0"]);
+      expect(result.html).toContain("<label>Revised</label>");
+    }
+  });
+
+  it("rejects batches larger than the 500-question format limit", () => {
+    const operations = Array.from({ length: 501 }, () => ({ op: "delete" as const, questionId: "old" }));
+    expect(patchQuestionnaireBlocks(base, operations)).toMatchObject({
+      ok: false,
+      error: "Provide between 1 and 500 question operations.",
+    });
+  });
+
   it("deletes adjacent questions as a valid batch and can replace a one-question questionnaire", () => {
     const deleted = patchQuestionnaireBlocks(fourQuestions, [
       { op: "delete", questionId: "two" },

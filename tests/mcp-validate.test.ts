@@ -19,8 +19,9 @@ vi.mock("../src/lib/repo", () => ({
   getVersion: vi.fn(async (_id: unknown, version: number) => (version === 2 ? { version: 2, fileName: "a.html", html: "<p></p>", manifest: { questions: [] } } : null)),
 }));
 
-import { dispatchTool } from "../src/lib/mcp/tools";
+import { dispatchTool, listToolDefs } from "../src/lib/mcp/tools";
 import { validateToolArgs } from "../src/lib/mcp/validate";
+import { LIMITS } from "../src/lib/format/schema";
 
 describe("tool argument schema", () => {
   beforeEach(() => {
@@ -65,5 +66,15 @@ describe("tool argument schema", () => {
     expect(validateToolArgs(section, "writing")).toBeNull();
     expect(validateToolArgs(section, null)).toBeNull();
     expect(validateToolArgs(section, 12)).toMatch(/match one of the allowed types/);
+  });
+
+  it("advertises and validates block patch batches up to the questionnaire question limit", () => {
+    const tool = listToolDefs().find(({ name }) => name === "preview_questionnaire_block_patch");
+    const properties = tool?.inputSchema.properties as Record<string, Record<string, unknown>> | undefined;
+    const operations = properties?.operations;
+    expect(operations?.maxItems).toBe(LIMITS.maxQuestions);
+    expect(validateToolArgs(operations!, Array.from({ length: 51 }, () => ({ op: "delete", questionId: "old" })))).toBeNull();
+    expect(validateToolArgs(operations!, Array.from({ length: LIMITS.maxQuestions + 1 }, () => ({ op: "delete", questionId: "old" }))))
+      .toMatch(/at most 500 items/);
   });
 });
