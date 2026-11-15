@@ -142,7 +142,7 @@ export async function publishVersionIfCurrent(
   expectedVersion: number,
   expectedBaseHash: string,
   survey: NewSurvey,
-  source: "mcp_patch" | "mcp_upload" = "mcp_patch",
+  source: "mcp_patch" | "mcp_upload" | "host_patch" = "mcp_patch",
 ): Promise<{ version: number } | { conflict: true } | null> {
   const oid = toOid(id);
   if (!oid) return null;

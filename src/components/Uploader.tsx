@@ -19,7 +19,7 @@ export interface UploadState {
   ok: boolean;
 }
 
-export function Uploader({ interviewId, onChange, compact }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean }) {
+export function Uploader({ interviewId, onChange, compact, disabled = false }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean }) {
   const [state, setState] = useState<UploadState>({ settled: false, ok: false });
   const [phase, setPhase] = useState<"idle" | "static" | "live">("idle");
   const [error, setError] = useState("");
@@ -68,17 +68,18 @@ export function Uploader({ interviewId, onChange, compact }: { interviewId?: str
 
   return (
     <div className="stack">
-      <input ref={input} type="file" accept=".html,.htm,text/html" className="sr" tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handle(f); }} />
+      <input ref={input} type="file" accept=".html,.htm,text/html" className="sr" tabIndex={-1} disabled={disabled} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handle(f); }} />
       {!state.fileName ? (
         <div
           className={`dropzone ${over ? "over" : ""}`}
           role="button"
-          tabIndex={0}
-          onClick={() => input.current?.click()}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.current?.click(); } }}
-          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          tabIndex={disabled ? -1 : 0}
+          aria-disabled={disabled}
+          onClick={() => { if (!disabled) input.current?.click(); }}
+          onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); input.current?.click(); } }}
+          onDragOver={(e) => { e.preventDefault(); if (!disabled) setOver(true); }}
           onDragLeave={() => setOver(false)}
-          onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) void handle(f); }}
+          onDrop={(e) => { e.preventDefault(); setOver(false); if (disabled) return; const f = e.dataTransfer.files?.[0]; if (f) void handle(f); }}
           style={compact ? { padding: "22px 16px" } : undefined}
         >
           <div className="ico"><Icon name="upload" size={20} /></div>
@@ -92,8 +93,8 @@ export function Uploader({ interviewId, onChange, compact }: { interviewId?: str
             <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{state.fileName}</div>
             <div className="muted" style={{ fontSize: 13 }}>{state.html ? `${Math.max(1, Math.round(state.html.length / 1024))} KB` : ""}</div>
           </div>
-          <button className="btn sm" onClick={() => input.current?.click()}>Replace file</button>
-          <button className="btn ghost sm icon" onClick={reset} aria-label="Remove file"><Icon name="x" size={16} /></button>
+          <button className="btn sm" disabled={disabled} onClick={() => input.current?.click()}>Replace file</button>
+          <button className="btn ghost sm icon" disabled={disabled} onClick={reset} aria-label="Remove file"><Icon name="x" size={16} /></button>
         </div>
       )}
       {error && <div className="callout err" role="alert"><Icon name="alert" /><span>{error}</span></div>}

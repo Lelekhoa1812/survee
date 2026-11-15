@@ -34,8 +34,16 @@ import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { sessionSecret } from "../env";
+import {
+  createQuestionnairePreviewToken,
+  fileNameHash,
+  hashCompatibilityFindings,
+  hasCompatibilityImpact,
+  sha256,
+  verifyQuestionnairePreviewToken,
+  type QuestionnairePreviewBindings,
+  type QuestionnairePreviewFailure,
+} from "../questionnaire-preview";
 import { currentPrincipal } from "../tenant-context";
 import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
@@ -76,95 +84,16 @@ function questionList(manifest: Manifest) {
   return manifest.questions.map((q) => ({ id: q.id, type: q.type, label: q.label, required: !!q.required, section: q.section ?? null }));
 }
 
-function sha256(value: string) {
-  return createHash("sha256").update(value).digest("hex");
+function createPatchPreviewToken(bindings: Omit<QuestionnairePreviewBindings, "tenantId">) {
+  return createQuestionnairePreviewToken(currentPrincipal()?.tenantId, bindings);
 }
 
-const PATCH_PREVIEW_TTL_SECONDS = 10 * 60;
+const verifyPatchPreviewToken = verifyQuestionnairePreviewToken;
 
-interface PatchPreviewClaims {
-  v: 1;
-  tenantId: string;
-  interviewId: string;
-  expectedVersion: number;
-  baseHash: string;
-  candidateHash: string;
-  fileNameHash: string;
-  compatibilityHash: string;
-  exp: number;
-}
-
-function fileNameHash(fileName?: string) {
-  return sha256(fileName ?? "");
-}
-
-function createPatchPreviewToken(bindings: Omit<PatchPreviewClaims, "v" | "exp" | "tenantId">) {
-  const tenantId = currentPrincipal()?.tenantId;
-  const secret = sessionSecret();
-  if (!tenantId || !secret) return null;
-  const claims: PatchPreviewClaims = {
-    v: 1,
-    ...bindings,
-    tenantId,
-    exp: Math.floor(Date.now() / 1000) + PATCH_PREVIEW_TTL_SECONDS,
-  };
-  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
-  const signature = createHmac("sha256", secret).update(`kqa-mcp-questionnaire-preview:v1:${payload}`).digest("base64url");
-  return { previewToken: `${payload}.${signature}`, previewExpiresAt: new Date(claims.exp * 1000).toISOString() };
-}
-
-function verifyPatchPreviewToken(
-  token: unknown,
-  bindings: Pick<PatchPreviewClaims, "tenantId" | "interviewId" | "expectedVersion" | "baseHash" | "candidateHash" | "fileNameHash">,
-): { ok: true; claims: PatchPreviewClaims } | { ok: false; code: "preview_required" | "preview_expired" | "invalid_preview" } {
-  if (typeof token !== "string" || !token) return { ok: false, code: "preview_required" };
-  const [payload, signature, extra] = token.split(".");
-  const secret = sessionSecret();
-  if (!payload || !signature || extra !== undefined || !secret) return { ok: false, code: "invalid_preview" };
-  const expectedSignature = createHmac("sha256", secret).update(`kqa-mcp-questionnaire-preview:v1:${payload}`).digest("base64url");
-  const actualBytes = Buffer.from(signature);
-  const expectedBytes = Buffer.from(expectedSignature);
-  if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) {
-    return { ok: false, code: "invalid_preview" };
-  }
-  try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<PatchPreviewClaims>;
-    if (
-      claims.v !== 1 || typeof claims.tenantId !== "string" || typeof claims.interviewId !== "string" ||
-      typeof claims.expectedVersion !== "number" || !Number.isInteger(claims.expectedVersion) ||
-      typeof claims.baseHash !== "string" || typeof claims.candidateHash !== "string" ||
-      typeof claims.fileNameHash !== "string" || typeof claims.compatibilityHash !== "string" ||
-      typeof claims.exp !== "number" || !Number.isInteger(claims.exp)
-    ) return { ok: false, code: "invalid_preview" };
-    if (claims.exp <= Math.floor(Date.now() / 1000)) return { ok: false, code: "preview_expired" };
-    const parsed = claims as PatchPreviewClaims;
-    if (
-      parsed.tenantId !== bindings.tenantId || parsed.interviewId !== bindings.interviewId ||
-      parsed.expectedVersion !== bindings.expectedVersion || parsed.baseHash !== bindings.baseHash ||
-      parsed.candidateHash !== bindings.candidateHash || parsed.fileNameHash !== bindings.fileNameHash
-    ) return { ok: false, code: "invalid_preview" };
-    return { ok: true, claims: parsed };
-  } catch {
-    return { ok: false, code: "invalid_preview" };
-  }
-}
-
-function previewTokenError(code: "preview_required" | "preview_expired" | "invalid_preview") {
+function previewTokenError(code: QuestionnairePreviewFailure) {
   if (code === "preview_required") return err("This operation requires the signed previewToken returned by a questionnaire preview.", code);
   if (code === "preview_expired") return err("This questionnaire preview expired. Preview the candidate again before continuing.", code);
   return err("This questionnaire preview is invalid for the current tenant, interview, or candidate. Preview again before continuing.", code);
-}
-
-function hasCompatibilityImpact(diagnostics: { code: string }[]) {
-  return diagnostics.some((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code));
-}
-
-function hashCompatibilityFindings(diagnostics: { code: string }[]) {
-  const findings = diagnostics
-    .filter((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code))
-    .map((diagnostic) => JSON.stringify(diagnostic))
-    .sort();
-  return sha256(JSON.stringify(findings));
 }
 
 function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[]) {
