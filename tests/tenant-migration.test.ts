@@ -82,6 +82,40 @@ function analyticsRunsMigrationDb(initialTenants: (string | undefined)[], analyt
   };
 }
 
+function partialBackfillDb(failOnceAt: string): { db: Db; scoped: Set<string> } {
+  const ownedCollections = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes", "analytics_runs"];
+  const scoped = new Set<string>();
+  let shouldFail = true;
+  return {
+    scoped,
+    db: {
+      collection(name: string) {
+        return {
+          countDocuments: async (filter: Record<string, unknown> = {}) => {
+            if (!ownedCollections.includes(name)) return 0;
+            if (Object.keys(filter).length === 0) return 1;
+            const tenantFilter = filter.tenantId as Record<string, unknown> | undefined;
+            if (tenantFilter?.$ne === "axion") return 0;
+            if (tenantFilter?.$exists === true) return scoped.has(name) ? 1 : 0;
+            return 0;
+          },
+          aggregate: () => ({ toArray: async () => [] }),
+          updateOne: async () => ({ upsertedCount: 0 }),
+          updateMany: async () => {
+            if (name === failOnceAt && shouldFail) {
+              shouldFail = false;
+              throw new Error("simulated interrupted backfill");
+            }
+            if (!ownedCollections.includes(name) || scoped.has(name)) return { modifiedCount: 0 };
+            scoped.add(name);
+            return { modifiedCount: 1 };
+          },
+        };
+      },
+    } as unknown as Db,
+  };
+}
+
 describe("tenant migration preflight", () => {
   it("allows assignment when only missing legacy event links need preservation", async () => {
     const audit = await auditTenantMigration(emptyAuditDb());
@@ -137,5 +171,20 @@ describe("tenant migration preflight", () => {
   it("checks the final audit and refuses to report a backfill that left unscoped records", async () => {
     await expect(backfillLegacyTenant(backfillDb(false))).rejects.toThrow("Tenant backfill verification found unscoped records");
     await expect(backfillLegacyTenant(backfillDb(true))).resolves.toMatchObject({ interviews: 1 });
+  });
+
+  it("resumes safely after a partial write when a backfill is retried", async () => {
+    const { db, scoped } = partialBackfillDb("survey_versions");
+
+    await expect(backfillLegacyTenant(db)).rejects.toThrow("simulated interrupted backfill");
+    expect([...scoped]).toEqual(["interviews"]);
+
+    const retried = await backfillLegacyTenant(db);
+    expect(retried.interviews).toBe(0);
+    expect(retried.survey_versions).toBe(1);
+    expect(scoped.size).toBe(8);
+    const audit = await auditTenantMigration(db);
+    expect(audit.preflight.readyForReviewedBackfill).toBe(true);
+    expect(Object.values(audit.collections).filter((collection) => "missingTenant" in collection).every((collection) => collection.missingTenant === 0)).toBe(true);
   });
 });
