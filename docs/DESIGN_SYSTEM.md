@@ -1,6 +1,6 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/4` · reviewed 15 November 2026
+Version: `kqa-design/5` · reviewed 15 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
@@ -19,7 +19,7 @@ This is the product-specific design policy for KQA's host console, respondent qu
 4. **Ask clear, neutral questions.** Ask one thing at a time in familiar, audience-appropriate language. Avoid leading assumptions, vague terms, double negatives, and items that combine separate ideas. State a reference period for time-bound behavior.
 5. **Make response options fit the question.** Make closed options distinct and broad enough to cover reasonable answers. Use balanced scale labels with a consistent direction. Add a neutral point or options like "not applicable", "not sure", "prefer not to answer", and "other" only when they fit the construct. Keep options stable when comparing versions.
 6. **Pretest with intended respondents.** For new or high-impact items, ask people like the intended respondents what they think each question means and how they chose an answer. Revise confusing items before fielding when feasible.
-7. **Make every interaction operable.** Use semantic controls, programmatic labels, keyboard support, visible focus, and announced status and errors. Meet WCAG 2.2 AA, including the 24 × 24 CSS-pixel minimum target size or a documented exception such as sufficient spacing. Verify keyboard and assistive-technology behavior.
+7. **Make every interaction operable.** Prefer native semantic controls, programmatic labels, and built-in keyboard behavior. Custom radio groups must follow the WAI-ARIA APG pattern. Keep focused controls fully visible around fixed or sticky UI (WCAG 2.4.11); provide a non-drag alternative for dragging interactions (WCAG 2.5.7). Errors should identify the affected field and explain a correction, and status/errors must reach assistive technology. Meet WCAG 2.2 AA, including the 24 × 24 CSS-pixel minimum target size or a documented exception such as sufficient spacing. Verify keyboard and assistive-technology behavior.
 8. **Design for narrow screens and long content.** Reflow at 320 CSS px where WCAG requires it. KQA questionnaires must work from 360 px and should be checked at 390 px. Test long labels, validation, tables, zoom, empty states, and errors.
 9. **Use motion to clarify change.** Animate to communicate state or continuity. Keep motion brief, and ensure `prefers-reduced-motion` leaves the interface fully understandable.
 10. **Show how every number was made.** State survey version, participant status scope, time window when used, status-cohort denominator, no-answer count, and valid n. KQA does not track whether conditional questions were shown; do not present cohort counts as item eligibility or no-answer counts as item-level missingness. For ordinal scales show distributions rather than means. For multi-select, make clear that percentages use valid respondents and can sum above 100%. Separate observed facts from interpretation; do not imply causality, statistical significance, or a score.
@@ -31,6 +31,8 @@ This is the product-specific design policy for KQA's host console, respondent qu
 - Can a keyboard-only user operate the full flow and see where focus is?
 - Are pointer targets at least 24 × 24 CSS px, or covered by a WCAG 2.2 SC 2.5.8 exception such as sufficient spacing?
 - Do controls have labels, errors explain recovery, and save/submission status reach assistive technology?
+- Is keyboard focus unobscured around fixed/sticky UI, is there a non-drag alternative for dragging, and do errors identify the affected field and explain a correction?
+- Are native radio controls used where possible; if custom radio groups are necessary, do they follow the WAI-ARIA APG arrow-key and Tab pattern?
 - Have WCAG 2.2 AA contrast and reflow been checked at 320 CSS px, plus KQA's 360/390 px questionnaire widths?
 - Have empty, loading, saving, success, error, submitted, long-content, dark-theme, and reduced-motion states been reviewed?
 - Does each question ask one clear thing, use neutral wording, and state an appropriate reference period?
@@ -45,8 +47,11 @@ This is the product-specific design policy for KQA's host console, respondent qu
 - [WCAG 2.2 Quick Reference](https://www.w3.org/WAI/WCAG22/quickref/) provides the normative accessibility criteria. KQA targets Level AA.
 - [WCAG 2.2 SC 2.5.8: Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) explains the 24 × 24 CSS-pixel minimum and its exceptions.
 - [WAI-ARIA Authoring Practices Guide: Tabs](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/) provides implementation patterns for tab interactions; it is guidance, not a conformance standard.
+- [WAI-ARIA Authoring Practices Guide: Radio Group](https://www.w3.org/WAI/ARIA/apg/patterns/radio/) describes the keyboard behavior expected of custom radio groups; native radio controls are preferable when they fit.
+- [WAI Forms Tutorial: User Notifications](https://www.w3.org/WAI/tutorials/forms/notifications/) explains how to make form errors and status messages concise and understandable.
 - [GitHub Primer Product Design](https://primer.style/product/) is a first-party product design-system reference for principles, components, and tokens.
 - [GOV.UK Design System](https://design-system.service.gov.uk/) shares research-informed service patterns. Localize UK-specific language and conventions for KQA's Australian English.
+- [GOV.UK Service Manual: User research](https://www.gov.uk/service-manual/user-research) describes methods for observing representative users completing realistic tasks; research complements automated checks.
 - [Pew Research Center: Writing Survey Questions](https://www.pewresearch.org/writing-survey-questions/) discusses question wording, response-option design, order effects, and pretesting.
 - [AAPOR: Best Practices for Survey Research](https://aapor.org/standards-and-ethics/best-practices/) provides professional survey research and reporting practices; apply it with context rather than treating a static checker as a methods review.
 - [Anthropic's frontend-design skill](https://github.com/anthropics/skills/tree/main/skills/frontend-design) is optional inspiration for design iteration and critique. Its preferences are subjective and do not override accessibility standards or KQA product policy.
