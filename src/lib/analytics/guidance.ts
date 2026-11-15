@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/1" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/2" as const;
 
 const PRINCIPLES = [
   {
@@ -128,6 +128,7 @@ export function getAnalyticsGuidance() {
     productConstraints: [
       "KQA's analyze_answers output is current-version descriptive data; it returns no raw text, names, notes, private links, score, significance test, or causal estimate.",
       "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
+      "KQA does not enforce a minimum cohort-size threshold; singleton counts and percentages may be returned. Integrated agents should state small-n limitations and follow the host's disclosure rules.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
       "Scale questions provide a distribution and median, not a mean. Number summaries respect the current question's bounds.",

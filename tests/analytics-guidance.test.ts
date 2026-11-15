@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/1");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/2");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -32,6 +32,13 @@ describe("versioned analytics guidance", () => {
     }
     expect(guidance.productConstraints.join(" ")).toContain("current-version");
     expect(guidance.reviewChecklist.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("documents that analytics does not suppress small cohorts", () => {
+    const constraints = getAnalyticsGuidance().productConstraints.join(" ").toLowerCase();
+    expect(constraints).toContain("does not enforce a minimum cohort-size threshold");
+    expect(constraints).toContain("singleton counts and percentages may be returned");
+    expect(constraints).toContain("disclosure rules");
   });
 
   it("returns fresh package objects so callers cannot mutate shared guidance", () => {
