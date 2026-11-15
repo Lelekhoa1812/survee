@@ -5,7 +5,7 @@ process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
 process.env.KQA_MCP_TOKEN = "t".repeat(43);
 
 interface Client { clientId: string; name: string; redirectUris: string[]; createdAt: Date }
-interface Code { _id: { toHexString(): string }; hash: string; clientId: string; redirectUri: string; challenge: string; email: string; expiresAt: Date }
+interface Code { _id: { toHexString(): string }; hash: string; tenantId: string; userId: { toHexString(): string }; clientId: string; redirectUri: string; challenge: string; email: string; expiresAt: Date }
 interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; note?: string }
 type ExistenceCondition = { $exists: boolean };
 type DateCondition = Date | ExistenceCondition;
@@ -91,13 +91,13 @@ describe("OAuth discovery and PKCE", () => {
 
     const verifier = "a".repeat(48);
     const challenge = s256(verifier);
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axion.local" });
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const bad = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier: "wrong-verifier-value-with-enough-length" });
     expect(bad.ok).toBe(false);
     const again = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     expect(again.ok).toBe(false);
 
-    const fresh = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axion.local" });
+    const fresh = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const good = await exchangeCode({ code: fresh, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     expect(good.ok).toBe(true);
     if (!good.ok) return;
@@ -115,7 +115,7 @@ describe("OAuth discovery and PKCE", () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "parallel-code-verifier-value-1234567890";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axion.local" });
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const input = { code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier };
 
     const results = await Promise.all([exchangeCode(input), exchangeCode(input)]);
@@ -128,7 +128,7 @@ describe("OAuth discovery and PKCE", () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "parallel-refresh-verifier-value-123456";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axion.local" });
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
 

@@ -3,6 +3,8 @@ import { ObjectId } from "mongodb";
 import { col } from "../db";
 import { mcpToken } from "../env";
 import type { ApiKeyDoc, ApiKeyView } from "./types";
+import { currentTenantId, tenantFilter } from "../tenant-context";
+import { AXION_TENANT_ID } from "../env";
 
 const MIN_SECRET = 32;
 const MAX_SECRET = 256;
@@ -56,16 +58,21 @@ export function toKeyView(doc: ApiKeyDoc): ApiKeyView {
 }
 
 export async function listApiKeys(): Promise<ApiKeyView[]> {
-  const docs = await (await col.apiKeys()).find({}).sort({ createdAt: -1 }).toArray();
+  const tenantId = await currentTenantId();
+  if (!tenantId) return [];
+  const docs = await (await col.apiKeys()).find(tenantFilter(tenantId)).sort({ createdAt: -1 }).toArray();
   return docs.map(toKeyView);
 }
 
-export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; oauthClientId?: string; refreshSecret?: string }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
+export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; tenantId?: string; oauthClientId?: string; refreshSecret?: string }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
   const problem = validateKeySecret(input.secret);
   if (problem) return { ok: false, error: problem };
+  const tenantId = input.tenantId ?? await currentTenantId();
+  if (!tenantId) return { ok: false, error: "An authenticated tenant is required." };
   const { prefix, suffix } = splitSecret(input.secret);
   const doc: ApiKeyDoc = {
     _id: new ObjectId(),
+    tenantId,
     name: input.name,
     note: input.note || undefined,
     prefix,
@@ -90,8 +97,10 @@ export async function createApiKey(input: { name: string; note?: string; secret:
 
 export async function updateApiKey(id: string, patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean }): Promise<{ ok: true; key: ApiKeyView } | { ok: false; error: string }> {
   if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { ok: false, error: "Key not found." };
   const c = await col.apiKeys();
-  const existing = await c.findOne({ _id: new ObjectId(id) });
+  const existing = await c.findOne(tenantFilter(tenantId, { _id: new ObjectId(id) }));
   if (!existing) return { ok: false, error: "Key not found." };
   const $set: Partial<ApiKeyDoc> = {};
   const $unset: Record<string, ""> = {};
@@ -109,15 +118,17 @@ export async function updateApiKey(id: string, patch: { name?: string; note?: st
   const update: { $set?: Partial<ApiKeyDoc>; $unset?: Record<string, ""> } = {};
   if (Object.keys($set).length) update.$set = $set;
   if (Object.keys($unset).length) update.$unset = $unset;
-  if (update.$set || update.$unset) await c.updateOne({ _id: existing._id }, update);
-  const next = await c.findOne({ _id: existing._id });
+  if (update.$set || update.$unset) await c.updateOne(tenantFilter(tenantId, { _id: existing._id }), update);
+  const next = await c.findOne(tenantFilter(tenantId, { _id: existing._id }));
   if (!next) return { ok: false, error: "Key not found." };
   return { ok: true, key: toKeyView(next) };
 }
 
 export async function deleteApiKey(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
-  const result = await (await col.apiKeys()).deleteOne({ _id: new ObjectId(id) });
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { ok: false, error: "Key not found." };
+  const result = await (await col.apiKeys()).deleteOne(tenantFilter(tenantId, { _id: new ObjectId(id) }));
   if (!result.deletedCount) return { ok: false, error: "Key not found." };
   return { ok: true };
 }
@@ -127,14 +138,19 @@ export async function deleteApiKey(id: string): Promise<{ ok: true } | { ok: fal
  * Updates last-used at most once a minute. Callers treat false and a database error the same: unauthorized.
  */
 export async function authenticateApiKey(secret: string): Promise<boolean> {
-  if (secret.length < MIN_SECRET || secret.length > MAX_SECRET || /\s/.test(secret)) return false;
+  return (await authenticateApiKeyTenant(secret)) !== null;
+}
+
+/** Authenticate a bearer and return its immutable tenant binding. */
+export async function authenticateApiKeyTenant(secret: string): Promise<string | null> {
+  if (secret.length < MIN_SECRET || secret.length > MAX_SECRET || /\s/.test(secret)) return null;
   const c = await col.apiKeys();
   const doc = await c.findOne({ hash: hashKey(secret) });
-  if (!doc || doc.revokedAt) return false;
-  if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return false;
+  if (!doc || doc.revokedAt) return null;
+  if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return null;
   const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
   if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
-  return true;
+  return doc.tenantId ?? AXION_TENANT_ID;
 }
 
 const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;

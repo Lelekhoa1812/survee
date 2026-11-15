@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { summarizeQuestion, type QuestionSummary } from "@/lib/analytics/summary";
+import type { QuestionSummary } from "@/lib/analytics/summary";
 import { formatPercentage } from "@/lib/analytics/format";
 import { buildAnalyticsCsv } from "@/lib/analytics/export";
 import type { Question, QuestionType } from "@/lib/format/schema";
-import type { InterviewData, PersonRow } from "./interview-types";
+import type { InterviewData } from "./interview-types";
 import { Badge, CopyButton, Icon } from "./ui";
 
 type Cohort = "everyone" | "submitted";
@@ -24,10 +24,6 @@ const TYPE_LABELS: Record<QuestionType, string> = {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
-}
-
-function selectedPeople(people: PersonRow[], cohort: Cohort) {
-  return cohort === "submitted" ? people.filter((person) => person.status === "submitted") : people;
 }
 
 function makeDownloadName(name: string) {
@@ -142,7 +138,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<QuestionType | "all">("all");
   const cohortLabel = cohort === "submitted" ? "Submitted only" : "Everyone";
-  const people = useMemo(() => selectedPeople(data.people, cohort), [data.people, cohort]);
+  const eligibleCount = cohort === "submitted" ? data.analysis?.submittedCount ?? 0 : data.analysis?.eligibleCount ?? 0;
   const questions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return data.manifest.questions.filter((question) => {
@@ -151,11 +147,12 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       return matchesType && matchesSearch;
     });
   }, [data.manifest.questions, search, typeFilter]);
-  const summaries = useMemo(() => new Map(questions.map((question) => [question.id, summarizeQuestion(question, people)])), [questions, people]);
+  const cohortSummaries = data.analysis?.summaries[cohort] ?? {};
+  const summaries = useMemo(() => new Map(questions.map((question) => [question.id, cohortSummaries[question.id]])), [questions, cohortSummaries]);
   const exportItems = useMemo(() => questions.map((question) => ({ question, summary: summaries.get(question.id)! })), [questions, summaries]);
   const csv = useMemo(() => buildAnalyticsCsv(exportItems, cohortLabel), [exportItems, cohortLabel]);
-  const submitted = people.filter((person) => person.status === "submitted").length;
-  const inProgress = people.filter((person) => person.status === "in_progress").length;
+  const submitted = data.analysis?.submittedCount ?? 0;
+  const inProgress = cohort === "submitted" ? 0 : data.analysis?.inProgressCount ?? 0;
 
   function downloadCsv() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -196,7 +193,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       </section>
 
       <div className="stats analysis-stats">
-        <div className="stat"><b>{people.length}</b><span>{cohortLabel} in cohort</span></div>
+        <div className="stat"><b>{eligibleCount}</b><span>{cohortLabel} in cohort</span></div>
         <div className="stat"><b>{submitted}</b><span>Submitted</span></div>
         <div className="stat"><b>{inProgress}</b><span>In progress</span></div>
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
@@ -232,7 +229,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         </div>
       </section>
 
-      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {people.length} {people.length === 1 ? "person" : "people"} in this cohort</p>
+      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {eligibleCount} {eligibleCount === 1 ? "person" : "people"} in this cohort</p>
       {groups.length ? groups.map((group) => (
         <section key={group.id} className="stack" style={{ gap: 10 }}>
           <h2 className="section-title">{group.title}</h2>

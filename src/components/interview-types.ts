@@ -1,4 +1,5 @@
 import type { AnswerMap, Manifest } from "@/lib/format/schema";
+import type { QuestionSummary } from "@/lib/analytics/summary";
 
 export interface PersonMail {
   state: "unsent" | "sent" | "failed";
@@ -53,4 +54,14 @@ export interface InterviewData {
   manifest: Manifest;
   /** Public origin used inside invite emails. Null when KQA_PUBLIC_URL is unset. */
   publicOrigin: string | null;
+  /** Aggregate-only answers for analysis routes. No respondent identifiers or raw text values. */
+  analysis?: {
+    eligibleCount: number;
+    submittedCount: number;
+    inProgressCount: number;
+    summaries: {
+      everyone: Record<string, QuestionSummary>;
+      submitted: Record<string, QuestionSummary>;
+    };
+  };
 }

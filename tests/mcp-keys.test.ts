@@ -5,6 +5,7 @@ process.env.KQA_MCP_TOKEN = "t".repeat(43);
 
 interface Doc {
   _id: { toHexString(): string };
+  tenantId?: string;
   hash: string;
   name: string;
   prefix: string;
@@ -25,17 +26,17 @@ vi.mock("../src/lib/db", () => ({
     apiKeys: async () => {
       lookups();
       return {
-        findOne: async (query: { hash?: string; _id?: { toHexString(): string } }) => docs.find((doc) => query.hash ? doc.hash === query.hash : doc._id.toHexString() === query._id?.toHexString()) ?? null,
+        findOne: async (query: Record<string, unknown>) => docs.find((doc) => matches(doc, query)) ?? null,
         insertOne: async (doc: Doc) => { docs.push(doc); return { insertedId: doc._id }; },
-        updateOne: async (query: { _id: { toHexString(): string } }, update: { $set?: Partial<Doc>; $unset?: Record<string, ""> }) => {
-          const doc = docs.find((item) => item._id.toHexString() === query._id.toHexString());
+        updateOne: async (query: Record<string, unknown>, update: { $set?: Partial<Doc>; $unset?: Record<string, ""> }) => {
+          const doc = docs.find((item) => matches(item, query));
           if (!doc) return { matchedCount: 0 };
           if (update.$set) Object.assign(doc, update.$set);
           if (update.$unset) for (const key of Object.keys(update.$unset)) delete (doc as unknown as Record<string, unknown>)[key];
           return { matchedCount: 1 };
         },
-        deleteOne: async (query: { _id: { toHexString(): string } }) => {
-          const index = docs.findIndex((item) => item._id.toHexString() === query._id.toHexString());
+        deleteOne: async (query: Record<string, unknown>) => {
+          const index = docs.findIndex((item) => matches(item, query));
           if (index < 0) return { deletedCount: 0 };
           docs.splice(index, 1);
           return { deletedCount: 1 };
@@ -46,8 +47,23 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
+function matches(doc: Doc, query: Record<string, unknown>): boolean {
+  const clauses = Array.isArray(query.$and) ? query.$and as Record<string, unknown>[] : [query];
+  return clauses.every((clause) => {
+    if (Array.isArray(clause.$or)) {
+      return (clause.$or as Record<string, unknown>[]).some((item) => item.tenantId === doc.tenantId
+        || (item.tenantId && typeof item.tenantId === "object" && "$exists" in item.tenantId && doc.tenantId === undefined));
+    }
+    if ("hash" in clause) return doc.hash === clause.hash;
+    if ("_id" in clause) return doc._id.toHexString() === (clause._id as { toHexString(): string }).toHexString();
+    if ("tenantId" in clause) return doc.tenantId === clause.tenantId;
+    return true;
+  });
+}
+
 import { handleMcp } from "../src/lib/mcp/http";
 import { createApiKey, deleteApiKey, generateKeySecret, updateApiKey } from "../src/lib/repo/keys";
+import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 function post(token: string) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -69,8 +85,9 @@ describe("API keys as MCP credentials", () => {
     expect(env.status).toBe(200);
     expect(lookups).not.toHaveBeenCalled();
 
+    await withTenantPrincipal({ tenantId: "axion", role: "owner", email: "admin@axiob.local", userId: "000000000000000000000001", source: "session" }, async () => {
     const secret = generateKeySecret();
-    const created = await createApiKey({ name: "Probe", note: "live test", secret, createdBy: "admin@axion.local" });
+    const created = await createApiKey({ name: "Probe", note: "live test", secret, createdBy: "admin@axiob.local" });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
     expect(created.secret).toBe(secret);
@@ -97,10 +114,11 @@ describe("API keys as MCP credentials", () => {
     expect((await deleteApiKey(created.key.id)).ok).toBe(true);
     expect((await post(secret)).status).toBe(401);
     expect((await post(process.env.KQA_MCP_TOKEN!)).status).toBe(200);
+    });
   });
 
   it("refuses a key value that copies the server token", async () => {
-    const created = await createApiKey({ name: "Same", secret: process.env.KQA_MCP_TOKEN!, createdBy: "admin@axion.local" });
+    const created = await withTenantPrincipal({ tenantId: "axion", role: "owner", email: "admin@axiob.local", userId: "000000000000000000000001", source: "session" }, () => createApiKey({ name: "Same", secret: process.env.KQA_MCP_TOKEN!, createdBy: "admin@axiob.local" }));
     expect(created.ok).toBe(false);
   });
 });

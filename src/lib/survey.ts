@@ -6,6 +6,7 @@ import type { NewSurvey } from "./repo";
 import { col } from "./db";
 import { toOid } from "./repo";
 import type { SurveyVersionDoc } from "./repo/types";
+import { currentTenantId, tenantFilter } from "./tenant-context";
 
 export interface Prepared {
   report: Report;
@@ -28,11 +29,13 @@ export function prepareSurvey(html: string, fileName?: string): Prepared {
 export async function withCompat(prepared: Prepared, interviewId: string): Promise<Prepared> {
   const oid = toOid(interviewId);
   if (!oid || !prepared.report.manifest) return prepared;
-  const interview = await (await col.interviews()).findOne({ _id: oid });
+  const tenantId = await currentTenantId();
+  if (!tenantId) return prepared;
+  const interview = await (await col.interviews()).findOne(tenantFilter(tenantId, { _id: oid }));
   if (!interview) return prepared;
-  const current = await (await col.versions()).findOne({ interviewId: oid, version: interview.currentVersion }, { projection: { manifest: 1 } });
+  const current = await (await col.versions()).findOne(tenantFilter(tenantId, { interviewId: oid, version: interview.currentVersion }), { projection: { manifest: 1 } });
   if (!current) return prepared;
-  const people = await (await col.participants()).find({ interviewId: oid }, { projection: { answers: 1, status: 1 } }).toArray();
+  const people = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }), { projection: { answers: 1, status: 1 } }).toArray();
   const extra = compareVersions({ previous: current.manifest, next: prepared.report.manifest, answers: people.map((p) => ({ answers: p.answers ?? {}, status: p.status })) });
   if (!extra.length) return prepared;
   const report = mergeDiagnostics(prepared.report, extra);

@@ -3,6 +3,10 @@ const isProd = process.env.NODE_ENV === "production";
 /** Development fallbacks are for a developer's own machine only: never in production and never on Vercel, whatever NODE_ENV says. */
 const allowDevDefaults = !isProd && !process.env.VERCEL;
 
+/** The migrated legacy workspace and the only tenant bound to KQA_MCP_TOKEN. */
+export const AXION_TENANT_ID = "axion";
+export const AXION_OWNER_EMAIL = "admin@axiob.local";
+
 export function mongoUri(): string {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("MONGODB_URI is not set. Add it to .env (local) or to the Vercel project environment variables.");
@@ -17,6 +21,13 @@ export interface AdminConfig {
   email: string;
   password: string;
   secret: string;
+}
+
+/** Signing key for persistent account sessions. Independent from the one-time legacy bootstrap credential. */
+export function sessionSecret(): string | null {
+  const secret = process.env.SESSION_SECRET || (allowDevDefaults ? "kqa-dev-only-secret-change-me" : "");
+  if (!secret || (!allowDevDefaults && secret.length < 16)) return null;
+  return secret;
 }
 
 /**
@@ -71,10 +82,10 @@ export function mcpToken(): string | null {
 }
 
 export function adminConfig(): AdminConfig | { error: string } {
-  const email = process.env.ADMIN_EMAIL || (allowDevDefaults ? "admin@axion.local" : "");
+  const email = process.env.ADMIN_EMAIL || (allowDevDefaults ? AXION_OWNER_EMAIL : "");
   const password = process.env.ADMIN_PASSWORD || (allowDevDefaults ? "12345678" : "");
-  const secret = process.env.SESSION_SECRET || (allowDevDefaults ? "kqa-dev-only-secret-change-me" : "");
-  if (!email || !password || !secret || (!allowDevDefaults && secret.length < 16)) {
+  const secret = sessionSecret();
+  if (!email || !password || !secret) {
     return { error: "Host login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD and SESSION_SECRET in the environment." };
   }
   return { email, password, secret };

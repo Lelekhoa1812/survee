@@ -9,7 +9,10 @@ const mongoMocks = vi.hoisted(() => {
 
 vi.mock("../src/lib/db", () => ({ col: { participants: mongoMocks.participants } }));
 
-import { iterateAnalyticsParticipants } from "../src/lib/repo";
+import { iterateAnalyticsParticipants, type AnalyticsParticipant } from "../src/lib/repo";
+import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
+
+const asAxion = <T>(run: () => T) => withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, run);
 
 describe("analytics participant query", () => {
   let cursor: { batchSize: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; [Symbol.asyncIterator]: () => AsyncGenerator<Record<string, unknown>> };
@@ -37,11 +40,13 @@ describe("analytics participant query", () => {
   });
 
   it("filters status in Mongo and streams only selected answer fields without identity or note text", async () => {
-    const rows = [];
-    for await (const row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit", "unsafe.path"], false)) rows.push(row);
+    const rows: AnalyticsParticipant[] = [];
+    await asAxion(async () => {
+      for await (const row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit", "unsafe.path"], false)) rows.push(row);
+    });
 
     expect(mongoMocks.find).toHaveBeenCalledWith(
-      { interviewId, status: { $in: ["invited", "in_progress", "submitted"] } },
+      tenantFilter("axion", { interviewId, status: { $in: ["invited", "in_progress", "submitted"] } }),
       { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
     );
     expect(cursor.batchSize).toHaveBeenCalledWith(250);
@@ -54,17 +59,21 @@ describe("analytics participant query", () => {
   });
 
   it("filters submitted respondents in Mongo", async () => {
-    for await (const _row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit"], true)) { /* consume cursor */ }
+    await asAxion(async () => {
+      for await (const _row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit"], true)) { /* consume cursor */ }
+    });
     expect(mongoMocks.find).toHaveBeenCalledWith(
-      { interviewId, status: "submitted" },
+      tenantFilter("axion", { interviewId, status: "submitted" }),
       { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
     );
   });
 
   it("filters a caller-selected status subset in Mongo", async () => {
-    for await (const _row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit"], { statuses: ["invited", "in_progress"] })) { /* consume cursor */ }
+    await asAxion(async () => {
+      for await (const _row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit"], { statuses: ["invited", "in_progress"] })) { /* consume cursor */ }
+    });
     expect(mongoMocks.find).toHaveBeenCalledWith(
-      { interviewId, status: { $in: ["invited", "in_progress"] } },
+      tenantFilter("axion", { interviewId, status: { $in: ["invited", "in_progress"] } }),
       { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
     );
   });

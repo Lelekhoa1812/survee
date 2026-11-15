@@ -1,6 +1,6 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, RevokedSessionDoc, SurveyVersionDoc } from "./repo/types";
+import type { ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -30,7 +30,26 @@ export async function db(): Promise<Db> {
 
 async function ensureIndexes(d: Db) {
   await Promise.all([
+    d.collection("tenants").createIndex({ slug: 1 }, { unique: true, name: "tenant_slug_unique" }),
+    d.collection("users").createIndex({ email: 1 }, { unique: true, name: "user_email_unique" }),
+    d.collection("memberships").createIndex({ tenantId: 1, userId: 1 }, { unique: true, name: "tenant_user_unique" }),
+    d.collection("memberships").createIndex({ userId: 1 }, { name: "memberships_by_user" }),
+    d.collection("pending_signups").createIndex({ tokenHash: 1 }, { unique: true, name: "signup_token_unique" }),
+    d.collection("pending_signups").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "signup_expiry" }),
+    d.collection("pending_signups").createIndex({ email: 1, createdAt: -1 }, { name: "signups_by_email" }),
+    d.collection("pending_email_changes").createIndex({ tokenHash: 1 }, { unique: true, name: "email_change_token_unique" }),
+    d.collection("pending_email_changes").createIndex({ userId: 1 }, { unique: true, name: "email_change_by_user" }),
+    d.collection("pending_email_changes").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "email_change_expiry" }),
+    d.collection("pending_password_resets").createIndex({ tokenHash: 1 }, { unique: true, name: "password_reset_token_unique" }),
+    d.collection("pending_password_resets").createIndex({ userId: 1 }, { unique: true, name: "password_reset_by_user" }),
+    d.collection("pending_password_resets").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "password_reset_expiry" }),
     d.collection("participants").createIndex({ token: 1 }, { unique: true, name: "token_unique" }),
+    d.collection("interviews").createIndex({ tenantId: 1, updatedAt: -1 }, { name: "tenant_recent" }),
+    d.collection("participants").createIndex({ tenantId: 1, interviewId: 1, createdAt: 1 }, { name: "tenant_people" }),
+    d.collection("survey_versions").createIndex({ tenantId: 1, interviewId: 1, version: -1 }, { name: "tenant_versions" }),
+    d.collection("events").createIndex({ tenantId: 1, interviewId: 1, at: -1 }, { name: "tenant_events" }),
+    d.collection("mail_messages").createIndex({ tenantId: 1, interviewId: 1, sentAt: -1 }, { name: "tenant_mail" }),
+    d.collection("api_keys").createIndex({ tenantId: 1, createdAt: -1 }, { name: "tenant_keys" }),
     d.collection("participants").createIndex({ interviewId: 1, createdAt: 1 }, { name: "by_interview" }),
     d.collection("survey_versions").createIndex({ interviewId: 1, version: -1 }, { unique: true, name: "interview_version" }),
     d.collection("interviews").createIndex({ updatedAt: -1 }, { name: "recent" }),
@@ -52,6 +71,12 @@ async function ensureIndexes(d: Db) {
 }
 
 export const col = {
+  tenants: async (): Promise<Collection<TenantDoc>> => (await db()).collection<TenantDoc>("tenants"),
+  users: async (): Promise<Collection<UserDoc>> => (await db()).collection<UserDoc>("users"),
+  memberships: async (): Promise<Collection<MembershipDoc>> => (await db()).collection<MembershipDoc>("memberships"),
+  signups: async (): Promise<Collection<PendingSignupDoc>> => (await db()).collection<PendingSignupDoc>("pending_signups"),
+  emailChanges: async (): Promise<Collection<PendingEmailChangeDoc>> => (await db()).collection<PendingEmailChangeDoc>("pending_email_changes"),
+  passwordResets: async (): Promise<Collection<PendingPasswordResetDoc>> => (await db()).collection<PendingPasswordResetDoc>("pending_password_resets"),
   interviews: async (): Promise<Collection<InterviewDoc>> => (await db()).collection<InterviewDoc>("interviews"),
   versions: async (): Promise<Collection<SurveyVersionDoc>> => (await db()).collection<SurveyVersionDoc>("survey_versions"),
   participants: async (): Promise<Collection<ParticipantDoc>> => (await db()).collection<ParticipantDoc>("participants"),

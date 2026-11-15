@@ -3,8 +3,9 @@ import { InterviewView } from "@/components/InterviewView";
 import type { InterviewData } from "@/components/interview-types";
 import { publicBaseUrl } from "@/lib/env";
 import { progress } from "@/lib/format/answers";
+import { createQuestionSummaryAccumulator } from "@/lib/analytics/summary";
 import { currentMail } from "@/lib/mail/state";
-import { getInterview, getVersion, listParticipants, listVersions, recentEvents } from "@/lib/repo";
+import { getInterview, getVersion, iterateAnalyticsParticipants, listParticipants, listVersions, recentEvents } from "@/lib/repo";
 import { listMailByInterview, mailRecord } from "@/lib/repo/mail";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +21,42 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   const { tab } = await searchParams;
   const interview = await getInterview(id);
   if (!interview) notFound();
-  const [current, people, versions, events, mailRows] = await Promise.all([getVersion(interview._id, interview.currentVersion), listParticipants(id), listVersions(interview._id), recentEvents(id, 25), listMailByInterview(interview._id)]);
+  const analysisOnly = tab === "analysis";
+  const [current, people, versions, events, mailRows] = await Promise.all([
+    getVersion(interview._id, interview.currentVersion),
+    analysisOnly ? Promise.resolve([]) : listParticipants(id),
+    analysisOnly ? Promise.resolve([]) : listVersions(interview._id),
+    analysisOnly ? Promise.resolve([]) : recentEvents(id, 25),
+    analysisOnly ? Promise.resolve([]) : listMailByInterview(interview._id),
+  ]);
   if (!current) notFound();
+  let analysis: InterviewData["analysis"];
+  if (analysisOnly) {
+    const questionIds = current.manifest.questions.map((question) => question.id);
+    const everyone = new Map(current.manifest.questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
+    const submitted = new Map(current.manifest.questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
+    let eligibleCount = 0;
+    let submittedCount = 0;
+    let inProgressCount = 0;
+    for await (const respondent of iterateAnalyticsParticipants(id, questionIds)) {
+      eligibleCount += 1;
+      if (respondent.status === "submitted") submittedCount += 1;
+      if (respondent.status === "in_progress") inProgressCount += 1;
+      for (const accumulator of everyone.values()) accumulator.add(respondent);
+      if (respondent.status === "submitted") {
+        for (const accumulator of submitted.values()) accumulator.add(respondent);
+      }
+    }
+    analysis = {
+      eligibleCount,
+      submittedCount,
+      inProgressCount,
+      summaries: {
+        everyone: Object.fromEntries([...everyone].map(([questionId, accumulator]) => [questionId, accumulator.finish()])),
+        submitted: Object.fromEntries([...submitted].map(([questionId, accumulator]) => [questionId, accumulator.finish()])),
+      },
+    };
+  }
   const names = new Map(people.map((p) => [p.id, p.name]));
   const mailByPerson = new Map<string, ReturnType<typeof mailRecord>[]>();
   for (const row of mailRows) {
@@ -34,6 +69,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, currentVersion: interview.currentVersion, createdAt: interview.createdAt.toISOString() },
     manifest: current.manifest,
     publicOrigin: base.ok ? base.origin : null,
+    ...(analysis ? { analysis } : {}),
     people: people.map((p) => {
       const pr = progress(current.manifest, p.answers);
       const mail = currentMail(p, mailByPerson.get(p.id) ?? []);
@@ -48,5 +84,5 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? names.get(e.participantId) : undefined, meta: e.meta })),
   };
   const initial = ["overview", "people", "answers", "analysis", "survey", "export"].includes(tab ?? "") ? (tab as string) : "overview";
-  return <InterviewView data={data} initialTab={initial} />;
+  return <InterviewView key={initial} data={data} initialTab={initial} analysisOnly={analysisOnly} />;
 }

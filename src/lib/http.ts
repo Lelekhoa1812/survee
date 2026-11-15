@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySession } from "./auth";
 import { LIMITS } from "./format/schema";
 import { isSessionRevoked } from "./repo";
+import { loadAccountPrincipal } from "./repo/accounts";
 
 export function json(data: unknown, status = 200, extra?: Record<string, string>): NextResponse {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store", ...extra } });
@@ -13,16 +14,27 @@ export function fail(status: number, error: string, extra: Record<string, unknow
 }
 
 /** A valid, unexpired, not signed-out host session, or null. If the revocation list cannot be read the answer is null. */
-export async function adminSession(): Promise<{ email: string; sid: string; exp: number } | null> {
+export async function adminSession(): Promise<{ userId: string; tenantId: string; role: "owner" | "admin" | "member"; email: string; tenantName: string; emailVerified: boolean; legacyBootstrap: boolean; authVersion: number; sid: string; exp: number } | null> {
   const jar = await cookies();
   const session = verifySession(jar.get(SESSION_COOKIE)?.value);
   if (!session) return null;
   try {
     if (await isSessionRevoked(session.sid)) return null;
+    const principal = await loadAccountPrincipal(session.userId, session.tenantId);
+    if (!principal || session.authVersion !== principal.authVersion) return null;
+    return {
+      ...session,
+      userId: principal.userId,
+      tenantId: principal.tenantId,
+      email: principal.email,
+      role: principal.role,
+      tenantName: principal.tenantName,
+      emailVerified: principal.emailVerified,
+      legacyBootstrap: principal.legacyBootstrap,
+    };
   } catch {
     return null;
   }
-  return session;
 }
 
 /** Mutating requests must come from this app's own pages. Blocks cross-site form posts and fetches. */

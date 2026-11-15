@@ -1,13 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
-import { mcpToken } from "../env";
-import { authenticateApiKey } from "../repo/keys";
+import { AXION_TENANT_ID, mcpToken } from "../env";
+import { authenticateApiKeyTenant } from "../repo/keys";
+import type { TenantPrincipal } from "../tenant-context";
 
 /**
  * Missing bearer, a query-string token, or the admin cookie is 401 and does not touch Mongo.
  * The env token is compared first, still without Mongo. Any other bearer is one hash lookup
  * against api_keys. A revoked, expired, or unknown key is the same 401.
  */
-export async function authorizeMcp(req: Request): Promise<{ ok: true } | { ok: false; status: 401; error: string }> {
+export async function authorizeMcp(req: Request): Promise<{ ok: true; principal: TenantPrincipal } | { ok: false; status: 401; error: string }> {
   const url = new URL(req.url);
   if (url.searchParams.has("token") || url.searchParams.has("access_token") || url.searchParams.has("KQA_MCP_TOKEN")) {
     return { ok: false, status: 401, error: "Unauthorized." };
@@ -16,9 +17,10 @@ export async function authorizeMcp(req: Request): Promise<{ ok: true } | { ok: f
   const match = /^Bearer\s+(\S+)\s*$/i.exec(header);
   if (!match) return { ok: false, status: 401, error: "Unauthorized." };
   const expected = mcpToken();
-  if (expected && tokensMatch(match[1], expected)) return { ok: true };
+  if (expected && tokensMatch(match[1], expected)) return { ok: true, principal: { tenantId: AXION_TENANT_ID, role: "service", source: "service_token" } };
   try {
-    if (await authenticateApiKey(match[1])) return { ok: true };
+    const tenantId = await authenticateApiKeyTenant(match[1]);
+    if (tenantId) return { ok: true, principal: { tenantId, role: "service", source: "api_key" } };
   } catch {
     return { ok: false, status: 401, error: "Unauthorized." };
   }

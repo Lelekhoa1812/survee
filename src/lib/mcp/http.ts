@@ -1,6 +1,7 @@
 import { authorizeMcp } from "./auth";
 import { requestOrigin, wwwAuthenticate } from "./oauth";
 import { dispatchTool, listToolDefs } from "./tools";
+import { withTenantPrincipal } from "../tenant-context";
 
 const PROTOCOL = "2025-06-18";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -96,17 +97,19 @@ async function handleOne(msg: RpcRequest): Promise<unknown | null> {
 export async function handleMcp(req: Request): Promise<Response> {
   const auth = await authorizeMcp(req);
   if (!auth.ok) return unauthorized(req);
-  if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
-  const body = await readBody(req);
-  if (!body.ok) return new Response(JSON.stringify(rpcError(null, -32700, body.message)), { status: body.status, headers: JSON_HEADERS });
-  const messages = Array.isArray(body.data) ? body.data : [body.data];
-  if (!messages.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
-  const replies: unknown[] = [];
-  for (const message of messages) {
-    const reply = await handleOne(message as RpcRequest);
-    if (reply) replies.push(reply);
-  }
-  if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
-  const payload = Array.isArray(body.data) ? replies : replies[0];
-  return new Response(JSON.stringify(payload), { status: 200, headers: JSON_HEADERS });
+  return withTenantPrincipal(auth.principal, async () => {
+    if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
+    const body = await readBody(req);
+    if (!body.ok) return new Response(JSON.stringify(rpcError(null, -32700, body.message)), { status: body.status, headers: JSON_HEADERS });
+    const messages = Array.isArray(body.data) ? body.data : [body.data];
+    if (!messages.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
+    const replies: unknown[] = [];
+    for (const message of messages) {
+      const reply = await handleOne(message as RpcRequest);
+      if (reply) replies.push(reply);
+    }
+    if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
+    const payload = Array.isArray(body.data) ? replies : replies[0];
+    return new Response(JSON.stringify(payload), { status: 200, headers: JSON_HEADERS });
+  });
 }

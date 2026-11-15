@@ -7,10 +7,79 @@ export type ParticipantStatus = "invited" | "in_progress" | "submitted";
 export type MailStatus = "sent" | "failed";
 export type MailDelivery = "delivered" | "bounced" | "unknown";
 export type MailTrigger = "admin" | "mcp";
+export type TenantRole = "owner" | "admin" | "member";
+
+/** collection: tenants */
+export interface TenantDoc {
+  _id: string;
+  name: string;
+  slug: string;
+  status: "active" | "suspended";
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** collection: users */
+export interface UserDoc {
+  _id: ObjectId;
+  email: string;
+  passwordHash: string;
+  emailVerifiedAt?: Date;
+  /** Existing Axion owner authenticated through the pre-account host credential during one-time bootstrap. */
+  legacyBootstrap?: boolean;
+  /** Bumped on password reset/change to expire previously issued sessions. */
+  authVersion?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** collection: memberships. Current product accounts have one default tenant; roles are explicit for future team access. */
+export interface MembershipDoc {
+  _id: ObjectId;
+  tenantId: string;
+  userId: ObjectId;
+  role: TenantRole;
+  createdAt: Date;
+}
+
+/** collection: pending_signups. Passwords are already scrypt-hashed; the one-time token is stored as a SHA-256 hash. */
+export interface PendingSignupDoc {
+  _id: ObjectId;
+  userId: ObjectId;
+  tenantId: string;
+  tenantName: string;
+  tenantSlug: string;
+  email: string;
+  passwordHash: string;
+  tokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+  consumedAt?: Date;
+}
+
+/** collection: pending_email_changes. A verification link is one use and expires after 30 minutes. */
+export interface PendingEmailChangeDoc {
+  _id: ObjectId;
+  userId: ObjectId;
+  email: string;
+  tokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+/** collection: pending_password_resets. The one-time token is stored only as a SHA-256 hash. */
+export interface PendingPasswordResetDoc {
+  _id: ObjectId;
+  userId: ObjectId;
+  tokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
 
 /** collection: interviews */
 export interface InterviewDoc {
   _id: ObjectId;
+  tenantId?: string;
   name: string;
   description?: string;
   mode: InterviewMode;
@@ -24,6 +93,7 @@ export interface InterviewDoc {
 /** collection: survey_versions. One row per uploaded HTML file; never edited, so old exports stay reproducible. */
 export interface SurveyVersionDoc {
   _id: ObjectId;
+  tenantId?: string;
   interviewId: ObjectId;
   version: number;
   fileName?: string;
@@ -39,6 +109,7 @@ export interface SurveyVersionDoc {
 /** collection: participants. The `token` is the secret in the respondent's link. `email` is optional and is only used to send that link. */
 export interface ParticipantDoc {
   _id: ObjectId;
+  tenantId?: string;
   interviewId: ObjectId;
   token: string;
   name: string;
@@ -60,6 +131,7 @@ export interface ParticipantDoc {
 /** collection: events. A light audit trail, expires after 180 days. */
 export interface EventDoc {
   _id: ObjectId;
+  tenantId?: string;
   /** Absent only for an agent call that is not about one interview. */
   interviewId?: ObjectId;
   participantId?: ObjectId;
@@ -74,6 +146,7 @@ export interface EventDoc {
  */
 export interface MailMessageDoc {
   _id: ObjectId;
+  tenantId?: string;
   interviewId: ObjectId;
   participantId: ObjectId;
   kind: "invite";
@@ -115,6 +188,8 @@ export interface OAuthClientDoc {
 /** collection: oauth_codes. One-time authorization code. Only the hash is stored. */
 export interface OAuthCodeDoc {
   _id: ObjectId;
+  tenantId?: string;
+  userId?: ObjectId;
   hash: string;
   clientId: string;
   redirectUri: string;
@@ -126,6 +201,7 @@ export interface OAuthCodeDoc {
 /** collection: api_keys. The secret is stored only as a SHA-256 hash. prefix and suffix are for the host to recognize a key. */
 export interface ApiKeyDoc {
   _id: ObjectId;
+  tenantId?: string;
   name: string;
   note?: string;
   prefix: string;

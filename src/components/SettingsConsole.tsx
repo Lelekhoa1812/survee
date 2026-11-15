@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
+import { AccountSettingsPanel } from "./AccountSettingsPanel";
 
 interface KeyRow {
   id: string;
@@ -19,6 +20,21 @@ interface KeyRow {
   via?: "key" | "oauth";
 }
 
+interface TenantAudit {
+  collections: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number }>;
+  blockingIntegrity: Record<string, number>;
+  legacyEventReferences: Record<string, number>;
+  preflight: { readyForReviewedBackfill: boolean };
+}
+
+interface AccountSettings {
+  tenantName: string;
+  email: string;
+  role: string;
+  emailVerified: boolean;
+  legacyBootstrap: boolean;
+}
+
 type Filter = "all" | KeyRow["status"];
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -28,7 +44,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "expired", label: "Expired" },
 ];
 
-export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { initialKeys: KeyRow[] | null; loadError: boolean; envToken: boolean; origin: string | null }) {
+export function SettingsConsole({ initialKeys, loadError, envToken, origin, tenantAudit: initialTenantAudit, tenantAuditError, mayManageLegacy, account }: { initialKeys: KeyRow[] | null; loadError: boolean; envToken: boolean; origin: string | null; tenantAudit: TenantAudit | null; tenantAuditError: boolean; mayManageLegacy: boolean; account: AccountSettings | null }) {
   const toast = useToast();
   const [keys, setKeys] = useState<KeyRow[] | null>(initialKeys);
   const [failed, setFailed] = useState(loadError);
@@ -40,6 +56,10 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
   const [revoking, setRevoking] = useState<KeyRow | null>(null);
   const [deleting, setDeleting] = useState<KeyRow | null>(null);
   const [revealed, setRevealed] = useState<{ name: string; secret: string } | null>(null);
+  const [tenantAudit, setTenantAudit] = useState<TenantAudit | null>(initialTenantAudit);
+  const [migrationOpen, setMigrationOpen] = useState(false);
+  const [migrationPhrase, setMigrationPhrase] = useState("");
+  const [backupConfirmed, setBackupConfirmed] = useState(false);
 
   const endpoint = origin ? `${origin}/api/mcp` : null;
   const snippet = JSON.stringify({
@@ -94,6 +114,33 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
     return res.data;
   }
 
+  const legacyCollections = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes"];
+  const unscopedLegacyCount = legacyCollections.reduce((sum, name) => sum + (tenantAudit?.collections[name]?.missingTenant ?? 0), 0);
+  const integrityFindings = [
+    ...Object.entries(tenantAudit?.blockingIntegrity ?? {}),
+    ["eventsInterviewParticipantMismatch", tenantAudit?.legacyEventReferences.eventsInterviewParticipantMismatch ?? 0] as [string, number],
+    ["eventsTenantMismatch", tenantAudit?.legacyEventReferences.eventsTenantMismatch ?? 0] as [string, number],
+  ].filter(([, count]) => count > 0);
+
+  async function assignLegacyData() {
+    if (busy || migrationPhrase !== "ASSIGN LEGACY DATA TO AXION" || !backupConfirmed) return;
+    setBusy(true);
+    const result = await api<{ audit?: TenantAudit; modified?: Record<string, number> }>("/api/admin/tenant-migration", {
+      method: "POST",
+      body: { confirmation: migrationPhrase, backupConfirmed },
+    });
+    setBusy(false);
+    if (!result.ok || !result.data.audit) {
+      toast(result.data.error ?? "The legacy data could not be assigned.", "err");
+      return;
+    }
+    setTenantAudit(result.data.audit);
+    setMigrationPhrase("");
+    setBackupConfirmed(false);
+    setMigrationOpen(false);
+    toast("Legacy records are assigned to Axion.");
+  }
+
   return (
     <main className="page">
       <div className="page-head">
@@ -103,6 +150,8 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
         </div>
         <button className="btn primary right" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New key</button>
       </div>
+
+      {account && <AccountSettingsPanel account={account} />}
 
       <div className="settings-grid">
         <section className="card">
@@ -129,7 +178,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
               <span className="label">Client snippet</span>
               <pre className="key-secret" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{snippet}</pre>
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <span className="hint">Replace the bearer with a key from below, or with the server token. Do not put the value in a repository.</span>
+                <span className="hint">Workspace keys and the Axion server token both use this endpoint. Do not put a bearer value in a repository.</span>
                 <CopyButton text={snippet} label="Copy snippet" className="btn sm" ariaLabel="Copy client snippet" />
               </div>
             </div>
@@ -141,7 +190,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
             <Icon name="shield" size={16} />
             <div>
               <h2>Server token</h2>
-              <div className="sub">The deployment credential. It is not listed here and cannot be revoked from this page.</div>
+              <div className="sub">The deployment credential is bound to Axion. It is not listed here and cannot be revoked from this page.</div>
             </div>
           </div>
           <div className="card-pad stack">
@@ -151,12 +200,50 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
             </div>
             <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
               {envToken
-                ? "Agents that already use the environment token keep working. Keys you create here are extra credentials with the same read and write access. Rotate the environment token in the host that runs this app."
-                : "No environment token is set, so only keys created here can call the agent API. Add KQA_MCP_TOKEN on the server if you also want a deployment-wide credential."}
+                ? "This token always operates in the Axion workspace. Keys created here are bound to this workspace and provide the same read and write access within it. Rotate the environment token in the host that runs this app."
+                : "No environment token is set, so only keys created here can call the agent API. Each key is limited to this workspace."}
             </p>
           </div>
         </section>
       </div>
+
+      {mayManageLegacy && (
+        <section className="card" style={{ marginBottom: 16 }}>
+          <div className="card-head">
+            <Icon name="shield" size={16} />
+            <div><h2>Axion data ownership</h2><div className="sub">Review and assign the existing host data to the Axion workspace.</div></div>
+          </div>
+          {tenantAuditError ? (
+            <div className="card-pad"><p className="muted" role="status">The read-only migration audit could not reach the database.</p></div>
+          ) : !tenantAudit ? (
+            <div className="card-pad"><p className="muted" role="status">Migration counts are unavailable.</p></div>
+          ) : (
+            <div className="card-pad stack">
+              {unscopedLegacyCount === 0 ? (
+                <p className="muted" role="status">All existing workspace records already have tenant ownership.</p>
+              ) : (
+                <p className="muted" role="status">{unscopedLegacyCount.toLocaleString()} existing records are still unscoped and currently visible only to Axion during the migration window.</p>
+              )}
+              {tenantAudit.preflight.readyForReviewedBackfill ? (
+                <div className="row wrap" style={{ justifyContent: "space-between" }}>
+                  <span className="hint">The record links pass the integrity checks. Assignment adds Axion tenant IDs and preserves all records, including events with incomplete links.</span>
+                  {unscopedLegacyCount > 0 && <button className="btn" type="button" onClick={() => setMigrationOpen(true)}>Review assignment</button>}
+                </div>
+              ) : (
+                <div className="callout warn" role="alert">
+                  <div><strong>Assignment is paused.</strong> The audit found conflicting tenant IDs or record links that need review.</div>
+                  {integrityFindings.length > 0 && <ul style={{ margin: "4px 0 0 18px" }}>{integrityFindings.map(([name, count]) => <li key={name}>{name}: {count.toLocaleString()}</li>)}</ul>}
+                </div>
+              )}
+              {unscopedLegacyCount > 0 && (
+                <p className="hint">
+                  Legacy event references retained: {tenantAudit.legacyEventReferences.eventsWithoutInterview ?? 0} missing interviews, {tenantAudit.legacyEventReferences.eventsWithoutParticipant ?? 0} missing participants, and {tenantAudit.legacyEventReferences.eventsWithoutInterviewId ?? 0} without an interview ID. No records are deleted.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {revealed && (
         <section className="card" style={{ marginBottom: 16, borderColor: "var(--accent)" }}>
@@ -205,7 +292,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
           <div className="card empty" style={{ border: 0, boxShadow: "none" }}>
             <div className="ico"><Icon name="lock" size={22} /></div>
             <h3>No keys yet</h3>
-            <p>A key lets an agent list interviews, send invites, and export answers. Name it after the agent or the machine that will hold it. You can revoke it later without touching the server token.</p>
+            <p>A key lets an agent list this workspace’s interviews, send invites, and export answers. Name it after the agent or machine that will hold it. You can revoke it without changing other workspaces.</p>
             <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> Create a key</button>
           </div>
         ) : visible.length === 0 ? (
@@ -294,7 +381,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
             </>
           }
         >
-          <p>Calls that use this key start failing immediately. The server token is unchanged. You can restore the key later; restoring does not show the value again.</p>
+          <p>Calls that use this key start failing immediately. The Axion server token is unchanged. You can restore the key later; restoring does not show the value again.</p>
         </Modal>
       )}
       {deleting && (
@@ -307,6 +394,32 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin }: { 
             if (data) setDeleting(null);
           }}
         />
+      )}
+      {migrationOpen && (
+        <Modal
+          title="Assign existing records to Axion?"
+          onClose={() => { if (!busy) { setMigrationOpen(false); setMigrationPhrase(""); setBackupConfirmed(false); } }}
+          actions={
+            <>
+              <button className="btn ghost" type="button" disabled={busy} onClick={() => { setMigrationOpen(false); setMigrationPhrase(""); setBackupConfirmed(false); }}>Cancel</button>
+              <button className="btn primary" type="button" disabled={busy || migrationPhrase !== "ASSIGN LEGACY DATA TO AXION" || !backupConfirmed} onClick={() => void assignLegacyData()}>{busy ? <Spinner /> : null} Assign records</button>
+            </>
+          }
+        >
+          <div className="stack">
+            <p>This writes <code>tenantId: axion</code> onto {unscopedLegacyCount.toLocaleString()} existing records, including interviews, survey versions, participants, events, mail, API keys, and active OAuth codes. It preserves record IDs, answers, links, keys, and event history.</p>
+            <p className="muted">The audit passed the parent-record checks. Legacy events with missing or incomplete references are retained and assigned to Axion.</p>
+            <p className="callout warn">Verify a current MongoDB backup is available before continuing. This app cannot verify the backup itself.</p>
+            <label className="row wrap" style={{ alignItems: "flex-start", gap: 8 }}>
+              <input type="checkbox" checked={backupConfirmed} onChange={(event) => setBackupConfirmed(event.target.checked)} style={{ marginTop: 4 }} />
+              <span>I verified a current database backup is available.</span>
+            </label>
+            <div className="field">
+              <label htmlFor="migration-confirm">Type <code>ASSIGN LEGACY DATA TO AXION</code> to continue</label>
+              <input id="migration-confirm" className="input" autoComplete="off" value={migrationPhrase} onChange={(event) => setMigrationPhrase(event.target.value)} />
+            </div>
+          </div>
+        </Modal>
       )}
     </main>
   );

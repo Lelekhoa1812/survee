@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import { api, BrandMark, Spinner } from "./ui";
 
@@ -47,6 +48,12 @@ export function LoginForm({ next }: { next: string }) {
       <button className="btn primary lg block" disabled={busy || !email || !password}>
         {busy ? <Spinner /> : null} Sign in
       </button>
+      <p className="muted" style={{ margin: 0, textAlign: "center", fontSize: 13.5 }}>
+        <Link href="/forgot-password" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Forgot your password?</Link>
+      </p>
+      <p className="muted" style={{ margin: 0, textAlign: "center", fontSize: 13.5 }}>
+        New to KQA? <Link href="/signup" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Create a workspace</Link>
+      </p>
     </form>
   );
 }

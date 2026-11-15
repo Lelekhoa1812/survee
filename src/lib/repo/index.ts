@@ -7,6 +7,8 @@ import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import type { InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
+import { currentTenantId, tenantFilter } from "../tenant-context";
+import { AXION_TENANT_ID } from "../env";
 
 export type { InterviewSummary, ParticipantView } from "./types";
 
@@ -23,17 +25,20 @@ function participantView(p: ParticipantDoc): ParticipantView {
   };
 }
 
-function logEvent(interviewId: ObjectId, type: string, participantId?: ObjectId, meta?: Record<string, unknown>) {
+function logEvent(tenantId: string, interviewId: ObjectId, type: string, participantId?: ObjectId, meta?: Record<string, unknown>) {
   // Fire and forget: the audit trail must never slow down or break an answer being saved.
-  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {});
+  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {});
 }
 
 // ------------------------------------------------------------------------------------------ interviews
 export async function listInterviews(): Promise<InterviewSummary[]> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) return [];
   const [interviews, participants] = await Promise.all([col.interviews(), col.participants()]);
-  const docs = await interviews.find({}).sort({ updatedAt: -1 }).toArray();
+  const docs = await interviews.find(tenantFilter(tenantId)).sort({ updatedAt: -1 }).toArray();
   const agg = await participants
     .aggregate<{ _id: { i: ObjectId; s: ParticipantStatus }; n: number; last: Date }>([
+      { $match: tenantFilter(tenantId) },
       { $group: { _id: { i: "$interviewId", s: "$status" }, n: { $sum: 1 }, last: { $max: "$updatedAt" } } },
     ])
     .toArray();
@@ -50,18 +55,24 @@ export async function listInterviews(): Promise<InterviewSummary[]> {
   });
 }
 
-export async function getInterview(id: string): Promise<InterviewDoc | null> {
+export async function getInterview(id: string, tenantOverride?: string): Promise<InterviewDoc | null> {
   const oid = toOid(id);
   if (!oid) return null;
-  return (await col.interviews()).findOne({ _id: oid });
+  const tenantId = tenantOverride ?? await currentTenantId();
+  if (!tenantId) return null;
+  return (await col.interviews()).findOne(tenantFilter(tenantId, { _id: oid }));
 }
 
-export async function getVersion(interviewId: ObjectId, version: number): Promise<SurveyVersionDoc | null> {
-  return (await col.versions()).findOne({ interviewId, version });
+export async function getVersion(interviewId: ObjectId, version: number, tenantOverride?: string): Promise<SurveyVersionDoc | null> {
+  const tenantId = tenantOverride ?? await currentTenantId();
+  if (!tenantId) return null;
+  return (await col.versions()).findOne(tenantFilter(tenantId, { interviewId, version }));
 }
 
-export async function listVersions(interviewId: ObjectId): Promise<Omit<SurveyVersionDoc, "html">[]> {
-  return (await col.versions()).find({ interviewId }, { projection: { html: 0 } }).sort({ version: -1 }).toArray();
+export async function listVersions(interviewId: ObjectId, tenantOverride?: string): Promise<Omit<SurveyVersionDoc, "html">[]> {
+  const tenantId = tenantOverride ?? await currentTenantId();
+  if (!tenantId) return [];
+  return (await col.versions()).find(tenantFilter(tenantId, { interviewId }), { projection: { html: 0 } }).sort({ version: -1 }).toArray();
 }
 
 export interface NewSurvey {
@@ -71,26 +82,30 @@ export interface NewSurvey {
   check: SurveyVersionDoc["check"];
 }
 
-function versionDoc(interviewId: ObjectId, version: number, s: NewSurvey): SurveyVersionDoc {
+function versionDoc(tenantId: string, interviewId: ObjectId, version: number, s: NewSurvey): SurveyVersionDoc {
   return {
-    _id: new ObjectId(), interviewId, version, fileName: s.fileName, html: s.html, htmlSha256: createHash("sha256").update(s.html).digest("hex"),
+    _id: new ObjectId(), tenantId, interviewId, version, fileName: s.fileName, html: s.html, htmlSha256: createHash("sha256").update(s.html).digest("hex"),
     bytes: Buffer.byteLength(s.html, "utf8"), manifest: s.manifest, check: s.check, createdAt: new Date(),
   };
 }
 
 export async function createInterview(input: { name: string; description?: string; mode: InterviewMode; survey: NewSurvey }): Promise<InterviewDoc> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
   const now = new Date();
-  const doc: InterviewDoc = { _id: new ObjectId(), name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1, createdAt: now, updatedAt: now };
+  const doc: InterviewDoc = { _id: new ObjectId(), tenantId, name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1, createdAt: now, updatedAt: now };
   await (await col.interviews()).insertOne(doc);
-  await (await col.versions()).insertOne(versionDoc(doc._id, 1, input.survey));
+  await (await col.versions()).insertOne(versionDoc(tenantId, doc._id, 1, input.survey));
   if (input.mode === "single") await addParticipants(doc._id.toHexString(), [{ name: "Respondent" }]);
-  logEvent(doc._id, "created");
+  logEvent(tenantId, doc._id, "created");
   return doc;
 }
 
 export async function updateInterview(id: string, patch: { name?: string; description?: string | null; status?: InterviewStatus }): Promise<InterviewDoc | null> {
   const oid = toOid(id);
   if (!oid) return null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
   const set: Partial<InterviewDoc> = { updatedAt: new Date() };
   const unset: Record<string, ""> = {};
   if (patch.name !== undefined) set.name = patch.name;
@@ -101,21 +116,23 @@ export async function updateInterview(id: string, patch: { name?: string; descri
   if (patch.status !== undefined) set.status = patch.status;
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
-  const res = await (await col.interviews()).findOneAndUpdate({ _id: oid }, update, { returnDocument: "after" });
-  if (res && patch.status) logEvent(oid, "status", undefined, { status: patch.status });
+  const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { returnDocument: "after" });
+  if (res && patch.status) logEvent(tenantId, oid, "status", undefined, { status: patch.status });
   return res;
 }
 
 export async function addVersion(id: string, survey: NewSurvey): Promise<number | null> {
   const oid = toOid(id);
   if (!oid) return null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
   const interviews = await col.interviews();
-  const cur = await interviews.findOne({ _id: oid });
+  const cur = await interviews.findOne(tenantFilter(tenantId, { _id: oid }));
   if (!cur) return null;
   const next = cur.currentVersion + 1;
-  await (await col.versions()).insertOne(versionDoc(oid, next, survey));
-  await interviews.updateOne({ _id: oid }, { $set: { currentVersion: next, updatedAt: new Date() } });
-  logEvent(oid, "version", undefined, { version: next });
+  await (await col.versions()).insertOne(versionDoc(tenantId, oid, next, survey));
+  await interviews.updateOne(tenantFilter(tenantId, { _id: oid }), { $set: { currentVersion: next, updatedAt: new Date() } });
+  logEvent(tenantId, oid, "version", undefined, { version: next });
   return next;
 }
 
@@ -128,15 +145,17 @@ export async function publishVersionIfCurrent(
 ): Promise<{ version: number } | { conflict: true } | null> {
   const oid = toOid(id);
   if (!oid) return null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
   const interviews = await col.interviews();
-  const interview = await interviews.findOne({ _id: oid, currentVersion: expectedVersion });
+  const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }));
   if (!interview) return { conflict: true };
-  const current = await getVersion(oid, expectedVersion);
+  const current = await getVersion(oid, expectedVersion, tenantId);
   if (!current || current.htmlSha256 !== expectedBaseHash) return { conflict: true };
 
   const version = expectedVersion + 1;
   const versions = await col.versions();
-  const doc = versionDoc(oid, version, survey);
+  const doc = versionDoc(tenantId, oid, version, survey);
   try {
     await versions.insertOne(doc);
   } catch (error) {
@@ -147,30 +166,32 @@ export async function publishVersionIfCurrent(
   let changed;
   try {
     changed = await interviews.updateOne(
-      { _id: oid, currentVersion: expectedVersion },
+      tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }),
       { $set: { currentVersion: version, updatedAt: new Date() } },
     );
   } catch (error) {
-    await versions.deleteOne({ _id: doc._id }).catch(() => {});
+    await versions.deleteOne(tenantFilter(tenantId, { _id: doc._id })).catch(() => {});
     throw error;
   }
   if (!changed.modifiedCount) {
-    await versions.deleteOne({ _id: doc._id }).catch(() => {});
+    await versions.deleteOne(tenantFilter(tenantId, { _id: doc._id })).catch(() => {});
     return { conflict: true };
   }
-  logEvent(oid, "version", undefined, { version, source: "mcp_patch" });
+  logEvent(tenantId, oid, "version", undefined, { version, source: "mcp_patch" });
   return { version };
 }
 
 export async function deleteInterview(id: string): Promise<boolean> {
   const oid = toOid(id);
   if (!oid) return false;
-  const res = await (await col.interviews()).deleteOne({ _id: oid });
+  const tenantId = await currentTenantId();
+  if (!tenantId) return false;
+  const res = await (await col.interviews()).deleteOne(tenantFilter(tenantId, { _id: oid }));
   if (!res.deletedCount) return false;
   await Promise.all([
-    (await col.versions()).deleteMany({ interviewId: oid }),
-    (await col.participants()).deleteMany({ interviewId: oid }),
-    (await col.events()).deleteMany({ interviewId: oid }),
+    (await col.versions()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
+    (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
+    (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
     deleteMailForInterview(oid),
   ]);
   return true;
@@ -180,7 +201,9 @@ export async function deleteInterview(id: string): Promise<boolean> {
 export async function listParticipants(interviewId: string): Promise<ParticipantView[]> {
   const oid = toOid(interviewId);
   if (!oid) return [];
-  const docs = await (await col.participants()).find({ interviewId: oid }).sort({ createdAt: 1 }).toArray();
+  const tenantId = await currentTenantId();
+  if (!tenantId) return [];
+  const docs = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid })).sort({ createdAt: 1 }).toArray();
   return docs.map(participantView);
 }
 
@@ -215,7 +238,9 @@ export async function* iterateAnalyticsParticipants(
     ? scope ? ["submitted" as const] : defaultStatuses
     : scope.statuses ?? defaultStatuses;
   const statusFilter = statuses.length === 1 ? statuses[0] : { $in: statuses };
-  const filter = { interviewId: oid, status: statusFilter };
+  const tenantId = await currentTenantId();
+  if (!tenantId) return;
+  const filter = tenantFilter(tenantId, { interviewId: oid, status: statusFilter });
   const cursor = (await col.participants()).find(filter, { projection }).batchSize(250);
   try {
     for await (const participant of cursor) {
@@ -239,31 +264,37 @@ export async function* iterateAnalyticsParticipants(
 export async function addParticipants(interviewId: string, people: { name: string; note?: string; email?: string }[]): Promise<ParticipantView[]> {
   const oid = toOid(interviewId);
   if (!oid || people.length === 0) return [];
+  const tenantId = await currentTenantId();
+  if (!tenantId || !(await (await col.interviews()).findOne(tenantFilter(tenantId, { _id: oid }), { projection: { _id: 1 } }))) return [];
   const now = new Date();
   const docs: ParticipantDoc[] = people.map((p, i) => {
     const parsed = p.email ? parseEmail(p.email) : { ok: true as const, email: null };
     if (!parsed.ok) throw new Error("Invalid email");
     return {
-      _id: new ObjectId(), interviewId: oid, token: newToken(), name: p.name.trim().slice(0, 120) || "Respondent", note: p.note?.trim().slice(0, 1000) || undefined,
+      _id: new ObjectId(), tenantId, interviewId: oid, token: newToken(), name: p.name.trim().slice(0, 120) || "Respondent", note: p.note?.trim().slice(0, 1000) || undefined,
       email: parsed.email ?? undefined,
       status: "invited" as const, answers: {}, revision: 0, createdAt: new Date(now.getTime() + i), updatedAt: now,
     };
   });
   await (await col.participants()).insertMany(docs);
-  await (await col.interviews()).updateOne({ _id: oid }, { $set: { updatedAt: now } });
+  await (await col.interviews()).updateOne(tenantFilter(tenantId, { _id: oid }), { $set: { updatedAt: now } });
   return docs.map(participantView);
 }
 
 export async function getParticipant(id: string): Promise<ParticipantView | null> {
   const oid = toOid(id);
   if (!oid) return null;
-  const doc = await (await col.participants()).findOne({ _id: oid });
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
+  const doc = await (await col.participants()).findOne(tenantFilter(tenantId, { _id: oid }));
   return doc ? participantView(doc) : null;
 }
 
 export async function updateParticipant(id: string, patch: { name?: string; note?: string | null; email?: string | null }): Promise<ParticipantView | null> {
   const oid = toOid(id);
   if (!oid) return null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
   const set: Partial<ParticipantDoc> = { updatedAt: new Date() };
   const unset: Record<string, ""> = {};
   if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120) || "Respondent";
@@ -281,14 +312,16 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   }
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
-  const res = await (await col.participants()).findOneAndUpdate({ _id: oid }, update, { returnDocument: "after" });
+  const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { returnDocument: "after" });
   return res ? participantView(res) : null;
 }
 
 export async function deleteParticipant(id: string): Promise<boolean> {
   const oid = toOid(id);
   if (!oid) return false;
-  const res = await (await col.participants()).deleteOne({ _id: oid });
+  const tenantId = await currentTenantId();
+  if (!tenantId) return false;
+  const res = await (await col.participants()).deleteOne(tenantFilter(tenantId, { _id: oid }));
   if (!res.deletedCount) return false;
   await deleteMailForPerson(oid);
   return true;
@@ -297,21 +330,26 @@ export async function deleteParticipant(id: string): Promise<boolean> {
 export async function regenerateToken(id: string): Promise<string | null> {
   const oid = toOid(id);
   if (!oid) return null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
   const token = newToken();
-  const res = await (await col.participants()).updateOne({ _id: oid }, { $set: { token, updatedAt: new Date() } });
+  const res = await (await col.participants()).updateOne(tenantFilter(tenantId, { _id: oid }), { $set: { token, updatedAt: new Date() } });
   return res.matchedCount ? token : null;
 }
 
 export async function reopenParticipant(id: string): Promise<ParticipantView | null> {
   const oid = toOid(id);
   if (!oid) return null;
-  const res = await (await col.participants()).findOneAndUpdate({ _id: oid, status: "submitted" }, { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" } }, { returnDocument: "after" });
-  if (res) logEvent(res.interviewId, "reopen", res._id);
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
+  const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid, status: "submitted" }), { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" } }, { returnDocument: "after" });
+  if (res) logEvent(tenantId, res.interviewId, "reopen", res._id);
   return res ? participantView(res) : null;
 }
 
 // ------------------------------------------------------------------------------------------ respondent side
 export interface RespondentContext {
+  tenantId: string;
   participant: ParticipantView;
   interview: { id: string; name: string; description?: string; mode: InterviewMode; status: InterviewStatus };
   version: SurveyVersionDoc;
@@ -325,16 +363,18 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
   const participants = await col.participants();
   const p = await participants.findOne({ token });
   if (!p) return null;
-  const interview = await (await col.interviews()).findOne({ _id: p.interviewId });
+  const tenantId = p.tenantId ?? AXION_TENANT_ID;
+  const interview = await (await col.interviews()).findOne(tenantFilter(tenantId, { _id: p.interviewId }));
   if (!interview) return null;
-  const version = await getVersion(p.interviewId, interview.currentVersion);
+  const version = await getVersion(p.interviewId, interview.currentVersion, tenantId);
   if (!version) return null;
   if (opts.touch) {
     const now = new Date();
-    void participants.updateOne({ _id: p._id }, { $set: { lastSeenAt: now } }).catch(() => {});
-    if (!p.lastSeenAt || now.getTime() - p.lastSeenAt.getTime() > 10 * 60 * 1000) logEvent(p.interviewId, "open", p._id);
+    void participants.updateOne(tenantFilter(tenantId, { _id: p._id }), { $set: { lastSeenAt: now } }).catch(() => {});
+    if (!p.lastSeenAt || now.getTime() - p.lastSeenAt.getTime() > 10 * 60 * 1000) logEvent(tenantId, p.interviewId, "open", p._id);
   }
   return {
+    tenantId,
     participant: participantView(p),
     interview: { id: interview._id.toHexString(), name: interview.name, description: interview.description, mode: interview.mode, status: interview.status },
     version,
@@ -413,12 +453,12 @@ export async function saveAnswers(token: string, patch: AnswerPatch): Promise<Sa
   }
   const participants = await col.participants();
   const res = await participants.findOneAndUpdate(
-    { _id: new ObjectId(ctx.participant.id), status: { $ne: "submitted" } },
+    tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), status: { $ne: "submitted" } }),
     { $set, ...(Object.keys($unset).length ? { $unset } : {}), $inc: { revision: 1 } },
     { returnDocument: "after" },
   );
   if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked." };
-  logEvent(res.interviewId, "save", res._id, { ids: ids.slice(0, 20) });
+  logEvent(ctx.tenantId, res.interviewId, "save", res._id, { ids: ids.slice(0, 20) });
   return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status };
 }
 
@@ -435,8 +475,8 @@ export async function submitAnswers(token: string): Promise<SubmitResult> {
     return { ok: false, status: 422, error: `${pr.missingRequired.length} required ${pr.missingRequired.length === 1 ? "question is" : "questions are"} not answered yet.`, missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })) };
   }
   const now = new Date();
-  const res = await (await col.participants()).findOneAndUpdate({ _id: new ObjectId(ctx.participant.id) }, { $set: { status: "submitted", submittedAt: now, updatedAt: now } }, { returnDocument: "after" });
-  if (res) logEvent(res.interviewId, "submit", res._id);
+  const res = await (await col.participants()).findOneAndUpdate(tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id) }), { $set: { status: "submitted", submittedAt: now, updatedAt: now } }, { returnDocument: "after" });
+  if (res) logEvent(ctx.tenantId, res.interviewId, "submit", res._id);
   return { ok: true, submittedAt: now.toISOString() };
 }
 
@@ -464,15 +504,19 @@ export async function clearLoginFailures(key: string): Promise<void> {
 
 /** Audit an MCP tool call. Meta is the tool name and outcome only: no HTML, answers, or links. */
 export async function noteMcp(tool: string, ok: boolean, interviewId?: string): Promise<void> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) return;
   const oid = interviewId ? toOid(interviewId) : null;
   const safe = /^[a-z0-9_]{1,64}$/.test(tool) ? tool : "unknown";
-  await (await col.events()).insertOne({ _id: new ObjectId(), ...(oid ? { interviewId: oid } : {}), type: "mcp", at: new Date(), meta: { tool: safe, ok } });
+  await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, ...(oid ? { interviewId: oid } : {}), type: "mcp", at: new Date(), meta: { tool: safe, ok } });
 }
 
 // ------------------------------------------------------------------------------------------ export input
 export async function recentEvents(interviewId: string, limit = 30) {
   const oid = toOid(interviewId);
   if (!oid) return [];
-  const docs = await (await col.events()).find({ interviewId: oid }).sort({ at: -1 }).limit(limit).toArray();
+  const tenantId = await currentTenantId();
+  if (!tenantId) return [];
+  const docs = await (await col.events()).find(tenantFilter(tenantId, { interviewId: oid })).sort({ at: -1 }).limit(limit).toArray();
   return docs.map((e) => ({ id: e._id.toHexString(), type: e.type, at: e.at.toISOString(), participantId: e.participantId?.toHexString(), meta: e.meta }));
 }

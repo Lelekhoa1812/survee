@@ -20,13 +20,13 @@ Stateless Streamable HTTP. One JSON-RPC request, one JSON response. There is no 
 
 `DELETE` answers 405. This server does not open an SSE channel and does not keep a session. A call with no bearer answers 401 and points ChatGPT at the OAuth discovery documents.
 
-ChatGPT connects to `https://<your-host>/api/mcp` with no pasted token. It discovers `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, then the host signs in and chooses Allow. That creates a key under Settings named after the app. Revoke or delete the key to disconnect it. Other agents can still use a bearer key or `KQA_MCP_TOKEN`.
+ChatGPT connects to `https://<your-host>/api/mcp` with no pasted token. It discovers `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, then the host signs in and chooses Allow. That creates a key under Settings named after the app. The key is bound to the signed-in workspace. Revoke or delete the key to disconnect it. Other agents can use a workspace key or `KQA_MCP_TOKEN`.
 
-Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is the server token. A host can also create named keys under Settings. Each key has a name, a note, an optional expiry, and a value. The value is shown once. The database stores a SHA-256 hash plus a short fingerprint. A key can be revoked, restored, or deleted. Revoked, expired, and deleted keys are rejected.
+Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is a tenant-bound service principal that always operates in the legacy **Axion** workspace; a request cannot select a different tenant. A host can also create named keys under Settings. Each key is permanently bound to the signed-in workspace and has a name, a note, an optional expiry, and a value. The value is shown once. The database stores a SHA-256 hash plus a short fingerprint. A key can be revoked, restored, or deleted. Revoked, expired, and deleted keys are rejected.
 
 Neither credential is the admin password, the session cookie, or a respondent link. Send it only in the Authorization header. A token in the query string is rejected. A missing bearer, the admin cookie, or a query-string token is HTTP 401 and does not touch the database. The server token is compared before any database call. Any other bearer is one lookup by hash. A failed lookup is the same HTTP 401.
 
-A valid server token or an active key can read and write. Anyone who has one can delete interviews. Treat both like the session secret.
+A valid server token can read and write Axion data. An active key can read and write only its bound workspace. Anyone who has one can delete interviews in that workspace. Treat both like the session secret.
 
 Locally the value lives in `.env` (gitignored). Production on Vercel needs the same name, plus `KQA_PUBLIC_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `IMAP_HOST`, and `IMAP_PORT`. Set those in the Vercel project. Do not paste the values into a chat, a doc, or a commit.
 

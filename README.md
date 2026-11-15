@@ -44,17 +44,17 @@ cp .env.example .env     # then fill in MONGODB_URI
 npm run dev              # http://localhost:3000
 ```
 
-In development the host login falls back to `admin@axion.local` / `12345678`. In production the three variables below are required and there are no fallbacks.
+In development the legacy Axion owner login falls back to `admin@axiob.local` / `12345678`. New accounts sign up with a workspace name, a deliverable email address and a password; email verification is required before sign-in. In production, the legacy owner bootstraps once with the configured credentials, then can change the `.local` email to a verified address in Settings.
 
 | Variable | Purpose |
 |---|---|
 | `MONGODB_URI` | MongoDB connection string. Required |
 | `MONGODB_DB` | Database name. Default `kqa` |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | The host login. Required in production |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Initial Axion owner bootstrap credential. Required in production; regular accounts use their own passwords |
 | `SESSION_SECRET` | Signs the admin session cookie. Required in production. `openssl rand -base64 32` |
 | `KQA_PUBLIC_URL` | Public origin used in invite emails, such as `https://your-host`. Required to send. The copied link on screen can still be the address you are visiting |
-| `KQA_MCP_TOKEN` | Server bearer for `POST /api/mcp`. Named keys created in Settings are also accepted. Not the admin password. `openssl rand -base64 32` |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Send invites. Port 587, STARTTLS. The password is never written into the repo |
+| `KQA_MCP_TOKEN` | Axion-bound service bearer for `POST /api/mcp`. Named keys created in Settings are also accepted and scoped to their workspace. Not the admin password. `openssl rand -base64 32` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Send interview invites, account verification, email changes and password resets. Port 587, STARTTLS. The password is never written into the repo |
 | `IMAP_HOST`, `IMAP_PORT` | On-demand bounce check. Port 993. Uses the same `SMTP_USER` and `SMTP_PASSWORD` |
 
 ## Commands
@@ -67,14 +67,14 @@ In development the host login falls back to `admin@axion.local` / `12345678`. In
 | `npm run check -- file.html` | Run the checker from the terminal |
 | `npm run docs` | Regenerate `DIAGNOSTICS.md` and the JSON Schema from code |
 | `npm run e2e -- <baseUrl> <token> <outDir>` | Real-Chrome end-to-end run of a respondent link |
-| `npm run shots -- <baseUrl> <outDir> <interviewId> [dark]` | Screenshots of the host area for review |
+| `npm run shots -- <baseUrl> <outDir> <interviewId> [light|dark] [all|analysis|accounts]` | Screenshots of host, analysis or account surfaces for review |
 
 `e2e` and `shots` use `puppeteer-core` with your installed Chrome (`CHROME_PATH` to override).
 
 ## How it is built
 
 * Next.js 16 (App Router, TypeScript), React 19, plain CSS design tokens, IBM Plex.
-* MongoDB (Atlas) with the official driver. Collections: `interviews`, `survey_versions` (immutable per upload), `participants` (token, optional email, status, answers keyed by question id), `mail_messages` (invite send and delivery, never the message body), `events` (audit, 180-day TTL), `login_attempts` (throttling, 30-minute TTL), `api_keys` (name, note, hash, fingerprint, expiry, revoke).
+* MongoDB (Atlas) with the official driver. Tenant-owned collections include `interviews`, `survey_versions` (immutable per upload), `participants` (token, optional email, status, answers keyed by question id), `mail_messages` (invite send and delivery, never the message body), `events` (audit, 180-day TTL), and `api_keys` (name, note, hash, fingerprint, expiry, revoke). Accounts use `tenants`, `users`, `memberships`, and expiring signup, email-change and password-reset token collections.
 * One definition of the format (`src/lib/format/schema.ts`, zod) feeds the checker, the answer validation, the JSON Schema and the docs, so they cannot drift.
 * Exports: Excel workbook, CSV (one row per person, or one per answer), Markdown report, JSON.
 
@@ -82,11 +82,11 @@ In development the host login falls back to `admin@axion.local` / `12345678`. In
 
 * Uploaded HTML is untrusted. It runs in an iframe with `sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"` (no same-origin) and a strict Content-Security-Policy that blocks network calls, framing and form posts. It can only talk to the app with `postMessage`, and the app accepts messages only from its own frame.
 * Respondent links carry a 144-bit random token. Tokens are the credential, so keep links private. The link in an invite email is that credential. A host can issue a new link for a person at any time; the mailed link then stops working and is not sent again on its own.
-* The host area uses an HMAC-signed, httpOnly, same-site cookie, checks the request origin on every mutating call, and throttles failed logins.
-* Agents use `POST /api/mcp` with `Authorization: Bearer`. The server accepts `KQA_MCP_TOKEN` or an active key from Settings. That credential is not the admin password and not the session cookie. A missing bearer is rejected before the database is touched. See [`docs/MCP.md`](docs/MCP.md). `/_next/mcp` is only the Next.js development diagnostics endpoint.
+* Each workspace has its own verified sign-in. Passwords use salted scrypt hashes; sessions are HMAC-signed, httpOnly and same-site, check persisted membership and credential version, and expire after 12 hours. Mutating calls check request origin; login, signup, email changes and password resets are throttled.
+* Agents use `POST /api/mcp` with `Authorization: Bearer`. The server accepts `KQA_MCP_TOKEN` for Axion or a tenant-scoped key from Settings. That credential is not the admin password and not the session cookie. A missing bearer is rejected before the database is touched. See [`docs/MCP.md`](docs/MCP.md). `/_next/mcp` is only the Next.js development diagnostics endpoint.
 * Every answer is validated against the manifest on the server before it is stored.
-* `/admin` currently has one shared credential. Per-host accounts are planned.
+* Analysis routes send aggregate summaries to the browser without respondent names, emails, links, notes or raw answer values. Individual answers are loaded only in the detail views.
 
 ## Deploying
 
-Vercel. Set the environment variables above, including `KQA_MCP_TOKEN`, `KQA_PUBLIC_URL`, and the SMTP and IMAP names. Make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`. Do not put the SMTP password or the MCP token in the repository.
+Vercel. Set the environment variables above, including `KQA_MCP_TOKEN`, `KQA_PUBLIC_URL`, and the SMTP and IMAP names. Make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`. Review the owner-only Axion data audit and verify a current database backup before assigning tenant IDs. Do not put the SMTP password or the MCP token in the repository.

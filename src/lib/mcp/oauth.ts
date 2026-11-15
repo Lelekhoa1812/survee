@@ -99,10 +99,12 @@ export function authorizeError(redirectUri: string, issuer: string, error: strin
   return url.toString();
 }
 
-export async function issueCode(input: { clientId: string; redirectUri: string; challenge: string; email: string }): Promise<string> {
+export async function issueCode(input: { clientId: string; redirectUri: string; challenge: string; email: string; tenantId: string; userId: string }): Promise<string> {
   const code = randomBytes(32).toString("base64url");
   await (await col.oauthCodes()).insertOne({
     _id: new ObjectId(),
+    tenantId: input.tenantId,
+    userId: new ObjectId(input.userId),
     hash: hashKey(code),
     clientId: input.clientId,
     redirectUri: input.redirectUri,
@@ -134,6 +136,7 @@ export async function exchangeCode(input: { code: string; clientId: string; redi
     refreshSecret: refresh,
     expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
     createdBy: doc.email,
+    tenantId: doc.tenantId ?? "axion",
     oauthClientId: doc.clientId,
   });
   if (!created.ok) return { ok: false, error: "server_error" };

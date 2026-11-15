@@ -13,7 +13,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/lib/db", () => ({
   col: {
     interviews: async () => ({
-      findOne: async (filter: { currentVersion: number }) => filter.currentVersion === mocks.currentVersion ? { currentVersion: mocks.currentVersion } : null,
+      findOne: async (filter: Record<string, unknown>) => {
+        const clauses = Array.isArray(filter.$and) ? filter.$and as Record<string, unknown>[] : [filter];
+        const interviewFilter = clauses.find((clause) => "currentVersion" in clause) as { currentVersion?: number } | undefined;
+        return interviewFilter?.currentVersion === mocks.currentVersion ? { currentVersion: mocks.currentVersion } : null;
+      },
       updateOne: mocks.updateOne,
     }),
     versions: async () => ({
@@ -26,6 +30,7 @@ vi.mock("../src/lib/db", () => ({
 }));
 
 import { publishVersionIfCurrent } from "../src/lib/repo";
+import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
 
 const interviewId = new ObjectId().toHexString();
 const survey = {
@@ -45,26 +50,26 @@ beforeEach(() => {
 
 describe("publishVersionIfCurrent", () => {
   it("adds the next immutable version and advances the head with a version compare-and-swap", async () => {
-    const result = await publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey);
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey));
     expect(result).toEqual({ version: 5 });
     expect(mocks.inserted).toHaveLength(1);
     expect(mocks.inserted[0]).toMatchObject({ version: 5, html: survey.html, htmlSha256: expect.any(String) });
     expect(mocks.updateOne).toHaveBeenCalledWith(
-      { _id: expect.any(ObjectId), currentVersion: 4 },
+      tenantFilter("axion", { _id: expect.any(ObjectId), currentVersion: 4 }),
       { $set: { currentVersion: 5, updatedAt: expect.any(Date) } },
     );
   });
 
   it("removes the uncommitted version when another publisher wins the compare-and-swap", async () => {
     mocks.modifiedCount = 0;
-    const result = await publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey);
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey));
     expect(result).toEqual({ conflict: true });
     expect(mocks.inserted).toHaveLength(1);
-    expect(mocks.deleted).toEqual([{ _id: mocks.inserted[0]._id }]);
+    expect(mocks.deleted).toEqual([tenantFilter("axion", { _id: mocks.inserted[0]._id })]);
   });
 
   it("rejects a stale base hash before inserting a version", async () => {
-    const result = await publishVersionIfCurrent(interviewId, 4, "d".repeat(64), survey);
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, "d".repeat(64), survey));
     expect(result).toEqual({ conflict: true });
     expect(mocks.inserted).toHaveLength(0);
     expect(mocks.updateOne).not.toHaveBeenCalled();

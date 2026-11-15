@@ -14,6 +14,7 @@ vi.mock("../src/lib/db", () => {
 });
 
 import { handleMcp } from "../src/lib/mcp/http";
+import { authorizeMcp } from "../src/lib/mcp/auth";
 
 function post(headers: Record<string, string>, url = "https://kqa.example/api/mcp") {
   return handleMcp(new Request(url, {
@@ -39,5 +40,12 @@ describe("MCP auth", () => {
     const res = await post({ authorization: `Bearer ${"x".repeat(40)}` });
     expect(res.status).toBe(401);
     expect(touch).toHaveBeenCalled();
+  });
+
+  it("binds the server token to the fixed Axion principal", async () => {
+    touch.mockClear();
+    const auth = await authorizeMcp(new Request("https://kqa.example/api/mcp", { headers: { authorization: `Bearer ${process.env.KQA_MCP_TOKEN}` } }));
+    expect(auth).toMatchObject({ ok: true, principal: { tenantId: "axion", role: "service", source: "service_token" } });
+    expect(touch).not.toHaveBeenCalled();
   });
 });

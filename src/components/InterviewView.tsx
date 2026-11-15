@@ -23,7 +23,7 @@ export function useOrigin(): string {
 
 const EVENT_TEXT: Record<string, string> = { open: "opened their link", save: "saved answers", submit: "submitted", reopen: "was reopened by you", created: "Interview created", version: "New survey version uploaded", status: "Status changed", export: "Exported answers", invite: "was emailed their link", mcp: "was updated by an agent" };
 
-export function InterviewView({ data, initialTab }: { data: InterviewData; initialTab: string }) {
+export function InterviewView({ data, initialTab, analysisOnly }: { data: InterviewData; initialTab: string; analysisOnly: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const origin = useOrigin();
@@ -38,9 +38,13 @@ export function InterviewView({ data, initialTab }: { data: InterviewData; initi
   const refresh = () => router.refresh();
 
   function select(t: Tab) {
-    setTab(t);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", t);
+    if (t === "analysis" || analysisOnly) {
+      router.push(`${url.pathname}${url.search}`);
+      return;
+    }
+    setTab(t);
     window.history.replaceState(null, "", url);
   }
 

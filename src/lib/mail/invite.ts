@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { smtpSettings } from "../env";
 import { col } from "../db";
+import { currentTenantId } from "../tenant-context";
 import { getInterview, getParticipant } from "../repo";
 import { insertMail, listMailByPerson, mailRecord } from "../repo/mail";
 import { domainOf, parseEmail } from "./address";
@@ -51,11 +52,13 @@ function storedSendError(err: unknown): string {
   return publicSmtpFailure(err).slice(0, 240);
 }
 
-function logInvite(interviewId: string, participantId: string, result: "sent" | "failed", domain: string) {
+async function logInvite(interviewId: string, participantId: string, result: "sent" | "failed", domain: string) {
   const interviewOid = /^[0-9a-f]{24}$/i.test(interviewId) ? new ObjectId(interviewId) : null;
   const personOid = /^[0-9a-f]{24}$/i.test(participantId) ? new ObjectId(participantId) : null;
   if (!interviewOid) return;
-  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } })).catch(() => {});
+  const tenantId = await currentTenantId();
+  if (!tenantId) return;
+  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } })).catch(() => {});
 }
 
 /** One person, one SMTP conversation. Refusals (no email, closed, unset public URL) do not write a mail row. */
@@ -100,7 +103,7 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     const error = storedSendError(err);
     try {
       await record({ ...base, status: "failed", error });
-      if (!deps.record) logInvite(ctx.interview.id, ctx.person.id, "failed", domainOf(parsed.email));
+      if (!deps.record) void logInvite(ctx.interview.id, ctx.person.id, "failed", domainOf(parsed.email));
     } catch { /* the send already failed; do not hide that behind a second write error */ }
     return { ok: false, code: "send_failed", error, interviewId: ctx.interview.id, personId: ctx.person.id };
   }
@@ -110,6 +113,6 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     // The message left. A failed row here would tell the host it did not, and the next click would send it again.
     return { ok: false, code: "send_failed", error: "The message was sent, but it could not be recorded. Do not send it again unless you mean to.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
-  if (!deps.record) logInvite(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
+  if (!deps.record) void logInvite(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
   return { ok: true, result: "sent", to: parsed.email, sentAt: base.sentAt.toISOString(), messageId: sent.messageId, interviewId: ctx.interview.id, personId: ctx.person.id };
 }

@@ -1,6 +1,7 @@
-import { checkCredentials, createSession, SESSION_COOKIE } from "@/lib/auth";
+import { createSession, SESSION_COOKIE } from "@/lib/auth";
 import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
 import { clearLoginFailures, loginBlocked, recordLoginFailure } from "@/lib/repo";
+import { authenticateAccount, bootstrapLegacyAxionOwner } from "@/lib/repo/accounts";
 import { headers } from "next/headers";
 
 /** The caller's address as the platform saw it. On Vercel the first two headers are set by the platform and cannot be forged. */
@@ -31,16 +32,13 @@ export async function POST(req: Request) {
     return fail(503, GENERIC_UNAVAILABLE); // fail closed: with no way to count attempts, do not accept guesses
   }
 
-  const result = checkCredentials(email, password);
-  if (!result.ok) {
-    if (result.reason === "invalid") {
-      await Promise.all([recordLoginFailure(ipKey), recordLoginFailure(ALL)]).catch(() => {});
-      return fail(401, result.message);
-    }
-    console.error("login unavailable:", result.message);
-    return fail(503, GENERIC_UNAVAILABLE);
+  let principal = await authenticateAccount(email, password);
+  if (!principal) principal = await bootstrapLegacyAxionOwner(email, password);
+  if (!principal) {
+    await Promise.all([recordLoginFailure(ipKey), recordLoginFailure(ALL)]).catch(() => {});
+    return fail(401, "That email and password do not match.");
   }
-  const session = createSession(email);
+  const session = createSession(principal);
   if (!session) return fail(503, GENERIC_UNAVAILABLE);
   await clearLoginFailures(ipKey).catch(() => {});
   const res = json({ ok: true });

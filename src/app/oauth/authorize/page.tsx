@@ -90,7 +90,7 @@ async function decide(formData: FormData) {
   if (String(formData.get("decision")) !== "allow" || !challenge) {
     redirect(authorizeError(redirectUri, origin, "access_denied", state));
   }
-  const code = await issueCode({ clientId, redirectUri, challenge, email: session.email });
+  const code = await issueCode({ clientId, redirectUri, challenge, email: session.email, tenantId: session.tenantId, userId: session.userId });
   const url = new URL(redirectUri);
   url.searchParams.set("code", code);
   url.searchParams.set("iss", origin);
