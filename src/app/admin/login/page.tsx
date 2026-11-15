@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/LoginForm";
+import { AuthModalRoute } from "@/components/AuthModalRoute";
+import { LandingSurface } from "@/components/LandingSurface";
 import { adminSession } from "@/lib/http";
 
 export const metadata = { title: "Host sign in" };
@@ -16,8 +18,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const safe = safeNext(next);
   if (await adminSession()) redirect(safe);
   return (
-    <main className="center-page">
-      <LoginForm next={safe} />
-    </main>
+    <>
+      <div className="auth-route-background" aria-hidden="true" inert><LandingSurface /></div>
+      <AuthModalRoute title="Host sign in" variant="login"><LoginForm next={safe} /></AuthModalRoute>
+    </>
   );
 }

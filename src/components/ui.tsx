@@ -163,7 +163,7 @@ export function CopyButton({ text, label = "Copy", done = "Copied", className = 
 }
 
 // ------------------------------------------------------------------------------------------------ modal
-export function Modal({ title, children, onClose, actions, className, style }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; className?: string; style?: CSSProperties }) {
+export function Modal({ title, children, onClose, actions, className, scrimClassName, style }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; className?: string; scrimClassName?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const onCloseRef = useRef(onClose);
@@ -249,7 +249,7 @@ export function Modal({ title, children, onClose, actions, className, style }: {
     };
   }, []);
   return (
-    <div className="scrim">
+    <div className={`scrim${scrimClassName ? ` ${scrimClassName}` : ""}`}>
       <div className={`modal${className ? ` ${className}` : ""}`} style={style} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={ref}>
         <h2 id={titleId}>{title}</h2>
         {children}
