@@ -2,6 +2,7 @@
 
 interface Schema {
   type?: string;
+  anyOf?: Schema[];
   properties?: Record<string, Schema>;
   required?: string[];
   additionalProperties?: boolean;
@@ -22,6 +23,11 @@ export function validateToolArgs(schema: Record<string, unknown>, value: unknown
 
 function check(schema: Schema, value: unknown, path: string): string | null {
   const where = path || "arguments";
+  if (schema.anyOf) {
+    const errors = schema.anyOf.map((option) => check(option, value, path));
+    if (errors.some((error) => error === null)) return null;
+    return `${where} must match one of the allowed types.`;
+  }
   if (schema.type === "object") {
     if (value === null || typeof value !== "object" || Array.isArray(value)) return `${where} must be an object.`;
     const rec = value as Record<string, unknown>;
@@ -65,6 +71,8 @@ function check(schema: Schema, value: unknown, path: string): string | null {
     if (schema.maximum !== undefined && value > schema.maximum) return `${where} must be at most ${schema.maximum}.`;
   } else if (schema.type === "number") {
     if (typeof value !== "number" || !Number.isFinite(value)) return `${where} must be a number.`;
+  } else if (schema.type === "null") {
+    if (value !== null) return `${where} must be null.`;
   }
   if (schema.enum && !schema.enum.includes(value)) {
     return `${where} must be one of ${schema.enum.map(String).join(", ")}.`;

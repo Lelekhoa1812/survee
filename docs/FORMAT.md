@@ -45,7 +45,7 @@ These markers do not change how KQA displays or saves answers. They let an MCP a
 * Put `data-kqa-question-list="SECTION_ID"` on the element that directly contains a section's question blocks. Use an empty value (`data-kqa-question-list=""`) for questions without a section.
 * Put `data-kqa-question-id="QUESTION_ID"` on the single root element for each question block. That element must be a direct child of its matching marked list.
 
-The markers are optional for ordinary uploads and full-file questionnaire edits. `preview_questionnaire_block_patch` requires them for targeted edits and supports ordinary, non-custom questions only. It accepts one root element per added or replacement block and rejects scripts and inline event-handler attributes in those fragments. It cannot move a question between sections or infer custom JavaScript behavior. If the markers are absent, duplicated, or out of sync with the manifest, use the complete-file preview and apply workflow in `MCP.md`.
+The markers are optional for ordinary uploads and full-file questionnaire edits. `preview_questionnaire_block_patch` requires them for targeted edits and supports ordinary, non-custom questions only. It accepts one root element per added or replacement block and rejects scripts and inline event-handler attributes in those fragments. It can move a marked question between sections and place an added or moved question before or after an unchanged question in the same section. It does not infer custom JavaScript behavior. If the markers are absent, duplicated, or out of sync with the manifest, use the complete-file preview and apply workflow in `MCP.md`.
 
 ### What the sandbox allows
 

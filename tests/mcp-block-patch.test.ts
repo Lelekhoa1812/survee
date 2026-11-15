@@ -130,4 +130,42 @@ describe("MCP questionnaire block patch", () => {
     expect(stale.structuredContent.code).toBe("stale_preview");
     expect(state.publish).not.toHaveBeenCalled();
   });
+
+  it("previews and applies positioned question moves through the same signed token", async () => {
+    const move = { op: "move", questionId: "confidence", beforeQuestionId: "team-size" };
+    const preview = await call("preview_questionnaire_block_patch", { interviewId, operations: [move] });
+    expect(preview.isError).toBeFalsy();
+    expect(preview.structuredContent).toMatchObject({
+      ok: true,
+      operationChanges: [{ op: "move", questionId: "confidence", section: "writing" }],
+    });
+    expect(preview.structuredContent.questionsAfter).toEqual(expect.arrayContaining([
+      { id: "confidence", type: "scale", section: "writing", label: "How confident are you in your current process?", required: false },
+    ]));
+    const reordered = (preview.structuredContent.questionsAfter as { id: string }[]).map(({ id }) => id);
+    expect(reordered.indexOf("confidence")).toBe(reordered.indexOf("team-size") - 1);
+
+    const changedTarget = await call("apply_questionnaire_block_patch", {
+      interviewId,
+      operations: [{ op: "move", questionId: "confidence", afterQuestionId: "team-size" }],
+      expectedVersion: 2,
+      baseHash,
+      candidateHash: preview.structuredContent.candidateHash,
+      previewToken: preview.structuredContent.previewToken,
+    });
+    expect(changedTarget.structuredContent.code).toBe("candidate_changed");
+    expect(state.publish).not.toHaveBeenCalled();
+
+    const applied = await call("apply_questionnaire_block_patch", {
+      interviewId,
+      operations: [move],
+      expectedVersion: 2,
+      baseHash,
+      candidateHash: preview.structuredContent.candidateHash,
+      previewToken: preview.structuredContent.previewToken,
+    });
+    expect(applied.isError).toBeFalsy();
+    expect(applied.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2 });
+    expect(state.publish).toHaveBeenCalledTimes(1);
+  });
 });

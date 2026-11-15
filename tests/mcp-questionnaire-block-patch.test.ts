@@ -12,6 +12,12 @@ function questionIds(html: string): string[] {
   return (JSON.parse(match[1]!) as { questions: { id: string }[] }).questions.map(({ id }) => id);
 }
 
+function htmlQuestionIds(html: string): string[] {
+  return [...html.matchAll(/data-kqa-question-id="([^"]+)"/g)].map((match) => match[1]!);
+}
+
+const twoSections = `<!doctype html><html><head><script id="kqa-manifest" type="application/json">{"format":"kqa/1","title":"T","sections":[{"id":"a","title":"A"},{"id":"b","title":"B"}],"questions":[{"id":"one","type":"text","label":"One","section":"a"},{"id":"two","type":"text","label":"Two","section":"b"}]}</script></head><body><div data-kqa-question-list="a"><section data-kqa-question-id="one">One</section></div><div data-kqa-question-list="b"><section data-kqa-question-id="two">Two</section></div><footer>keep me</footer></body></html>`;
+
 describe("questionnaire block patch", () => {
   it("adds a question to the section list and manifest while preserving unrelated bytes", () => {
     const result = patchQuestionnaireBlocks(base, [{ op: "add", question: { id: "new", type: "text", label: "New" }, html: '<section data-kqa-question-id="new"><label>New</label></section>' }]);
@@ -78,5 +84,60 @@ describe("questionnaire block patch", () => {
       op: "update", questionId: "old", question: { id: "new", type: "text", label: "Fresh" }, html: '<section data-kqa-question-id="old">Fresh</section>',
     }]);
     expect(result).toMatchObject({ ok: false, error: expect.stringContaining("cannot change its id") });
+  });
+
+  it("reorders a question within its section in both the manifest and HTML", () => {
+    const result = patchQuestionnaireBlocks(fourQuestions, [{ op: "move", questionId: "four", beforeQuestionId: "two" }]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(questionIds(result.html)).toEqual(["old", "four", "two", "three"]);
+      expect(htmlQuestionIds(result.html)).toEqual(["old", "four", "two", "three"]);
+      expect(result.changes).toEqual([{ op: "move", questionId: "four", section: undefined }]);
+      expect(result.html).toContain("<footer>keep me</footer>");
+    }
+  });
+
+  it("moves a question across sections and supports insertion before or after an existing question", () => {
+    const moved = patchQuestionnaireBlocks(twoSections, [{ op: "move", questionId: "two", section: "a", beforeQuestionId: "one" }]);
+    expect(moved.ok).toBe(true);
+    if (moved.ok) {
+      expect(questionIds(moved.html)).toEqual(["two", "one"]);
+      expect(JSON.parse(moved.html.match(/<script id="kqa-manifest" type="application\/json">([\s\S]*?)<\/script>/)![1]!).questions[0]).toMatchObject({ id: "two", section: "a" });
+      expect(htmlQuestionIds(moved.html)).toEqual(["two", "one"]);
+      expect(moved.html).toContain('<div data-kqa-question-list="b"></div>');
+    }
+
+    const appended = patchQuestionnaireBlocks(twoSections, [{ op: "move", questionId: "two", section: "a" }]);
+    expect(appended.ok).toBe(true);
+    if (appended.ok) {
+      expect(questionIds(appended.html)).toEqual(["one", "two"]);
+      expect(htmlQuestionIds(appended.html)).toEqual(["one", "two"]);
+    }
+
+    const added = patchQuestionnaireBlocks(fourQuestions, [{
+      op: "add",
+      question: { id: "five", type: "text", label: "Five" },
+      html: '<section data-kqa-question-id="five">Five</section>',
+      afterQuestionId: "two",
+    }]);
+    expect(added.ok).toBe(true);
+    if (added.ok) {
+      expect(questionIds(added.html)).toEqual(["old", "two", "five", "three", "four"]);
+      expect(htmlQuestionIds(added.html)).toEqual(["old", "two", "five", "three", "four"]);
+    }
+  });
+
+  it("rejects missing, cross-section, or changed insertion targets", () => {
+    expect(patchQuestionnaireBlocks(base, [{
+      op: "add", question: { id: "new", type: "text", label: "New" }, html: '<section data-kqa-question-id="new">New</section>', beforeQuestionId: "missing",
+    }])).toMatchObject({ ok: false, error: expect.stringContaining("was not found") });
+    expect(patchQuestionnaireBlocks(twoSections, [{ op: "move", questionId: "two", beforeQuestionId: "one" }])).toMatchObject({
+      ok: false, error: expect.stringContaining("must be in section b"),
+    });
+    expect(patchQuestionnaireBlocks(fourQuestions, [
+      { op: "add", question: { id: "five", type: "text", label: "Five" }, html: '<section data-kqa-question-id="five">Five</section>', beforeQuestionId: "two" },
+      { op: "update", questionId: "two", question: { id: "two", type: "text", label: "Two updated" }, html: '<section data-kqa-question-id="two">Two updated</section>' },
+    ])).toMatchObject({ ok: false, error: expect.stringContaining("also appears in this operation batch") });
   });
 });

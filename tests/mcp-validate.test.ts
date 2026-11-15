@@ -59,4 +59,11 @@ describe("tool argument schema", () => {
   it("rejects strings beyond a schema length limit", () => {
     expect(validateToolArgs({ type: "string", maxLength: 3 }, "token")).toMatch(/at most 3 characters/);
   });
+
+  it("validates nullable schema alternatives", () => {
+    const section = { anyOf: [{ type: "string" }, { type: "null" }] };
+    expect(validateToolArgs(section, "writing")).toBeNull();
+    expect(validateToolArgs(section, null)).toBeNull();
+    expect(validateToolArgs(section, 12)).toMatch(/match one of the allowed types/);
+  });
 });

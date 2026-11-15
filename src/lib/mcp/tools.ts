@@ -104,10 +104,13 @@ const questionnaireBlockOperations = {
   minItems: 1,
   maxItems: 50,
   items: obj({
-    op: { type: "string", enum: ["add", "update", "delete"] },
+    op: { type: "string", enum: ["add", "update", "delete", "move"] },
     questionId: str,
     question: questionnaireQuestion,
     html: str,
+    section: { anyOf: [str, { type: "null" }] },
+    beforeQuestionId: str,
+    afterQuestionId: str,
   }, ["op"]),
 };
 
@@ -1090,7 +1093,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_block_patch",
-    description: "Preview a batch of add/update/delete operations for ordinary questions with explicit question and list markers. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed.",
+    description: "Preview a batch of add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed.",
     inputSchema: obj({ interviewId: str, operations: questionnaireBlockOperations }, ["interviewId", "operations"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1162,7 +1165,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "apply_questionnaire_block_patch",
-    description: "Publish a previewed batch of ordinary question block edits. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
+    description: "Publish a previewed batch of ordinary question block edits, including question moves and positioned additions. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
     inputSchema: obj({
       interviewId: str,
       operations: questionnaireBlockOperations,
