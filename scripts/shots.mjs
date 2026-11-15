@@ -15,7 +15,7 @@ await mkdir(out, { recursive: true });
 const browser = await puppeteer.launch({ executablePath: chrome, headless: "new", args: ["--no-sandbox"] });
 const errors = [];
 try {
-  for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844, isMobile: true, deviceScaleFactor: 2 }], ["narrow", { width: 320, height: 760, isMobile: true, deviceScaleFactor: 2 }]]) {
+  for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["tablet", { width: 1040, height: 850 }], ["mobile", { width: 390, height: 844, isMobile: true, deviceScaleFactor: 2 }], ["narrow", { width: 320, height: 760, isMobile: true, deviceScaleFactor: 2 }]]) {
     const page = await browser.newPage();
     await page.setViewport(viewport);
     await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: scheme }]);
@@ -27,12 +27,18 @@ try {
         documentWidth: document.documentElement.scrollWidth,
         bodyWidth: document.body.scrollWidth,
         hasPage: !!document.querySelector("main.page"),
+        hasLanding: !!document.querySelector(".marketing-page"),
+        marketingPreviewRight: document.querySelector(".marketing-preview")?.getBoundingClientRect().right ?? 0,
         navWidth: document.querySelector(".topbar .nav")?.clientWidth ?? 0,
         navScrollWidth: document.querySelector(".topbar .nav")?.scrollWidth ?? 0,
       }));
       if (!layout.hasPage && ["dashboard", "new", "check", "overview", "people", "answers", "analysis", "survey", "export", "docs", "settings"].includes(name)) errors.push(`${label}: ${name} did not render the host page`);
+      if (name === "landing" && !layout.hasLanding) errors.push(`${label}: landing did not render`);
       if (layout.documentWidth > layout.width + 1 || layout.bodyWidth > layout.width + 1) {
         errors.push(`${label}: ${name} has horizontal overflow (${layout.width}px viewport, ${Math.max(layout.documentWidth, layout.bodyWidth)}px content)`);
+      }
+      if (name === "landing" && layout.marketingPreviewRight > layout.width + 1) {
+        errors.push(`${label}: landing workflow card is clipped (${layout.marketingPreviewRight}px right edge in a ${layout.width}px viewport)`);
       }
       if (layout.navScrollWidth > layout.navWidth + 1) errors.push(`${label}: ${name} hides main navigation items (${layout.navWidth}px available, ${layout.navScrollWidth}px needed)`);
     };
@@ -42,6 +48,10 @@ try {
       await page.screenshot({ path: `${out}/${scheme}-${label}-${name}.png`, fullPage: full });
     };
 
+    if (shotSet === "all") {
+      await page.goto(`${base}/`, { waitUntil: "networkidle2" });
+      await shot("landing");
+    }
     await page.goto(`${base}/admin/login`, { waitUntil: "networkidle2" });
     await shot("login", false);
     if (shotSet === "all" || shotSet === "accounts") {

@@ -110,6 +110,7 @@ interface JsonTokenExtraction {
 
 interface DtcgTokenRecord {
   path: string[];
+  curlyPath: string;
   scope: string;
   name: string;
   rawValue: unknown;
@@ -194,6 +195,7 @@ function collectDtcg(parsed: Record<string, unknown>): JsonTokenExtraction {
       addDiagnostic(`${sourcePath} contains a nested light/dark path segment; only top-level light/dark groups are treated as theme scopes.`);
     }
     const name = tokenPath.filter((part) => part !== "$root").join(".");
+    const curlyPath = tokenPath.join(".");
     if (!safeTokenName(name)) {
       addDiagnostic(`${sourcePath} was skipped because its token path is empty, too long, or contains control characters.`);
       return;
@@ -203,7 +205,7 @@ function collectDtcg(parsed: Record<string, unknown>): JsonTokenExtraction {
       || typeof tokenType !== "string"
       || !tokenType;
     if (requiresReview) addDiagnostic(`${sourcePath} has no explicit or inherited $type; its semantic role needs manual review.`);
-    records.push({ path, scope, name, rawValue, ...(tokenType ? { sourceType: tokenType } : {}), requiresReview });
+    records.push({ path, curlyPath, scope, name, rawValue, ...(tokenType ? { sourceType: tokenType } : {}), requiresReview });
   };
 
   const visit = (value: unknown, path: string[], inheritedType: string | undefined, depth: number) => {
@@ -270,7 +272,7 @@ function collectDtcg(parsed: Record<string, unknown>): JsonTokenExtraction {
   for (const record of records) {
     byPointer.set(pointerKey(record.path), record);
     byPointer.set(pointerKey([...record.path, "$value"]), record);
-    byCurlyPath.set(record.name, [...(byCurlyPath.get(record.name) ?? []), record]);
+    byCurlyPath.set(record.curlyPath, [...(byCurlyPath.get(record.curlyPath) ?? []), record]);
   }
   const cache = new Map<DtcgTokenRecord, { value: unknown; unresolved: boolean }>();
   let resolvedValueNodes = 0;

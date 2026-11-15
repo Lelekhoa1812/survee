@@ -121,17 +121,22 @@ describe("user-supplied design profile extraction", () => {
     expect(result.integrationProposal.status).toBe("proposal_only");
   });
 
-  it("resolves curly aliases, $root token paths, and inline JSON Pointer references", () => {
+  it("resolves explicit $root token paths and inline JSON Pointer references", () => {
     const result = profile(JSON.stringify({
       palette: {
         $type: "color",
         $root: { $value: "#ffffff" },
         brand: { $value: "#155eef" },
+        accents: {
+          $type: "color",
+          $root: { $value: "#cc4400" },
+        },
       },
       semantic: {
         $type: "color",
-        canvas: { $value: "{palette}" },
+        canvas: { $value: "{palette.$root}" },
         brandCopy: { $value: "{palette.brand}" },
+        nestedRoot: { $value: "{palette.accents.$root}" },
         surface: { $value: { $ref: "#/palette/$root/$value" } },
       },
     }), "json");
@@ -139,9 +144,24 @@ describe("user-supplied design profile extraction", () => {
     expect(result.extractedTokens).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "semantic.canvas", value: "#ffffff" }),
       expect.objectContaining({ name: "semantic.brandCopy", value: "#155eef" }),
+      expect.objectContaining({ name: "semantic.nestedRoot", value: "#cc4400" }),
       expect.objectContaining({ name: "semantic.surface", value: "#ffffff" }),
     ]));
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("does not resolve a group name as its $root token", () => {
+    const result = profile(JSON.stringify({
+      palette: { $type: "color", $root: { $value: "#ffffff" } },
+      semantic: { $type: "color", canvas: { $value: "{palette}" } },
+    }), "json");
+
+    expect(result.extractedTokens).toContainEqual(expect.objectContaining({
+      name: "semantic.canvas",
+      value: "{palette}",
+      requiresReview: true,
+    }));
+    expect(result.diagnostics.join(" ")).toContain("references unresolved token {palette}");
   });
 
   it("keeps unresolved and circular aliases visible for manual review", () => {
