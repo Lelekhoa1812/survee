@@ -24,8 +24,20 @@ describe("descriptive question summaries", () => {
         { value: "yes", label: "Yes", count: 1, percent: 100 },
         { value: "no", label: "No", count: 0, percent: 0 },
       ],
+      disclosureRisk: {
+        singletonCohort: true,
+        singletonAnsweredCount: true,
+        singletonNoAnswerCount: false,
+        singletonNoteOnlyCount: false,
+        singletonUnmappedResponseCount: false,
+        singletonDistributionDenominator: true,
+        singletonDistributionValues: ["yes"],
+        singletonNumericSummary: false,
+      },
     });
-    expect(summarizeQuestion(number, [respondent(7)]).numeric).toEqual({ n: 1, min: 7, q1: 7, median: 7, q3: 7, max: 7, mean: 7 });
+    const numberSummary = summarizeQuestion(number, [respondent(7)]);
+    expect(numberSummary.numeric).toEqual({ n: 1, min: 7, q1: 7, median: 7, q3: 7, max: 7, mean: 7 });
+    expect(numberSummary.disclosureRisk.singletonNumericSummary).toBe(true);
   });
 
   it("keeps cohort, no-answer, note-only, valid, and unmapped counts distinct", () => {
@@ -48,6 +60,7 @@ describe("descriptive question summaries", () => {
       { count: 2, percent: 100 },
       { count: 1, percent: 50 },
     ]);
+    expect(summary.disclosureRisk).toMatchObject({ singletonDistributionDenominator: false, singletonDistributionValues: ["b"] });
   });
 
   it("reports number summaries while retaining non-numeric legacy values as unmapped", () => {

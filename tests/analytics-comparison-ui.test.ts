@@ -39,6 +39,8 @@ describe("status comparison", () => {
     expect(html).toContain("Cohort n=4");
     expect(html).toContain("<th scope=\"row\">Note only</th><td>0</td><td>1</td><td>0</td>");
     expect(html).toContain("<th scope=\"row\">Unmapped</th><td>0</td><td>1</td><td>0</td>");
+    expect(html).toContain("Singleton signals: Invited — cohort n=1, no answer=1; In progress — note only=1, unmapped=1");
+    expect(html).toContain("do not assess attribute combinations or guarantee anonymity");
   });
 
   it("compares categorical shares on each status group's valid-response denominator and keeps the table available", () => {

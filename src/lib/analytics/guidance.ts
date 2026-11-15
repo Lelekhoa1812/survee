@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/9" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/10" as const;
 
 const PRINCIPLES = [
   {
@@ -63,7 +63,7 @@ const PRINCIPLES = [
     id: "protect-respondents",
     title: "Protect respondent privacy",
     guidance:
-      "Use aggregate results for analysis. Do not include names, email addresses, private links, raw free-text answers, or identifying combinations in charts or summaries. Before sharing subgroup results, consider whether a person could be identified from a small count or from combining attributes; suppress or combine details when needed and follow the host's access and disclosure rules. KQA's aggregate output is not a guarantee that a downstream report is anonymous.",
+      "Use aggregate results for analysis. Do not include names, email addresses, private links, raw free-text answers, or identifying combinations in charts or summaries. Question summaries include disclosureRisk singleton signals for cohort, answered, no-answer, note-only, unmapped, valid-answer denominator, one-person distribution values, and one-response numeric summaries. Use these to identify visible counts of one in ordinary and status-comparison results; segmented results also include segment-level singleton signals. KQA returns every count and value without minimum-size suppression. These signals do not cover all attribute combinations or outside knowledge; before sharing, follow the host's disclosure rules and assess whether details could identify someone. KQA's aggregate output is not a guarantee that a downstream report is anonymous.",
   },
   {
     id: "resolve-ambiguity",
@@ -154,8 +154,9 @@ export function getAnalyticsGuidance() {
       "KQA's analyze_answers output is current-version descriptive data; it returns no raw text, names, notes, private links, score, significance test, or causal estimate.",
       "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
       "KQA does not enforce a minimum cohort-size threshold; singleton counts and percentages may be returned. Integrated agents should state small-n limitations and follow the host's disclosure rules.",
+      "QuestionSummary.disclosureRisk flags singleton cohort, answer, no-answer, note-only, unmapped, valid-denominator, distribution-value, and numeric-summary counts. singletonDistributionValues lists the current-version values with a count of one. This is a detectable-signal set, not an identifiability assessment or anonymity guarantee.",
       "analyze_answers segmentBy groups outcomes by one closed categorical current-version answer; checkbox groups can overlap, and answer-group counts include singleton and zero-count options.",
-      "Segment disclosureRisk metadata flags singleton segments and, for status comparisons, singleton status groups. It does not assess combinations of attributes or guarantee anonymity.",
+      "Segment disclosureRisk metadata flags singleton segments and, for status comparisons, singleton status groups. Question-level disclosureRisk metadata accompanies each ordinary, status, and segmented summary. Neither metadata shape assesses combinations of attributes or guarantees anonymity.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
       "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",

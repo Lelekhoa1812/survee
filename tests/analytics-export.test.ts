@@ -31,6 +31,10 @@ describe("analytics CSV export", () => {
     expect(csv).toContain("\"response_count\"");
     expect(csv.split("\r\n")[0]).toContain('"cohort_count","answered","no_answer","no_answer_note"');
     expect(csv.split("\r\n")[0]).toContain('"note_only","unmapped"');
+    expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_question_summary"');
+    expect(csv).toContain("singletonDistributionValues");
+    expect(csv).toContain('""singletonDistributionValues"":[""email"",""phone""]');
+    expect(csv).toContain("Singleton signals cover counts of one only");
     expect(csv).toContain("KQA does not track conditional or routed item display");
     expect(csv).toContain('"2","2","2","0","KQA does not track conditional or routed item display');
     expect(csv).toContain('"1","2","1","1","KQA does not track conditional or routed item display');
@@ -71,8 +75,11 @@ describe("analytics CSV export", () => {
       disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] },
     }], "Everyone");
 
-    expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_singleton_segment","disclosure_risk_singleton_status_groups","disclosure_risk_note"');
-    expect(csv).toContain('"true","submitted","Singleton signals only; no minimum group threshold or anonymity guarantee."');
+    expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_singleton_segment","disclosure_risk_singleton_status_groups","disclosure_risk_question_summary","disclosure_risk_note"');
+    expect(csv).toContain('"true","submitted",');
+    expect(csv).toContain("Singleton signals cover counts of one only");
+    expect(csv).toContain("singletonNumericSummary");
+    expect(csv).toContain('""singletonNumericSummary"":true');
   });
 
   it("exports type-7 quartiles with the numeric summary", () => {

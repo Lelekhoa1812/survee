@@ -24,6 +24,21 @@ export interface DescriptiveStats {
   median: number;
 }
 
+export interface QuestionSummaryDisclosureRisk {
+  /** Cohort and response totals equal one. */
+  singletonCohort: boolean;
+  singletonAnsweredCount: boolean;
+  singletonNoAnswerCount: boolean;
+  singletonNoteOnlyCount: boolean;
+  singletonUnmappedResponseCount: boolean;
+  /** Valid respondent denominator equals one. */
+  singletonDistributionDenominator: boolean;
+  /** Distribution values selected by exactly one valid respondent. */
+  singletonDistributionValues: string[];
+  /** A number summary based on exactly one valid response. */
+  singletonNumericSummary: boolean;
+}
+
 export interface QuestionSummary {
   /** Everyone in the selected status cohort; KQA does not track item-level display eligibility. */
   cohortCount: number;
@@ -42,6 +57,8 @@ export interface QuestionSummary {
   distribution: DistributionRow[];
   numeric: DescriptiveStats | null;
   scaleMedian: number | null;
+  /** Detectable singleton counts only; not an identifiability assessment or anonymity guarantee. */
+  disclosureRisk: QuestionSummaryDisclosureRisk;
 }
 
 export interface QuestionSummaryAccumulatorSnapshot {
@@ -176,21 +193,35 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     }
     if (q.type === "scale" && numericValues.length) scaleMedian = median(numericValues);
 
+    const distribution = distributionRows.map((row) => ({
+      ...row,
+      percent: distributionDenominator ? (row.count / distributionDenominator) * 100 : 0,
+    }));
+    const noAnswerCount = cohortCount - answeredCount;
+    const unmappedResponseCount = Math.max(distributionUnmappedResponseCount, numericUnmappedResponseCount);
+
     return {
       cohortCount,
       eligibleCount: cohortCount,
       answeredCount,
-      noAnswerCount: cohortCount - answeredCount,
-      missingCount: cohortCount - answeredCount,
+      noAnswerCount,
+      missingCount: noAnswerCount,
       noteOnlyCount,
-      unmappedResponseCount: Math.max(distributionUnmappedResponseCount, numericUnmappedResponseCount),
+      unmappedResponseCount,
       distributionDenominator,
-      distribution: distributionRows.map((row) => ({
-        ...row,
-        percent: distributionDenominator ? (row.count / distributionDenominator) * 100 : 0,
-      })),
+      distribution,
       numeric,
       scaleMedian,
+      disclosureRisk: {
+        singletonCohort: cohortCount === 1,
+        singletonAnsweredCount: answeredCount === 1,
+        singletonNoAnswerCount: noAnswerCount === 1,
+        singletonNoteOnlyCount: noteOnlyCount === 1,
+        singletonUnmappedResponseCount: unmappedResponseCount === 1,
+        singletonDistributionDenominator: distributionDenominator === 1,
+        singletonDistributionValues: distribution.filter((row) => row.count === 1).map((row) => row.value),
+        singletonNumericSummary: numeric?.n === 1,
+      },
     };
   }
 

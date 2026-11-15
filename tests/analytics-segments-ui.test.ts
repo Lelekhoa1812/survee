@@ -178,6 +178,7 @@ async function resolveDeferredRequest() {
 describe("answer-segment analytics UI", () => {
   it("updates loaded dimension and outcome results, compares statuses, and copies the refreshed CSV", async () => {
     await act(async () => root.render(createElement(AnalyticsTab, { data })));
+    expect(host.querySelector(".analysis-disclosure-flag")?.textContent).toContain("South count=1");
 
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Break down by answer")!);
     expect(host.querySelector(".analysis-segment-list")?.getAttribute("aria-label")).toBe("Results grouped by Region");
@@ -204,7 +205,8 @@ describe("answer-segment analytics UI", () => {
     expect(copied).toHaveLength(1);
     expect(copied[0]).toContain('"satisfaction","Satisfaction","single","Department = Operations · Invited · not started"');
     expect(copied[0]).toContain('"interview-1","1","2026-11-15T00:01:00.000Z"');
-    expect(copied[0]).toContain('"true","invited","Singleton signals only; no minimum group threshold or anonymity guarantee."');
+    expect(copied[0]).toContain('"true","invited",');
+    expect(copied[0]).toContain("Singleton signals cover counts of one only");
   });
 
   it("hides and disables stale results while compare and cohort scopes are loading", async () => {

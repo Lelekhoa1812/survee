@@ -20,11 +20,11 @@ export interface AnalyticsExportMetadata {
 const HEADERS = [
   "question_id", "question", "type", "cohort", "interview_id", "survey_version", "as_of", "measure", "answer_value", "answer_label",
   "count", "percent", "valid_responses", "cohort_count", "answered", "no_answer", "no_answer_note", "note_only", "unmapped", "min", "q1", "median", "q3", "mean", "max",
-  "disclosure_risk_singleton_segment", "disclosure_risk_singleton_status_groups", "disclosure_risk_note",
+  "disclosure_risk_singleton_segment", "disclosure_risk_singleton_status_groups", "disclosure_risk_question_summary", "disclosure_risk_note",
 ];
 
 const NO_ANSWER_NOTE = "KQA does not track conditional or routed item display; no_answer may include people who did not see this question.";
-const DISCLOSURE_RISK_NOTE = "Singleton signals only; no minimum group threshold or anonymity guarantee.";
+const DISCLOSURE_RISK_NOTE = "Singleton signals cover counts of one only; no minimum threshold or anonymity guarantee, and attribute combinations can add risk.";
 
 function cell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
@@ -43,7 +43,8 @@ export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, 
   const rows = [row(HEADERS)];
   for (const { question, summary, cohort: itemCohort, disclosureRisk } of items) {
     const base = [question.id, question.label, question.type, itemCohort ?? cohort, metadata.interviewId, metadata.surveyVersion, metadata.asOf];
-    const risk = disclosureRisk ? [disclosureRisk.singletonSegment ? "true" : "false", disclosureRisk.singletonStatusGroups.join("|"), DISCLOSURE_RISK_NOTE] : [null, null, null];
+    const groupRisk = disclosureRisk ? [disclosureRisk.singletonSegment ? "true" : "false", disclosureRisk.singletonStatusGroups.join("|")] : [null, null];
+    const risk = [...groupRisk, JSON.stringify(summary.disclosureRisk), DISCLOSURE_RISK_NOTE];
     if (summary.distribution.length) {
       for (const option of summary.distribution) {
         rows.push(row([

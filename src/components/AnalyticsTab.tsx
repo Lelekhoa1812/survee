@@ -47,6 +47,38 @@ function makeDownloadName(name: string) {
   return `${safe || "interview"}-analysis.csv`;
 }
 
+function singletonSignals(summary: QuestionSummary): string[] {
+  const risk = summary.disclosureRisk;
+  const signals: string[] = [];
+  if (risk.singletonCohort) signals.push("cohort n=1");
+  if (risk.singletonAnsweredCount) signals.push("answered=1");
+  if (risk.singletonNoAnswerCount) signals.push("no answer=1");
+  if (risk.singletonNoteOnlyCount) signals.push("note only=1");
+  if (risk.singletonUnmappedResponseCount) signals.push("unmapped=1");
+  if (risk.singletonDistributionDenominator) signals.push("valid response n=1");
+  for (const value of risk.singletonDistributionValues) {
+    const option = summary.distribution.find((row) => row.value === value);
+    signals.push(`${option?.label ?? value} count=1`);
+  }
+  if (risk.singletonNumericSummary) signals.push("numeric n=1");
+  return signals;
+}
+
+function SingletonDisclosureNote({ summary }: { summary: QuestionSummary }) {
+  const signals = singletonSignals(summary);
+  if (!signals.length) return null;
+  return <p className="analysis-disclosure-flag" role="note">Singleton signals: {signals.join(" · ")}. These flags do not assess attribute combinations or guarantee anonymity.</p>;
+}
+
+function ComparisonDisclosureNote({ summaries }: { summaries: Record<ParticipantStatus, QuestionSummary> }) {
+  const groups = COMPARE_STATUSES.flatMap((status) => {
+    const signals = singletonSignals(summaries[status]);
+    return signals.length ? [`${STATUS_SHORT_LABELS[status]} — ${signals.join(", ")}`] : [];
+  });
+  if (!groups.length) return null;
+  return <p className="analysis-disclosure-flag" role="note">Singleton signals: {groups.join("; ")}. These flags do not assess attribute combinations or guarantee anonymity.</p>;
+}
+
 function DistributionChart({ question, summary }: { question: Question; summary: QuestionSummary }) {
   if (!summary.distributionDenominator) {
     return <p className="analysis-empty">No valid responses to chart yet.</p>;
@@ -154,6 +186,8 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
         </div>
         <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · cohort n={summary.cohortCount}</p>
       </div>}
+
+      <SingletonDisclosureNote summary={summary} />
 
       {hasDistribution && (display === "chart"
         ? <DistributionChart question={question} summary={summary} />
@@ -338,6 +372,7 @@ export function ComparisonQuestion({ question, summaries, showHeading = true, di
         </div>
         <p className="analysis-response-count">Three status groups</p>
       </div>}
+      <ComparisonDisclosureNote summaries={summaries} />
       {display === "table" ? <ComparisonTable question={question} summaries={summaries} /> : <>
         {distributionQuestion && <ComparisonDistributionChart question={question} summaries={summaries} />}
         {numericQuestion && <ComparisonNumericChart summaries={summaries} />}
@@ -554,7 +589,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
-        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. KQA does not track whether a conditional or routed question was shown, so no-answer counts may include people who did not see the question. Checkbox percentages can total more than 100%. Text and note content are excluded. These summaries describe the selected interview cohort; nonresponse or self-selection can shape results. They do not establish population representativeness, statistical significance, or causal effects.</p>
+        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. KQA does not track whether a conditional or routed question was shown, so no-answer counts may include people who did not see the question. Checkbox percentages can total more than 100%. Text and note content are excluded. Singleton signals flag counts of one, but do not assess identification from combinations of attributes or guarantee anonymity. These summaries describe the selected interview cohort; nonresponse or self-selection can shape results. They do not establish population representativeness, statistical significance, or causal effects.</p>
         {data.analysis?.asOf && <p className="analysis-freshness" role="status">Analytics read completed {fullTime(data.analysis.asOf)}. Status groups share one live scan; updates during that scan may be observed.</p>}
       </section>
 

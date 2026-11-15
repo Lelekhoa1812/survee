@@ -292,13 +292,14 @@ describe("MCP tools", () => {
 
   it("returns scoped descriptive summaries without raw answers", async () => {
     const res = await call("analyze_answers", { interviewId, submittedOnly: false });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { surveyVersion?: number; scope?: { participantCount: number; respondentCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number; numeric: { mean: number } | null }[]; methodology?: string[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { surveyVersion?: number; scope?: { participantCount: number; respondentCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number; numeric: { mean: number } | null; disclosureRisk: { singletonUnmappedResponseCount: boolean; singletonDistributionDenominator: boolean; singletonDistributionValues: string[] } }[]; methodology?: string[] } } };
     expect(body.result.isError).toBeFalsy();
     expect(body.result.structuredContent.surveyVersion).toBe(1);
     expect(body.result.structuredContent.scope?.participantCount).toBe(2);
     expect(body.result.structuredContent.scope?.respondentCount).toBe(2);
     const fit = body.result.structuredContent.questions?.find((question) => question.id === "fit");
     expect(fit).toMatchObject({ answeredCount: 2, unmappedResponseCount: 1 });
+    expect(fit?.disclosureRisk).toMatchObject({ singletonUnmappedResponseCount: true, singletonDistributionDenominator: true, singletonDistributionValues: ["yes"] });
     const budget = body.result.structuredContent.questions?.find((question) => question.id === "budget");
     expect(budget?.numeric).toMatchObject({ n: 2, mean: 3, median: 3, q1: 2.5, q3: 3.5 });
     expect(body.result.structuredContent.methodology?.join(" ")).toContain("type-7 sample quantiles");
@@ -314,7 +315,7 @@ describe("MCP tools", () => {
       asOf: string;
       segmentBy: { id: string; label: string };
       scope: { participantCount: number; statuses: string[] };
-      segments: { kind: string; label: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; questions: { id: string; numeric: { n: number; mean: number } | null }[]; statusCohorts: { status: string; participantCount: number; questions: { numeric: { n: number; mean: number } | null }[] }[] }[];
+      segments: { kind: string; label: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; questions: { id: string; numeric: { n: number; mean: number } | null; disclosureRisk: { singletonNumericSummary: boolean } }[]; statusCohorts: { status: string; participantCount: number; questions: { numeric: { n: number; mean: number } | null; disclosureRisk: { singletonNumericSummary: boolean } }[] }[] }[];
       methodology: string[];
     } } };
     expect(body.result.isError).toBeFalsy();
@@ -323,6 +324,7 @@ describe("MCP tools", () => {
     const yes = body.result.structuredContent.segments.find((segment) => segment.label === "Yes");
     expect(yes).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, statusCohorts: [{ status: "invited", participantCount: 0 }, { status: "in_progress", participantCount: 0 }, { status: "submitted", participantCount: 1 }] });
     expect(yes?.questions[0]).toMatchObject({ id: "budget", numeric: { n: 1, mean: 2 } });
+    expect(yes?.questions[0].disclosureRisk.singletonNumericSummary).toBe(true);
     const unmapped = body.result.structuredContent.segments.find((segment) => segment.kind === "unmapped");
     expect(unmapped).toMatchObject({ label: "Unmapped answer", participantCount: 1, statusCounts: { invited: 1, in_progress: 0, submitted: 0 } });
     expect(unmapped?.questions[0]).toMatchObject({ numeric: { n: 1, mean: 4 } });
@@ -350,7 +352,7 @@ describe("MCP tools", () => {
   it("compares selected statuses from one scan and one shared asOf", async () => {
     const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
     const res = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { participantCount: number; respondentCount: number; statuses: string[] }; statusCohorts: { status: string; participantCount: number; respondentCount: number; questions: { id: string; cohortCount: number; eligibleCount: number; answeredCount: number; noAnswerCount: number; missingCount: number; unmappedResponseCount: number }[] }[]; methodology: string[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { participantCount: number; respondentCount: number; statuses: string[] }; statusCohorts: { status: string; participantCount: number; respondentCount: number; questions: { id: string; cohortCount: number; eligibleCount: number; answeredCount: number; noAnswerCount: number; missingCount: number; unmappedResponseCount: number; disclosureRisk: { singletonCohort: boolean; singletonUnmappedResponseCount: boolean; singletonDistributionDenominator: boolean; singletonDistributionValues: string[] } }[] }[]; methodology: string[] } } };
     expect(body.result.isError).toBeFalsy();
     expect(Number.isNaN(Date.parse(body.result.structuredContent.asOf))).toBe(false);
     expect(body.result.structuredContent.scope).toMatchObject({ participantCount: 2, respondentCount: 2, statuses: ["invited", "submitted"] });
@@ -360,6 +362,8 @@ describe("MCP tools", () => {
     ]);
     expect(body.result.structuredContent.statusCohorts[0].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 1 });
     expect(body.result.structuredContent.statusCohorts[1].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 0 });
+    expect(body.result.structuredContent.statusCohorts[0].questions[0].disclosureRisk).toMatchObject({ singletonCohort: true, singletonUnmappedResponseCount: true });
+    expect(body.result.structuredContent.statusCohorts[1].questions[0].disclosureRisk).toMatchObject({ singletonCohort: true, singletonDistributionDenominator: true, singletonDistributionValues: ["yes"] });
     expect(body.result.structuredContent.methodology.join(" ")).toContain("including invited people with no answers");
     expect(body.result.structuredContent.methodology.join(" ")).toContain("does not track item-level display or eligibility");
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
