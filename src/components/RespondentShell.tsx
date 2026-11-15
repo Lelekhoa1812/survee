@@ -216,7 +216,15 @@ export function RespondentShell({ token }: { token: string }) {
           <BrandMark />
           <div className="rs-title"><b>{data.title}</b><span>Answering as {data.participant.name}</span></div>
           <div className="right row" style={{ gap: 18 }}>
-            <div className="rs-progress" aria-label={`${counts.answered} of ${counts.total} answered`}>
+            <div
+              className="rs-progress"
+              role="progressbar"
+              aria-label="Questionnaire progress"
+              aria-valuemin={0}
+              aria-valuemax={Math.max(counts.total, 1)}
+              aria-valuenow={counts.answered}
+              aria-valuetext={`${counts.answered} of ${counts.total} questions answered`}
+            >
               <div className="bar"><i style={{ width: `${pct}%` }} /></div>
               <small>{counts.answered} of {counts.total} answered</small>
             </div>
