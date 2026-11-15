@@ -7,6 +7,9 @@ import puppeteer from "puppeteer-core";
 
 const base = process.argv[2] || "http://localhost:3100";
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const local = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(new URL(base).hostname);
+const email = process.env.ADMIN_EMAIL || (local ? "admin@axiob.local" : "");
+const password = process.env.ADMIN_PASSWORD || (local ? "12345678" : "");
 const starter = readFileSync(path.join(import.meta.dirname, "..", "docs", "template", "starter.kqa.html"), "utf8");
 const dir = mkdtempSync(path.join(tmpdir(), "kqa-probe-"));
 
@@ -28,8 +31,9 @@ try {
   const page = await browser.newPage();
   await page.goto(`${base}/admin/login`, { waitUntil: "networkidle2" });
   if (await page.$("#email")) {
-    await page.type("#email", process.env.ADMIN_EMAIL || "admin@axion.local");
-    await page.type("#password", process.env.ADMIN_PASSWORD || "12345678");
+    if (!email || !password) throw new Error("Supply explicit ADMIN_EMAIL and ADMIN_PASSWORD before probing a remote host.");
+    await page.type("#email", email);
+    await page.type("#password", password);
     await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2" }), page.click("button.primary")]);
   }
   for (const [i, c] of cases.entries()) {

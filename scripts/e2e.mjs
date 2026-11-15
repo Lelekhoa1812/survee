@@ -1,9 +1,11 @@
 // End-to-end check in a real Chrome: open a respondent link, answer, reload, confirm answers come back, submit.
 // Usage: node scripts/e2e.mjs <baseUrl> <token> [outDir]
 import puppeteer from "puppeteer-core";
+import { assertSafeMutatingTestTarget } from "./lib/mutating-test-target.mjs";
 
 const [base = "http://localhost:3100", token, out = "."] = process.argv.slice(2);
 if (!token) { console.error("Usage: node scripts/e2e.mjs <baseUrl> <token> [outDir]"); process.exit(2); }
+assertSafeMutatingTestTarget(base, "respondent E2E");
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(...a);

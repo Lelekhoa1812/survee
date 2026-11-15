@@ -67,9 +67,14 @@ In development the legacy Axion owner login falls back to `admin@axiob.local` / 
 | `npm run check -- file.html` | Run the checker from the terminal |
 | `npm run docs` | Regenerate `DIAGNOSTICS.md` and the JSON Schema from code |
 | `npm run e2e -- <baseUrl> <token> <outDir>` | Real-Chrome end-to-end run of a respondent link |
+| `npm run e2e:offline -- <baseUrl> <token>` | Offline, refusal, concurrency-window and submit checks against a disposable respondent |
+| `npm run e2e:concurrency -- <baseUrl> <token>` | Concurrent answer-write check against a disposable respondent |
+| `npm run e2e:security -- <baseUrl> [email] [password]` | Black-box auth, origin and request-size checks; add `--throttle` only on a disposable local account |
+| `npm run e2e:probe -- [baseUrl]` | Browser checks for live questionnaire diagnostics |
 | `npm run shots -- <baseUrl> <outDir> <interviewId> [light|dark] [all|analysis|accounts]` | Screenshots of host, analysis or account surfaces for review |
+| `npm run shots:states -- <baseUrl> <outDir> <interviewId> <respondentToken> [light|dark]` | Screenshots of diagnostic and interview states |
 
-`e2e` and `shots` use `puppeteer-core` with your installed Chrome (`CHROME_PATH` to override).
+The respondent E2E, offline, concurrency, security and state-screenshot checks can change answer data, submit respondents, revoke test sessions or create interviews. They reject remote targets by default and assume a disposable local database. For an explicitly disposable HTTPS test deployment, set `KQA_E2E_ALLOW_REMOTE_MUTATIONS=1` and `KQA_E2E_CONFIRM_ORIGIN` to the exact origin; the primary `kqa-bay.vercel.app` host also requires `KQA_E2E_ALLOW_PRODUCTION_MUTATIONS=1`. Never point these checks at real respondents. `e2e` and screenshot commands use `puppeteer-core` with your installed Chrome (`CHROME_PATH` to override).
 
 ## How it is built
 

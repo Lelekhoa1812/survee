@@ -2,8 +2,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { assertSafeMutatingTestTarget } from "./lib/mutating-test-target.mjs";
 
 const [base = "http://localhost:3100", out = ".", id, token, scheme = "light"] = process.argv.slice(2);
+assertSafeMutatingTestTarget(base, "state screenshot generation");
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const starter = readFileSync(path.join(import.meta.dirname, "..", "docs", "template", "starter.kqa.html"), "utf8");
 const broken = starter

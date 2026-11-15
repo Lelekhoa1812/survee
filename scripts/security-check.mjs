@@ -1,6 +1,14 @@
 // Black-box checks for the properties the security review found and we fixed. Needs the dev or production server.
 // Usage: node scripts/security-check.mjs <baseUrl> [adminEmail] [adminPassword] [--throttle]
-const [base = "http://localhost:3100", email = "admin@axion.local", password = "12345678"] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+import { assertSafeMutatingTestTarget, isLocalTestTarget } from "./lib/mutating-test-target.mjs";
+
+const args = process.argv.slice(2);
+const positional = args.filter((a) => !a.startsWith("--"));
+const [base = "http://localhost:3100", email = isLocalTestTarget(base) ? "admin@axiob.local" : "", password = isLocalTestTarget(base) ? "12345678" : ""] = positional;
+assertSafeMutatingTestTarget(base, "security check");
+const withThrottle = args.includes("--throttle");
+if (withThrottle && !isLocalTestTarget(base)) throw new Error("The throttling check locks sign-in for up to 15 minutes and is local-only.");
+if (!email || !password) throw new Error("Supply explicit credentials for a non-local security check.");
 const origin = new URL(base).origin;
 let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); if (!ok) failed++; };
@@ -19,7 +27,6 @@ check("a copied cookie is rejected after logout", after.status === 401, String(a
 
 // 2. rotating X-Forwarded-For no longer defeats the throttle. Slow (about 200 requests) and it locks sign-in for 15
 // minutes afterwards, so it only runs with --throttle.
-const withThrottle = process.argv.includes("--throttle");
 let blockedAt = 0;
 for (let i = 1; withThrottle && i <= 230; i++) {
   const r = await post("/api/admin/login", { email, password: "wrong-" + i }, undefined, { "X-Forwarded-For": `10.0.${i}.${i}` });

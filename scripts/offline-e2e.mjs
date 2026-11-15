@@ -2,9 +2,11 @@
 // shown and rolled back, and a second window cannot overwrite a submitted answer.
 // Usage: node scripts/offline-e2e.mjs <baseUrl> <token>      (use a token that has not been submitted)
 import puppeteer from "puppeteer-core";
+import { assertSafeMutatingTestTarget } from "./lib/mutating-test-target.mjs";
 
 const [base = "http://localhost:3100", token] = process.argv.slice(2);
 if (!token) { console.error("Usage: node scripts/offline-e2e.mjs <baseUrl> <token>"); process.exit(2); }
+assertSafeMutatingTestTarget(base, "offline respondent E2E");
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;

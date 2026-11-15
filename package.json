@@ -15,7 +15,12 @@
     "a11y:audit": "node scripts/a11y-audit.mjs",
     "docs": "tsx scripts/gen-docs.ts",
     "e2e": "node scripts/e2e.mjs",
-    "shots": "node scripts/shots.mjs"
+    "e2e:offline": "node scripts/offline-e2e.mjs",
+    "e2e:concurrency": "node scripts/concurrency-check.mjs",
+    "e2e:security": "node scripts/security-check.mjs",
+    "e2e:probe": "node scripts/probe-e2e.mjs",
+    "shots": "node scripts/shots.mjs",
+    "shots:states": "node scripts/shots-states.mjs"
   },
   "engines": {
     "node": ">=20.9"
