@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ObjectId } from "mongodb";
 
-const state = vi.hoisted(() => ({ body: {} as Record<string, unknown> }));
+const state = vi.hoisted(() => ({ body: {} as Record<string, unknown>, headerValues: {} as Record<string, string> }));
 
 vi.mock("@/lib/http", () => ({
   sameOrigin: async () => true,
@@ -17,10 +17,11 @@ vi.mock("@/lib/env", () => ({
 vi.mock("@/lib/mail/smtp", () => ({ newMessageId: vi.fn(), sendSmtp: vi.fn() }));
 vi.mock("@/lib/repo/accounts", () => ({ createPendingSignup: vi.fn(), removePendingSignup: vi.fn() }));
 vi.mock("@/lib/repo", () => ({ consumeRateLimit: vi.fn(async () => true) }));
-vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-real-ip": "192.0.2.1" }) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headerValues) }));
 
 import { POST } from "../src/app/api/auth/signup/route";
 import { createPendingSignup } from "../src/lib/repo/accounts";
+import { consumeRateLimit } from "../src/lib/repo";
 import { sendSmtp } from "../src/lib/mail/smtp";
 
 async function post(body: Record<string, unknown>) {
@@ -31,6 +32,7 @@ async function post(body: Record<string, unknown>) {
 describe("signup validation fields", () => {
   beforeEach(() => {
     state.body = {};
+    state.headerValues = { "x-vercel-forwarded-for": "192.0.2.1" };
     vi.clearAllMocks();
   });
 
@@ -74,5 +76,30 @@ describe("signup validation fields", () => {
       to: "person@example.com",
       subject: "Verify your KQA account",
     }));
+  });
+
+  it("uses only the Vercel client IP for signup throttling", async () => {
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: true, id: new ObjectId() });
+    state.headerValues = {
+      "x-vercel-forwarded-for": "198.51.100.24, 10.0.0.1",
+      "x-forwarded-for": "203.0.113.90, 10.0.0.1",
+      "x-real-ip": "203.0.113.91",
+    };
+
+    await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+
+    expect(consumeRateLimit).toHaveBeenCalledWith("signup-ip:198.51.100.24", 5);
+  });
+
+  it("does not trust forwarded headers when the Vercel IP header is absent", async () => {
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: true, id: new ObjectId() });
+    state.headerValues = {
+      "x-forwarded-for": "203.0.113.90",
+      "x-real-ip": "203.0.113.91",
+    };
+
+    await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+
+    expect(consumeRateLimit).toHaveBeenCalledWith("signup-ip:unknown", 5);
   });
 });

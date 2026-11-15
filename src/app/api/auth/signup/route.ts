@@ -10,10 +10,9 @@ import { headers } from "next/headers";
 const GENERIC = "If this address can create an account, check its inbox for a verification link.";
 
 function clientIp(h: Headers): string {
-  const platform = h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip");
-  if (platform) return platform.split(",")[0].trim();
-  const chain = (h.get("x-forwarded-for") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-  return chain.at(-1) ?? "unknown";
+  // Vercel supplies this independently of proxy-overwritable x-forwarded-for.
+  // Do not accept caller-provided forwarding headers as a rate-limit identity.
+  return h.get("x-vercel-forwarded-for")?.split(",")[0].trim() || "unknown";
 }
 
 function escapeHtml(value: string): string {
