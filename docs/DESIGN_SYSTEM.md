@@ -1,10 +1,12 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/11` · reviewed 16 November 2026
+Version: `kqa-design/12` · reviewed 16 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
 The tool also returns a structured `designPlan` contract for moving from a user brief through design, implementation, task-based usability sessions, and critique. Its `inputs`, `steps`, `output.fields`, `guardrails`, and separate task-usability and WCAG-EM methods are intended to make agent work repeatable and reviewable. Visual-taste guidance is heuristic: preserve the user's explicit direction and product context, and do not present a subjective preference as a standard. WCAG 2.2 AA remains the accessibility target.
+
+When a user supplies a theme, the read-only MCP tool `extract_design_profile` can parse CSS custom properties or token JSON into scoped semantic-role candidates, provenance, ambiguity, and limited solid-color contrast calculations. It returns a proposal overlay for review and never fetches, executes, stores, or applies the input. Its contrast calculations do not replace rendered accessibility checks.
 
 For host surfaces, `visualProfile.host` exposes the default KQA visual direction, semantic token names, and core light/dark token values from `src/app/globals.css`. The default is a heuristic when the user has not supplied a different brand or theme; it is not a template to force onto every interview. Contrast still needs verification for the actual foreground/background pairing. The stylesheet does not currently define a shared spacing scale. Questionnaire guidance is separate because its HTML runs in a sandboxed iframe and does not inherit host CSS variables; `visualProfile.questionnaire` exposes tokens and layout conventions from [`template/starter.kqa.html`](template/starter.kqa.html), while [`FORMAT.md`](FORMAT.md) documents the supported controls and runtime. Analytics guidance emphasizes legible labels, provenance, denominators, non-color chart alternatives, and singleton disclosure signals; KQA does not suppress small groups by default.
 

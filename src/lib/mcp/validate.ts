@@ -11,6 +11,8 @@ interface Schema {
   maxItems?: number;
   minimum?: number;
   maximum?: number;
+  minLength?: number;
+  maxLength?: number;
 }
 
 /** Returns a short error, or null when the value matches. */
@@ -53,6 +55,8 @@ function check(schema: Schema, value: unknown, path: string): string | null {
   }
   if (schema.type === "string") {
     if (typeof value !== "string") return `${where} must be a string.`;
+    if (schema.minLength !== undefined && value.length < schema.minLength) return `${where} must contain at least ${schema.minLength} character${schema.minLength === 1 ? "" : "s"}.`;
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) return `${where} must contain at most ${schema.maxLength} characters.`;
   } else if (schema.type === "boolean") {
     if (typeof value !== "boolean") return `${where} must be true or false.`;
   } else if (schema.type === "integer") {

@@ -5,6 +5,7 @@ import { canSegmentByAnswer, summarizeAnswerSegments } from "../analytics/segmen
 import { createQuestionSummaryAccumulator, summarizeQuestionCohorts, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
+import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
@@ -205,6 +206,25 @@ const TOOLS: ToolDef[] = [
     async run(args) {
       const surface = (asString(args.surface, 24) || "all") as DesignSurface;
       return ok(getDesignGuidance(surface));
+    },
+  },
+  {
+    name: "extract_design_profile",
+    description: "Extract user-supplied CSS custom properties or token JSON into KQA semantic-role proposals. Returns provenance, ambiguity, candidate contrast checks, and a reviewable overlay; never fetches URLs, executes CSS, stores input, or applies changes.",
+    inputSchema: obj({
+      source: { type: "string", minLength: 1, maxLength: 32768 },
+      format: { type: "string", enum: ["css", "json"] },
+      surface: { type: "string", enum: ["host", "questionnaire", "analytics"] },
+    }, ["source", "format"]),
+    async run(args) {
+      if (typeof args.source !== "string") return err("source is required.", "invalid_args");
+      const surface = (asString(args.surface, 24) || "questionnaire") as DesignProfileSurface;
+      const result = extractDesignProfile({
+        source: args.source,
+        format: args.format as DesignProfileFormat,
+        surface,
+      });
+      return result.ok ? ok(result.profile) : err(result.error, result.code);
     },
   },
   {
@@ -1376,7 +1396,7 @@ const TOOLS: ToolDef[] = [
 
 export function listToolDefs(capabilities?: readonly McpCapability[]) {
   const readOnlyTools = new Set([
-    "get_analytics_guidance", "get_design_guidance", "audit_questionnaire_design", "list_interviews", "get_interview",
+    "get_analytics_guidance", "get_design_guidance", "extract_design_profile", "audit_questionnaire_design", "list_interviews", "get_interview",
     "get_survey_html", "list_versions", "check_questionnaire", "list_people", "get_person", "get_answers",
     "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_version_patch", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
   ]);

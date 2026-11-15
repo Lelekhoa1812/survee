@@ -32,6 +32,7 @@ export const DEFAULT_MCP_CAPABILITIES: readonly McpCapability[] = ["interviews:r
 export const MCP_TOOL_CAPABILITIES = {
   get_analytics_guidance: "analytics:read",
   get_design_guidance: "interviews:read",
+  extract_design_profile: "interviews:read",
   audit_questionnaire_design: "interviews:read",
   list_interviews: "interviews:read",
   get_interview: "interviews:read",

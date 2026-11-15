@@ -132,7 +132,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { getVersion, iterateAnalyticsParticipants, publishVersionIfCurrent } from "../src/lib/repo";
+import { getVersion, iterateAnalyticsParticipants, noteMcp, publishVersionIfCurrent } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -150,6 +150,7 @@ beforeEach(() => {
   mailRows.length = 0;
   sent.length = 0;
   searches.length = 0;
+  vi.mocked(noteMcp).mockClear();
 });
 
 describe("MCP tools", () => {
@@ -248,7 +249,7 @@ describe("MCP tools", () => {
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/11");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/12");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
     expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.steps?.join(" ")).toContain("representative sample");
@@ -277,6 +278,29 @@ describe("MCP tools", () => {
       revision: "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
       contentSha256: "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3",
     });
+  });
+
+  it("extracts supplied design tokens as a read-only, non-persistent MCP proposal", async () => {
+    const source = ":root { --bg: #ffffff; --ink: #111111; } @media (prefers-color-scheme: dark) { :root { --bg: #000000; --ink: #ffffff; } }";
+    const res = await call("extract_design_profile", { source, format: "css", surface: "host" });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { profileVersion?: string; policyVersion?: string; sourceFormat?: string; surface?: string; proposedMappings?: { role: string }[]; contrastChecks?: { status: string }[]; integrationProposal?: { status: string; cssOverlay: string | null } } } };
+
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/1", policyVersion: "kqa-design/12", sourceFormat: "css", surface: "host" });
+    expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
+    expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
+    expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });
+    expect(listToolDefs(["interviews:read"]).find(({ name }) => name === "extract_design_profile")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
+    expect(noteMcp).toHaveBeenCalledWith("extract_design_profile", true, undefined);
+    expect(JSON.stringify(vi.mocked(noteMcp).mock.calls)).not.toContain(source);
+  });
+
+  it("rejects oversized design source at MCP schema validation", async () => {
+    const res = await call("extract_design_profile", { source: "x".repeat(32769), format: "css" });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toMatchObject({ code: "invalid_args" });
+    expect(body.result.structuredContent.error).toContain("at most 32768 characters");
   });
 
   it("returns review checklists scoped to the requested surface", async () => {

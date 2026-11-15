@@ -55,4 +55,8 @@ describe("tool argument schema", () => {
   it("reports a missing required field from the schema", () => {
     expect(validateToolArgs({ type: "object", properties: { interviewId: { type: "string" } }, required: ["interviewId"], additionalProperties: false }, {})).toMatch(/interviewId is required/);
   });
+
+  it("rejects strings beyond a schema length limit", () => {
+    expect(validateToolArgs({ type: "string", maxLength: 3 }, "token")).toMatch(/at most 3 characters/);
+  });
 });

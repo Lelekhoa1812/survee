@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/11");
+    expect(guidance.policyVersion).toBe("kqa-design/12");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
@@ -13,6 +13,9 @@ describe("design guidance package", () => {
     expect(guidance.designPlan.guardrails.join(" ")).toContain("subjective taste heuristics");
     expect(guidance.designPlan.steps.join(" ")).toContain("could fit almost any unrelated product");
     expect(guidance.designPlan.output.fields).toContain("representativeSamplesAndStates");
+    expect(guidance.designPlan.output.fields).toContain("designProfileProposalAndReview");
+    expect(guidance.designPlan.steps.join(" ")).toContain("call extract_design_profile");
+    expect(guidance.designPlan.steps.join(" ")).toContain("Never fetch an arbitrary stylesheet URL");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("representative sample");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
     expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("realistic, neutral tasks");

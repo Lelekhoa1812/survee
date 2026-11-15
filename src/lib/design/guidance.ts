@@ -84,9 +84,10 @@ const SOURCES = [
 
 const DESIGN_PLAN = {
   purpose: "A repeatable brief-to-build-to-review contract for the connected agent. Treat the user's stated visual direction and constraints as authoritative; ask only when a missing choice would materially change the result.",
-  inputs: ["surface", "audience", "primary user task", "brand/theme references", "content and data density", "technical and accessibility constraints"],
+  inputs: ["surface", "audience", "primary user task", "brand/theme references", "user-supplied CSS custom properties or token JSON when available", "content and data density", "technical and accessibility constraints"],
   steps: [
     "Restate the audience, primary task, and user-provided theme constraints; identify assumptions that materially affect the design.",
+    "When the user supplies brand CSS custom properties or token JSON, call extract_design_profile with the intended surface; review its source scopes, provenance, ambiguity, contrast candidates, and safe overlay before integrating. Never fetch an arbitrary stylesheet URL or execute supplied CSS.",
     "Choose a visual direction from the product's subject matter and supplied references. Explain why it fits; do not apply a generic style recipe by default. Taste guidance is heuristic and must yield to the user's brief.",
     "Before building, check whether the main choices could fit almost any unrelated product. Revise generic defaults unless the brief specifically supports them, and explain why the selected visual motif belongs here.",
     "Map semantic color, typography, spacing, shape, and elevation roles to the applicable visual profile. Reuse existing tokens where available; document any deliberate extension rather than scattering literal values.",
@@ -99,7 +100,7 @@ const DESIGN_PLAN = {
   accessibilityEvaluationMethodology: ACCESSIBILITY_EVALUATION_METHOD,
   taskBasedUsabilityMethodology: TASK_BASED_USABILITY_METHOD,
   output: {
-    fields: ["briefSummary", "visualDirection", "tokenMapping", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
+    fields: ["briefSummary", "visualDirection", "tokenMapping", "designProfileProposalAndReview", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
     evidenceRule: "State concrete checks and their results. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality. Mark user research as untested unless sessions with relevant participants were actually observed.",
   },
   guardrails: [
@@ -174,7 +175,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/11",
+    policyVersion: "kqa-design/12",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
