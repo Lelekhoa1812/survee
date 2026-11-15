@@ -48,7 +48,7 @@ In development the legacy Axion owner login falls back to `admin@axiob.local` / 
 
 | Variable | Purpose |
 |---|---|
-| `MONGODB_URI` | MongoDB connection string. Required |
+| `MONGODB_URI` | Required MongoDB Atlas or replica-set URI; respondent saves and questionnaire publishing require transactions |
 | `MONGODB_DB` | Database name. Default `kqa` |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Initial Axion owner bootstrap credential. Required in production; regular accounts use their own passwords |
 | `SESSION_SECRET` | Signs the admin session cookie. Required in production. `openssl rand -base64 32` |

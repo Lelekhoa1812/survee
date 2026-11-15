@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { ObjectId } from "mongodb";
-import { col } from "../db";
+import { ObjectId, type ClientSession } from "mongodb";
+import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
 import { progress, validateAnswer } from "../format/answers";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
@@ -69,6 +69,10 @@ export async function getVersion(interviewId: ObjectId, version: number, tenantO
   return (await col.versions()).findOne(tenantFilter(tenantId, { interviewId, version }));
 }
 
+function versionConflict(): { ok: false; status: 409; error: string; code: "questionnaire_version_changed" } {
+  return { ok: false, status: 409, error: "This questionnaire was updated while you were answering. Reload the page to continue.", code: "questionnaire_version_changed" };
+}
+
 export async function listVersions(interviewId: ObjectId, tenantOverride?: string): Promise<Omit<SurveyVersionDoc, "html">[]> {
   const tenantId = tenantOverride ?? await currentTenantId();
   if (!tenantId) return [];
@@ -126,14 +130,12 @@ export async function addVersion(id: string, survey: NewSurvey): Promise<number 
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
-  const interviews = await col.interviews();
-  const cur = await interviews.findOne(tenantFilter(tenantId, { _id: oid }));
-  if (!cur) return null;
-  const next = cur.currentVersion + 1;
-  await (await col.versions()).insertOne(versionDoc(tenantId, oid, next, survey));
-  await interviews.updateOne(tenantFilter(tenantId, { _id: oid }), { $set: { currentVersion: next, updatedAt: new Date() } });
-  logEvent(tenantId, oid, "version", undefined, { version: next });
-  return next;
+  const interview = await getInterview(oid.toHexString(), tenantId);
+  if (!interview) return null;
+  const current = await getVersion(oid, interview.currentVersion, tenantId);
+  if (!current) return null;
+  const published = await publishVersionIfCurrent(oid.toHexString(), interview.currentVersion, current.htmlSha256, survey);
+  return published && !("conflict" in published) ? published.version : null;
 }
 
 /** Publish only if the interview still points at the version that was reviewed. */
@@ -148,38 +150,33 @@ export async function publishVersionIfCurrent(
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
-  const interviews = await col.interviews();
-  const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }));
-  if (!interview) return { conflict: true };
-  const current = await getVersion(oid, expectedVersion, tenantId);
-  if (!current || current.htmlSha256 !== expectedBaseHash) return { conflict: true };
-
   const version = expectedVersion + 1;
-  const versions = await col.versions();
-  const doc = versionDoc(tenantId, oid, version, survey);
   try {
-    await versions.insertOne(doc);
+    const result = await withMongoTransaction(async (session) => {
+      const interviews = await col.interviews();
+      const versions = await col.versions();
+      const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }), { session });
+      if (!interview) return { conflict: true as const };
+      const current = await versions.findOne(tenantFilter(tenantId, { interviewId: oid, version: expectedVersion }), { session });
+      if (!current || current.htmlSha256 !== expectedBaseHash) return { conflict: true as const };
+
+      const changed = await interviews.updateOne(
+        tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }),
+        { $set: { currentVersion: version, updatedAt: new Date() }, $inc: { respondentWriteRevision: 1 } },
+        { session },
+      );
+      if (!changed.modifiedCount) return { conflict: true as const };
+      await versions.insertOne(versionDoc(tenantId, oid, version, survey), { session });
+      return { version };
+    });
+    if ("conflict" in result) return result;
+    logEvent(tenantId, oid, "version", undefined, { version, source });
+    return result;
   } catch (error) {
     // A concurrent publisher may already have claimed this version number.
     if (error && typeof error === "object" && "code" in error && error.code === 11000) return { conflict: true };
     throw error;
   }
-  let changed;
-  try {
-    changed = await interviews.updateOne(
-      tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }),
-      { $set: { currentVersion: version, updatedAt: new Date() } },
-    );
-  } catch (error) {
-    await versions.deleteOne(tenantFilter(tenantId, { _id: doc._id })).catch(() => {});
-    throw error;
-  }
-  if (!changed.modifiedCount) {
-    await versions.deleteOne(tenantFilter(tenantId, { _id: doc._id })).catch(() => {});
-    return { conflict: true };
-  }
-  logEvent(tenantId, oid, "version", undefined, { version, source });
-  return { version };
 }
 
 export async function deleteInterview(id: string): Promise<boolean> {
@@ -384,19 +381,43 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
 
 export type SaveResult =
   | { ok: true; revision: number; savedAt: string; status: ParticipantStatus }
-  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; details?: { id: string; reason: string }[] };
+  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; code?: string; details?: { id: string; reason: string }[] };
 
 export interface AnswerPatch {
   [questionId: string]: { value?: unknown; note?: unknown };
 }
 
+type FenceFailure = { ok: false; status: 403 | 404 | 409; error: string; code?: string };
+
+/** Atomically touch the interview row used by publishers before changing respondent data. */
+async function fenceRespondentWrite(
+  session: ClientSession,
+  tenantId: string,
+  interviewId: ObjectId,
+  expectedVersion: number,
+): Promise<{ ok: true } | FenceFailure> {
+  const interviews = await col.interviews();
+  const changed = await interviews.updateOne(
+    tenantFilter(tenantId, { _id: interviewId, currentVersion: expectedVersion, status: "open" }),
+    { $inc: { respondentWriteRevision: 1 } },
+    { session },
+  );
+  if (changed.matchedCount) return { ok: true };
+  const current = await interviews.findOne(tenantFilter(tenantId, { _id: interviewId }), { session });
+  if (!current) return { ok: false, status: 404, error: "This link is not valid." };
+  if (current.currentVersion !== expectedVersion) return versionConflict();
+  if (current.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
+  return versionConflict();
+}
+
 /** Validate a patch against the manifest and apply it. Unknown ids and invalid values are rejected, never stored. */
-export async function saveAnswers(token: string, patch: AnswerPatch): Promise<SaveResult> {
+export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch): Promise<SaveResult> {
   const ids = Object.keys(patch);
   if (ids.length === 0) return { ok: false, status: 400, error: "Nothing to save." };
   if (ids.length > 200) return { ok: false, status: 413, error: "Too many answers in one request." };
   const ctx = await loadByToken(token);
   if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
+  if (ctx.version.version !== expectedVersion) return versionConflict();
   if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
   if (ctx.participant.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them." };
 
@@ -453,21 +474,27 @@ export async function saveAnswers(token: string, patch: AnswerPatch): Promise<Sa
     else $unset[`answers.${id}`] = "";
   }
   const participants = await col.participants();
-  const res = await participants.findOneAndUpdate(
-    tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), status: { $ne: "submitted" } }),
-    { $set, ...(Object.keys($unset).length ? { $unset } : {}), $inc: { revision: 1 } },
-    { returnDocument: "after" },
-  );
-  if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked." };
-  logEvent(ctx.tenantId, res.interviewId, "save", res._id, { ids: ids.slice(0, 20) });
-  return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status };
+  const result = await withMongoTransaction(async (session): Promise<SaveResult> => {
+    const fence = await fenceRespondentWrite(session, ctx.tenantId, new ObjectId(ctx.interview.id), expectedVersion);
+    if (!fence.ok) return fence;
+    const res = await participants.findOneAndUpdate(
+      tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), status: { $ne: "submitted" } }),
+      { $set, ...(Object.keys($unset).length ? { $unset } : {}), $inc: { revision: 1 } },
+      { returnDocument: "after", session },
+    );
+    if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked." };
+    return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status };
+  });
+  if (result.ok) logEvent(ctx.tenantId, new ObjectId(ctx.interview.id), "save", new ObjectId(ctx.participant.id), { ids: ids.slice(0, 20) });
+  return result;
 }
 
-export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 422; error: string; missing?: { id: string; label: string }[] };
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[] };
 
-export async function submitAnswers(token: string): Promise<SubmitResult> {
+export async function submitAnswers(token: string, expectedVersion: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
   if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
+  if (ctx.version.version !== expectedVersion) return versionConflict();
   if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
   if (ctx.participant.status === "submitted") return { ok: true, submittedAt: ctx.participant.submittedAt ?? new Date().toISOString() };
   const pr = progress(ctx.version.manifest, ctx.participant.answers);
@@ -476,9 +503,22 @@ export async function submitAnswers(token: string): Promise<SubmitResult> {
     return { ok: false, status: 422, error: `${pr.missingRequired.length} required ${pr.missingRequired.length === 1 ? "question is" : "questions are"} not answered yet.`, missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })) };
   }
   const now = new Date();
-  const res = await (await col.participants()).findOneAndUpdate(tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id) }), { $set: { status: "submitted", submittedAt: now, updatedAt: now } }, { returnDocument: "after" });
-  if (res) logEvent(ctx.tenantId, res.interviewId, "submit", res._id);
-  return { ok: true, submittedAt: now.toISOString() };
+  const participants = await col.participants();
+  const interviewId = new ObjectId(ctx.interview.id);
+  const participantId = new ObjectId(ctx.participant.id);
+  const result = await withMongoTransaction(async (session): Promise<SubmitResult> => {
+    const fence = await fenceRespondentWrite(session, ctx.tenantId, interviewId, expectedVersion);
+    if (!fence.ok) return fence;
+    const res = await participants.findOneAndUpdate(
+      tenantFilter(ctx.tenantId, { _id: participantId }),
+      { $set: { status: "submitted", submittedAt: now, updatedAt: now } },
+      { returnDocument: "after", session },
+    );
+    if (!res) return { ok: false, status: 404, error: "This link is not valid." };
+    return { ok: true, submittedAt: (res.submittedAt ?? now).toISOString() };
+  });
+  if (result.ok) logEvent(ctx.tenantId, interviewId, "submit", participantId);
+  return result;
 }
 
 // ------------------------------------------------------------------------------------------ login throttling

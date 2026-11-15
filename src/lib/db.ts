@@ -1,4 +1,4 @@
-import { MongoClient, type Collection, type Db } from "mongodb";
+import { MongoClient, type ClientSession, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
 import type { ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc } from "./repo/types";
 
@@ -26,6 +26,21 @@ export async function db(): Promise<Db> {
   }
   await globalThis.__kqaMongo!.indexes;
   return d;
+}
+
+/** Run a unit of work that must commit atomically across MongoDB collections. */
+export async function withMongoTransaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
+  // Ensure collections and indexes are ready before opening a transaction.
+  await db();
+  const c = await client();
+  const session = c.startSession();
+  try {
+    const result = await session.withTransaction(() => work(session));
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  } finally {
+    await session.endSession();
+  }
 }
 
 async function ensureIndexes(d: Db) {

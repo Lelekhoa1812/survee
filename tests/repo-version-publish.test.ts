@@ -6,11 +6,14 @@ const mocks = vi.hoisted(() => ({
   baseHash: "c".repeat(64),
   modifiedCount: 1,
   inserted: [] as Record<string, unknown>[],
+  insertOptions: [] as Record<string, unknown>[],
   deleted: [] as Record<string, unknown>[],
   updateOne: vi.fn(async () => ({ modifiedCount: 1 })),
+  withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true })),
 }));
 
 vi.mock("../src/lib/db", () => ({
+  withMongoTransaction: mocks.withMongoTransaction,
   col: {
     interviews: async () => ({
       findOne: async (filter: Record<string, unknown>) => {
@@ -22,7 +25,7 @@ vi.mock("../src/lib/db", () => ({
     }),
     versions: async () => ({
       findOne: async (_filter: unknown, options?: { projection?: unknown }) => options?.projection ? { manifest: {} } : { htmlSha256: mocks.baseHash },
-      insertOne: async (row: Record<string, unknown>) => { mocks.inserted.push(row); },
+      insertOne: async (row: Record<string, unknown>, options: Record<string, unknown>) => { mocks.inserted.push(row); mocks.insertOptions.push(options); },
       deleteOne: async (filter: Record<string, unknown>) => { mocks.deleted.push(filter); },
     }),
     events: async () => ({ insertOne: async () => ({}) }),
@@ -44,28 +47,33 @@ beforeEach(() => {
   mocks.baseHash = "c".repeat(64);
   mocks.modifiedCount = 1;
   mocks.inserted.length = 0;
+  mocks.insertOptions.length = 0;
   mocks.deleted.length = 0;
   mocks.updateOne.mockReset().mockImplementation(async () => ({ modifiedCount: mocks.modifiedCount }));
+  mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => work({ transaction: true }));
 });
 
 describe("publishVersionIfCurrent", () => {
-  it("adds the next immutable version and advances the head with a version compare-and-swap", async () => {
+  it("adds the next immutable version and advances the head in one transaction", async () => {
     const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey));
     expect(result).toEqual({ version: 5 });
     expect(mocks.inserted).toHaveLength(1);
     expect(mocks.inserted[0]).toMatchObject({ version: 5, html: survey.html, htmlSha256: expect.any(String) });
+    expect(mocks.insertOptions).toEqual([{ session: { transaction: true } }]);
     expect(mocks.updateOne).toHaveBeenCalledWith(
       tenantFilter("axion", { _id: expect.any(ObjectId), currentVersion: 4 }),
-      { $set: { currentVersion: 5, updatedAt: expect.any(Date) } },
+      { $set: { currentVersion: 5, updatedAt: expect.any(Date) }, $inc: { respondentWriteRevision: 1 } },
+      { session: { transaction: true } },
     );
+    expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
   });
 
-  it("removes the uncommitted version when another publisher wins the compare-and-swap", async () => {
+  it("returns a conflict when another publisher wins the compare-and-swap", async () => {
     mocks.modifiedCount = 0;
     const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey));
     expect(result).toEqual({ conflict: true });
-    expect(mocks.inserted).toHaveLength(1);
-    expect(mocks.deleted).toEqual([tenantFilter("axion", { _id: mocks.inserted[0]._id })]);
+    expect(mocks.inserted).toHaveLength(0);
+    expect(mocks.deleted).toHaveLength(0);
   });
 
   it("rejects a stale base hash before inserting a version", async () => {

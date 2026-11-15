@@ -33,6 +33,7 @@ beforeEach(() => {
       ok: true,
       participant: { name: "Ada", status: "in_progress" },
       interview: { name: "Study", status: "open" },
+      version: 7,
       title: "Study questions",
       questions: [
         { id: "first-required", type: "text", label: "First required question", required: true },
@@ -44,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root.unmount());
   host.remove();
 });
@@ -68,5 +70,47 @@ describe("respondent required-answer recovery", () => {
     expect(host.querySelector("[role=dialog]")).toBeNull();
     expect(document.activeElement).toBe(submit);
     expect(postMessage).toHaveBeenCalledWith({ kqa: 1, type: "focus-question", id: "first-required" }, "*");
+  });
+
+  it("locks a stale questionnaire and explains that unsaved edits need a reload", async () => {
+    vi.useFakeTimers();
+    state.api.mockImplementation(async (url: string) => {
+      if (url.endsWith("/answers")) return { ok: false, status: 409, data: { ok: false, error: "updated", code: "questionnaire_version_changed" } };
+      return {
+        ok: true,
+        status: 200,
+        data: {
+          ok: true,
+          participant: { name: "Ada", status: "in_progress" },
+          interview: { name: "Study", status: "open" },
+          version: 7,
+          title: "Study questions",
+          questions: [{ id: "answer", type: "text", label: "Answer" }],
+          answers: {},
+        },
+      };
+    });
+
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const frame = host.querySelector("iframe")!;
+
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "set", id: "answer", value: "unsaved edit" },
+        origin: "null",
+        source: frame.contentWindow,
+      }));
+      await vi.advanceTimersByTimeAsync(650);
+    });
+
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Changes made since the last save were not saved");
+    expect(alert?.textContent).toContain("Reload questionnaire");
+    const answerSave = state.api.mock.calls.find(([url]) => String(url).endsWith("/answers"));
+    expect(answerSave?.[1]).toMatchObject({ body: { version: 7, answers: { answer: { value: "unsaved edit" } } } });
+    vi.useRealTimers();
   });
 });

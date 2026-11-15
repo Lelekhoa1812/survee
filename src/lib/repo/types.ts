@@ -97,6 +97,8 @@ export interface InterviewDoc {
   status: InterviewStatus;
   /** The survey version people are answering now. */
   currentVersion: number;
+  /** Written by respondent saves/submits and version publication to serialize the version fence. */
+  respondentWriteRevision?: number;
   createdAt: Date;
   updatedAt: Date;
 }

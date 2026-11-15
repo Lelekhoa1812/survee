@@ -18,6 +18,7 @@ export async function GET(req: Request, { params }: Ctx) {
     ok: true,
     participant: { name: ctx.participant.name, status: ctx.participant.status, revision: ctx.participant.revision, submittedAt: ctx.participant.submittedAt },
     interview: { name: ctx.interview.name, status: ctx.interview.status },
+    version: ctx.version.version,
     title: manifest.title,
     questions: manifest.questions,
     answers: ctx.participant.answers,

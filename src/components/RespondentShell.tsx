@@ -9,6 +9,7 @@ type SaveState = "idle" | "saving" | "saved" | "error" | "offline";
 interface Loaded {
   participant: { name: string; status: "invited" | "in_progress" | "submitted"; submittedAt?: string };
   interview: { name: string; status: "open" | "closed" };
+  version: number;
   title: string;
   questions: Question[];
   answers: AnswerMap;
@@ -24,6 +25,7 @@ export function RespondentShell({ token }: { token: string }) {
   const [save, setSave] = useState<SaveState>("idle");
   const [locked, setLocked] = useState(false);
   const [closed, setClosed] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
   const [counts, setCounts] = useState({ answered: 0, total: 0, missing: [] as Question[] });
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -32,6 +34,8 @@ export function RespondentShell({ token }: { token: string }) {
 
   const frame = useRef<HTMLIFrameElement>(null);
   const answers = useRef<AnswerMap>({});
+  const version = useRef(0);
+  const refreshRequiredRef = useRef(false);
   const questions = useRef<Question[]>([]);
   const pending = useRef<Patch>({});
   const focusQuestionAfterClose = useRef<string | null>(null);
@@ -64,6 +68,9 @@ export function RespondentShell({ token }: { token: string }) {
     const res = await api<Loaded & { ok: boolean }>(`/api/p/${token}`, { headers: { "X-KQA-Client": "respondent" } });
     if (res.status === 404) { setPhase("invalid"); return; }
     if (!res.ok || !res.data.questions) { setPhase("error"); return; }
+    version.current = res.data.version;
+    refreshRequiredRef.current = false;
+    setRefreshRequired(false);
     answers.current = res.data.answers ?? {};
     questions.current = res.data.questions;
     setData(res.data);
@@ -84,7 +91,7 @@ export function RespondentShell({ token }: { token: string }) {
     pending.current = {};
     inflight.current = true;
     setSave("saving");
-    const res = await api<{ savedAt: string; details?: { id: string; reason: string }[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { answers: batch } });
+    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string }[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, answers: batch } });
     inflight.current = false;
     if (res.ok) {
       attempts.current = 0;
@@ -98,6 +105,16 @@ export function RespondentShell({ token }: { token: string }) {
       setSave(navigator.onLine ? "error" : "offline");
       attempts.current += 1;
       retry.current = setTimeout(flush, Math.min(30000, 1500 * 2 ** Math.min(attempts.current, 5)));
+      return;
+    }
+    if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
+      pending.current = {};
+      clearTimeout(retry.current);
+      refreshRequiredRef.current = true;
+      setRefreshRequired(true);
+      setSave("idle");
+      applyLock(true);
+      toast("This questionnaire was updated. Reload to continue; your earlier saved answers are safe, but recent changes on this page were not saved.", "err");
       return;
     }
     if (res.status === 403 || res.status === 409) {
@@ -162,7 +179,7 @@ export function RespondentShell({ token }: { token: string }) {
     const hide = () => {
       if (document.visibilityState === "hidden" && Object.keys(pending.current).length && !inflight.current) {
         const batch = pending.current; pending.current = {};
-        void fetch(`/api/p/${token}/answers`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers: batch }), keepalive: true }).catch(() => { pending.current = { ...batch, ...pending.current }; });
+        void fetch(`/api/p/${token}/answers`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: version.current, answers: batch }), keepalive: true }).catch(() => { pending.current = { ...batch, ...pending.current }; });
       }
     };
     window.addEventListener("online", online);
@@ -185,8 +202,9 @@ export function RespondentShell({ token }: { token: string }) {
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     await flush();
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
+    if (refreshRequiredRef.current) { setSubmitting(false); setConfirming(false); return; }
     if (Object.keys(pending.current).length) { setSubmitting(false); toast("Your latest changes have not saved yet. Check your connection and try again.", "err"); return; }
-    const res = await api<{ submittedAt: string; missing?: { id: string; label: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: {} });
+    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
     setSubmitting(false);
     if (res.ok) {
       setConfirming(false);
@@ -195,6 +213,15 @@ export function RespondentShell({ token }: { token: string }) {
       setSave("idle");
     } else {
       setConfirming(false);
+      if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
+        pending.current = {};
+        refreshRequiredRef.current = true;
+        setRefreshRequired(true);
+        setSave("idle");
+        applyLock(true);
+        toast("This questionnaire was updated. Reload to continue; your saved answers are safe.", "err");
+        return;
+      }
       toast(res.data.error ?? "Could not submit.", "err");
       if (res.status === 422) recount();
     }
@@ -242,9 +269,10 @@ export function RespondentShell({ token }: { token: string }) {
         </div>
       </div>
 
-      <div className={`rs-banner ${submitted ? "ok" : closed ? "warn" : "none"}`} role={submitted || closed ? "status" : undefined}>
+      <div className={`rs-banner ${refreshRequired || (!submitted && closed) ? "warn" : submitted ? "ok" : "none"}`} role={refreshRequired ? "alert" : submitted || closed ? "status" : undefined}>
+        {refreshRequired && <><Icon name="lock" size={16} /> This questionnaire changed while the page was open. Changes made since the last save were not saved. Reload to continue with the latest version. <button className="btn" onClick={() => window.location.reload()}>Reload questionnaire</button></>}
         {submitted && <><Icon name="check" size={16} /> Submitted. Your answers are locked, and your host can reopen them if you need a change.</>}
-        {!submitted && closed && <><Icon name="lock" size={16} /> This interview is closed, so answers can no longer be changed.</>}
+        {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> This interview is closed, so answers can no longer be changed.</>}
       </div>
 
       <div className="rs-frame">
