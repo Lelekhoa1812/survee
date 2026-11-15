@@ -1,7 +1,8 @@
 import { fail, guardAdmin, json, readJson, str, adminSession } from "@/lib/http";
 import { getInterview, getVersion, publishVersionIfCurrent } from "@/lib/repo";
 import { prepareSurvey, withCompat } from "@/lib/survey";
-import { LIMITS, type Manifest } from "@/lib/format/schema";
+import { LIMITS } from "@/lib/format/schema";
+import { summarizeQuestionChanges, summarizeSectionChanges } from "@/lib/survey-changes";
 import {
   createQuestionnairePreviewToken,
   fileNameHash,
@@ -23,16 +24,6 @@ type VersionBody = {
   previewToken?: unknown;
   acknowledgeCompatibilityImpact?: unknown;
 };
-
-function questionList(manifest: Manifest) {
-  return manifest.questions.map((question) => ({
-    id: question.id,
-    type: question.type,
-    label: question.label,
-    required: !!question.required,
-    section: question.section ?? null,
-  }));
-}
 
 function digest(value: unknown): string | null {
   return typeof value === "string" && /^[0-9a-f]{64}$/i.test(value) ? value : null;
@@ -81,6 +72,8 @@ export async function POST(req: Request, { params }: Ctx) {
       }
 
       const candidateHash = sha256(prepared.survey.html);
+      const questionChanges = summarizeQuestionChanges(current.manifest.questions, prepared.survey.manifest.questions);
+      const sectionChanges = summarizeSectionChanges(current.manifest.sections ?? [], prepared.survey.manifest.sections ?? []);
       const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
       const signed = createQuestionnairePreviewToken(session.tenantId, {
         interviewId: id,
@@ -108,10 +101,12 @@ export async function POST(req: Request, { params }: Ctx) {
         changes: {
           questionCountBefore: current.manifest.questions.length,
           questionCountAfter: prepared.survey.manifest.questions.length,
-          questionsBefore: questionList(current.manifest),
-          questionsAfter: questionList(prepared.survey.manifest),
+          questionChanges,
+          // The candidate preview frame needs the complete definitions to render options and controls.
+          questionsAfter: prepared.survey.manifest.questions,
           sectionsBefore: current.manifest.sections ?? [],
           sectionsAfter: prepared.survey.manifest.sections ?? [],
+          sectionChanges,
         },
       });
     }

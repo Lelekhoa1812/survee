@@ -9,12 +9,15 @@ const state = vi.hoisted(() => ({
   baseHash: "a".repeat(64),
   invalid: false,
   compatibilityImpact: false,
+  currentManifest: null as any,
+  candidateManifest: null as any,
   publish: vi.fn(async () => ({ version: 3 })),
 }));
 
 const interviewId = "0123456789abcdef01234567";
 const candidate = "<html><body><h1>Updated survey</h1></body></html>";
-const manifest = { format: "kqa/1", title: "Updated survey", questions: [{ id: "q1", type: "text", label: "New question wording" }] };
+const currentManifest = { format: "kqa/1", title: "Current survey", questions: [{ id: "q1", type: "text", label: "Old wording" }] };
+const candidateManifest = { format: "kqa/1", title: "Updated survey", questions: [{ id: "q1", type: "text", label: "New question wording" }] };
 
 vi.mock("@/lib/http", () => ({
   guardAdmin: async () => state.denied,
@@ -29,7 +32,7 @@ vi.mock("@/lib/repo", () => ({
   getInterview: async () => ({ _id: "interview-object-id", currentVersion: state.currentVersion }),
   getVersion: async () => ({
     htmlSha256: state.baseHash,
-    manifest: { format: "kqa/1", title: "Current survey", questions: [{ id: "q1", type: "text", label: "Old wording" }] },
+    manifest: state.currentManifest,
   }),
   publishVersionIfCurrent: state.publish,
 }));
@@ -37,6 +40,7 @@ vi.mock("@/lib/repo", () => ({
 vi.mock("@/lib/survey", () => ({
   prepareSurvey: (html: string) => {
     const diagnostics = state.invalid ? [{ code: "KQA001", severity: "error", category: "format", title: "Invalid file", message: "Invalid candidate", fix: "Fix the file" }] : [];
+    const manifest = state.candidateManifest;
     const report = { ok: !state.invalid, diagnostics, counts: { error: state.invalid ? 1 : 0, warning: 0, info: 0 }, manifest };
     return { report, markdown: "checker report", survey: state.invalid ? undefined : { html: html.replace(/^\uFEFF/, ""), manifest, check: { errors: 0, warnings: 0, info: 0, checkedAt: "now", checkerVersion: "test" } } };
   },
@@ -86,6 +90,8 @@ beforeEach(() => {
   state.baseHash = "a".repeat(64);
   state.invalid = false;
   state.compatibilityImpact = false;
+  state.currentManifest = currentManifest;
+  state.candidateManifest = candidateManifest;
   state.publish.mockReset().mockResolvedValue({ version: 3 });
 });
 
@@ -110,11 +116,66 @@ describe("host questionnaire version preview and apply", () => {
       changes: {
         questionCountBefore: 1,
         questionCountAfter: 1,
-        questionsBefore: [{ id: "q1", label: "Old wording" }],
-        questionsAfter: [{ id: "q1", label: "New question wording" }],
+        questionChanges: {
+          updated: [{ previous: { id: "q1", label: "Old wording" }, question: { id: "q1", label: "New question wording" }, fields: ["label"] }],
+        },
+        questionsAfter: [{ id: "q1", type: "text", label: "New question wording" }],
       },
     });
     expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("returns complete semantic question and section changes for host review", async () => {
+    state.currentManifest = {
+      format: "kqa/1",
+      title: "Current survey",
+      sections: [
+        { id: "intro", title: "Introduction", description: "Start here" },
+        { id: "end", title: "End" },
+      ],
+      questions: [
+        { id: "q1", type: "single", label: "Choice", section: "intro", options: [{ label: "Old A", value: "a" }, { label: "B", value: "b" }], help: "Choose one" },
+        { id: "q2", type: "number", label: "Score", min: 0, max: 100 },
+      ],
+    };
+    state.candidateManifest = {
+      format: "kqa/1",
+      title: "Updated survey",
+      sections: [
+        { id: "end", title: "End" },
+        { id: "intro", title: "Getting started", description: "Read this first" },
+      ],
+      questions: [
+        { id: "q1", type: "single", label: "Choice", section: "intro", options: [{ label: "New A", value: "a" }, { label: "B", value: "b" }], help: "Select one" },
+        { id: "q2", type: "number", label: "Score", min: 1, max: 10 },
+      ],
+    };
+
+    const { response, data } = await getPreview();
+    expect(response.status).toBe(200);
+    expect(data.changes.questionChanges.updated).toEqual([
+      expect.objectContaining({
+        previous: expect.objectContaining({ options: [{ label: "Old A", value: "a" }, { label: "B", value: "b" }], help: "Choose one" }),
+        question: expect.objectContaining({ options: [{ label: "New A", value: "a" }, { label: "B", value: "b" }], help: "Select one" }),
+        fields: ["options", "help"],
+      }),
+      expect.objectContaining({
+        previous: expect.objectContaining({ min: 0, max: 100 }),
+        question: expect.objectContaining({ min: 1, max: 10 }),
+        fields: ["min", "max"],
+      }),
+    ]);
+    expect(data.changes.sectionChanges).toEqual({
+      added: [],
+      removed: [],
+      updated: [{
+        previous: { id: "intro", title: "Introduction", description: "Start here" },
+        section: { id: "intro", title: "Getting started", description: "Read this first" },
+        fields: ["title", "description"],
+      }],
+      moved: [{ id: "intro", beforePosition: 1, afterPosition: 2 }],
+    });
+    expect(data.changes.questionsAfter[0].options).toEqual([{ label: "New A", value: "a" }, { label: "B", value: "b" }]);
   });
 
   it("publishes only the candidate tied to the reviewed preview", async () => {

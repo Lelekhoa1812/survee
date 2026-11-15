@@ -3,7 +3,8 @@
 import { useCallback, useRef, useState } from "react";
 import type { Diagnostic } from "@/lib/diagnostics/types";
 import type { Question, Section } from "@/lib/format/schema";
-import { FIELD_LABELS, fieldsForQuestion, formatQuestionFieldValue, summarizeQuestionChanges } from "@/lib/survey-changes";
+import { FIELD_LABELS, fieldsForQuestion, formatQuestionFieldValue } from "@/lib/survey-changes";
+import type { QuestionChanges, SectionChanges } from "@/lib/survey-changes";
 import type { InterviewData } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
 import { Uploader, type UploadState } from "./Uploader";
@@ -27,16 +28,12 @@ interface CandidatePreview {
   changes: {
     questionCountBefore: number;
     questionCountAfter: number;
-    questionsBefore: Question[];
+    questionChanges: QuestionChanges;
     questionsAfter: Question[];
     sectionsBefore: Section[];
     sectionsAfter: Section[];
+    sectionChanges: SectionChanges;
   };
-}
-function sectionSummary(sections: Section[]) {
-  return sections.length
-    ? sections.map((section) => `${section.title} (${section.id})${section.description ? ` — ${section.description}` : ""}`).join("; ")
-    : "none";
 }
 
 export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () => void }) {
@@ -54,8 +51,9 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
   const answered = data.people.reduce((n, p) => n + p.answered, 0);
   const endpoint = `/api/admin/interviews/${data.interview.id}/versions`;
   const compatibilityFindings = preview?.diagnostics.filter((diagnostic) => diagnostic.category === "compat") ?? [];
-  const changes = preview ? summarizeQuestionChanges(preview.changes.questionsBefore, preview.changes.questionsAfter) : null;
-  const sectionsChanged = !!preview && JSON.stringify(preview.changes.sectionsBefore) !== JSON.stringify(preview.changes.sectionsAfter);
+  const changes = preview?.changes.questionChanges ?? null;
+  const sectionChanges = preview?.changes.sectionChanges ?? null;
+  const hasSectionChanges = !!sectionChanges && (sectionChanges.added.length + sectionChanges.removed.length + sectionChanges.updated.length + sectionChanges.moved.length > 0);
   const canPreview = upload.ok && upload.settled && !busy;
   const canPublish = !!preview && reviewedCandidate && (!preview.compatibilityImpact || ackCompatibility) && !busy;
 
@@ -186,7 +184,7 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
                 </div>
                 <div className="candidate-changes">
                   <h4>Question and section changes</h4>
-                  {changes.added.length + changes.removed.length + changes.updated.length + changes.moved.length === 0 && !sectionsChanged ? (
+                  {changes.added.length + changes.removed.length + changes.updated.length + changes.moved.length === 0 && !hasSectionChanges ? (
                     <p className="muted">No question or section definitions changed. Review the rendered theme and layout below.</p>
                   ) : (
                     <div className="candidate-change-list">
@@ -229,11 +227,35 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
                           <ul>{changes.moved.map(({ id, beforePosition, afterPosition }) => <li key={`moved-${id}`}>Moved {id}: position {beforePosition} → {afterPosition}</li>)}</ul>
                         </article>
                       )}
-                      {sectionsChanged && (
+                      {hasSectionChanges && sectionChanges && (
                         <article className="candidate-question-change">
                           <h5>Sections changed</h5>
-                          <p><strong>Before:</strong> {sectionSummary(preview.changes.sectionsBefore)}</p>
-                          <p><strong>Candidate:</strong> {sectionSummary(preview.changes.sectionsAfter)}</p>
+                          {sectionChanges.added.map((section) => (
+                            <p key={`section-added-${section.id}`}><strong>Added {section.id}:</strong> {section.title}{section.description ? ` — ${section.description}` : ""}</p>
+                          ))}
+                          {sectionChanges.removed.map((section) => (
+                            <p key={`section-removed-${section.id}`}><strong>Removed {section.id}:</strong> {section.title}{section.description ? ` — ${section.description}` : ""}</p>
+                          ))}
+                          {sectionChanges.updated.map(({ previous, section, fields }) => (
+                            <div key={`section-updated-${section.id}`}>
+                              <p><strong>Updated {section.id}</strong></p>
+                              <div className="candidate-question-table-wrap" tabIndex={0} aria-label={`Scroll to read changed fields for section ${section.id}`}>
+                                <table className="t candidate-question-diff" aria-label={`Changed fields for section ${section.id}`}>
+                                  <thead><tr><th scope="col">Field</th><th scope="col">Before</th><th scope="col">Candidate</th></tr></thead>
+                                  <tbody>{fields.map((field) => (
+                                    <tr key={field}>
+                                      <th scope="row">{field === "title" ? "Title" : "Description"}</th>
+                                      <td className="candidate-question-value">{previous[field] || (field === "description" ? "No description" : "Not set")}</td>
+                                      <td className="candidate-question-value">{section[field] || (field === "description" ? "No description" : "Not set")}</td>
+                                    </tr>
+                                  ))}</tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                          {sectionChanges.moved.length > 0 && (
+                            <ul>{sectionChanges.moved.map(({ id, beforePosition, afterPosition }) => <li key={`section-moved-${id}`}>Moved section {id}: position {beforePosition} → {afterPosition}</li>)}</ul>
+                          )}
                         </article>
                       )}
                     </div>
