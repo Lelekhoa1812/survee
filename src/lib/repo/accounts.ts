@@ -1,11 +1,11 @@
-import { createHash, randomBytes, timingSafeEqual, scrypt } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { AXION_OWNER_EMAIL, AXION_TENANT_ID, adminConfig } from "../env";
+import { derivePasswordKey, PASSWORD_HASH_BYTES, PASSWORD_HASH_COST } from "../password-kdf";
 import { col } from "../db";
 import type { MembershipDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, TenantDoc, TenantRole, UserDoc } from "./types";
 
-const PASSWORD_BYTES = 64;
-const SCRYPT_N = 16_384;
+const DUMMY_PASSWORD_SALT = "kqa-account-lookup-dummy-salt";
 const SIGNUP_TTL_MS = 30 * 60 * 1000;
 const EMAIL_CHANGE_TTL_MS = 30 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
@@ -33,28 +33,22 @@ function safeEqual(a: Buffer, b: Buffer): boolean {
   return timingSafeEqual(a, b);
 }
 
-function derive(password: string, salt: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    scrypt(password, salt, PASSWORD_BYTES, { N: SCRYPT_N, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (error, key) => {
-      if (error) reject(error);
-      else resolve(key as Buffer);
-    });
-  });
-}
-
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("base64url");
-  const key = await derive(password, salt);
-  return `scrypt$${SCRYPT_N}$${salt}$${key.toString("base64url")}`;
+  const key = await derivePasswordKey(password, salt);
+  return `scrypt$${PASSWORD_HASH_COST}$${salt}$${key.toString("base64url")}`;
 }
 
 export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
   const [algorithm, cost, salt, expectedText] = encoded.split("$");
-  if (algorithm !== "scrypt" || cost !== String(SCRYPT_N) || !salt || !expectedText) return false;
+  if (algorithm !== "scrypt" || cost !== String(PASSWORD_HASH_COST) || !salt || !expectedText) {
+    await derivePasswordKey(password, DUMMY_PASSWORD_SALT).catch(() => {});
+    return false;
+  }
   try {
     const expected = Buffer.from(expectedText, "base64url");
-    const actual = await derive(password, salt);
-    return expected.length === PASSWORD_BYTES && safeEqual(actual, expected);
+    const actual = await derivePasswordKey(password, salt);
+    return expected.length === PASSWORD_HASH_BYTES && safeEqual(actual, expected);
   } catch {
     return false;
   }
@@ -71,13 +65,18 @@ function accountPrincipal(user: UserDoc, membership: MembershipDoc, tenant: Tena
 export async function authenticateAccount(emailInput: string, password: string): Promise<AccountPrincipal | null> {
   const email = normalizeEmail(emailInput);
   const user = await (await col.users()).findOne({ email });
-  if (!user || !(user.emailVerifiedAt || user.legacyBootstrap)) return null;
+  if (!user || !(user.emailVerifiedAt || user.legacyBootstrap)) {
+    // Match the password-hash work for missing and unverified accounts so a
+    // generic sign-in error does not reveal account existence by response time.
+    await derivePasswordKey(password, DUMMY_PASSWORD_SALT).catch(() => {});
+    return null;
+  }
   const passwordMatches = await verifyPassword(password, user.passwordHash);
+  if (!passwordMatches) return null;
   const membership = await (await col.memberships()).findOne({ userId: user._id });
   if (!membership) return null;
   const tenant = await (await col.tenants()).findOne({ _id: membership.tenantId, status: "active" });
   if (!tenant) return null;
-  if (!passwordMatches) return null;
   return accountPrincipal(user, membership, tenant);
 }
 
