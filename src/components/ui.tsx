@@ -155,10 +155,38 @@ export function Modal({ title, children, onClose, actions, className, style }: {
     const getFocusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
       'a[href], area[href], button, input:not([type="hidden"]), select, textarea, iframe, object, embed, [contenteditable]:not([contenteditable="false"]), [tabindex]',
     )).filter((element) => {
-      if (element.tabIndex < 0 || element.matches(":disabled") || element.closest("[hidden], [inert], [aria-hidden='true']")) return false;
-      const computed = window.getComputedStyle(element);
-      return computed.display !== "none" && computed.visibility !== "hidden";
+      if (element.tabIndex < 0 || element.matches(":disabled")) return false;
+      let ancestor: HTMLElement | null = element;
+      while (ancestor && dialog.contains(ancestor)) {
+        if (ancestor.hidden || ancestor.inert || ancestor.getAttribute("aria-hidden") === "true") return false;
+        const computed = window.getComputedStyle(ancestor);
+        if (computed.display === "none" || computed.visibility === "hidden" || computed.visibility === "collapse") return false;
+        if (ancestor === dialog) break;
+        ancestor = ancestor.parentElement;
+      }
+      return true;
     });
+    const inerted: { element: HTMLElement; wasInert: boolean }[] = [];
+    let branch: HTMLElement | null = dialog.parentElement;
+    while (branch?.parentElement) {
+      const parent = branch.parentElement;
+      for (const sibling of Array.from(parent.children)) {
+        if (sibling !== branch && sibling instanceof HTMLElement) {
+          inerted.push({ element: sibling, wasInert: sibling.inert || sibling.hasAttribute("inert") });
+          sibling.inert = true;
+        }
+      }
+      if (parent === document.body) break;
+      branch = parent;
+    }
+    const bodyOverflow = document.body.style.overflow;
+    const bodyPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      const existingPadding = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+      document.body.style.paddingRight = `${existingPadding + scrollbarWidth}px`;
+    }
     const focusables = getFocusable();
     const preferred = dialog.querySelector<HTMLElement>("[autofocus]");
     (preferred && focusables.includes(preferred) ? preferred : focusables[0] ?? dialog).focus();
@@ -192,10 +220,16 @@ export function Modal({ title, children, onClose, actions, className, style }: {
       }
     };
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); prev?.focus?.(); };
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      for (const { element, wasInert } of inerted) element.inert = wasInert;
+      document.body.style.overflow = bodyOverflow;
+      document.body.style.paddingRight = bodyPaddingRight;
+      prev?.focus?.();
+    };
   }, []);
   return (
-    <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="scrim">
       <div className={`modal${className ? ` ${className}` : ""}`} style={style} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={ref}>
         <h2 id={titleId}>{title}</h2>
         {children}

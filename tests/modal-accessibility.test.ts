@@ -28,8 +28,8 @@ afterEach(() => {
 function renderModal(onClose: () => void) {
   act(() => {
     root.render(createElement(Modal, { title: "Example dialog", onClose, children: [
-      createElement("button", null, "First action"),
-      createElement("button", null, "Last action"),
+      createElement("button", { key: "first" }, "First action"),
+      createElement("button", { key: "last" }, "Last action"),
     ] }));
   });
 }
@@ -41,6 +41,8 @@ describe("shared modal accessibility", () => {
     const buttons = dialog.querySelectorAll("button");
     expect(dialog.getAttribute("aria-labelledby")).toBe(dialog.querySelector("h2")?.id);
     expect(document.activeElement).toBe(buttons[0]);
+    expect(returnFocus.inert).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
 
     buttons[0].focus();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
@@ -55,6 +57,8 @@ describe("shared modal accessibility", () => {
 
     act(() => root.unmount());
     expect(document.activeElement).toBe(returnFocus);
+    expect(returnFocus.inert).toBe(false);
+    expect(document.body.style.overflow).toBe("");
     root = createRoot(host);
   });
 
@@ -70,5 +74,25 @@ describe("shared modal accessibility", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(oldClose).not.toHaveBeenCalled();
     expect(latestClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not dismiss when the backdrop is clicked", () => {
+    const onClose = vi.fn();
+    renderModal(onClose);
+    const scrim = host.querySelector<HTMLElement>(".scrim")!;
+    scrim.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("skips focusable controls hidden by an ancestor", () => {
+    act(() => root.render(createElement(Modal, {
+      title: "Hidden-control test",
+      onClose: vi.fn(),
+      children: [
+        createElement("div", { key: "hidden", style: { display: "none" } }, createElement("button", null, "Hidden")),
+        createElement("button", { key: "visible" }, "Visible"),
+      ],
+    })));
+    expect(document.activeElement?.textContent).toBe("Visible");
   });
 });
