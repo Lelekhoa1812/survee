@@ -1,12 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const store = vi.hoisted(() => ({ users: [] as any[], tenants: [] as any[], memberships: [] as any[] }));
+const store = vi.hoisted(() => ({
+  users: [] as any[],
+  tenants: [] as any[],
+  memberships: [] as any[],
+  failMembershipInsert: false,
+  failUserDelete: false,
+  beforeMembershipInsert: null as null | (() => Promise<void>),
+}));
 
 vi.mock("../src/lib/db", () => ({
   col: {
     users: async () => ({
       findOne: async (query: Record<string, any>) => store.users.find((user) => query.email ? user.email === query.email : user._id.toHexString() === query._id.toHexString()) ?? null,
-      insertOne: async (user: any) => { store.users.push(user); return { insertedId: user._id }; },
+      insertOne: async (user: any) => {
+        if (store.users.some((item) => item.email === user.email || item._id.toHexString() === user._id.toHexString())) {
+          throw Object.assign(new Error("duplicate key"), { code: 11000 });
+        }
+        store.users.push(user);
+        return { insertedId: user._id };
+      },
+      deleteOne: async (query: Record<string, any>) => {
+        if (store.failUserDelete) throw new Error("user rollback failed");
+        const index = store.users.findIndex((user) => user._id.toHexString() === query._id.toHexString());
+        if (index === -1) return { deletedCount: 0 };
+        store.users.splice(index, 1);
+        return { deletedCount: 1 };
+      },
     }),
     tenants: async () => ({
       findOne: async (query: Record<string, any>) => store.tenants.find((tenant) => tenant._id === query._id && (!query.status || tenant.status === query.status)) ?? null,
@@ -16,13 +36,25 @@ vi.mock("../src/lib/db", () => ({
       },
     }),
     memberships: async () => ({
-      insertOne: async (membership: any) => { store.memberships.push(membership); return { insertedId: membership._id }; },
-      findOne: async (query: Record<string, any>) => store.memberships.find((membership) => membership.userId.toHexString() === query.userId.toHexString() && (!query.tenantId || membership.tenantId === query.tenantId)) ?? null,
+      insertOne: async (membership: any) => {
+        if (store.beforeMembershipInsert) await store.beforeMembershipInsert();
+        if (store.failMembershipInsert) throw new Error("membership write failed");
+        if (store.memberships.some((item) => item.tenantId === membership.tenantId && item.userId.toHexString() === membership.userId.toHexString())) {
+          throw Object.assign(new Error("duplicate key"), { code: 11000 });
+        }
+        store.memberships.push(membership);
+        return { insertedId: membership._id };
+      },
+      findOne: async (query: Record<string, any>) => store.memberships.find((membership) =>
+        (!query.userId || membership.userId.toHexString() === query.userId.toHexString())
+        && (!query.tenantId || membership.tenantId === query.tenantId)
+        && (!query.role || membership.role === query.role),
+      ) ?? null,
     }),
   },
 }));
 
-import { authenticateAccount, bootstrapLegacyAxionOwner, verifyPassword } from "../src/lib/repo/accounts";
+import { authenticateAccount, bootstrapLegacyAxionOwner, hashPassword, verifyPassword } from "../src/lib/repo/accounts";
 import { col } from "../src/lib/db";
 
 describe("legacy Axion owner bootstrap", () => {
@@ -30,6 +62,9 @@ describe("legacy Axion owner bootstrap", () => {
     store.users.splice(0);
     store.tenants.splice(0);
     store.memberships.splice(0);
+    store.failMembershipInsert = false;
+    store.failUserDelete = false;
+    store.beforeMembershipInsert = null;
     vi.stubEnv("ADMIN_EMAIL", "admin@axion.local");
     vi.stubEnv("ADMIN_PASSWORD", "a legacy host password");
     vi.stubEnv("SESSION_SECRET", "a local session secret with enough length");
@@ -61,5 +96,63 @@ describe("legacy Axion owner bootstrap", () => {
     expect(store.users).toHaveLength(0);
     expect(store.memberships).toHaveLength(0);
     expect(store.tenants).toHaveLength(0);
+  });
+
+  it("repairs a partial owner bootstrap after membership insertion fails", async () => {
+    store.failMembershipInsert = true;
+    store.failUserDelete = true;
+    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password")).rejects.toThrow("membership write failed");
+    expect(store.users).toHaveLength(1);
+    expect(store.tenants).toHaveLength(1);
+    expect(store.memberships).toHaveLength(0);
+
+    store.failMembershipInsert = false;
+    store.failUserDelete = false;
+    const retried = await bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password");
+    expect(retried).toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "admin@axiob.local", role: "owner" });
+    expect(store.users).toHaveLength(1);
+    expect(store.tenants).toHaveLength(1);
+    expect(store.memberships).toHaveLength(1);
+  });
+
+  it("does not use the legacy credential to repair an owner account with a changed password", async () => {
+    await bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password");
+    store.memberships.splice(0);
+    store.users[0].passwordHash = await hashPassword("a changed password for Axion");
+
+    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password")).resolves.toBeNull();
+    expect(store.memberships).toHaveLength(0);
+  });
+
+  it("does not recreate the reserved legacy identity after its owner changes email", async () => {
+    await bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password");
+    store.users[0].email = "owner@axion.example";
+    delete store.users[0].legacyBootstrap;
+    store.users[0].emailVerifiedAt = new Date();
+
+    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password")).resolves.toBeNull();
+    expect(store.users).toHaveLength(1);
+    expect(store.memberships).toHaveLength(1);
+  });
+
+  it("lets concurrent first logins converge on one Axion owner graph", async () => {
+    let arrivals = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    store.beforeMembershipInsert = async () => {
+      arrivals += 1;
+      if (arrivals === 2) release();
+      await barrier;
+    };
+
+    const results = await Promise.all([
+      bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password"),
+      bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password"),
+    ]);
+
+    expect(results.every(Boolean)).toBe(true);
+    expect(store.users).toHaveLength(1);
+    expect(store.tenants).toHaveLength(1);
+    expect(store.memberships).toHaveLength(1);
   });
 });

@@ -229,34 +229,51 @@ export async function bootstrapLegacyAxionOwner(emailInput: string, password: st
   }
   const axion = await tenants.findOne({ _id: AXION_TENANT_ID, status: "active" });
   if (!axion) return null;
+  const memberships = await col.memberships();
+  // Bootstrap is for first account creation and partial-graph recovery. Once an
+  // Axion membership exists, do not recreate the reserved legacy email after an
+  // owner changes it or otherwise reinitialize the workspace identity.
+  if (await memberships.findOne({ tenantId: AXION_TENANT_ID })) return null;
   // Store the identity the owner confirmed even if the pre-account host login
   // used a different configured email address.
-  const existing = await (await col.users()).findOne({ email: AXION_OWNER_EMAIL });
-  if (existing) return null;
-  const now = new Date();
-  const user: UserDoc = {
-    _id: new ObjectId(),
-    email: AXION_OWNER_EMAIL,
-    passwordHash: await hashPassword(password),
-    legacyBootstrap: true,
-    createdAt: now,
-    updatedAt: now,
-  };
-  try {
-    await (await col.users()).insertOne(user);
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === 11000) return null;
-    throw error;
+  const users = await col.users();
+  let user = await users.findOne({ email: AXION_OWNER_EMAIL });
+  if (user) {
+    // A prior attempt may have inserted the account but failed to save its
+    // membership. Repair that partial graph only while the bootstrap password
+    // still matches the stored account; never restore access after a password change.
+    if (!user.legacyBootstrap || !(await verifyPassword(password, user.passwordHash))) return null;
+  } else {
+    const now = new Date();
+    const candidate: UserDoc = {
+      _id: new ObjectId(),
+      email: AXION_OWNER_EMAIL,
+      passwordHash: await hashPassword(password),
+      legacyBootstrap: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    try {
+      await users.insertOne(candidate);
+      user = candidate;
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+      // Another request may have inserted the same bootstrap account first.
+      user = await users.findOne({ email: AXION_OWNER_EMAIL });
+      if (!user || !user.legacyBootstrap || !(await verifyPassword(password, user.passwordHash))) return null;
+    }
   }
-  const membership: MembershipDoc = { _id: new ObjectId(), tenantId: AXION_TENANT_ID, userId: user._id, role: "owner", createdAt: now };
+  const candidate: MembershipDoc = { _id: new ObjectId(), tenantId: AXION_TENANT_ID, userId: user._id, role: "owner", createdAt: new Date() };
+  let axionMembership = candidate;
   try {
-    await (await col.memberships()).insertOne(membership);
+    await memberships.insertOne(candidate);
   } catch (error) {
-    await (await col.users()).deleteOne({ _id: user._id }).catch(() => {});
-    if (error && typeof error === "object" && "code" in error && error.code === 11000) return null;
-    throw error;
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const existingMembership = await memberships.findOne({ tenantId: AXION_TENANT_ID, userId: user._id });
+    if (!existingMembership) throw error;
+    axionMembership = existingMembership;
   }
-  return accountPrincipal(user, membership, axion);
+  return accountPrincipal(user, axionMembership, axion);
 }
 
 /** Rename an active workspace. Callers must authorize the owner's current tenant first. */
