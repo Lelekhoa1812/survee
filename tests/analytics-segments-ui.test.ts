@@ -34,7 +34,7 @@ function answer(value: string | number) {
   return { value, updatedAt: at };
 }
 const rows: { status: ParticipantStatus; answers: AnswerMap }[] = [
-  { status: "invited", answers: { region: answer("north"), department: answer("ops"), satisfaction: answer("agree"), budget: answer(10) } },
+  { status: "invited", answers: { region: answer("north"), department: answer("ops"), budget: answer(10) } },
   { status: "in_progress", answers: { region: answer("south"), department: answer("eng"), satisfaction: answer("disagree"), budget: answer(20) } },
   { status: "submitted", answers: { region: answer("north"), department: answer("eng"), satisfaction: answer("agree"), budget: answer(30) } },
 ];
@@ -205,10 +205,12 @@ describe("answer-segment analytics UI", () => {
     expect(host.textContent).toContain("Satisfaction");
     expect(host.textContent).toContain("Budget");
     expect(host.textContent).toContain("Agree");
+    expect(host.textContent).toContain("0 answered · 1 no answer · cohort n=1");
     expect(new URL(String(fetchMock.mock.calls.at(-1)?.[0]), window.location.href).searchParams.getAll("questionId")).toEqual(["region", "satisfaction", "budget"]);
 
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Compare statuses")!);
     expect(host.textContent).toContain("Invited 1 · In progress 0 · Submitted 0");
+    expect(host.textContent).toContain("Invited · not started: 0 answered, 1 no answer");
     expect(host.textContent).toContain("One-person status group");
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("compareStatuses=true");
 

@@ -192,8 +192,10 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
             {question.required && <Badge kind="info" plain>Required</Badge>}
           </div>
         </div>
-        <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · cohort n={summary.cohortCount}</p>
+        <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · {summary.noAnswerCount} no answer · cohort n={summary.cohortCount}</p>
       </div>}
+
+      {!showHeading && <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · {summary.noAnswerCount} no answer · cohort n={summary.cohortCount}</p>}
 
       <SingletonDisclosureNote summary={summary} />
 
@@ -370,6 +372,11 @@ function ComparisonTable({ question, summaries }: { question: Question; summarie
 export function ComparisonQuestion({ question, summaries, showHeading = true, display = "table" }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary>; showHeading?: boolean; display?: Display }) {
   const distributionQuestion = question.type === "single" || question.type === "multi" || question.type === "select" || question.type === "scale";
   const numericQuestion = question.type === "number";
+  const responseCounts = COMPARE_STATUSES.map((status) => {
+    const summary = summaries[status];
+    const label = STATUS_LABELS[status];
+    return `${label}: ${summary.answeredCount} answered, ${summary.noAnswerCount} no answer`;
+  }).join(" · ");
 
   return (
     <article className="analysis-question">
@@ -380,6 +387,7 @@ export function ComparisonQuestion({ question, summaries, showHeading = true, di
         </div>
         <p className="analysis-response-count">Three status groups</p>
       </div>}
+      <p className="analysis-text-note">{responseCounts}</p>
       <ComparisonDisclosureNote summaries={summaries} />
       {display === "table" ? <ComparisonTable question={question} summaries={summaries} /> : <>
         {distributionQuestion && <ComparisonDistributionChart question={question} summaries={summaries} />}
