@@ -5,12 +5,13 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/9");
+    expect(guidance.policyVersion).toBe("kqa-design/10");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
     expect(guidance.designPlan.guardrails.join(" ")).toContain("WCAG 2.2 AA");
     expect(guidance.designPlan.guardrails.join(" ")).toContain("subjective taste heuristics");
+    expect(guidance.designPlan.steps.join(" ")).toContain("could fit almost any unrelated product");
     expect(guidance.designPlan.output.fields).toContain("representativeSamplesAndStates");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("representative sample");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
@@ -19,6 +20,14 @@ describe("design guidance package", () => {
     expect(guidance.reviewChecklist.join(" ")).toContain("disposable local account");
     expect(guidance.reviewChecklist.join(" ")).toContain("commit-scoped JSON summary");
     expect(guidance.sources.find((source) => source.name === "axe-core")?.role).toContain("not a complete accessibility verdict");
+    expect(guidance.principles.find((principle) => principle.id === "brief-specific-visuals")?.guidance).toContain("options rather than defaults");
+    const externalDesignSource = guidance.sources.find((source) => source.name === "Anthropic frontend-design skill");
+    expect(externalDesignSource).toMatchObject({
+      revision: "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
+      reviewedAt: "2026-11-16",
+      contentSha256: "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3",
+    });
+    expect(externalDesignSource?.url).not.toContain("/main/");
   });
 
   it("scopes the visual profile to the host, questionnaire, and analytics surfaces", () => {

@@ -3,6 +3,7 @@ export type DesignSurface = "all" | "questionnaire" | "host" | "analytics";
 const PRINCIPLES = [
   { id: "task-first", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make the task obvious", guidance: "Lead with the user's current task, the next useful action, and the current state. Keep labels concrete, use plain language, and explain consequences before destructive or irreversible actions." },
   { id: "theme-fit", surfaces: ["all", "questionnaire", "host"], title: "Fit the intended theme", guidance: "Use the supplied brand, audience, and tone as constraints. Define a small set of semantic color, type, spacing, and shape tokens, then reuse them. Keep contrast and focus indicators legible when the theme changes; do not encode meaning by color alone." },
+  { id: "brief-specific-visuals", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make visual choices specific to the brief", guidance: "Choose palette, type, layout, and motion for this product, audience, and task. Treat familiar product patterns as options rather than defaults; keep a distinctive motif only when it supports the brief and remove decoration that adds no meaning. The user's direction takes precedence over this heuristic." },
   { id: "respondent-control", surfaces: ["all", "questionnaire"], title: "Keep respondents oriented and in control", guidance: "Use clear section titles, concise progress, save state, and submission consequences. Make optional and required questions distinct. Preserve stable question and option ids across versions, and disclose when a change can affect stored answers." },
   { id: "question-clarity", surfaces: ["all", "questionnaire"], title: "Ask clear, neutral questions", guidance: "Ask one thing at a time in familiar, audience-appropriate language. Avoid leading assumptions, ambiguous terms, double negatives, and questions that combine multiple ideas. Give a specific reference period when asking about time-bound behavior, and make instructions match the answer the respondent is expected to provide." },
   { id: "response-options", surfaces: ["all", "questionnaire"], title: "Make response options fit the question", guidance: "For closed questions, make options distinct and cover reasonable answers. Use balanced scale labels with a consistent direction; include a neutral point, 'not applicable', 'not sure', 'prefer not to answer', or 'other' only when it fits the construct. Keep option order intentional and stable when comparing versions." },
@@ -61,7 +62,7 @@ const SOURCES = [
   { name: "GOV.UK Service Manual: User research", url: "https://www.gov.uk/service-manual/user-research", role: "Methods for observing representative users doing realistic tasks; research evidence complements automated checks." },
   { name: "Pew Research Center: Writing Survey Questions", url: "https://www.pewresearch.org/writing-survey-questions/", role: "Survey question wording, response-option design, order effects, and pretesting; apply the research principles to KQA's supported formats." },
   { name: "AAPOR: Best Practices for Survey Research", url: "https://aapor.org/standards-and-ethics/best-practices/", role: "Professional survey research and reporting practices; use with context and do not treat the static checker as a methods review." },
-  { name: "Anthropic frontend-design skill", url: "https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md", role: "Optional subjective design-process inspiration; not a standard and not an authority over the user's brief, WCAG, or KQA policy." },
+  { name: "Anthropic frontend-design skill", url: "https://raw.githubusercontent.com/anthropics/skills/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/frontend-design/SKILL.md", revision: "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f", reviewedAt: "2026-11-16", contentSha256: "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3", role: "Optional subjective design-process inspiration reviewed at this immutable Git revision; not a standard and not an authority over the user's brief, WCAG, or KQA policy." },
 ];
 
 const DESIGN_PLAN = {
@@ -70,6 +71,7 @@ const DESIGN_PLAN = {
   steps: [
     "Restate the audience, primary task, and user-provided theme constraints; identify assumptions that materially affect the design.",
     "Choose a visual direction from the product's subject matter and supplied references. Explain why it fits; do not apply a generic style recipe by default. Taste guidance is heuristic and must yield to the user's brief.",
+    "Before building, check whether the main choices could fit almost any unrelated product. Revise generic defaults unless the brief specifically supports them, and explain why the selected visual motif belongs here.",
     "Map semantic color, typography, spacing, shape, and elevation roles to the applicable visual profile. Reuse existing tokens where available; document any deliberate extension rather than scattering literal values.",
     "Describe information hierarchy, layout at narrow and wide widths, key components, and loading, empty, error, success, and disabled states relevant to the task.",
     "Use motion only when it clarifies a user action or state change; preserve the same meaning with prefers-reduced-motion enabled.",
@@ -85,6 +87,7 @@ const DESIGN_PLAN = {
     "WCAG 2.2 AA is the accessibility target; subjective taste heuristics never override it or the user's explicit direction.",
     "Do not claim full-product WCAG conformance based only on a static scan, checklist, screenshot, or unrepresentative sample; record the evaluated scope, sample, criteria, findings, and unresolved gaps.",
     "Do not add motion, gradients, cards, display type, or decorative labels merely because a design heuristic suggests them; use only when justified by this brief and task.",
+    "Treat common dashboard and landing-page treatments as choices to justify, not a default kit. Let the user's supplied direction override any subjective anti-pattern heuristic.",
     "Do not invent brand facts or claim user research occurred when it did not.",
   ],
   surfaceInstructions: {
@@ -152,7 +155,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/9",
+    policyVersion: "kqa-design/10",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

@@ -242,12 +242,12 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: {
       policyVersion?: string;
       principles?: { id: string; guidance: string }[];
-      sources?: { name: string; url?: string }[];
+      sources?: { name: string; url?: string; revision?: string; contentSha256?: string }[];
       designPlan?: { output?: { fields?: string[] }; guardrails?: string[]; accessibilityEvaluationMethodology?: { source?: string; status?: string; steps?: string[] } };
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/9");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/10");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
     expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.steps?.join(" ")).toContain("representative sample");
@@ -267,7 +267,11 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI-ARIA Authoring Practices Guide: Radio Group");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI Forms Tutorial: User Notifications");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("axe-core");
-    expect(body.result.structuredContent.sources?.find((source) => source.name === "Anthropic frontend-design skill")?.url).toBe("https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md");
+    expect(body.result.structuredContent.sources?.find((source) => source.name === "Anthropic frontend-design skill")).toMatchObject({
+      url: "https://raw.githubusercontent.com/anthropics/skills/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/frontend-design/SKILL.md",
+      revision: "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
+      contentSha256: "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3",
+    });
   });
 
   it("returns review checklists scoped to the requested surface", async () => {

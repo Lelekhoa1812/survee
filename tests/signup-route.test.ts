@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ObjectId } from "mongodb";
 
 const state = vi.hoisted(() => ({ body: {} as Record<string, unknown> }));
 
@@ -19,6 +20,8 @@ vi.mock("@/lib/repo", () => ({ consumeRateLimit: vi.fn(async () => true) }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-real-ip": "192.0.2.1" }) }));
 
 import { POST } from "../src/app/api/auth/signup/route";
+import { createPendingSignup } from "../src/lib/repo/accounts";
+import { sendSmtp } from "../src/lib/mail/smtp";
 
 async function post(body: Record<string, unknown>) {
   state.body = body;
@@ -26,7 +29,10 @@ async function post(body: Record<string, unknown>) {
 }
 
 describe("signup validation fields", () => {
-  beforeEach(() => { state.body = {}; });
+  beforeEach(() => {
+    state.body = {};
+    vi.clearAllMocks();
+  });
 
   it("identifies a missing workspace name as a field error", async () => {
     const response = await post({ tenantName: "   ", email: "person@example.com", password: "long enough password" });
@@ -46,5 +52,27 @@ describe("signup validation fields", () => {
     const response = await post({ tenantName: "Research", email: "person@example.com", password: "short" });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ field: "password", error: "Use a password between 12 and 200 characters." });
+  });
+
+  it("starts workspace signup without an invitation and sends a generic verification response", async () => {
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: true, id: new ObjectId() });
+
+    const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      message: "If this address can create an account, check its inbox for a verification link.",
+    });
+    expect(createPendingSignup).toHaveBeenCalledWith({
+      tenantName: "Research",
+      email: "person@example.com",
+      password: "a sufficiently long password",
+      token: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+    });
+    expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({
+      to: "person@example.com",
+      subject: "Verify your KQA account",
+    }));
   });
 });
