@@ -122,7 +122,9 @@ export async function summarizeAnswerSegments(
         for (const status of statuses) {
           const byQuestion = group.byStatus?.[status];
           if (!byQuestion) continue;
-          for (const [id, accumulator] of byQuestion) combined.get(id)?.merge(accumulator);
+          for (const [id, accumulator] of byQuestion) {
+            combined.get(id)?.merge(accumulator, { consumeSource: true });
+          }
         }
         return {
           key: group.key, kind: group.kind, ...(group.value === undefined ? {} : { value: group.value }), label: group.label,

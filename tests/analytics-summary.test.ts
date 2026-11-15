@@ -109,6 +109,18 @@ describe("descriptive question summaries", () => {
     expect(source.finish().numeric).toEqual({ n: 2, min: 3, q1: 4.25, median: 5.5, q3: 6.75, max: 8, mean: 5.5 });
   });
 
+  it("can consume an accumulator after a one-shot merge without retaining source observations", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const combined = createQuestionSummaryAccumulator(q);
+    const source = createQuestionSummaryAccumulator(q);
+    for (const value of [1, 3, 8]) source.add(respondent(value));
+
+    combined.merge(source, { consumeSource: true });
+
+    expect(combined.finish().numeric).toEqual({ n: 3, min: 1, q1: 2, median: 3, q3: 5.5, max: 8, mean: 4 });
+    expect(source.snapshot()).toMatchObject({ cohortCount: 0, answeredCount: 0, distributionDenominator: 0, numericValues: [] });
+  });
+
   it("shows scale distributions and the observed middle category without calculating a mean", () => {
     const q: Question = { id: "q", type: "scale", label: "Agreement", min: 1, max: 5 };
     const summary = summarizeQuestion(q, [respondent(1), respondent("2"), respondent(5), respondent(6)]);

@@ -74,4 +74,19 @@ describe("answer-segment analytics", () => {
     expect(result.segments[0]).toMatchObject({ participantCount: 1, summaries: { outcome: { cohortCount: 1 } } });
     expect(result.segments[2]).toMatchObject({ kind: "unmapped", participantCount: 1 });
   });
+
+  it("keeps exact numeric Type-7 summaries when status observations are combined", async () => {
+    const numericOutcome: Question = { id: "amount", type: "number", label: "Amount" };
+    const result = await summarizeAnswerSegments(topics, [numericOutcome], (async function* () {
+      yield respondent("invited", { topics: { value: ["alpha"], updatedAt: at }, amount: { value: 1, updatedAt: at } });
+      yield respondent("submitted", { topics: { value: ["alpha"], updatedAt: at }, amount: { value: 2, updatedAt: at } });
+      yield respondent("submitted", { topics: { value: ["alpha"], updatedAt: at }, amount: { value: 3, updatedAt: at } });
+      yield respondent("submitted", { topics: { value: ["alpha"], updatedAt: at }, amount: { value: 4, updatedAt: at } });
+    })(), undefined, true);
+
+    const alpha = result.segments.find((group) => group.value === "alpha");
+    expect(alpha?.summaries.amount.numeric).toEqual({ n: 4, min: 1, q1: 1.75, median: 2.5, q3: 3.25, max: 4, mean: 2.5 });
+    expect(alpha?.statusSummaries?.invited?.amount.numeric).toEqual({ n: 1, min: 1, q1: 1, median: 1, q3: 1, max: 1, mean: 1 });
+    expect(alpha?.statusSummaries?.submitted?.amount.numeric).toEqual({ n: 3, min: 2, q1: 2.5, median: 3, q3: 3.5, max: 4, mean: 3 });
+  });
 });

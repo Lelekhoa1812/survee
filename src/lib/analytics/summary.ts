@@ -78,7 +78,7 @@ export interface QuestionSummaryAccumulatorSnapshot {
 
 export interface QuestionSummaryAccumulator {
   add(respondent: AnalyticsRespondent): void;
-  merge(other: QuestionSummaryAccumulator): void;
+  merge(other: QuestionSummaryAccumulator, options?: { consumeSource?: boolean }): void;
   finish(): QuestionSummary;
   snapshot(): QuestionSummaryAccumulatorSnapshot;
 }
@@ -91,7 +91,8 @@ interface QuestionSummaryAccumulatorMergeState {
   distributionUnmappedResponseCount: number;
   numericUnmappedResponseCount: number;
   distributionCounts: readonly { value: string; count: number }[];
-  numericValues: readonly number[];
+  numericValues: number[];
+  clear(): void;
 }
 
 const accumulatorMergeStates = new WeakMap<QuestionSummaryAccumulator, () => QuestionSummaryAccumulatorMergeState>();
@@ -173,7 +174,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   let distributionDenominator = 0;
   let distributionUnmappedResponseCount = 0;
   let numericUnmappedResponseCount = 0;
-  const numericValues: number[] = [];
+  let numericValues: number[] = [];
 
   function add(respondent: AnalyticsRespondent) {
     cohortCount += 1;
@@ -281,10 +282,11 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     };
   }
 
-  function merge(other: QuestionSummaryAccumulator) {
+  function merge(other: QuestionSummaryAccumulator, options: { consumeSource?: boolean } = {}) {
     // Keep the public snapshot independent, but avoid allocating a second full numeric list when
     // merging accumulators created here. Exact quantiles still require retaining each value.
-    const source = accumulatorMergeStates.get(other)?.() ?? other.snapshot();
+    const sourceState = accumulatorMergeStates.get(other);
+    const source = sourceState?.() ?? other.snapshot();
     cohortCount += source.cohortCount;
     answeredCount += source.answeredCount;
     noteOnlyCount += source.noteOnlyCount;
@@ -296,6 +298,21 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       if (target) target.count += row.count;
     }
     for (const value of source.numericValues) numericValues.push(value);
+    // Some one-shot merges (segmented status summaries) have already materialized the source
+    // summary and will never use that accumulator again. Clear its full state after merging so
+    // its exact observations can be collected without leaving a partially valid accumulator.
+    if (options.consumeSource && sourceState) sourceState().clear();
+  }
+
+  function clear() {
+    cohortCount = 0;
+    answeredCount = 0;
+    noteOnlyCount = 0;
+    distributionDenominator = 0;
+    distributionUnmappedResponseCount = 0;
+    numericUnmappedResponseCount = 0;
+    for (const row of distributionRows) row.count = 0;
+    numericValues = [];
   }
 
   const accumulator = { add, merge, finish, snapshot };
@@ -308,6 +325,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     numericUnmappedResponseCount,
     distributionCounts: distributionRows,
     numericValues,
+    clear,
   }));
   return accumulator;
 }
