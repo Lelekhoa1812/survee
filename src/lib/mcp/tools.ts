@@ -506,7 +506,7 @@ const TOOLS: ToolDef[] = [
           "eligibleCount and missingCount remain as compatibility aliases for cohortCount and noAnswerCount; they do not measure item-level eligibility or missingness. Distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
           ...(compareRequested ? ["The selected status cohorts were computed in one participant scan and share this asOf time; changes during the live read are not isolated by a database snapshot."] : []),
-          "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
+          "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale responses are ordinal: scaleMedian is the lower central category retained for compatibility, and scaleMedianRange gives the one or two central observed categories. Category codes are never averaged and no scale mean is calculated. Text is not interpreted, scored, or returned.",
         ],
       });
     },

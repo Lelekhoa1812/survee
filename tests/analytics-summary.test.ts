@@ -109,13 +109,24 @@ describe("descriptive question summaries", () => {
     expect(source.finish().numeric).toEqual({ n: 2, min: 3, q1: 4.25, median: 5.5, q3: 6.75, max: 8, mean: 5.5 });
   });
 
-  it("shows scale distributions and a median without calculating a mean", () => {
+  it("shows scale distributions and the observed middle category without calculating a mean", () => {
     const q: Question = { id: "q", type: "scale", label: "Agreement", min: 1, max: 5 };
     const summary = summarizeQuestion(q, [respondent(1), respondent("2"), respondent(5), respondent(6)]);
     expect(summary.scaleMedian).toBe(2);
+    expect(summary.scaleMedianRange).toEqual({ lower: 2, upper: 2 });
     expect(summary.numeric).toBeNull();
     expect(summary.unmappedResponseCount).toBe(1);
     expect(summary.distributionDenominator).toBe(3);
+  });
+
+  it("preserves both observed central categories for an even ordinal scale cohort", () => {
+    const q: Question = { id: "q", type: "scale", label: "Agreement", min: 1, max: 5 };
+    const summary = summarizeQuestion(q, [respondent(1), respondent(2)]);
+
+    expect(summary.scaleMedian).toBe(1);
+    expect(summary.scaleMedianRange).toEqual({ lower: 1, upper: 2 });
+    expect(summary.scaleMedianRange).not.toEqual({ lower: 1.5, upper: 1.5 });
+    expect(summary.numeric).toBeNull();
   });
 
   it("does not round a nonzero option share down to zero percent", () => {

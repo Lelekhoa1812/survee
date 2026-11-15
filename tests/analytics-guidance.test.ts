@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/11");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/12");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -33,6 +33,8 @@ describe("versioned analytics guidance", () => {
       "missing",
       "unmapped",
       "median",
+      "scalemedianrange",
+      "never average category codes",
       "multi-select",
       "causal",
       "chart",

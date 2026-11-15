@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/11" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/12" as const;
 
 const PRINCIPLES = [
   {
@@ -33,7 +33,7 @@ const PRINCIPLES = [
     id: "match-measure-to-statistic",
     title: "Respect the question's measurement type",
     guidance:
-      "For single-choice and dropdown questions, show category counts or valid-response shares. For ordered scales, prefer the full distribution and optionally report the median; do not report a mean for a scale or assume equal spacing between its labels. For number questions, describe n, range, Q1, median, Q3, and mean; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Note skew or extreme values only when supported by these summaries. Dates and free text are not summarized by the current aggregate tool; use the relevant review or export workflow only when the task requires it.",
+      "For single-choice and dropdown questions, show category counts or valid-response shares. For ordered scales, prefer the full distribution and optionally report the observed middle category when n is odd or both central observed categories when n is even; never average category codes or report a mean, and do not assume equal spacing between labels. QuestionSummary.scaleMedian retains the lower central category for compatibility; scaleMedianRange gives the exact central category or pair. For number questions, describe n, range, Q1, median, Q3, and mean; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Note skew or extreme values only when supported by these summaries. Dates and free text are not summarized by the current aggregate tool; use the relevant review or export workflow only when the task requires it.",
   },
   {
     id: "explain-multiselect",
@@ -159,7 +159,7 @@ export function getAnalyticsGuidance() {
       "All selected outcomes in one segmented analysis share the same status scope, participant scan, and asOf. Segment disclosureRisk metadata flags singleton segments and, for status comparisons, singleton status groups. Question-level disclosureRisk metadata accompanies each ordinary, status, and segmented summary. Neither metadata shape assesses combinations of attributes or guarantees anonymity.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
-      "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
+      "Scale questions provide a distribution and the observed middle category or central pair, not an average of ordinal codes. QuestionSummary.scaleMedianRange contains the exact central observed category or pair; scaleMedian is its lower value retained for compatibility. No mean is calculated for scales. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
       "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
       "Each analyze_answers page is a separate live read with its own asOf; changes can occur between pages, so KQA does not provide a consistent multi-page snapshot.",
       "When compareStatuses is true, status groups on one page share a participant scan and asOf; this live read does not use a frozen database snapshot.",

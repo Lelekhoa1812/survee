@@ -43,6 +43,13 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
 }
 
+function formatScaleMedianRange(range: QuestionSummary["scaleMedianRange"]) {
+  if (!range) return "—";
+  return range.lower === range.upper
+    ? formatNumber(range.lower)
+    : `${formatNumber(range.lower)}–${formatNumber(range.upper)}`;
+}
+
 function makeDownloadName(name: string) {
   const safe = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
   return `${safe || "interview"}-analysis.csv`;
@@ -195,8 +202,8 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
         : <DistributionTable question={question} summary={summary} />)}
 
       {question.type === "number" && <NumericSummary summary={summary} display={display} />}
-      {question.type === "scale" && summary.scaleMedian !== null && (
-        <p className="question-stats">Median response: {formatNumber(summary.scaleMedian)} · valid n={summary.distributionDenominator}. Scale responses are ordinal; no mean is calculated.</p>
+      {question.type === "scale" && summary.scaleMedianRange !== null && (
+        <p className="question-stats">{summary.scaleMedianRange.lower === summary.scaleMedianRange.upper ? "Median category" : "Median categories"}: {formatScaleMedianRange(summary.scaleMedianRange)} · valid n={summary.distributionDenominator}. These are observed ordinal categories; codes are not averaged and no mean is calculated.</p>
       )}
       {!hasDistribution && question.type !== "number" && (
         <p className="analysis-text-note">Response count only. Text and date values are not included in this analysis; review individual answers in the Answers tab.</p>
@@ -341,7 +348,7 @@ function ComparisonTable({ question, summaries }: { question: Question; summarie
                   })}
                 </tr>
               ))}
-              {question.type === "scale" && <tr><th scope="row">Median (ordinal)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].scaleMedian === null ? "—" : formatNumber(summaries[status].scaleMedian!)}</td>)}</tr>}
+              {question.type === "scale" && <tr><th scope="row">Median category (range if even n)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{formatScaleMedianRange(summaries[status].scaleMedianRange)}</td>)}</tr>}
             </>
           )}
           {numericQuestion && numericRows.map((row, index) => (

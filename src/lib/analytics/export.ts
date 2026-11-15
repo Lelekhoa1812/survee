@@ -21,6 +21,7 @@ const HEADERS = [
   "question_id", "question", "type", "cohort", "interview_id", "survey_version", "as_of", "measure", "answer_value", "answer_label",
   "count", "percent", "valid_responses", "cohort_count", "answered", "no_answer", "no_answer_note", "note_only", "unmapped", "min", "q1", "median", "q3", "mean", "max",
   "disclosure_risk_singleton_segment", "disclosure_risk_singleton_status_groups", "disclosure_risk_question_summary", "disclosure_risk_note",
+  "scale_median_lower", "scale_median_upper",
 ];
 
 const NO_ANSWER_NOTE = "KQA does not track conditional or routed item display; no_answer may include people who did not see this question.";
@@ -50,7 +51,7 @@ export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, 
         rows.push(row([
           ...base, "distribution", option.value, option.label, option.count, summary.distributionDenominator ? option.percent : null,
           summary.distributionDenominator, summary.cohortCount, summary.answeredCount, summary.noAnswerCount,
-          NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount, null, null, null, null, null, null, ...risk,
+          NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount, null, null, null, null, null, null, ...risk, null, null,
         ]));
       }
       if (summary.scaleMedian !== null) {
@@ -58,19 +59,20 @@ export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, 
           ...base, "ordinal_scale_median", null, null, null, null, summary.distributionDenominator,
           summary.cohortCount, summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount,
           summary.unmappedResponseCount, null, null, summary.scaleMedian, null, null, null, ...risk,
+          summary.scaleMedianRange?.lower ?? summary.scaleMedian, summary.scaleMedianRange?.upper ?? summary.scaleMedian,
         ]));
       }
     } else if (question.type === "number") {
       rows.push(row([
         ...base, "numeric_summary", null, null, null, null, summary.numeric?.n ?? 0, summary.cohortCount,
         summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount,
-        summary.numeric?.min, summary.numeric?.q1, summary.numeric?.median, summary.numeric?.q3, summary.numeric?.mean, summary.numeric?.max, ...risk,
+        summary.numeric?.min, summary.numeric?.q1, summary.numeric?.median, summary.numeric?.q3, summary.numeric?.mean, summary.numeric?.max, ...risk, null, null,
       ]));
     } else {
       rows.push(row([
         ...base, "response_count", null, null, summary.answeredCount, null, summary.answeredCount,
         summary.cohortCount, summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount,
-        summary.unmappedResponseCount, null, null, null, null, null, null, ...risk,
+        summary.unmappedResponseCount, null, null, null, null, null, null, ...risk, null, null,
       ]));
     }
   }

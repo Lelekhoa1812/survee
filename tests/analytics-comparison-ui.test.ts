@@ -92,6 +92,21 @@ describe("status comparison", () => {
     expect(html).toContain("Show data table");
   });
 
+  it("shows the central observed scale categories instead of an averaged code", () => {
+    const question: Question = { id: "agreement", type: "scale", label: "Agreement", min: 1, max: 5 };
+    const answer = (value: number) => ({ answers: { agreement: { value, updatedAt: at } } });
+    const summaries = {
+      invited: summarizeQuestion(question, []),
+      in_progress: summarizeQuestion(question, [answer(1), answer(2)]),
+      submitted: summarizeQuestion(question, [answer(2)]),
+    } satisfies Record<ParticipantStatus, ReturnType<typeof summarizeQuestion>>;
+
+    const html = renderToStaticMarkup(createElement(ComparisonQuestion, { question, summaries, display: "table" }));
+
+    expect(html).toContain("<th scope=\"row\">Median category (range if even n)</th><td>—</td><td>1–2</td><td>2</td>");
+    expect(html).not.toContain("1.5");
+  });
+
   it("explains that checkbox shares can total more than one hundred percent", () => {
     const question: Question = {
       id: "topics",

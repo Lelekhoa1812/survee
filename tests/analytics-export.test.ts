@@ -3,6 +3,26 @@ import { buildAnalyticsCsv } from "../src/lib/analytics/export";
 import { summarizeQuestion } from "../src/lib/analytics/summary";
 import { questionSchema } from "../src/lib/format/schema";
 
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      values.push(current);
+      current = "";
+    } else current += char;
+  }
+  values.push(current);
+  return values;
+}
+
 describe("analytics CSV export", () => {
   it("exports aggregate counts without respondent text and protects formula-like labels", () => {
     const choice = questionSchema.parse({
@@ -93,5 +113,23 @@ describe("analytics CSV export", () => {
     const csv = buildAnalyticsCsv([{ question: number, summary }], "Everyone");
     expect(csv.split("\r\n")[0]).toContain('"min","q1","median","q3","mean","max"');
     expect(csv.split("\r\n")[1]).toContain('"1","1.75","2.5","3.25","2.5","4"');
+  });
+
+  it("exports the exact central category pair for even ordinal scale responses", () => {
+    const scale = questionSchema.parse({ id: "agreement", type: "scale", label: "Agreement", min: 1, max: 5 });
+    const summary = summarizeQuestion(scale, [
+      { answers: { agreement: { value: 1, updatedAt: "2026-11-15T00:00:00.000Z" } } },
+      { answers: { agreement: { value: 2, updatedAt: "2026-11-15T00:00:00.000Z" } } },
+    ]);
+    const csv = buildAnalyticsCsv([{ question: scale, summary }], "Everyone");
+    const [headerLine, ...dataLines] = csv.trimEnd().split("\r\n");
+    const header = parseCsvLine(headerLine);
+    const medianRow = parseCsvLine(dataLines.find((line) => line.includes('"ordinal_scale_median"'))!);
+    const value = (name: string) => medianRow[header.indexOf(name)];
+
+    expect(header.slice(-2)).toEqual(["scale_median_lower", "scale_median_upper"]);
+    expect(value("median")).toBe("1");
+    expect(value("scale_median_lower")).toBe("1");
+    expect(value("scale_median_upper")).toBe("2");
   });
 });

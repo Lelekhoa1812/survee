@@ -56,7 +56,10 @@ export interface QuestionSummary {
   distributionDenominator: number;
   distribution: DistributionRow[];
   numeric: DescriptiveStats | null;
+  /** Lower central observed response category; use scaleMedianRange to interpret ordinal scales. */
   scaleMedian: number | null;
+  /** Central observed response category for odd n; central pair for even n. Never averages ordinal codes. */
+  scaleMedianRange: { lower: number; upper: number } | null;
   /** Detectable singleton counts only; not an identifiability assessment or anonymity guarantee. */
   disclosureRisk: QuestionSummaryDisclosureRisk;
 }
@@ -188,6 +191,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     numericValues.sort((a, b) => a - b);
     let numeric: DescriptiveStats | null = null;
     let scaleMedian: number | null = null;
+    let scaleMedianRange: QuestionSummary["scaleMedianRange"] = null;
     if (q.type === "number" && numericValues.length) {
       // Divide each value before adding so a sum of otherwise valid finite values cannot overflow.
       const mean = numericValues.reduce((average, value, index) => {
@@ -204,7 +208,12 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
         median: median(numericValues),
       };
     }
-    if (q.type === "scale" && numericValues.length) scaleMedian = median(numericValues);
+    if (q.type === "scale" && numericValues.length) {
+      const lower = numericValues[Math.floor((numericValues.length - 1) / 2)];
+      const upper = numericValues[Math.floor(numericValues.length / 2)];
+      scaleMedian = lower;
+      scaleMedianRange = { lower, upper };
+    }
 
     const distribution = distributionRows.map((row) => ({
       ...row,
@@ -225,6 +234,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       distribution,
       numeric,
       scaleMedian,
+      scaleMedianRange,
       disclosureRisk: {
         singletonCohort: cohortCount === 1,
         singletonAnsweredCount: answeredCount === 1,

@@ -36,6 +36,13 @@ function fmtNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
 }
 
+function fmtScaleMedianRange(range: QuestionSummary["scaleMedianRange"]) {
+  if (!range) return "—";
+  return range.lower === range.upper
+    ? fmtNumber(range.lower)
+    : `${fmtNumber(range.lower)}–${fmtNumber(range.upper)}`;
+}
+
 export function AnswersTab({ data }: { data: InterviewData }) {
   const [view, setView] = useState<"question" | "person">(data.interview.mode === "multi" && data.people.length > 1 ? "question" : "person");
   const [only, setOnly] = useState<"all" | "submitted">("all");
@@ -96,7 +103,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                     </div>
                     <Tally q={q} summary={summary} />
                     {summary.numeric && <p className="question-stats">Numeric summary for n={summary.numeric.n}: minimum {fmtNumber(summary.numeric.min)} · median {fmtNumber(summary.numeric.median)} · mean {fmtNumber(summary.numeric.mean)} · maximum {fmtNumber(summary.numeric.max)}. Descriptive only.</p>}
-                    {summary.scaleMedian !== null && <p className="question-stats">Median response: {fmtNumber(summary.scaleMedian)} · n={summary.distributionDenominator}. Scale responses are ordinal; no mean is calculated.</p>}
+                    {summary.scaleMedianRange !== null && <p className="question-stats">{summary.scaleMedianRange.lower === summary.scaleMedianRange.upper ? "Median category" : "Median categories"}: {fmtScaleMedianRange(summary.scaleMedianRange)} · valid n={summary.distributionDenominator}. These are observed ordinal categories; codes are not averaged and no mean is calculated.</p>}
                     {summary.unmappedResponseCount > 0 && <p className="question-warning">{summary.unmappedResponseCount} stored {summary.unmappedResponseCount === 1 ? "answer does" : "answers do"} not match this survey version's options or range and {summary.unmappedResponseCount === 1 ? "is" : "are"} excluded from the summary.</p>}
                     <div className="stack" style={{ gap: 8 }}>
                       {[...answeredBy, ...noteOnly].map((p) => {
