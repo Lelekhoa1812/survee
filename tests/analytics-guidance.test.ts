@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/6");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/7");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -20,6 +20,7 @@ describe("versioned analytics guidance", () => {
       "business question",
       "submittedonly",
       "comparestatuses",
+      "participantcount",
       "cohortcount",
       "noanswercount",
       "does not record whether conditional or routed questions were displayed",

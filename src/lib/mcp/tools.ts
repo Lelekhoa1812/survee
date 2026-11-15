@@ -318,7 +318,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected respondent statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       questionId: str,
@@ -375,7 +375,7 @@ const TOOLS: ToolDef[] = [
         selectedSummaries = Object.fromEntries([...accumulators].map(([questionId, accumulator]) => [questionId, accumulator.finish()]));
         asOf = new Date().toISOString();
       }
-      const respondentCount = statuses.reduce((count, status) => count + statusCounts[status], 0);
+      const participantCount = statuses.reduce((count, status) => count + statusCounts[status], 0);
       const submittedCount = statuses.includes("submitted") ? statusCounts.submitted : 0;
       return ok({
         interviewId: id,
@@ -383,7 +383,8 @@ const TOOLS: ToolDef[] = [
         asOf,
         scope: {
           statuses,
-          respondentCount,
+          participantCount,
+          respondentCount: participantCount,
           submittedCount,
           submittedOnly: statuses.length === 1 && statuses[0] === "submitted",
         },
@@ -400,6 +401,7 @@ const TOOLS: ToolDef[] = [
         ...(compareRequested ? {
           statusCohorts: statuses.map((status) => ({
             status,
+            participantCount: statusCounts[status],
             respondentCount: statusCounts[status],
             questions: page.map((question) => ({
               id: question.id,
@@ -410,12 +412,13 @@ const TOOLS: ToolDef[] = [
           })),
         } : {}),
         methodology: [
-          "Summaries use the current survey version and the respondent statuses shown in scope.",
+          "Summaries use the current survey version and the participant statuses shown in scope.",
+          "participantCount counts everyone in the selected status cohort, including invited people with no answers. respondentCount is a compatibility alias; do not describe people with no answers as respondents.",
           "answeredCount counts non-empty stored values, including values that are incompatible with the current version; unmapped values are excluded from valid numeric summaries and distributions.",
           "cohortCount includes everyone in each selected status cohort; noAnswerCount is the count without a non-empty stored value and may include people who were not shown a conditional or routed question because KQA does not track item-level display or eligibility.",
           "eligibleCount and missingCount remain as compatibility aliases for cohortCount and noAnswerCount; they do not measure item-level eligibility or missingness. Distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
-          ...(compareRequested ? ["The selected status cohorts were computed in one respondent scan and share this asOf time; changes during the live read are not isolated by a database snapshot."] : []),
+          ...(compareRequested ? ["The selected status cohorts were computed in one participant scan and share this asOf time; changes during the live read are not isolated by a database snapshot."] : []),
           "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
         ],
       });

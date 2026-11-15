@@ -178,9 +178,10 @@ describe("MCP tools", () => {
 
   it("returns scoped descriptive summaries without raw answers", async () => {
     const res = await call("analyze_answers", { interviewId, submittedOnly: false });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { surveyVersion?: number; scope?: { respondentCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number; numeric: { mean: number } | null }[]; methodology?: string[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { surveyVersion?: number; scope?: { participantCount: number; respondentCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number; numeric: { mean: number } | null }[]; methodology?: string[] } } };
     expect(body.result.isError).toBeFalsy();
     expect(body.result.structuredContent.surveyVersion).toBe(1);
+    expect(body.result.structuredContent.scope?.participantCount).toBe(2);
     expect(body.result.structuredContent.scope?.respondentCount).toBe(2);
     const fit = body.result.structuredContent.questions?.find((question) => question.id === "fit");
     expect(fit).toMatchObject({ answeredCount: 2, unmappedResponseCount: 1 });
@@ -194,43 +195,44 @@ describe("MCP tools", () => {
 
   it("narrows analytics to selected statuses", async () => {
     const res = await call("analyze_answers", { interviewId, statuses: ["invited"] });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { scope?: { statuses: string[]; respondentCount: number; submittedCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number }[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { scope?: { statuses: string[]; participantCount: number; respondentCount: number; submittedCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number }[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1, submittedCount: 0, submittedOnly: false });
+    expect(body.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1, submittedCount: 0, submittedOnly: false });
     expect(body.result.structuredContent.questions?.find((question) => question.id === "fit")).toMatchObject({ answeredCount: 1, unmappedResponseCount: 1 });
   });
 
   it("compares selected statuses from one scan and one shared asOf", async () => {
     const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
     const res = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { respondentCount: number; statuses: string[] }; statusCohorts: { status: string; respondentCount: number; questions: { id: string; cohortCount: number; eligibleCount: number; answeredCount: number; noAnswerCount: number; missingCount: number; unmappedResponseCount: number }[] }[]; methodology: string[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { participantCount: number; respondentCount: number; statuses: string[] }; statusCohorts: { status: string; participantCount: number; respondentCount: number; questions: { id: string; cohortCount: number; eligibleCount: number; answeredCount: number; noAnswerCount: number; missingCount: number; unmappedResponseCount: number }[] }[]; methodology: string[] } } };
     expect(body.result.isError).toBeFalsy();
     expect(Number.isNaN(Date.parse(body.result.structuredContent.asOf))).toBe(false);
-    expect(body.result.structuredContent.scope).toMatchObject({ respondentCount: 2, statuses: ["invited", "submitted"] });
-    expect(body.result.structuredContent.statusCohorts.map(({ status, respondentCount }) => ({ status, respondentCount }))).toEqual([
-      { status: "invited", respondentCount: 1 },
-      { status: "submitted", respondentCount: 1 },
+    expect(body.result.structuredContent.scope).toMatchObject({ participantCount: 2, respondentCount: 2, statuses: ["invited", "submitted"] });
+    expect(body.result.structuredContent.statusCohorts.map(({ status, participantCount, respondentCount }) => ({ status, participantCount, respondentCount }))).toEqual([
+      { status: "invited", participantCount: 1, respondentCount: 1 },
+      { status: "submitted", participantCount: 1, respondentCount: 1 },
     ]);
     expect(body.result.structuredContent.statusCohorts[0].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 1 });
     expect(body.result.structuredContent.statusCohorts[1].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 0 });
+    expect(body.result.structuredContent.methodology.join(" ")).toContain("including invited people with no answers");
     expect(body.result.structuredContent.methodology.join(" ")).toContain("does not track item-level display or eligibility");
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
   });
 
   it("paginates analytics questions and keeps the requested cohort on each page", async () => {
     const first = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: 0, limit: 1 });
-    const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; respondentCount: number }; questions: { id: string }[] } } };
+    const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string }[] } } };
     expect(firstBody.result.isError).toBeFalsy();
     expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 2, nextOffset: 1 });
-    expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1 });
+    expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(firstBody.result.structuredContent.questions.map((question) => question.id)).toEqual(["fit"]);
 
     const nextOffset = firstBody.result.structuredContent.nextOffset;
     const second = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: nextOffset!, limit: 1 });
-    const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; scope: { statuses: string[]; respondentCount: number }; questions: { id: string; numeric: { mean: number } | null }[] } } };
+    const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string; numeric: { mean: number } | null }[] } } };
     expect(secondBody.result.isError).toBeFalsy();
     expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: null });
-    expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1 });
+    expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4, q1: 4, q3: 4 } });
   });
 

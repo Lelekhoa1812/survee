@@ -2,20 +2,20 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/6" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/7" as const;
 
 const PRINCIPLES = [
   {
     id: "frame-the-decision",
     title: "Start with the business question",
     guidance:
-      "Restate the decision to inform, the outcome of interest, the relevant audience, and the time or interview scope. Map each part to a question and a respondent cohort before interpreting results. If the interview does not measure the requested outcome, say so and offer the nearest measured proxy without presenting it as equivalent.",
+      "Restate the decision to inform, the outcome of interest, the relevant audience, and the time or interview scope. Map each part to a question and a participant cohort before interpreting results. If the interview does not measure the requested outcome, say so and offer the nearest measured proxy without presenting it as equivalent.",
   },
   {
     id: "name-the-cohort",
-    title: "Make respondent scope explicit",
+    title: "Make participant scope explicit",
     guidance:
-      "State whether the result includes all people in the interview, only submitted people, or a caller-selected status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one respondent scan and one shared asOf; each question page is still a separate live read. cohortCount is everyone in the selected status cohort, not a count of people eligible to see that question. KQA does not record whether conditional or routed questions were displayed or applicable. State each group's cohortCount, valid-answer n, and denominator; do not infer item eligibility. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
+      "State whether the result includes all people in the interview, only submitted people, or a caller-selected participant status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one participant scan and one shared asOf; each question page is still a separate live read. scope.participantCount and statusCohorts[].participantCount count everyone in their selected status groups. respondentCount is a compatibility alias for these counts; do not describe invited people with no answers as respondents. Per-question cohortCount is everyone in the selected status group, not a count of people eligible to see that question. KQA does not record whether conditional or routed questions were displayed or applicable. State each group's participant count, cohortCount, valid-answer n, and denominator; do not infer item eligibility. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
   },
   {
     id: "show-missingness",
@@ -153,7 +153,7 @@ export function getAnalyticsGuidance() {
       "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
       "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
       "Each analyze_answers page is a separate live read with its own asOf; changes can occur between pages, so KQA does not provide a consistent multi-page snapshot.",
-      "When compareStatuses is true, status groups on one page share a respondent scan and asOf; this live read does not use a frozen database snapshot.",
+      "When compareStatuses is true, status groups on one page share a participant scan and asOf; this live read does not use a frozen database snapshot.",
     ],
     principles: PRINCIPLES.map((principle) => ({ ...principle })),
     reviewChecklist: [...REVIEW_CHECKLIST],
