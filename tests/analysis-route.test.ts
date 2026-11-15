@@ -32,12 +32,13 @@ vi.mock("@/lib/repo", () => ({
 import { GET } from "../src/app/api/admin/interviews/[id]/analysis/route";
 
 function request(query: string) {
-  return new Request(`https://kqa.local/api/admin/interviews/interview/analysis?${query}`);
+  return new Request(`https://kqa.local/api/admin/interviews/interview/analysis?surveyVersion=1&${query}`);
 }
 
 describe("interview answer-segmentation route", () => {
   beforeEach(() => {
     state.denied = null;
+    state.interview = { _id: "interview", currentVersion: 1 };
     state.rows = [
       { status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } },
       { status: "invited", answers: { fit: { value: "retired" }, budget: { value: 4 }, confidence: { value: "low" } } },
@@ -57,10 +58,29 @@ describe("interview answer-segmentation route", () => {
     expect(state.getInterview).not.toHaveBeenCalled();
   });
 
+  it("requires the analysis page's survey version before reading aggregates", async () => {
+    const response = await GET(new Request("https://kqa.local/api/admin/interviews/interview/analysis?segmentBy=fit&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
+    expect(response.status).toBe(400);
+    expect(state.getInterview).not.toHaveBeenCalled();
+    expect(state.iterate).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale survey versions before scanning participant answers", async () => {
+    state.interview = { _id: "interview", currentVersion: 2 };
+    state.getInterview.mockResolvedValue(state.interview);
+    const response = await GET(request("segmentBy=fit&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("survey changed while the page was open");
+    expect(state.getVersion).not.toHaveBeenCalled();
+    expect(state.iterate).not.toHaveBeenCalled();
+  });
+
   it("returns aggregate-only outcome summaries in each segment with one scan", async () => {
     const response = await GET(request("segmentBy=fit&questionId=budget&compareStatuses=true"), { params: Promise.resolve({ id: "interview" }) });
-    const body = await response.json() as { ok: boolean; asOf: string; scope: { participantCount: number; compareStatuses: boolean }; segments: { label: string; kind: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; summaries: { budget: { numeric: { n: number; mean: number } | null; disclosureRisk: { singletonNumericSummary: boolean } } }; statusSummaries?: Record<string, Record<string, unknown>> }[]; methodology: string[] };
+    const body = await response.json() as { ok: boolean; interviewId: string; surveyVersion: number; asOf: string; scope: { participantCount: number; compareStatuses: boolean }; segments: { label: string; kind: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; summaries: { budget: { numeric: { n: number; mean: number } | null; disclosureRisk: { singletonNumericSummary: boolean } } }; statusSummaries?: Record<string, Record<string, unknown>> }[]; methodology: string[] };
     expect(response.status).toBe(200);
+    expect(body).toMatchObject({ interviewId: "interview", surveyVersion: 1 });
     expect(body).toMatchObject({ ok: true, scope: { participantCount: 3, compareStatuses: true } });
     expect(Number.isNaN(Date.parse(body.asOf))).toBe(false);
     expect(body.segments.find((segment) => segment.label === "Yes")).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, summaries: { budget: { numeric: { n: 1, mean: 2 } } } });

@@ -99,6 +99,8 @@ function segmentResponse(url: URL) {
   const statusCounts = { invited: 1, in_progress: 1, submitted: 1 };
   return {
     ok: true,
+    interviewId: "interview-1",
+    surveyVersion: responseSurveyVersion,
     asOf: "2026-11-15T00:01:00.000Z",
     segmentBy: { id: dimension.id, type: dimension.type, label: dimension.label },
     outcomes: outcomes.map((outcome) => ({ id: outcome.id, type: outcome.type, label: outcome.label })),
@@ -114,6 +116,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let copied: string[];
 let deferFetch = false;
 let deferredRequest: { url: URL; resolve: (response: Response) => void } | null = null;
+let responseSurveyVersion = 1;
 
 function responseFor(url: URL) {
   return new Response(JSON.stringify(segmentResponse(url)), {
@@ -130,6 +133,7 @@ beforeEach(() => {
   copied = [];
   deferFetch = false;
   deferredRequest = null;
+  responseSurveyVersion = 1;
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: { writeText: vi.fn(async (text: string) => { copied.push(text); }) },
@@ -252,5 +256,17 @@ describe("answer-segment analytics UI", () => {
     expect(host.querySelector<HTMLButtonElement>(".analysis-export-actions button:last-child")?.disabled).toBe(true);
     await resolveDeferredRequest();
     expect(host.querySelector(".analysis-segment-list")).not.toBeNull();
+  });
+
+  it("rejects a segment response from a different survey version", async () => {
+    responseSurveyVersion = 2;
+    await act(async () => root.render(createElement(AnalyticsTab, { data })));
+
+    await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Break down by answer")!);
+
+    expect(new URL(String(fetchMock.mock.calls.at(-1)?.[0]), window.location.href).searchParams.get("surveyVersion")).toBe("1");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("survey changed while analysis loaded");
+    expect(host.querySelector(".analysis-segment-list")).toBeNull();
+    expect([...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Copy CSV")?.disabled).toBe(true);
   });
 });

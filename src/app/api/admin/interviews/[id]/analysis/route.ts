@@ -9,12 +9,19 @@ export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews
   const denied = await guardAdmin();
   if (denied) return denied;
   const { id } = await ctx.params;
+  const url = new URL(req.url);
+  const requestedVersion = url.searchParams.get("surveyVersion");
+  if (!requestedVersion || !/^\d+$/.test(requestedVersion) || !Number.isSafeInteger(Number(requestedVersion)) || Number(requestedVersion) < 1) {
+    return fail(400, "Choose the survey version shown on the analysis page.");
+  }
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
+  if (interview.currentVersion !== Number(requestedVersion)) {
+    return fail(409, "This survey changed while the page was open. Reload the interview to view analysis for the latest version.");
+  }
   const version = await getVersion(interview._id, interview.currentVersion);
   if (!version) return fail(404, "Survey version not found.");
 
-  const url = new URL(req.url);
   const segmentById = (url.searchParams.get("segmentBy") ?? "").trim();
   const outcomeIds = url.searchParams.getAll("questionId").map((id) => id.trim());
   if (!segmentById || !outcomeIds.length || outcomeIds.some((id) => !id)) return fail(400, "Choose a segmentation question and one or more outcome questions.");

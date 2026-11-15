@@ -405,6 +405,8 @@ export function ComparisonQuestion({ question, summaries, showHeading = true, di
 }
 
 interface SegmentAnalysisResponse {
+  interviewId: string;
+  surveyVersion: number;
   asOf: string;
   segmentBy: { id: string; type: QuestionType; label: string };
   outcomes: { id: string; type: QuestionType; label: string }[];
@@ -493,6 +495,8 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const selectedStatuses = compareStatuses ? COMPARE_STATUSES : cohort.statuses;
   const selectedStatusesParam = selectedStatuses.join(",");
   const currentSegmentResult = segmentResult
+    && segmentResult.interviewId === data.interview.id
+    && segmentResult.surveyVersion === data.interview.currentVersion
     && segmentQuestion
     && segmentResult.segmentBy.id === segmentQuestion.id
     && segmentResult.outcomes.length === selectedOutcomeQuestions.length
@@ -572,7 +576,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       return;
     }
     const controller = new AbortController();
-    const query = new URLSearchParams({ segmentBy: segmentQuestion.id, statuses: selectedStatusesParam, compareStatuses: String(compareStatuses) });
+    const query = new URLSearchParams({ surveyVersion: String(data.interview.currentVersion), segmentBy: segmentQuestion.id, statuses: selectedStatusesParam, compareStatuses: String(compareStatuses) });
     for (const question of selectedOutcomeQuestions) query.append("questionId", question.id);
     setSegmentResult(null);
     setSegmentError("");
@@ -586,6 +590,9 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         });
         const body = await response.json().catch(() => null) as (SegmentAnalysisResponse & { ok?: boolean; error?: string }) | null;
         if (!response.ok || !body?.ok) throw new Error(body?.error || "Could not load answer segments. Try again.");
+        if (body.interviewId !== data.interview.id || body.surveyVersion !== data.interview.currentVersion) {
+          throw new Error("The survey changed while analysis loaded. Reload the interview before viewing or exporting these results.");
+        }
         setSegmentResult(body);
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -595,7 +602,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       }
     })();
     return () => controller.abort();
-  }, [segmentMode, segmentQuestion?.id, selectedOutcomeIdsParam, data.interview.id, selectedStatusesParam, compareStatuses]);
+  }, [segmentMode, segmentQuestion?.id, selectedOutcomeIdsParam, data.interview.id, data.interview.currentVersion, selectedStatusesParam, compareStatuses]);
 
   const groups = useMemo(() => {
     const sections = data.manifest.sections ?? [];
