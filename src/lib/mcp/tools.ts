@@ -1152,6 +1152,8 @@ const TOOLS: ToolDef[] = [
           },
           addedIds: questionChanges.added.map((question) => question.id),
           removedIds: questionChanges.removed.map((question) => question.id),
+          addedQuestions: questionChanges.added,
+          removedQuestions: questionChanges.removed,
           updated: questionChanges.updated.map(({ previous, question, fields }) => ({
             id: question.id,
             fields,

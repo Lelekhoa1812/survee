@@ -86,6 +86,63 @@ describe("MCP questionnaire block patch", () => {
     expect(state.publish).toHaveBeenCalledWith(interviewId, 2, baseHash, expect.objectContaining({ html: expect.stringContaining('data-kqa="new-q"') }));
   });
 
+  it("returns complete definitions for added and removed questions in the preview", async () => {
+    const addition = {
+      op: "add",
+      question: {
+        id: "estimate", type: "number", section: "writing", label: "Estimated team size?",
+        help: "Use your current headcount.", required: true, min: 2, max: 20, step: 2,
+        note: { label: "Context", placeholder: "Optional detail" },
+      },
+      html: '<article class="kq-q" data-kqa-question-id="estimate"><h3><label for="f-estimate">Estimated team size?</label></h3><p class="kq-help">Use your current headcount.</p><input id="f-estimate" type="number" data-kqa="estimate" min="2" max="20" step="2"></article>',
+    };
+    const added = await call("preview_questionnaire_block_patch", { interviewId, operations: [addition] });
+
+    expect(added.isError).toBeFalsy();
+    expect(added.structuredContent.questionChanges).toMatchObject({
+      addedIds: ["estimate"],
+      addedQuestions: [{
+        id: "estimate",
+        type: "number",
+        label: "Estimated team size?",
+        help: "Use your current headcount.",
+        required: true,
+        section: "writing",
+        min: 2,
+        max: 20,
+        step: 2,
+        note: { label: "Context", placeholder: "Optional detail" },
+      }],
+      removedIds: [],
+      removedQuestions: [],
+    });
+
+    const removed = await call("preview_questionnaire_block_patch", {
+      interviewId,
+      operations: [{ op: "delete", questionId: "priority" }],
+    });
+    expect(removed.isError).toBeFalsy();
+    expect(removed.structuredContent.questionChanges).toMatchObject({
+      addedIds: [],
+      addedQuestions: [],
+      removedIds: ["priority"],
+      removedQuestions: [{
+        id: "priority",
+        type: "single",
+        label: "Which area should we start with?",
+        help: "Pick one. You can change it any time before you submit.",
+        required: true,
+        section: "choices",
+        options: [
+          { value: "accuracy", label: "Accuracy of the ratings" },
+          { value: "speed", label: "Speed of each run" },
+          { value: "cost", label: "Cost per lead" },
+        ],
+        note: true,
+      }],
+    });
+  });
+
   it("rejects altered operations and requires compatibility acknowledgement", async () => {
     state.compatibilityImpact = true;
     const preview = await call("preview_questionnaire_block_patch", { interviewId, operations: [operation] });
