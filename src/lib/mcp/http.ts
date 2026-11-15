@@ -3,6 +3,7 @@ import { requestOrigin, wwwAuthenticate } from "./oauth";
 import { dispatchTool, listToolDefs } from "./tools";
 import { withTenantPrincipal } from "../tenant-context";
 import type { McpCapability } from "./capabilities";
+import { mcpOriginError, withMcpCors } from "./origin";
 
 const PROTOCOL = "2025-06-18";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -98,9 +99,11 @@ async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promi
 
 /** Stateless Streamable HTTP: one JSON-RPC response, no session, no open stream. Auth runs before any tool. */
 export async function handleMcp(req: Request): Promise<Response> {
+  const originError = mcpOriginError(req);
+  if (originError) return originError;
   const auth = await authorizeMcp(req);
-  if (!auth.ok) return unauthorized(req);
-  return withTenantPrincipal(auth.principal, async () => {
+  if (!auth.ok) return withMcpCors(req, unauthorized(req));
+  const response = await withTenantPrincipal(auth.principal, async () => {
     if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
     const body = await readBody(req);
     if (!body.ok) return new Response(JSON.stringify(rpcError(null, -32700, body.message)), { status: body.status, headers: JSON_HEADERS });
@@ -113,4 +116,5 @@ export async function handleMcp(req: Request): Promise<Response> {
     if (!reply) return new Response(null, { status: 202, headers: JSON_HEADERS });
     return new Response(JSON.stringify(reply), { status: 200, headers: JSON_HEADERS });
   });
+  return withMcpCors(req, response);
 }

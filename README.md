@@ -54,6 +54,7 @@ In development the legacy Axion owner login falls back to `admin@axiob.local` / 
 | `SESSION_SECRET` | Signs the admin session cookie. Required in production. `openssl rand -base64 32` |
 | `KQA_PUBLIC_URL` | Public origin used in invite emails, such as `https://your-host`. Required to send. The copied link on screen can still be the address you are visiting |
 | `KQA_MCP_TOKEN` | Axion-bound service bearer for `POST /api/mcp`. Named keys created in Settings are also accepted and scoped to their workspace. Not the admin password. `openssl rand -base64 32` |
+| `KQA_MCP_ALLOWED_ORIGINS` | Optional comma-separated cross-origin browser MCP origins (`https://client.example`). `KQA_PUBLIC_URL` is trusted too. Requests without an `Origin` header remain supported for server-to-server clients |
 | `KQA_AXION_LEGACY_TENANT_FALLBACK` | Defaults to enabled for Axion data during migration. After a reviewed backfill and a zero-unscoped audit, set to `false` and redeploy to enforce strict tenant filters |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Send interview invites, account verification, email changes and password resets. Port 587, STARTTLS. The password is never written into the repo |
 | `IMAP_HOST`, `IMAP_PORT` | On-demand bounce check. Port 993. Uses the same `SMTP_USER` and `SMTP_PASSWORD` |
