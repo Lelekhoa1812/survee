@@ -15,7 +15,7 @@ await mkdir(out, { recursive: true });
 const browser = await puppeteer.launch({ executablePath: chrome, headless: "new", args: ["--no-sandbox"] });
 const errors = [];
 try {
-  for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["tablet", { width: 1040, height: 850 }], ["mobile", { width: 390, height: 844, isMobile: true, deviceScaleFactor: 2 }], ["narrow", { width: 320, height: 760, isMobile: true, deviceScaleFactor: 2 }]]) {
+  for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["tablet", { width: 1040, height: 850 }], ["compact", { width: 960, height: 850 }], ["mobile", { width: 390, height: 844, isMobile: true, deviceScaleFactor: 2 }], ["narrow", { width: 320, height: 760, isMobile: true, deviceScaleFactor: 2 }]]) {
     const page = await browser.newPage();
     await page.setViewport(viewport);
     await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: scheme }]);
