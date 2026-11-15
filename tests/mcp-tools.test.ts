@@ -494,6 +494,73 @@ describe("MCP tools", () => {
     expect(thirdBody.result.structuredContent.questions.map(({ id }) => id)).toEqual(["confidence"]);
   });
 
+  it("keeps segmented singleton and zero-count groups stable across pages", async () => {
+    const first = await call("analyze_answers", {
+      interviewId,
+      segmentBy: "fit",
+      statuses: ["invited", "submitted"],
+      compareStatuses: true,
+      offset: 0,
+      limit: 1,
+    });
+    const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: {
+      analysisRunId: string; asOf: string; nextOffset: number | null; scope: { participantCount: number };
+      segments: { key: string; participantCount: number; disclosureRisk: { singletonSegment: boolean }; questions: { id: string }[]; statusCohorts: { status: string; questions: { id: string }[] }[] }[];
+    } } };
+    expect(firstBody.result.isError).toBeFalsy();
+    expect(firstBody.result.structuredContent).toMatchObject({ nextOffset: 1, scope: { participantCount: 2 } });
+    const zeroCount = firstBody.result.structuredContent.segments.find(({ key }) => key === "answer:no");
+    expect(zeroCount).toMatchObject({ participantCount: 0, questions: [{ id: "budget" }] });
+    expect(firstBody.result.structuredContent.segments.find(({ key }) => key === "answer:yes")).toMatchObject({
+      participantCount: 1,
+      disclosureRisk: { singletonSegment: true },
+      questions: [{ id: "budget" }],
+      statusCohorts: [
+        { status: "invited", questions: [{ id: "budget" }] },
+        { status: "submitted", questions: [{ id: "budget" }] },
+      ],
+    });
+
+    const callsAfterFirstPage = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    vi.mocked(iterateAnalyticsParticipants).mockImplementation(async function* () {});
+    const second = await call("analyze_answers", {
+      interviewId,
+      runId: firstBody.result.structuredContent.analysisRunId,
+      offset: firstBody.result.structuredContent.nextOffset!,
+      limit: 1,
+    });
+    const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: {
+      asOf: string; offset: number; nextOffset: number | null; scope: { participantCount: number };
+      segments: { key: string; participantCount: number; questions: { id: string; numeric: { mean: number } | null }[]; statusCohorts: { status: string; questions: { id: string }[] }[] }[];
+    } } };
+    expect(secondBody.result.isError).toBeFalsy();
+    expect(secondBody.result.structuredContent).toMatchObject({
+      asOf: firstBody.result.structuredContent.asOf,
+      offset: 1,
+      nextOffset: null,
+      scope: { participantCount: 2 },
+    });
+    expect(secondBody.result.structuredContent.segments.find(({ key }) => key === "answer:no")).toMatchObject({
+      participantCount: 0,
+      questions: [{ id: "confidence" }],
+    });
+    expect(secondBody.result.structuredContent.segments.find(({ key }) => key === "answer:yes")).toMatchObject({
+      participantCount: 1,
+      questions: [{ id: "confidence", distribution: [
+        { value: "high", count: 1, percent: 100 },
+        { value: "low", count: 0, percent: 0 },
+      ] }],
+      statusCohorts: [
+        { status: "invited", questions: [{ id: "confidence" }] },
+        { status: "submitted", questions: [{ id: "confidence", distribution: [
+          { value: "high", count: 1, percent: 100 },
+          { value: "low", count: 0, percent: 0 },
+        ] }] },
+      ],
+    });
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsAfterFirstPage);
+  });
+
   it("rejects empty or conflicting analytics status filters", async () => {
     const empty = await call("analyze_answers", { interviewId, statuses: [] });
     const emptyBody = await empty.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
