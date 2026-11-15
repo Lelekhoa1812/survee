@@ -602,8 +602,10 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .rs-title { min-width: 0; display: grid; line-height: 1.25; }
 .rs-title b { font-weight: 600; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rs-title span { color: var(--muted); font-size: 12.5px; }
+.rs-bar-actions { display: flex; align-items: center; gap: 18px; }
 .rs-progress { display: grid; gap: 4px; width: 150px; }
 .rs-progress small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rs-save-label { min-width: 0; }
 .save-state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); white-space: nowrap; min-width: 92px; justify-content: flex-end; }
 .save-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--field); }
 .save-state.saved i { background: var(--accent); }
@@ -662,13 +664,24 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
   .analysis-bar-row { grid-template-columns: minmax(72px, 90px) minmax(48px, 1fr) 84px; gap: 7px; font-size: 12.5px; }
   .analysis-compare-series { grid-template-columns: minmax(70px, 82px) minmax(34px, 1fr) minmax(72px, auto); gap: 7px; font-size: 12px; }
   .analysis-intro-head { display: grid; }
-  .rs-bar-in { padding: 0 14px; gap: 10px; }
-  .rs-progress { display: none; }
-  .save-state { min-width: 0; }
+  .rs-bar-in { padding: 0 14px; gap: 6px; }
+  .rs-bar-actions { gap: 8px; }
+  .rs-progress { display: grid; width: 118px; }
+  .rs-progress small { font-size: 11px; white-space: nowrap; }
+  .save-state { min-width: 0; max-width: 84px; gap: 5px; font-size: 12px; }
+  .rs-save-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rs-bar-actions > .btn { white-space: nowrap; }
   .card-pad { padding: 16px; }
   .auth-card { padding: 24px; }
   .auth-route-modal { padding: 24px; }
   .auth-route-modal .auth-card { padding: 20px 0 0; }
+}
+
+@media (max-width: 560px) {
+  .rs-bar-in { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; }
+  .rs-title { flex: 1 1 0; }
+  .rs-bar-actions { flex: 1 0 100%; width: 100%; margin-left: 0; justify-content: space-between; gap: 10px; }
+  .rs-progress { width: 110px; flex: 0 0 110px; }
 }
 
 @media (max-width: 700px) {

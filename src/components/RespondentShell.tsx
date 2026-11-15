@@ -250,7 +250,7 @@ export function RespondentShell({ token }: { token: string }) {
         <div className="rs-bar-in">
           <BrandMark />
           <div className="rs-title"><b>{data.title}</b><span>Answering as {data.participant.name}</span></div>
-          <div className="right row" style={{ gap: 18 }}>
+          <div className="right rs-bar-actions">
             <div
               className="rs-progress"
               role="progressbar"
@@ -261,9 +261,9 @@ export function RespondentShell({ token }: { token: string }) {
               aria-valuetext={`${counts.answered} of ${counts.total} questions answered`}
             >
               <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-              <small>{counts.answered} of {counts.total} answered</small>
+              <small>{counts.answered}/{counts.total} answered</small>
             </div>
-            <span className={`save-state ${save}`} role="status" aria-live="polite" title={lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : undefined}><i />{SAVE_LABEL[save]}</span>
+            <span className={`save-state ${save}`} role="status" aria-live="polite" title={lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
             <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || counts.answered === 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Submit"}</button>
           </div>
         </div>
