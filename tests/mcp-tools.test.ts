@@ -50,6 +50,7 @@ vi.mock("imapflow", () => ({
 vi.mock("../src/lib/db", () => ({
   db: async () => { throw new Error("db() should not run in this test"); },
   col: {
+    tenants: async () => ({ findOne: async (query: { _id: string; status: string }) => query._id === "axion" && query.status === "active" ? { _id: "axion" } : null }),
     mail: async () => ({
       insertOne: async (row: Record<string, unknown>) => { mailRows.push(row); return { insertedId: row._id }; },
       find: () => ({ sort: () => ({ limit: () => ({ toArray: async () => mailRows }) }) }),

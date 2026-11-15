@@ -13,9 +13,13 @@ type DateCondition = Date | ExistenceCondition | { $eq: Date; $gt: Date };
 const clients: Client[] = [];
 const codes: Code[] = [];
 const keys: Key[] = [];
+let axionActive = true;
 
 vi.mock("../src/lib/db", () => ({
   col: {
+    tenants: async () => ({
+      findOne: async (query: { _id: string; status: string }) => axionActive && query._id === "axion" && query.status === "active" ? { _id: "axion" } : null,
+    }),
     oauthClients: async () => ({
       insertOne: async (doc: Client) => { clients.push(doc); },
       findOne: async (query: { clientId: string }) => clients.find((item) => item.clientId === query.clientId) ?? null,
@@ -69,6 +73,7 @@ describe("OAuth discovery and PKCE", () => {
     clients.splice(0);
     codes.splice(0);
     keys.splice(0);
+    axionActive = true;
   });
 
   it("publishes the documents ChatGPT looks up", () => {
@@ -155,6 +160,20 @@ describe("OAuth discovery and PKCE", () => {
     expect(rotated).not.toBeNull();
     expect(keys[0].capabilities).toEqual(capabilities);
     expect(await authenticateApiKeyAccess(rotated!.access)).toEqual({ tenantId: "axion", capabilities });
+  });
+
+  it("rejects OAuth access and refresh when the tenant is suspended", async () => {
+    const registered = await registerClient({ name: "Suspension check", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "suspended-tenant-oauth-verifier-value-123456";
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+
+    axionActive = false;
+    expect(await authenticateApiKeyAccess(exchanged.access)).toBeNull();
+    expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
+    expect(keys).toHaveLength(1);
   });
 
   it("uses read-only defaults for a short-lived code issued before capability consent", async () => {

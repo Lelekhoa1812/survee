@@ -1,16 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
 process.env.KQA_MCP_TOKEN = "t".repeat(43);
 
-const { touch, dispatch } = vi.hoisted(() => ({ touch: vi.fn(), dispatch: vi.fn() }));
+const { touch, dispatch, tenant } = vi.hoisted(() => ({ touch: vi.fn(), dispatch: vi.fn(), tenant: { active: true } }));
 
 vi.mock("../src/lib/db", () => {
   const deny = () => {
     touch();
     return Promise.reject(new Error("mongo should not be touched"));
   };
-  return { db: deny, col: new Proxy({}, { get: () => deny }) };
+  return {
+    db: deny,
+    col: new Proxy({}, {
+      get: (_target, key) => key === "tenants"
+        ? async () => ({ findOne: async (query: { _id: string; status: string }) => { touch(); return tenant.active && query._id === "axion" && query.status === "active" ? { _id: "axion" } : null; } })
+        : deny,
+    }),
+  };
 });
 
 vi.mock("../src/lib/mcp/tools", () => ({
@@ -38,6 +45,12 @@ function postBody(headers: Record<string, string>, body: unknown) {
 }
 
 describe("MCP auth", () => {
+  beforeEach(() => {
+    tenant.active = true;
+    touch.mockClear();
+    dispatch.mockClear();
+  });
+
   it("rejects a missing token, a wrong token, a query token, and the admin cookie without touching Mongo", async () => {
     const missing = await post({});
     const wrong = await post({ authorization: "Bearer not-the-token" });
@@ -55,11 +68,17 @@ describe("MCP auth", () => {
     expect(touch).toHaveBeenCalled();
   });
 
-  it("binds the server token to the fixed Axion principal", async () => {
+  it("binds the server token to the fixed active Axion principal", async () => {
     touch.mockClear();
     const auth = await authorizeMcp(new Request("https://kqa.example/api/mcp", { headers: { authorization: `Bearer ${process.env.KQA_MCP_TOKEN}` } }));
     expect(auth).toMatchObject({ ok: true, principal: { tenantId: "axion", role: "service", source: "service_token" } });
-    expect(touch).not.toHaveBeenCalled();
+    expect(touch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects the server token when Axion is suspended", async () => {
+    tenant.active = false;
+    const auth = await authorizeMcp(new Request("https://kqa.example/api/mcp", { headers: { authorization: `Bearer ${process.env.KQA_MCP_TOKEN}` } }));
+    expect(auth).toEqual({ ok: false, status: 401, error: "Unauthorized." });
   });
 
   it("rejects JSON-RPC batches before dispatch", async () => {

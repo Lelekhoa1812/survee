@@ -6,6 +6,7 @@ import type { ApiKeyDoc, ApiKeyView } from "./types";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
 import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities, type McpCapability } from "../mcp/capabilities";
+import { isTenantActive } from "./tenants";
 
 const MIN_SECRET = 32;
 const MAX_SECRET = 256;
@@ -163,11 +164,13 @@ export async function authenticateApiKeyAccess(secret: string): Promise<{ tenant
   const doc = await c.findOne({ hash: hashKey(secret) });
   if (!doc || doc.revokedAt) return null;
   if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return null;
+  const tenantId = doc.tenantId ?? AXION_TENANT_ID;
+  if (!await isTenantActive(tenantId)) return null;
   const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
   if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
-  if (doc.capabilities === undefined) return { tenantId: doc.tenantId ?? AXION_TENANT_ID };
+  if (doc.capabilities === undefined) return { tenantId };
   const capabilities = parseMcpCapabilities(doc.capabilities) ?? [];
-  return { tenantId: doc.tenantId ?? AXION_TENANT_ID, capabilities };
+  return { tenantId, capabilities };
 }
 
 const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -181,6 +184,7 @@ export async function rotateOAuthKey(refreshSecret: string): Promise<{ access: s
   if (!doc || doc.revokedAt) return null;
   const now = new Date();
   if (doc.expiresAt && doc.expiresAt.getTime() <= now.getTime()) return null;
+  if (!await isTenantActive(doc.tenantId ?? AXION_TENANT_ID)) return null;
   const access = generateKeySecret();
   const refresh = generateKeySecret();
   const { prefix, suffix } = splitSecret(access);

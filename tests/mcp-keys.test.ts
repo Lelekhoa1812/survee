@@ -22,9 +22,13 @@ interface Doc {
 
 const docs: Doc[] = [];
 const lookups = vi.fn();
+const activeTenants = new Set<string>();
 
 vi.mock("../src/lib/db", () => ({
   col: {
+    tenants: async () => ({
+      findOne: async (query: { _id: string; status: string }) => activeTenants.has(query._id) && query.status === "active" ? { _id: query._id } : null,
+    }),
     apiKeys: async () => {
       lookups();
       return {
@@ -87,6 +91,9 @@ describe("API keys as MCP credentials", () => {
   beforeEach(() => {
     docs.splice(0, docs.length);
     lookups.mockClear();
+    activeTenants.clear();
+    activeTenants.add("axion");
+    activeTenants.add("tenant-1");
   });
 
   it("accepts the server token without a key lookup, and accepts, revokes, and deletes a key", async () => {
@@ -130,6 +137,23 @@ describe("API keys as MCP credentials", () => {
   it("refuses a key value that copies the server token", async () => {
     const created = await withTenantPrincipal({ tenantId: "axion", role: "owner", email: "admin@axiob.local", userId: "000000000000000000000001", source: "session" }, () => createApiKey({ name: "Same", secret: process.env.KQA_MCP_TOKEN!, createdBy: "admin@axiob.local" }));
     expect(created.ok).toBe(false);
+  });
+
+  it("rejects tenant-bound credentials when the tenant is suspended", async () => {
+    await withTenantPrincipal({ tenantId: "tenant-1", role: "owner", email: "owner@example.com", userId: "000000000000000000000002", source: "session" }, async () => {
+      const secret = generateKeySecret();
+      const created = await createApiKey({ name: "Tenant key", secret, createdBy: "owner@example.com" });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+
+      expect((await post(secret)).status).toBe(200);
+      activeTenants.delete("tenant-1");
+      expect((await post(secret)).status).toBe(401);
+      expect((await post(process.env.KQA_MCP_TOKEN!)).status).toBe(200);
+
+      activeTenants.delete("axion");
+      expect((await post(process.env.KQA_MCP_TOKEN!)).status).toBe(401);
+    });
   });
 
   it("limits new keys in tools/list and rechecks permissions at call time", async () => {
