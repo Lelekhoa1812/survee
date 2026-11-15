@@ -35,7 +35,8 @@ describe("status comparison table", () => {
     expect(html).toContain("<th scope=\"row\">Yes</th><td>0 (—)</td>");
     expect(html).toContain("Valid responses (n)");
     expect(html).toContain("<th scope=\"row\">Answered</th><td>0</td><td>2</td><td>2</td>");
-    expect(html).toContain("<th scope=\"row\">Missing</th><td>1</td><td>2</td><td>0</td>");
+    expect(html).toContain("<th scope=\"row\">No answer</th><td>1</td><td>2</td><td>0</td>");
+    expect(html).toContain("Cohort n=4");
     expect(html).toContain("<th scope=\"row\">Note only</th><td>0</td><td>1</td><td>0</td>");
     expect(html).toContain("<th scope=\"row\">Unmapped</th><td>0</td><td>1</td><td>0</td>");
   });

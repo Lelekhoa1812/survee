@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/5" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/6" as const;
 
 const PRINCIPLES = [
   {
@@ -15,13 +15,13 @@ const PRINCIPLES = [
     id: "name-the-cohort",
     title: "Make respondent scope explicit",
     guidance:
-      "State whether the result includes all people in the interview, only submitted people, or a caller-selected status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one respondent scan and one shared asOf; each question page is still a separate live read. State each group's eligible count, question eligibility, valid-answer n, and denominator. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
+      "State whether the result includes all people in the interview, only submitted people, or a caller-selected status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one respondent scan and one shared asOf; each question page is still a separate live read. cohortCount is everyone in the selected status cohort, not a count of people eligible to see that question. KQA does not record whether conditional or routed questions were displayed or applicable. State each group's cohortCount, valid-answer n, and denominator; do not infer item eligibility. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
   },
   {
     id: "show-missingness",
     title: "Treat missing and unmapped answers as information",
     guidance:
-      "Report eligible, answered, missing, note-only, and unmapped counts when available. Distinguish an unanswered item from an answer that no longer maps to the current version's choices or range. Do not silently impute, recode, or treat missing answers as a negative response. Explain that missingness can bias interpretation when who answered differs from who did not; KQA summaries do not estimate or correct that bias.",
+      "Report cohortCount, answeredCount, noAnswerCount, noteOnlyCount, and unmappedResponseCount when available. noAnswerCount means there is no non-empty stored value; it may include people who were not shown a conditional or routed item because KQA does not track item-level display or eligibility. Legacy eligibleCount and missingCount fields are aliases retained for compatibility, not item-level eligibility or missingness measures. Distinguish an unanswered item from an answer that no longer maps to the current version's choices or range. Do not silently impute, recode, or treat no answer as a negative response. Explain that nonresponse can bias interpretation when who answered differs from who did not; KQA summaries do not estimate or correct that bias.",
   },
   {
     id: "match-measure-to-statistic",
@@ -69,7 +69,7 @@ const PRINCIPLES = [
 
 const REVIEW_CHECKLIST = [
   "Does the answer name the decision, question, questionnaire version, respondent scope, and time period that were actually analyzed?",
-  "Are eligible, answered, missing, unmapped, and valid-answer denominators distinguished where available?",
+  "Are cohortCount, answeredCount, noAnswerCount, unmappedResponseCount, and valid-answer denominators distinguished, with KQA's item-eligibility limit stated?",
   "Do side-by-side status groups come from one scan, share an asOf, and show each group's denominator?",
   "Are scale distributions treated as ordered categories, number summaries described as numeric, and multi-select shares labeled per respondent?",
   "Does the interpretation avoid unsupported population, significance, or causal claims and identify material uncertainty?",

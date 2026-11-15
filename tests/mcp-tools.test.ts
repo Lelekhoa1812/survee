@@ -149,13 +149,15 @@ describe("MCP tools", () => {
 
   it("returns sourced design guidance for the requested product surface", async () => {
     const res = await call("get_design_guidance", { surface: "questionnaire" });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string }[]; sources?: { name: string }[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string; guidance: string }[]; sources?: { name: string }[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/2");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/3");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("question-clarity");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("response-options");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("pretest");
+    expect(body.result.structuredContent.principles?.find((p) => p.id === "accessible-interaction")?.guidance).toContain("24 × 24 CSS px");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 Quick Reference");
+    expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 SC 2.5.8: Target Size (Minimum)");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
   });
 
@@ -169,6 +171,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.reviewChecklist?.length).toBeGreaterThan(4);
     expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("question wording");
     expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("Pretest new or high-impact questions");
+    expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("24 × 24 CSS px");
     expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot verify rendered contrast");
     expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot judge question wording");
   });
@@ -200,7 +203,7 @@ describe("MCP tools", () => {
   it("compares selected statuses from one scan and one shared asOf", async () => {
     const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
     const res = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { respondentCount: number; statuses: string[] }; statusCohorts: { status: string; respondentCount: number; questions: { id: string; eligibleCount: number; answeredCount: number; unmappedResponseCount: number }[] }[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { respondentCount: number; statuses: string[] }; statusCohorts: { status: string; respondentCount: number; questions: { id: string; cohortCount: number; eligibleCount: number; answeredCount: number; noAnswerCount: number; missingCount: number; unmappedResponseCount: number }[] }[]; methodology: string[] } } };
     expect(body.result.isError).toBeFalsy();
     expect(Number.isNaN(Date.parse(body.result.structuredContent.asOf))).toBe(false);
     expect(body.result.structuredContent.scope).toMatchObject({ respondentCount: 2, statuses: ["invited", "submitted"] });
@@ -208,8 +211,9 @@ describe("MCP tools", () => {
       { status: "invited", respondentCount: 1 },
       { status: "submitted", respondentCount: 1 },
     ]);
-    expect(body.result.structuredContent.statusCohorts[0].questions[0]).toMatchObject({ id: "fit", eligibleCount: 1, answeredCount: 1, unmappedResponseCount: 1 });
-    expect(body.result.structuredContent.statusCohorts[1].questions[0]).toMatchObject({ id: "fit", eligibleCount: 1, answeredCount: 1, unmappedResponseCount: 0 });
+    expect(body.result.structuredContent.statusCohorts[0].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 1 });
+    expect(body.result.structuredContent.statusCohorts[1].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 0 });
+    expect(body.result.structuredContent.methodology.join(" ")).toContain("does not track item-level display or eligibility");
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
   });
 

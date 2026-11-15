@@ -16,8 +16,10 @@ export interface AnalyticsExportMetadata {
 
 const HEADERS = [
   "question_id", "question", "type", "cohort", "interview_id", "survey_version", "as_of", "measure", "answer_value", "answer_label",
-  "count", "percent", "valid_responses", "eligible", "answered", "missing", "note_only", "unmapped", "min", "q1", "median", "q3", "mean", "max",
+  "count", "percent", "valid_responses", "cohort_count", "answered", "no_answer", "no_answer_note", "note_only", "unmapped", "min", "q1", "median", "q3", "mean", "max",
 ];
+
+const NO_ANSWER_NOTE = "KQA does not track conditional or routed item display; no_answer may include people who did not see this question.";
 
 function cell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
@@ -40,27 +42,27 @@ export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, 
       for (const option of summary.distribution) {
         rows.push(row([
           ...base, "distribution", option.value, option.label, option.count, summary.distributionDenominator ? option.percent : null,
-          summary.distributionDenominator, summary.eligibleCount, summary.answeredCount, summary.missingCount,
-          summary.noteOnlyCount, summary.unmappedResponseCount, null, null, null, null, null, null,
+          summary.distributionDenominator, summary.cohortCount, summary.answeredCount, summary.noAnswerCount,
+          NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount, null, null, null, null, null, null,
         ]));
       }
       if (summary.scaleMedian !== null) {
         rows.push(row([
           ...base, "ordinal_scale_median", null, null, null, null, summary.distributionDenominator,
-          summary.eligibleCount, summary.answeredCount, summary.missingCount, summary.noteOnlyCount,
+          summary.cohortCount, summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount,
           summary.unmappedResponseCount, null, null, summary.scaleMedian, null, null, null,
         ]));
       }
     } else if (question.type === "number") {
       rows.push(row([
-        ...base, "numeric_summary", null, null, null, null, summary.numeric?.n ?? 0, summary.eligibleCount,
-        summary.answeredCount, summary.missingCount, summary.noteOnlyCount, summary.unmappedResponseCount,
+        ...base, "numeric_summary", null, null, null, null, summary.numeric?.n ?? 0, summary.cohortCount,
+        summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount,
         summary.numeric?.min, summary.numeric?.q1, summary.numeric?.median, summary.numeric?.q3, summary.numeric?.mean, summary.numeric?.max,
       ]));
     } else {
       rows.push(row([
         ...base, "response_count", null, null, summary.answeredCount, null, summary.answeredCount,
-        summary.eligibleCount, summary.answeredCount, summary.missingCount, summary.noteOnlyCount,
+        summary.cohortCount, summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount,
         summary.unmappedResponseCount, null, null, null, null, null, null,
       ]));
     }

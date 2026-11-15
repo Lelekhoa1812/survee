@@ -14,8 +14,10 @@ describe("descriptive question summaries", () => {
     const number: Question = { id: "q", type: "number", label: "Budget" };
 
     expect(summarizeQuestion(choice, [respondent("yes")])).toMatchObject({
+      cohortCount: 1,
       eligibleCount: 1,
       answeredCount: 1,
+      noAnswerCount: 0,
       missingCount: 0,
       distributionDenominator: 1,
       distribution: [
@@ -26,10 +28,10 @@ describe("descriptive question summaries", () => {
     expect(summarizeQuestion(number, [respondent(7)]).numeric).toEqual({ n: 1, min: 7, q1: 7, median: 7, q3: 7, max: 7, mean: 7 });
   });
 
-  it("keeps eligible, missing, note-only, valid, and unmapped counts distinct", () => {
+  it("keeps cohort, no-answer, note-only, valid, and unmapped counts distinct", () => {
     const q: Question = { id: "q", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] };
     const summary = summarizeQuestion(q, [respondent("yes"), respondent("no"), respondent("retired"), respondent(undefined, "More context"), respondent()]);
-    expect(summary).toMatchObject({ eligibleCount: 5, answeredCount: 3, missingCount: 2, noteOnlyCount: 1, unmappedResponseCount: 1, distributionDenominator: 2 });
+    expect(summary).toMatchObject({ cohortCount: 5, eligibleCount: 5, answeredCount: 3, noAnswerCount: 2, missingCount: 2, noteOnlyCount: 1, unmappedResponseCount: 1, distributionDenominator: 2 });
     expect(summary.distribution).toEqual([
       { value: "yes", label: "Yes", count: 1, percent: 50 },
       { value: "no", label: "No", count: 1, percent: 50 },

@@ -25,8 +25,14 @@ export interface DescriptiveStats {
 }
 
 export interface QuestionSummary {
+  /** Everyone in the selected status cohort; KQA does not track item-level display eligibility. */
+  cohortCount: number;
+  /** @deprecated Use cohortCount; this is not item-level eligibility. */
   eligibleCount: number;
   answeredCount: number;
+  /** People in the cohort without a non-empty stored answer; may include people who did not see the item. */
+  noAnswerCount: number;
+  /** @deprecated Use noAnswerCount; this is not item-level missingness. */
   missingCount: number;
   noteOnlyCount: number;
   /** Respondents whose stored value does not fit the current version's choices or range. */
@@ -39,7 +45,7 @@ export interface QuestionSummary {
 }
 
 export interface QuestionSummaryAccumulatorSnapshot {
-  eligibleCount: number;
+  cohortCount: number;
   answeredCount: number;
   noteOnlyCount: number;
   distributionDenominator: number;
@@ -111,7 +117,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   const byValue = new Map(distributionRows.map((row) => [row.value, row]));
   const hasDistribution = q.type === "single" || q.type === "select" || q.type === "multi" || q.type === "scale";
   const hasNumericSummary = q.type === "number" || q.type === "scale";
-  let eligibleCount = 0;
+  let cohortCount = 0;
   let answeredCount = 0;
   let noteOnlyCount = 0;
   let distributionDenominator = 0;
@@ -120,7 +126,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   const numericValues: number[] = [];
 
   function add(respondent: AnalyticsRespondent) {
-    eligibleCount += 1;
+    cohortCount += 1;
     const answer = respondent.answers[q.id];
     const answered = isAnswered(q, respondent.answers);
     if (!answered && typeof answer?.note === "string" && answer.note.trim() !== "") noteOnlyCount += 1;
@@ -171,9 +177,11 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     if (q.type === "scale" && numericValues.length) scaleMedian = median(numericValues);
 
     return {
-      eligibleCount,
+      cohortCount,
+      eligibleCount: cohortCount,
       answeredCount,
-      missingCount: eligibleCount - answeredCount,
+      noAnswerCount: cohortCount - answeredCount,
+      missingCount: cohortCount - answeredCount,
       noteOnlyCount,
       unmappedResponseCount: Math.max(distributionUnmappedResponseCount, numericUnmappedResponseCount),
       distributionDenominator,
@@ -188,7 +196,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
 
   function snapshot(): QuestionSummaryAccumulatorSnapshot {
     return {
-      eligibleCount,
+      cohortCount,
       answeredCount,
       noteOnlyCount,
       distributionDenominator,
@@ -201,7 +209,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
 
   function merge(other: QuestionSummaryAccumulator) {
     const source = other.snapshot();
-    eligibleCount += source.eligibleCount;
+    cohortCount += source.cohortCount;
     answeredCount += source.answeredCount;
     noteOnlyCount += source.noteOnlyCount;
     distributionDenominator += source.distributionDenominator;

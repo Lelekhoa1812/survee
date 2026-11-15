@@ -145,7 +145,7 @@ function QuestionAnalysis({ question, summary, display }: { question: Question; 
             {question.required && <Badge kind="info" plain>Required</Badge>}
           </div>
         </div>
-        <p className="analysis-response-count"><b>{summary.answeredCount}</b> of {summary.eligibleCount} answered</p>
+        <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · cohort n={summary.cohortCount}</p>
       </div>
 
       {hasDistribution && (display === "chart"
@@ -182,7 +182,7 @@ export function ComparisonQuestion({ question, summaries }: { question: Question
   ];
   const countRows: { label: string; value: (summary: QuestionSummary) => number }[] = [
     { label: "Answered", value: (summary) => summary.answeredCount },
-    { label: "Missing", value: (summary) => summary.missingCount },
+    { label: "No answer", value: (summary) => summary.noAnswerCount },
     { label: "Note only", value: (summary) => summary.noteOnlyCount },
     { label: "Unmapped", value: (summary) => summary.unmappedResponseCount },
   ];
@@ -202,7 +202,7 @@ export function ComparisonQuestion({ question, summaries }: { question: Question
           <thead>
             <tr>
               <th scope="col">Measure</th>
-              {COMPARE_STATUSES.map((status) => <th scope="col" key={status}>{STATUS_LABELS[status]}<span className="analysis-cohort-denom">Eligible n={summaries[status].eligibleCount}</span></th>)}
+              {COMPARE_STATUSES.map((status) => <th scope="col" key={status}>{STATUS_LABELS[status]}<span className="analysis-cohort-denom">Cohort n={summaries[status].cohortCount}</span></th>)}
             </tr>
           </thead>
           <tbody>
@@ -250,7 +250,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const cohort = ANALYTICS_COHORTS.find((item) => item.key === cohortKey) ?? ANALYTICS_COHORTS[0];
   const cohortLabel = cohort.label;
   const statusCounts = data.analysis?.statusCounts ?? { invited: 0, in_progress: 0, submitted: 0 };
-  const eligibleCount = cohort.statuses.reduce((count, status) => count + statusCounts[status], 0);
+  const cohortCount = cohort.statuses.reduce((count, status) => count + statusCounts[status], 0);
   const questions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return data.manifest.questions.filter((question) => {
@@ -314,7 +314,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
-        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question shows eligible and valid-answer denominators. Checkbox percentages can total more than 100%. Text and note content are excluded.</p>
+        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. KQA does not track whether a conditional or routed question was shown, so no-answer counts may include people who did not see the question. Checkbox percentages can total more than 100%. Text and note content are excluded.</p>
         {data.analysis?.asOf && <p className="analysis-freshness" role="status">Analytics read completed {fullTime(data.analysis.asOf)}. Status groups share one live scan; updates during that scan may be observed.</p>}
       </section>
 
@@ -322,7 +322,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         {COMPARE_STATUSES.map((status) => <div className="stat" key={status}><b>{statusCounts[status]}</b><span>{STATUS_LABELS[status]}</span></div>)}
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
       </div> : <div className="stats analysis-stats">
-        <div className="stat"><b>{eligibleCount}</b><span>{cohortLabel} in cohort</span></div>
+        <div className="stat"><b>{cohortCount}</b><span>{cohortLabel} in cohort</span></div>
         <div className="stat"><b>{submitted}</b><span>Submitted in cohort</span></div>
         <div className="stat"><b>{inProgress}</b><span>In progress in cohort</span></div>
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
@@ -372,7 +372,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         </div>
       </section>
 
-      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${eligibleCount} ${eligibleCount === 1 ? "person" : "people"} in this cohort`}</p>
+      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}</p>
       {groups.length ? groups.map((group) => (
         <section key={group.id} className="stack" style={{ gap: 10 }}>
           <h2 className="section-title">{group.title}</h2>

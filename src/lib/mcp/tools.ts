@@ -412,7 +412,8 @@ const TOOLS: ToolDef[] = [
         methodology: [
           "Summaries use the current survey version and the respondent statuses shown in scope.",
           "answeredCount counts non-empty stored values, including values that are incompatible with the current version; unmapped values are excluded from valid numeric summaries and distributions.",
-          "missingCount uses respondents in scope; distribution percentages use valid answers that match the current options or scale.",
+          "cohortCount includes everyone in each selected status cohort; noAnswerCount is the count without a non-empty stored value and may include people who were not shown a conditional or routed question because KQA does not track item-level display or eligibility.",
+          "eligibleCount and missingCount remain as compatibility aliases for cohortCount and noAnswerCount; they do not measure item-level eligibility or missingness. Distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
           ...(compareRequested ? ["The selected status cohorts were computed in one respondent scan and share this asOf time; changes during the live read are not isolated by a database snapshot."] : []),
           "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
