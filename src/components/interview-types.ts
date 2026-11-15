@@ -1,5 +1,7 @@
 import type { AnswerMap, Manifest } from "@/lib/format/schema";
+import type { AnalyticsCohortKey } from "@/lib/analytics/cohorts";
 import type { QuestionSummary } from "@/lib/analytics/summary";
+import type { ParticipantStatus } from "@/lib/repo/types";
 
 export interface PersonMail {
   state: "unsent" | "sent" | "failed";
@@ -56,12 +58,7 @@ export interface InterviewData {
   publicOrigin: string | null;
   /** Aggregate-only answers for analysis routes. No respondent identifiers or raw text values. */
   analysis?: {
-    eligibleCount: number;
-    submittedCount: number;
-    inProgressCount: number;
-    summaries: {
-      everyone: Record<string, QuestionSummary>;
-      submitted: Record<string, QuestionSummary>;
-    };
+    statusCounts: Record<ParticipantStatus, number>;
+    summaries: Record<AnalyticsCohortKey, Record<string, QuestionSummary>>;
   };
 }

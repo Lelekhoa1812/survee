@@ -1,5 +1,7 @@
 import { isAnswered, validateAnswer } from "../format/answers";
 import type { AnswerMap, Question } from "../format/schema";
+import { ANALYTICS_COHORTS, ANALYTICS_STATUSES, type AnalyticsCohortKey } from "./cohorts";
+import type { ParticipantStatus } from "../repo/types";
 
 export interface AnalyticsRespondent {
   answers: AnswerMap;
@@ -34,6 +36,33 @@ export interface QuestionSummary {
   scaleMedian: number | null;
 }
 
+export interface QuestionSummaryAccumulatorSnapshot {
+  eligibleCount: number;
+  answeredCount: number;
+  noteOnlyCount: number;
+  distributionDenominator: number;
+  distributionUnmappedResponseCount: number;
+  numericUnmappedResponseCount: number;
+  distributionCounts: { value: string; count: number }[];
+  numericValues: number[];
+}
+
+export interface QuestionSummaryAccumulator {
+  add(respondent: AnalyticsRespondent): void;
+  merge(other: QuestionSummaryAccumulator): void;
+  finish(): QuestionSummary;
+  snapshot(): QuestionSummaryAccumulatorSnapshot;
+}
+
+export interface CohortAnalyticsRespondent extends AnalyticsRespondent {
+  status: ParticipantStatus;
+}
+
+export interface QuestionCohortSummaries {
+  statusCounts: Record<ParticipantStatus, number>;
+  summaries: Record<AnalyticsCohortKey, Record<string, QuestionSummary>>;
+}
+
 function numericValue(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string" && value.trim() !== "") {
@@ -63,7 +92,7 @@ function initialDistribution(q: Question) {
  * Descriptive, current-version summary only. It never scores responses or infers meaning from text.
  * Text answers stay in the answer-review view and are not included in this aggregate.
  */
-export function createQuestionSummaryAccumulator(q: Question) {
+export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAccumulator {
   const distributionRows = initialDistribution(q);
   const byValue = new Map(distributionRows.map((row) => [row.value, row]));
   const hasDistribution = q.type === "single" || q.type === "select" || q.type === "multi" || q.type === "scale";
@@ -141,11 +170,71 @@ export function createQuestionSummaryAccumulator(q: Question) {
     };
   }
 
-  return { add, finish };
+  function snapshot(): QuestionSummaryAccumulatorSnapshot {
+    return {
+      eligibleCount,
+      answeredCount,
+      noteOnlyCount,
+      distributionDenominator,
+      distributionUnmappedResponseCount,
+      numericUnmappedResponseCount,
+      distributionCounts: distributionRows.map(({ value, count }) => ({ value, count })),
+      numericValues: [...numericValues],
+    };
+  }
+
+  function merge(other: QuestionSummaryAccumulator) {
+    const source = other.snapshot();
+    eligibleCount += source.eligibleCount;
+    answeredCount += source.answeredCount;
+    noteOnlyCount += source.noteOnlyCount;
+    distributionDenominator += source.distributionDenominator;
+    distributionUnmappedResponseCount += source.distributionUnmappedResponseCount;
+    numericUnmappedResponseCount += source.numericUnmappedResponseCount;
+    for (const row of source.distributionCounts) {
+      const target = byValue.get(row.value);
+      if (target) target.count += row.count;
+    }
+    for (const value of source.numericValues) numericValues.push(value);
+  }
+
+  return { add, merge, finish, snapshot };
 }
 
 export function summarizeQuestion(q: Question, respondents: AnalyticsRespondent[]): QuestionSummary {
   const summary = createQuestionSummaryAccumulator(q);
   for (const respondent of respondents) summary.add(respondent);
   return summary.finish();
+}
+
+/** Build every non-empty status cohort from one respondent scan and per-status accumulators. */
+export async function summarizeQuestionCohorts(
+  questions: Question[],
+  respondents: AsyncIterable<CohortAnalyticsRespondent>,
+): Promise<QuestionCohortSummaries> {
+  const statusCounts: Record<ParticipantStatus, number> = { invited: 0, in_progress: 0, submitted: 0 };
+  const byStatus = new Map(ANALYTICS_STATUSES.map((status) => [
+    status,
+    new Map(questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)])),
+  ]));
+
+  for await (const respondent of respondents) {
+    const accumulators = byStatus.get(respondent.status);
+    if (!accumulators) continue;
+    statusCounts[respondent.status] += 1;
+    for (const accumulator of accumulators.values()) accumulator.add(respondent);
+  }
+
+  const summaries = {} as QuestionCohortSummaries["summaries"];
+  for (const cohort of ANALYTICS_COHORTS) {
+    const byQuestion: Record<string, QuestionSummary> = {};
+    for (const question of questions) {
+      const combined = createQuestionSummaryAccumulator(question);
+      for (const status of cohort.statuses) combined.merge(byStatus.get(status)!.get(question.id)!);
+      byQuestion[question.id] = combined.finish();
+    }
+    summaries[cohort.key] = byQuestion;
+  }
+
+  return { statusCounts, summaries };
 }

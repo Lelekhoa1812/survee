@@ -286,6 +286,11 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-controls { padding: 16px; display: grid; gap: 14px; }
 .analysis-control-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(180px, .7fr); gap: 12px; }
 .analysis-control-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.analysis-cohort-options { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; border: 0; }
+.analysis-cohort-options legend { float: left; margin-right: 4px; padding: 0; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.analysis-cohort-option { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; white-space: nowrap; cursor: pointer; }
+.analysis-cohort-option input { accent-color: var(--accent); }
+.analysis-cohort-option input:disabled { cursor: not-allowed; }
 .analysis-export-actions { margin-left: auto; }
 .analysis-result-count { font-size: 13px; }
 .analysis-question-list { overflow: hidden; }

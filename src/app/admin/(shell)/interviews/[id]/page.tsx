@@ -3,7 +3,7 @@ import { InterviewView } from "@/components/InterviewView";
 import type { InterviewData } from "@/components/interview-types";
 import { publicBaseUrl } from "@/lib/env";
 import { progress } from "@/lib/format/answers";
-import { createQuestionSummaryAccumulator } from "@/lib/analytics/summary";
+import { summarizeQuestionCohorts } from "@/lib/analytics/summary";
 import { currentMail } from "@/lib/mail/state";
 import { getInterview, getVersion, iterateAnalyticsParticipants, listParticipants, listVersions, recentEvents } from "@/lib/repo";
 import { listMailByInterview, mailRecord } from "@/lib/repo/mail";
@@ -33,29 +33,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   let analysis: InterviewData["analysis"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
-    const everyone = new Map(current.manifest.questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
-    const submitted = new Map(current.manifest.questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
-    let eligibleCount = 0;
-    let submittedCount = 0;
-    let inProgressCount = 0;
-    for await (const respondent of iterateAnalyticsParticipants(id, questionIds)) {
-      eligibleCount += 1;
-      if (respondent.status === "submitted") submittedCount += 1;
-      if (respondent.status === "in_progress") inProgressCount += 1;
-      for (const accumulator of everyone.values()) accumulator.add(respondent);
-      if (respondent.status === "submitted") {
-        for (const accumulator of submitted.values()) accumulator.add(respondent);
-      }
-    }
-    analysis = {
-      eligibleCount,
-      submittedCount,
-      inProgressCount,
-      summaries: {
-        everyone: Object.fromEntries([...everyone].map(([questionId, accumulator]) => [questionId, accumulator.finish()])),
-        submitted: Object.fromEntries([...submitted].map(([questionId, accumulator]) => [questionId, accumulator.finish()])),
-      },
-    };
+    analysis = await summarizeQuestionCohorts(current.manifest.questions, iterateAnalyticsParticipants(id, questionIds));
   }
   const names = new Map(people.map((p) => [p.id, p.name]));
   const mailByPerson = new Map<string, ReturnType<typeof mailRecord>[]>();

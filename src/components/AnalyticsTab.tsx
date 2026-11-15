@@ -4,12 +4,19 @@ import { useMemo, useState } from "react";
 import type { QuestionSummary } from "@/lib/analytics/summary";
 import { formatPercentage } from "@/lib/analytics/format";
 import { buildAnalyticsCsv } from "@/lib/analytics/export";
+import { ANALYTICS_COHORTS, analyticsCohortForStatuses, type AnalyticsCohortKey } from "@/lib/analytics/cohorts";
 import type { Question, QuestionType } from "@/lib/format/schema";
+import type { ParticipantStatus } from "@/lib/repo/types";
 import type { InterviewData } from "./interview-types";
 import { Badge, CopyButton, Icon } from "./ui";
 
-type Cohort = "everyone" | "submitted";
 type Display = "chart" | "table";
+
+const STATUS_LABELS: Record<ParticipantStatus, string> = {
+  invited: "Invited · not started",
+  in_progress: "In progress",
+  submitted: "Submitted",
+};
 
 const TYPE_LABELS: Record<QuestionType, string> = {
   single: "Single choice",
@@ -133,12 +140,14 @@ function QuestionAnalysis({ question, summary, display }: { question: Question; 
 }
 
 export function AnalyticsTab({ data }: { data: InterviewData }) {
-  const [cohort, setCohort] = useState<Cohort>("everyone");
+  const [cohortKey, setCohortKey] = useState<AnalyticsCohortKey>("everyone");
   const [display, setDisplay] = useState<Display>("chart");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<QuestionType | "all">("all");
-  const cohortLabel = cohort === "submitted" ? "Submitted only" : "Everyone";
-  const eligibleCount = cohort === "submitted" ? data.analysis?.submittedCount ?? 0 : data.analysis?.eligibleCount ?? 0;
+  const cohort = ANALYTICS_COHORTS.find((item) => item.key === cohortKey) ?? ANALYTICS_COHORTS[0];
+  const cohortLabel = cohort.label;
+  const statusCounts = data.analysis?.statusCounts ?? { invited: 0, in_progress: 0, submitted: 0 };
+  const eligibleCount = cohort.statuses.reduce((count, status) => count + statusCounts[status], 0);
   const questions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return data.manifest.questions.filter((question) => {
@@ -147,12 +156,18 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       return matchesType && matchesSearch;
     });
   }, [data.manifest.questions, search, typeFilter]);
-  const cohortSummaries = data.analysis?.summaries[cohort] ?? {};
+  const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
   const summaries = useMemo(() => new Map(questions.map((question) => [question.id, cohortSummaries[question.id]])), [questions, cohortSummaries]);
   const exportItems = useMemo(() => questions.map((question) => ({ question, summary: summaries.get(question.id)! })), [questions, summaries]);
   const csv = useMemo(() => buildAnalyticsCsv(exportItems, cohortLabel), [exportItems, cohortLabel]);
-  const submitted = data.analysis?.submittedCount ?? 0;
-  const inProgress = cohort === "submitted" ? 0 : data.analysis?.inProgressCount ?? 0;
+  const submitted = cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : 0;
+  const inProgress = cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : 0;
+
+  function toggleStatus(status: ParticipantStatus, checked: boolean) {
+    const next = checked ? [...cohort.statuses, status] : cohort.statuses.filter((item) => item !== status);
+    const match = analyticsCohortForStatuses(next);
+    if (match) setCohortKey(match.key);
+  }
 
   function downloadCsv() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -185,17 +200,17 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         <div className="analysis-intro-head">
           <div>
             <h2>Response analysis</h2>
-            <p>Descriptive summaries for the current survey version. Earlier wording is not separated from current wording.</p>
+            <p>Descriptive summaries for the current survey version. Earlier wording is not separated from current wording. No minimum group size is applied.</p>
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
-        <p className="analysis-caveat">Everyone includes people who have not started. Each question shows answered and eligible counts; distribution percentages use valid answers. Checkbox percentages can total more than 100%. Free-text answers and notes are excluded.</p>
+        <p className="analysis-caveat">Choose which participant statuses to include. Each question shows answered and eligible counts; distribution percentages use valid answers. Checkbox percentages can total more than 100%. Free-text answers and notes are excluded.</p>
       </section>
 
       <div className="stats analysis-stats">
         <div className="stat"><b>{eligibleCount}</b><span>{cohortLabel} in cohort</span></div>
-        <div className="stat"><b>{submitted}</b><span>Submitted</span></div>
-        <div className="stat"><b>{inProgress}</b><span>In progress</span></div>
+        <div className="stat"><b>{submitted}</b><span>Submitted in cohort</span></div>
+        <div className="stat"><b>{inProgress}</b><span>In progress in cohort</span></div>
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
       </div>
 
@@ -214,10 +229,20 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
         </div>
         <div className="analysis-control-footer">
-          <div className="seg" role="group" aria-label="Response cohort">
-            <button type="button" aria-pressed={cohort === "everyone"} onClick={() => setCohort("everyone")}>Everyone</button>
-            <button type="button" aria-pressed={cohort === "submitted"} onClick={() => setCohort("submitted")}>Submitted only</button>
-          </div>
+          <fieldset className="analysis-cohort-options">
+            <legend>Include participant statuses</legend>
+            {(["invited", "in_progress", "submitted"] as const).map((status) => (
+              <label key={status} className="analysis-cohort-option">
+                <input
+                  type="checkbox"
+                  checked={cohort.statuses.some((item) => item === status)}
+                  disabled={cohort.statuses.length === 1 && cohort.statuses.some((item) => item === status)}
+                  onChange={(event) => toggleStatus(status, event.target.checked)}
+                />
+                <span>{STATUS_LABELS[status]} <span className="muted">({statusCounts[status]})</span></span>
+              </label>
+            ))}
+          </fieldset>
           <div className="seg" role="group" aria-label="Display format">
             <button type="button" aria-pressed={display === "chart"} onClick={() => setDisplay("chart")}>Chart</button>
             <button type="button" aria-pressed={display === "table"} onClick={() => setDisplay("table")}>Table</button>
