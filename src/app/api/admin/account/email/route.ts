@@ -5,7 +5,7 @@ import { fail, guardAdmin, json, readJson } from "@/lib/http";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { parseEmail } from "@/lib/mail/address";
 import { adminSession } from "@/lib/http";
-import { loginBlocked, recordLoginFailure } from "@/lib/repo";
+import { consumeRateLimit } from "@/lib/repo";
 import { createPendingEmailChange, removePendingEmailChange } from "@/lib/repo/accounts";
 
 function escapeHtml(value: string): string {
@@ -32,8 +32,7 @@ export async function POST(req: Request) {
 
   const rateKey = `email-change:${createHash("sha256").update(session.userId).digest("hex")}`;
   try {
-    if (await loginBlocked(rateKey, 3)) return fail(429, "Too many email changes. Wait a few minutes and try again.");
-    await recordLoginFailure(rateKey);
+    if (!(await consumeRateLimit(rateKey, 3))) return fail(429, "Too many email changes. Wait a few minutes and try again.");
   } catch {
     return fail(503, "Email verification is temporarily unavailable.");
   }

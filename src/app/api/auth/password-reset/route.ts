@@ -5,7 +5,7 @@ import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
 import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { createPendingPasswordReset, removePendingPasswordReset } from "@/lib/repo/accounts";
-import { loginBlocked, recordLoginFailure } from "@/lib/repo";
+import { consumeRateLimit } from "@/lib/repo";
 
 const GENERIC = "If a verified KQA account uses this address, check its inbox for a temporary sign-in password.";
 
@@ -35,8 +35,8 @@ export async function POST(req: Request) {
   const ipKey = `password-reset-ip:${clientIp(h)}`;
   const emailKey = `password-reset-email:${createHash("sha256").update(parsed.email).digest("hex")}`;
   try {
-    if (await loginBlocked(ipKey, 5) || await loginBlocked(emailKey, 3)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
-    await Promise.all([recordLoginFailure(ipKey), recordLoginFailure(emailKey)]);
+    const [ipAllowed, emailAllowed] = await Promise.all([consumeRateLimit(ipKey, 5), consumeRateLimit(emailKey, 3)]);
+    if (!ipAllowed || !emailAllowed) return fail(429, "Too many attempts. Wait a few minutes and try again.");
   } catch {
     return fail(503, "Password reset is temporarily unavailable. Try again later.");
   }

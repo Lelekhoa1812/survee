@@ -490,6 +490,32 @@ export async function loginBlocked(key: string, maxFails = 8): Promise<boolean> 
   return (await (await col.logins()).countDocuments({ key, at: { $gte: since } })) >= maxFails;
 }
 
+/** Atomically consume one attempt in a fixed window. Keys are hashed before storage so IPs and addresses stay out of the rate-limit collection. */
+export async function consumeRateLimit(key: string, maxAttempts: number, windowMinutes = LOGIN_WINDOW_MIN): Promise<boolean> {
+  if (!key || !Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || !Number.isSafeInteger(windowMinutes) || windowMinutes < 1) {
+    throw new Error("Invalid rate limit configuration.");
+  }
+  const now = new Date();
+  const nextWindowEnd = new Date(now.getTime() + windowMinutes * 60 * 1000);
+  const activeWindow = { $gt: ["$windowEndsAt", now] };
+  const pipeline = [{ $set: {
+    count: { $cond: [activeWindow, { $add: [{ $ifNull: ["$count", 0] }, 1] }, 1] },
+    windowEndsAt: { $cond: [activeWindow, "$windowEndsAt", nextWindowEnd] },
+    expireAt: { $cond: [activeWindow, "$windowEndsAt", nextWindowEnd] },
+  } }];
+  const buckets = await col.rateLimits();
+  const _id = createHash("sha256").update(key).digest("hex");
+  let bucket;
+  try {
+    bucket = await buckets.findOneAndUpdate({ _id }, pipeline, { upsert: true, returnDocument: "after" });
+  } catch (error) {
+    // Concurrent first requests may race to upsert the same unique _id. The loser retries as an update.
+    if ((error as { code?: number }).code !== 11000) throw error;
+    bucket = await buckets.findOneAndUpdate({ _id }, pipeline, { returnDocument: "after" });
+  }
+  return !!bucket && bucket.count <= maxAttempts;
+}
+
 export async function revokeSession(sid: string, exp: number): Promise<void> {
   await (await col.revoked()).updateOne({ sid }, { $setOnInsert: { _id: new ObjectId(), sid, expireAt: new Date(exp * 1000) } }, { upsert: true });
 }

@@ -4,7 +4,7 @@ import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { smtpSettings, publicBaseUrl } from "@/lib/env";
 import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
 import { createPendingSignup, removePendingSignup } from "@/lib/repo/accounts";
-import { loginBlocked as attemptsBlocked, recordLoginFailure as recordAttempt } from "@/lib/repo";
+import { consumeRateLimit } from "@/lib/repo";
 import { headers } from "next/headers";
 
 const GENERIC = "If this address can create an account, check its inbox for a verification link.";
@@ -44,8 +44,8 @@ export async function POST(req: Request) {
   const emailKey = `signup-email:${createHash("sha256").update(parsed.email).digest("hex")}`;
   const generic = () => json({ ok: true, message: GENERIC });
   try {
-    if (await attemptsBlocked(ipKey, 5) || await attemptsBlocked(emailKey, 3)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
-    await Promise.all([recordAttempt(ipKey), recordAttempt(emailKey)]);
+    const [ipAllowed, emailAllowed] = await Promise.all([consumeRateLimit(ipKey, 5), consumeRateLimit(emailKey, 3)]);
+    if (!ipAllowed || !emailAllowed) return fail(429, "Too many attempts. Wait a few minutes and try again.");
   } catch {
     return fail(503, "Signup is temporarily unavailable. Try again later.");
   }

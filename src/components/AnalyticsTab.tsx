@@ -317,6 +317,19 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const segmentQuestion = segmentQuestions.find((question) => question.id === segmentById) ?? segmentQuestions[0];
   const outcomeQuestions = questions.filter((question) => question.id !== segmentQuestion?.id);
   const outcomeQuestion = outcomeQuestions.find((question) => question.id === segmentOutcomeId) ?? outcomeQuestions[0];
+  const selectedStatuses = compareStatuses ? COMPARE_STATUSES : cohort.statuses;
+  const selectedStatusesParam = selectedStatuses.join(",");
+  const currentSegmentResult = segmentResult
+    && segmentQuestion
+    && outcomeQuestion
+    && segmentResult.segmentBy.id === segmentQuestion.id
+    && segmentResult.outcome.id === outcomeQuestion.id
+    && segmentResult.scope.compareStatuses === compareStatuses
+    && segmentResult.scope.statuses.length === selectedStatuses.length
+    && segmentResult.scope.statuses.every((status, index) => status === selectedStatuses[index])
+    ? segmentResult
+    : null;
+  const segmentResultsPending = segmentMode && !segmentError && !!outcomeQuestion && !currentSegmentResult;
   const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
   const summaries = useMemo(() => new Map(questions.map((question) => [question.id, cohortSummaries[question.id]])), [questions, cohortSummaries]);
   const exportItems = useMemo(() => compareStatuses
@@ -324,22 +337,20 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     : questions.map((question) => ({ question, summary: summaries.get(question.id)! })),
   [questions, summaries, compareStatuses, data.analysis]);
   const segmentExportItems = useMemo(() => {
-    if (!segmentResult || !outcomeQuestion || !segmentQuestion) return [];
-    return segmentResult.segments.flatMap((segment) => compareStatuses
+    if (!currentSegmentResult || !outcomeQuestion || !segmentQuestion) return [];
+    return currentSegmentResult.segments.flatMap((segment) => compareStatuses
       ? COMPARE_STATUSES.flatMap((status) => {
           const summary = segment.statusSummaries?.[status]?.[outcomeQuestion.id];
           return summary ? [{ question: outcomeQuestion, summary, cohort: `${segmentQuestion.label} = ${segment.label} · ${STATUS_LABELS[status]}` }] : [];
         })
       : [{ question: outcomeQuestion, summary: segment.summaries[outcomeQuestion.id], cohort: `${segmentQuestion.label} = ${segment.label}` }]);
-  }, [segmentResult, outcomeQuestion, segmentQuestion, compareStatuses]);
+  }, [currentSegmentResult, outcomeQuestion, segmentQuestion, compareStatuses]);
   const activeExportItems = segmentMode ? segmentExportItems : exportItems;
   const csv = useMemo(() => buildAnalyticsCsv(activeExportItems, cohortLabel, {
     interviewId: data.interview.id,
     surveyVersion: data.interview.currentVersion,
-    asOf: segmentMode ? segmentResult?.asOf : data.analysis?.asOf,
-  }), [activeExportItems, cohortLabel, data.interview.id, data.interview.currentVersion, data.analysis?.asOf, segmentMode, segmentResult?.asOf]);
-  const selectedStatuses = compareStatuses ? COMPARE_STATUSES : cohort.statuses;
-  const selectedStatusesParam = selectedStatuses.join(",");
+    asOf: segmentMode ? currentSegmentResult?.asOf : data.analysis?.asOf,
+  }), [activeExportItems, cohortLabel, data.interview.id, data.interview.currentVersion, data.analysis?.asOf, segmentMode, currentSegmentResult?.asOf]);
   const submitted = cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : 0;
   const inProgress = cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : 0;
 
@@ -477,20 +488,28 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
             <button type="button" aria-pressed={display === "table"} onClick={() => setDisplay("table")}>Table</button>
           </div>}
           <div className="row wrap analysis-export-actions">
-            <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={segmentMode ? !segmentResult : !questions.length} />
-            <button type="button" className="btn sm" onClick={downloadCsv} disabled={segmentMode ? !segmentResult : !questions.length}><Icon name="download" size={14} /> Download CSV</button>
+            <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={segmentMode ? !currentSegmentResult : !questions.length} />
+            <button type="button" className="btn sm" onClick={downloadCsv} disabled={segmentMode ? !currentSegmentResult : !questions.length}><Icon name="download" size={14} /> Download CSV</button>
           </div>
         </div>
         {segmentMode && <div className="analysis-segment-controls">
           <div className="field">
             <label htmlFor="analysis-segment-by">Break down by answer</label>
-            <select id="analysis-segment-by" className="select" value={segmentQuestion?.id ?? ""} onChange={(event) => setSegmentById(event.target.value)}>
+            <select id="analysis-segment-by" className="select" value={segmentQuestion?.id ?? ""} onChange={(event) => {
+              setSegmentById(event.target.value);
+              setSegmentResult(null);
+              setSegmentError("");
+            }}>
               {segmentQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
             </select>
           </div>
           <div className="field">
             <label htmlFor="analysis-segment-outcome">Outcome question</label>
-            <select id="analysis-segment-outcome" className="select" value={outcomeQuestion?.id ?? ""} onChange={(event) => setSegmentOutcomeId(event.target.value)} disabled={!outcomeQuestions.length}>
+            <select id="analysis-segment-outcome" className="select" value={outcomeQuestion?.id ?? ""} onChange={(event) => {
+              setSegmentOutcomeId(event.target.value);
+              setSegmentResult(null);
+              setSegmentError("");
+            }} disabled={!outcomeQuestions.length}>
               {outcomeQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
             </select>
           </div>
@@ -498,17 +517,17 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       </section>
 
       <p className="muted analysis-result-count" aria-live="polite">{segmentMode
-        ? segmentLoading ? "Calculating answer groups…" : `${segmentResult?.segments.length ?? 0} answer groups · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`
+        ? segmentLoading || segmentResultsPending ? "Calculating answer groups…" : `${currentSegmentResult?.segments.length ?? 0} answer groups · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`
         : `Showing ${questions.length} of ${data.manifest.questions.length} questions · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`}</p>
       {segmentMode ? <>
         {!segmentQuestions.length && <div className="card empty"><h3>No categorical questions to segment by</h3><p>Add a single-choice, dropdown, checkbox, or scale question to define answer groups.</p></div>}
         {!outcomeQuestion && segmentQuestions.length > 0 && <div className="card empty"><h3>No outcome questions match</h3><p>Change the search or question type filter, or choose a different segmentation question.</p></div>}
         {segmentQuestion?.type === "multi" && <p className="analysis-text-note">This checkbox question can place one person in several answer groups. Group counts and percentages overlap and must not be added together.</p>}
-        {segmentLoading && <p className="card analysis-segment-message" role="status">Calculating answer groups…</p>}
+        {(segmentLoading || segmentResultsPending) && <p className="card analysis-segment-message" role="status">Calculating answer groups…</p>}
         {segmentError && <p className="card analysis-segment-message question-warning" role="alert">{segmentError}</p>}
-        {segmentResult && outcomeQuestion && <>
-          <p className="analysis-freshness" role="status">Segment analysis completed {fullTime(segmentResult.asOf)} for n={segmentResult.scope.participantCount}. Group summaries share one live scan.</p>
-          <SegmentResults question={outcomeQuestion} result={segmentResult} compareStatuses={compareStatuses} display={display} />
+        {currentSegmentResult && outcomeQuestion && <>
+          <p className="analysis-freshness" role="status">Segment analysis completed {fullTime(currentSegmentResult.asOf)} for n={currentSegmentResult.scope.participantCount}. Group summaries share one live scan.</p>
+          <SegmentResults question={outcomeQuestion} result={currentSegmentResult} compareStatuses={compareStatuses} display={display} />
         </>}
       </> : groups.length ? groups.map((group) => (
         <section key={group.id} className="stack" style={{ gap: 10 }}>

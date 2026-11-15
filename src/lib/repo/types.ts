@@ -77,6 +77,14 @@ export interface PendingPasswordResetDoc {
   expiresAt: Date;
 }
 
+/** collection: rate_limits. One atomic, expiring counter per privacy-preserving request key. */
+export interface RateLimitBucketDoc {
+  _id: string;
+  count: number;
+  windowEndsAt: Date;
+  expireAt: Date;
+}
+
 /** collection: interviews */
 export interface InterviewDoc {
   _id: ObjectId;
