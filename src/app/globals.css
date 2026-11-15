@@ -118,7 +118,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.block { width: 100%; }
 .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
 
 /* ---- forms */
 .field { display: grid; gap: 6px; }
@@ -276,6 +282,8 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .scrim { position: fixed; inset: 0; background: rgba(8, 18, 30, .5); backdrop-filter: blur(3px); z-index: 80; display: grid; place-items: center; padding: 20px; animation: fade .15s ease; }
 .modal { width: min(520px, 100%); background: var(--surface); border-radius: 16px; border: 1px solid var(--line); box-shadow: var(--shadow-lg); padding: 24px; display: grid; gap: 16px; max-height: calc(100dvh - 40px); overflow: auto; animation: pop .18s ease; }
 .modal h2 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.modal.answers-modal > h2 { padding: 18px 20px 0; }
+.modal.answers-modal .card-head { padding-top: 10px; }
 .modal .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }

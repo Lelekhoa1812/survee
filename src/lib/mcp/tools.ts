@@ -1,6 +1,7 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { createQuestionSummaryAccumulator } from "../analytics/summary";
+import { getAnalyticsGuidance } from "../analytics/guidance";
 import { DESIGN_REVIEW_CHECKLIST, getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
 import { parseEmail } from "../mail/address";
@@ -22,6 +23,7 @@ import {
   listParticipants,
   listVersions,
   noteMcp,
+  publishVersionIfCurrent,
   recentEvents,
   regenerateToken,
   reopenParticipant,
@@ -33,6 +35,7 @@ import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
+import { createHash } from "node:crypto";
 import { validateToolArgs } from "./validate";
 
 export interface ToolResult {
@@ -69,6 +72,14 @@ function oid(id: string): ObjectId | null {
 
 function questionList(manifest: Manifest) {
   return manifest.questions.map((q) => ({ id: q.id, type: q.type, label: q.label, required: !!q.required, section: q.section ?? null }));
+}
+
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function hasCompatibilityImpact(diagnostics: { code: string }[]) {
+  return diagnostics.some((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code));
 }
 
 function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[]) {
@@ -124,6 +135,14 @@ async function onePerson(personId: string) {
 }
 
 const TOOLS: ToolDef[] = [
+  {
+    name: "get_analytics_guidance",
+    description: "Return deterministic, versioned interpretation guidance and primary sources for analyzing KQA survey results. KQA does not run an LLM.",
+    inputSchema: obj({}),
+    async run() {
+      return ok(getAnalyticsGuidance());
+    },
+  },
   {
     name: "get_design_guidance",
     description: "Return KQA's sourced, versioned design principles for questionnaires, the host console, or analytics. No LLM is built into KQA.",
@@ -488,6 +507,83 @@ const TOOLS: ToolDef[] = [
       if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.");
       await deleteInterview(id);
       return ok({ ok: true });
+    },
+  },
+  {
+    name: "preview_questionnaire_version_patch",
+    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not store or publish anything.",
+    inputSchema: obj({ interviewId: str, html: str, fileName: str }, ["interviewId", "html"]),
+    async run(args) {
+      const id = asString(args.interviewId, 40);
+      if (!id) return err("interviewId is required.");
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
+      const current = await getVersion(interview._id, interview.currentVersion);
+      if (!current) return err("Current survey version not found.", "not_found");
+      if (typeof args.html !== "string") return err("html is required.");
+      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
+      const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
+      const candidateHtml = prepared.survey?.html ?? args.html.replace(/^\uFEFF/, "");
+      return ok({
+        ok: !!prepared.survey && prepared.report.ok,
+        interviewId: id,
+        currentVersion: interview.currentVersion,
+        baseHash: current.htmlSha256,
+        candidateHash: sha256(candidateHtml),
+        staticValid: prepared.report.ok,
+        diagnostics: prepared.report.diagnostics,
+        counts: prepared.report.counts,
+        compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
+        report: prepared.markdown,
+        changes: prepared.report.manifest ? {
+          questionCountBefore: current.manifest.questions.length,
+          questionCountAfter: prepared.report.manifest.questions.length,
+          questionsBefore: questionList(current.manifest),
+          questionsAfter: questionList(prepared.report.manifest),
+          sectionsBefore: current.manifest.sections ?? [],
+          sectionsAfter: prepared.report.manifest.sections ?? [],
+        } : null,
+      });
+    },
+  },
+  {
+    name: "apply_questionnaire_version_patch",
+    description: "Publish a new immutable questionnaire version from complete HTML after preview. Requires the previewed current version and hashes; acknowledge compatibility impact when preview reports it.",
+    inputSchema: obj({
+      interviewId: str,
+      html: str,
+      fileName: str,
+      expectedVersion: { type: "integer", minimum: 1 },
+      baseHash: str,
+      candidateHash: str,
+      acknowledgeCompatibilityImpact: bool,
+    }, ["interviewId", "html", "expectedVersion", "baseHash", "candidateHash"]),
+    async run(args) {
+      const id = asString(args.interviewId, 40);
+      if (!id) return err("interviewId is required.");
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
+      if (typeof args.html !== "string") return err("html is required.");
+      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
+      const expectedVersion = args.expectedVersion as number;
+      const current = await getVersion(interview._id, interview.currentVersion);
+      if (interview.currentVersion !== expectedVersion || !current || current.htmlSha256 !== args.baseHash) {
+        return err("The questionnaire changed since preview. Preview again before applying.", "stale_preview");
+      }
+      const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
+      if (!prepared.survey || !prepared.report.ok) {
+        return { ...err("The candidate did not pass the static checker.", "checker"), structuredContent: { ok: false, error: "The candidate did not pass the static checker.", code: "checker", diagnostics: prepared.report.diagnostics, report: prepared.markdown } };
+      }
+      const candidateHash = sha256(prepared.survey.html);
+      if (candidateHash !== args.candidateHash) return err("The candidate HTML changed since preview. Preview again before applying.", "candidate_changed");
+      const impact = hasCompatibilityImpact(prepared.report.diagnostics);
+      if (impact && args.acknowledgeCompatibilityImpact !== true) {
+        return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics } };
+      }
+      const published = await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey);
+      if (!published) return err("Interview not found.", "not_found");
+      if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
+      return ok({ ok: true, interviewId: id, version: published.version, previousVersion: expectedVersion, candidateHash, diagnostics: prepared.report.diagnostics });
     },
   },
   {

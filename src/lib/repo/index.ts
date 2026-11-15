@@ -119,6 +119,49 @@ export async function addVersion(id: string, survey: NewSurvey): Promise<number 
   return next;
 }
 
+/** Publish only if the interview still points at the version that was reviewed. */
+export async function publishVersionIfCurrent(
+  id: string,
+  expectedVersion: number,
+  expectedBaseHash: string,
+  survey: NewSurvey,
+): Promise<{ version: number } | { conflict: true } | null> {
+  const oid = toOid(id);
+  if (!oid) return null;
+  const interviews = await col.interviews();
+  const interview = await interviews.findOne({ _id: oid, currentVersion: expectedVersion });
+  if (!interview) return { conflict: true };
+  const current = await getVersion(oid, expectedVersion);
+  if (!current || current.htmlSha256 !== expectedBaseHash) return { conflict: true };
+
+  const version = expectedVersion + 1;
+  const versions = await col.versions();
+  const doc = versionDoc(oid, version, survey);
+  try {
+    await versions.insertOne(doc);
+  } catch (error) {
+    // A concurrent publisher may already have claimed this version number.
+    if (error && typeof error === "object" && "code" in error && error.code === 11000) return { conflict: true };
+    throw error;
+  }
+  let changed;
+  try {
+    changed = await interviews.updateOne(
+      { _id: oid, currentVersion: expectedVersion },
+      { $set: { currentVersion: version, updatedAt: new Date() } },
+    );
+  } catch (error) {
+    await versions.deleteOne({ _id: doc._id }).catch(() => {});
+    throw error;
+  }
+  if (!changed.modifiedCount) {
+    await versions.deleteOne({ _id: doc._id }).catch(() => {});
+    return { conflict: true };
+  }
+  logEvent(oid, "version", undefined, { version, source: "mcp_patch" });
+  return { version };
+}
+
 export async function deleteInterview(id: string): Promise<boolean> {
   const oid = toOid(id);
   if (!oid) return false;

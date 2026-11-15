@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 // ------------------------------------------------------------------------------------------------ icons
 const PATHS: Record<string, ReactNode> = {
@@ -142,28 +142,61 @@ export function CopyButton({ text, label = "Copy", done = "Copied", className = 
 }
 
 // ------------------------------------------------------------------------------------------------ modal
-export function Modal({ title, children, onClose, actions }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode }) {
+export function Modal({ title, children, onClose, actions, className, style }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; className?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>("input, textarea, button.primary, button.accent, button")?.focus();
+    const dialog = ref.current;
+    if (!dialog) return;
+    const getFocusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'a[href], area[href], button, input:not([type="hidden"]), select, textarea, iframe, object, embed, [contenteditable]:not([contenteditable="false"]), [tabindex]',
+    )).filter((element) => {
+      if (element.tabIndex < 0 || element.matches(":disabled") || element.closest("[hidden], [inert], [aria-hidden='true']")) return false;
+      const computed = window.getComputedStyle(element);
+      return computed.display !== "none" && computed.visibility !== "hidden";
+    });
+    const focusables = getFocusable();
+    const preferred = dialog.querySelector<HTMLElement>("[autofocus]");
+    (preferred && focusables.includes(preferred) ? preferred : focusables[0] ?? dialog).focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "Tab" && ref.current) {
-        const f = ref.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input, textarea, select");
-        if (!f.length) return;
-        const first = f[0], last = f[f.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+      }
+      if (e.key === "Tab") {
+        const current = ref.current;
+        if (!current) return;
+        const focusable = getFocusable();
+        if (!focusable.length) {
+          e.preventDefault();
+          current.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (!current.contains(active)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("keydown", onKey); prev?.focus?.(); };
-  }, [onClose]);
+  }, []);
   return (
     <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
-        <h2>{title}</h2>
+      <div className={`modal${className ? ` ${className}` : ""}`} style={style} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={ref}>
+        <h2 id={titleId}>{title}</h2>
         {children}
         {actions && <div className="actions">{actions}</div>}
       </div>

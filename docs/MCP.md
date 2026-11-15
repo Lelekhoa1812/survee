@@ -49,6 +49,7 @@ Every tool uses the same bearer check. Arguments are checked against the publish
 
 | Tool | What it does |
 |---|---|
+| `get_analytics_guidance` | Return versioned interpretation principles, a review checklist, and primary sources for descriptive survey analysis |
 | `get_design_guidance` | Return KQA's versioned design principles, review checklist, and external sources for a product surface |
 | `audit_questionnaire_design` | Run static questionnaire diagnostics and return the design review checklist; it does not render or certify the page |
 | `list_interviews` | Host's interviews, open or closed, with people counts |
@@ -60,6 +61,8 @@ Every tool uses the same bearer check. Arguments are checked against the publish
 | `update_interview` | Rename, notes, open, or close |
 | `delete_interview` | Delete the interview, people, answers, and invite history. `confirmName` must match |
 | `upload_survey_version` | Replace the live file. A failed check stores nothing |
+| `preview_questionnaire_version_patch` | Check a complete candidate HTML file against the current version and saved answers; stores nothing |
+| `apply_questionnaire_version_patch` | Publish a previewed complete HTML file with version/hash checks and compatibility acknowledgement |
 | `list_people` | People, optional email, status, progress, mail state, private link |
 | `get_person` | One person |
 | `add_people` | Add people to a multi-user interview. Email is optional |
@@ -77,6 +80,10 @@ Every tool uses the same bearer check. Arguments are checked against the publish
 | `check_invite_delivery` | IMAP check of the message id KQA stored. `delivered`, `bounced`, or `unknown` |
 
 `get_design_guidance` is a deterministic instruction package; KQA does not include or call an LLM. `audit_questionnaire_design` runs the same static checker used by uploads and returns the checklist for rendered review. Static diagnostics cannot verify contrast, layout, keyboard interaction, motion, or assistive-technology behavior.
+
+`get_analytics_guidance` returns the versioned `kqa-analytics/1` package for an integrated agent. It describes how to scope and interpret the descriptive summaries, explain missingness and multi-select denominators, choose charts, protect respondent privacy, and state limits on inference. It is guidance only: KQA does not generate or certify the downstream analysis.
+
+For agent-authored questionnaire changes, call `preview_questionnaire_version_patch` with the complete candidate HTML. It returns the current version and base hash, a hash of the normalized candidate HTML, static diagnostics, and compatibility findings computed against the current survey and saved answers. Preview is non-mutating. If it passes, call `apply_questionnaire_version_patch` with the same complete HTML, `expectedVersion`, `baseHash`, and `candidateHash` from that preview. Apply reruns the checker and compatibility comparison on the server; it does not accept preview diagnostics or a client-supplied manifest. If compatibility findings are present, also pass `acknowledgeCompatibilityImpact: true`. The server rejects a stale version/base hash, changed candidate HTML, failed static checks, missing acknowledgement, or a concurrent publish. A successful apply adds a new immutable version and preserves prior versions and answers. These tools treat questionnaire files as arbitrary HTML: they do not edit question markup or custom JavaScript on the agent's behalf.
 
 `analyze_answers` uses the current immutable survey version. By default it includes invited, in-progress, and submitted people; set `submittedOnly` to true to restrict the cohort. Use `questionId` for one question or `offset` and `limit` to page through questions. `answeredCount` counts non-empty stored values, including values that no longer fit the current version; `unmappedResponseCount` reports those values, and they are excluded from valid numeric summaries and distributions. Missingness uses the eligible respondent count, and option distributions expose their valid-answer denominator. Scale questions report a distribution and median without a mean. Number summaries are descriptive and respect current minimum and maximum bounds. Text answers, names, notes, and private links are not returned.
 

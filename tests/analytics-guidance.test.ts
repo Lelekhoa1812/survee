@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+import { ANALYTICS_GUIDANCE_VERSION, getAnalyticsGuidance } from "../src/lib/analytics/guidance";
+import { dispatchTool, listToolDefs } from "../src/lib/mcp/tools";
+
+describe("versioned analytics guidance", () => {
+  it("returns a deterministic, JSON-serializable package with primary sources", () => {
+    const first = getAnalyticsGuidance();
+    const second = getAnalyticsGuidance();
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/1");
+    expect(first).toEqual(second);
+    expect(JSON.parse(JSON.stringify(first))).toEqual(first);
+    expect(first.sources.length).toBeGreaterThanOrEqual(6);
+    expect(first.sources.every((source) => source.url.startsWith("https://"))).toBe(true);
+  });
+
+  it("covers cohort definition, denominators, missingness, measure types, privacy, and claim limits", () => {
+    const guidance = getAnalyticsGuidance();
+    const text = guidance.principles.map(({ title, guidance }) => `${title} ${guidance}`).join(" ").toLowerCase();
+    for (const phrase of [
+      "business question",
+      "submittedonly",
+      "missing",
+      "unmapped",
+      "median",
+      "multi-select",
+      "causal",
+      "chart",
+      "privacy",
+      "ambiguity",
+    ]) {
+      expect(text).toContain(phrase);
+    }
+    expect(guidance.productConstraints.join(" ")).toContain("current-version");
+    expect(guidance.reviewChecklist.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("returns fresh package objects so callers cannot mutate shared guidance", () => {
+    const first = getAnalyticsGuidance();
+    (first.principles[0] as { guidance: string }).guidance = "caller mutation";
+    expect(getAnalyticsGuidance().principles[0].guidance).not.toBe("caller mutation");
+  });
+
+  it("exposes the versioned package as a no-argument MCP tool", async () => {
+    expect(listToolDefs().find(({ name }) => name === "get_analytics_guidance")?.inputSchema).toMatchObject({ type: "object", properties: {}, required: [], additionalProperties: false });
+    const result = await dispatchTool("get_analytics_guidance", {});
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent.policyVersion).toBe(ANALYTICS_GUIDANCE_VERSION);
+    expect(result.structuredContent.sources).toEqual(getAnalyticsGuidance().sources);
+  });
+});

@@ -5,7 +5,7 @@ import { displayValue, isAnswered } from "@/lib/format/answers";
 import type { Question } from "@/lib/format/schema";
 import type { InterviewData, PersonRow } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
-import { Badge, Icon } from "./ui";
+import { Badge, Icon, Modal } from "./ui";
 import { fullTime } from "@/lib/time";
 import { summarizeQuestion, type QuestionSummary } from "@/lib/analytics/summary";
 import { formatPercentage } from "@/lib/analytics/format";
@@ -165,12 +165,10 @@ export function AnswersTab({ data }: { data: InterviewData }) {
       )}
 
       {viewing && (
-        <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) setViewing(null); }}>
-          <div className="modal" style={{ width: "min(1000px, 100%)", padding: 0, gap: 0 }} role="dialog" aria-modal="true" aria-label={`${viewing.name}'s answers`}>
-            <div className="card-head"><h2>{viewing.name}</h2><span className="sub">Read only</span><button className="btn ghost sm icon right" onClick={() => setViewing(null)} aria-label="Close"><Icon name="x" size={16} /></button></div>
-            <PreviewFrame src={`/api/admin/frame?interview=${data.interview.id}&version=${data.interview.currentVersion}`} questions={questions} answers={viewing.answers} locked name={viewing.name} height={Math.round(typeof window === "undefined" ? 640 : window.innerHeight * 0.72)} />
-          </div>
-        </div>
+        <Modal title={`${viewing.name}'s answers`} onClose={() => setViewing(null)} className="answers-modal" style={{ width: "min(1000px, 100%)", padding: 0, gap: 0 }}>
+          <div className="card-head"><span className="sub">Read only</span><button className="btn ghost sm icon right" onClick={() => setViewing(null)} aria-label="Close"><Icon name="x" size={16} /></button></div>
+          <PreviewFrame src={`/api/admin/frame?interview=${data.interview.id}&version=${data.interview.currentVersion}`} questions={questions} answers={viewing.answers} locked name={viewing.name} height={Math.round(typeof window === "undefined" ? 640 : window.innerHeight * 0.72)} />
+        </Modal>
       )}
     </div>
   );
