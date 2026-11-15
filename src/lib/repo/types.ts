@@ -196,6 +196,8 @@ export interface OAuthCodeDoc {
   redirectUri: string;
   challenge: string;
   email: string;
+  /** Missing only on short-lived codes created before capability consent shipped. */
+  capabilities?: McpCapability[];
   expiresAt: Date;
 }
 

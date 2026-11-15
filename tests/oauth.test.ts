@@ -5,8 +5,8 @@ process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
 process.env.KQA_MCP_TOKEN = "t".repeat(43);
 
 interface Client { clientId: string; name: string; redirectUris: string[]; createdAt: Date }
-interface Code { _id: { toHexString(): string }; hash: string; tenantId: string; userId: { toHexString(): string }; clientId: string; redirectUri: string; challenge: string; email: string; expiresAt: Date }
-interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; note?: string }
+interface Code { _id: { toHexString(): string }; hash: string; tenantId: string; userId: { toHexString(): string }; clientId: string; redirectUri: string; challenge: string; email: string; capabilities?: string[]; expiresAt: Date }
+interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; note?: string; capabilities?: string[] }
 type ExistenceCondition = { $exists: boolean };
 type DateCondition = Date | ExistenceCondition | { $eq: Date; $gt: Date };
 
@@ -56,7 +56,13 @@ vi.mock("../src/lib/db", () => ({
 }));
 
 import { allowedRedirect, authorizationServerMetadata, exchangeCode, issueCode, OAUTH_SCOPE, protectedResourceMetadata, registerClient, s256, tokenResponse, wwwAuthenticate } from "../src/lib/mcp/oauth";
-import { authenticateApiKey, rotateOAuthKey } from "../src/lib/repo/keys";
+import { DEFAULT_MCP_CAPABILITIES, type McpCapability } from "../src/lib/mcp/capabilities";
+import { listToolDefs, dispatchTool } from "../src/lib/mcp/tools";
+import { authenticateApiKey, authenticateApiKeyAccess, rotateOAuthKey } from "../src/lib/repo/keys";
+
+function issueReadOnlyCode(input: Omit<Parameters<typeof issueCode>[0], "capabilities">): Promise<string> {
+  return issueCode({ ...input, capabilities: [...DEFAULT_MCP_CAPABILITIES] });
+}
 
 describe("OAuth discovery and PKCE", () => {
   beforeEach(() => {
@@ -97,13 +103,13 @@ describe("OAuth discovery and PKCE", () => {
 
     const verifier = "a".repeat(48);
     const challenge = s256(verifier);
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const bad = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier: "wrong-verifier-value-with-enough-length" });
     expect(bad.ok).toBe(false);
     const again = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     expect(again.ok).toBe(false);
 
-    const fresh = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const fresh = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const good = await exchangeCode({ code: fresh, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     expect(good.ok).toBe(true);
     if (!good.ok) return;
@@ -117,11 +123,71 @@ describe("OAuth discovery and PKCE", () => {
     expect(createHash("sha256").update(verifier).digest("base64url")).toBe(challenge);
   });
 
+  it("stores the selected OAuth permissions, enforces them on tools, and preserves them on refresh", async () => {
+    const registered = await registerClient({ name: "Analytics client", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "limited-permission-verifier-value-123456";
+    const capabilities: McpCapability[] = ["analytics:read"];
+    const code = await issueCode({
+      clientId: registered.clientId,
+      redirectUri: "https://chatgpt.com/callback",
+      challenge: s256(verifier),
+      email: "admin@axiob.local",
+      tenantId: "axion",
+      userId: "000000000000000000000001",
+      capabilities,
+    });
+
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+    expect(keys[0].capabilities).toEqual(capabilities);
+    const access = await authenticateApiKeyAccess(exchanged.access);
+    expect(access).toEqual({ tenantId: "axion", capabilities });
+    const names = listToolDefs(access?.capabilities).map(({ name }) => name);
+    expect(names).toContain("get_analytics_guidance");
+    expect(names).toContain("analyze_answers");
+    expect(names).not.toContain("get_answers");
+    expect(names).not.toContain("list_interviews");
+    expect((await dispatchTool("get_analytics_guidance", {}, access?.capabilities)).isError).toBe(false);
+    expect((await dispatchTool("get_answers", { interviewId: "a".repeat(24) }, access?.capabilities)).isError).toBe(true);
+
+    const rotated = await rotateOAuthKey(exchanged.refresh);
+    expect(rotated).not.toBeNull();
+    expect(keys[0].capabilities).toEqual(capabilities);
+    expect(await authenticateApiKeyAccess(rotated!.access)).toEqual({ tenantId: "axion", capabilities });
+  });
+
+  it("uses read-only defaults for a short-lived code issued before capability consent", async () => {
+    const registered = await registerClient({ name: "Older client", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "legacy-capability-code-verifier-value-1234";
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    delete codes[0].capabilities;
+
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+
+    expect(exchanged.ok).toBe(true);
+    expect(keys[0].capabilities).toEqual(DEFAULT_MCP_CAPABILITIES);
+  });
+
+  it("rejects a code whose stored permission grant is invalid", async () => {
+    const registered = await registerClient({ name: "Tampered client", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "invalid-capability-code-verifier-value-123";
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    codes[0].capabilities = ["root:all"];
+
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+
+    expect(exchanged).toEqual({ ok: false, error: "invalid_grant" });
+    expect(keys).toHaveLength(0);
+  });
+
   it("allows only one concurrent exchange of an authorization code", async () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "parallel-code-verifier-value-1234567890";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const input = { code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier };
 
     const results = await Promise.all([exchangeCode(input), exchangeCode(input)]);
@@ -134,7 +200,7 @@ describe("OAuth discovery and PKCE", () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "parallel-refresh-verifier-value-123456";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
 
@@ -152,7 +218,7 @@ describe("OAuth discovery and PKCE", () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "owner-shortened-expiry-verifier-value-123456";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
     const shortenedExpiry = new Date(Date.now() + 3 * 60 * 60 * 1000);
@@ -170,7 +236,7 @@ describe("OAuth discovery and PKCE", () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "near-expiry-refresh-verifier-value-12345";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
     const nearExpiry = new Date(Date.now() + 5_000);
@@ -188,7 +254,7 @@ describe("OAuth discovery and PKCE", () => {
     const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "normal-expiry-refresh-verifier-value-12345";
-    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
     const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
     const originalExpiry = keys[0].expiresAt?.getTime();

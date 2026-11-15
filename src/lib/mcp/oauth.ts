@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { col } from "../db";
 import { createApiKey, generateKeySecret, hashKey } from "../repo/keys";
-import { MCP_CAPABILITIES } from "./capabilities";
+import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities, type McpCapability } from "./capabilities";
 
 export const OAUTH_SCOPE = "host";
 const CODE_TTL_MS = 5 * 60 * 1000;
@@ -100,7 +100,9 @@ export function authorizeError(redirectUri: string, issuer: string, error: strin
   return url.toString();
 }
 
-export async function issueCode(input: { clientId: string; redirectUri: string; challenge: string; email: string; tenantId: string; userId: string }): Promise<string> {
+export async function issueCode(input: { clientId: string; redirectUri: string; challenge: string; email: string; tenantId: string; userId: string; capabilities: McpCapability[] }): Promise<string> {
+  const capabilities = parseMcpCapabilities(input.capabilities);
+  if (!capabilities) throw new Error("Choose at least one valid access permission.");
   const code = randomBytes(32).toString("base64url");
   await (await col.oauthCodes()).insertOne({
     _id: new ObjectId(),
@@ -111,6 +113,7 @@ export async function issueCode(input: { clientId: string; redirectUri: string; 
     redirectUri: input.redirectUri,
     challenge: input.challenge,
     email: input.email,
+    capabilities,
     expiresAt: new Date(Date.now() + CODE_TTL_MS),
   });
   return code;
@@ -127,6 +130,10 @@ export async function exchangeCode(input: { code: string; clientId: string; redi
   if (claimed.deletedCount !== 1) return { ok: false, error: "invalid_grant" };
   if (doc.clientId !== input.clientId || doc.redirectUri !== input.redirectUri) return { ok: false, error: "invalid_grant" };
   if (!challengesMatch(s256(input.verifier), doc.challenge)) return { ok: false, error: "invalid_grant" };
+  const capabilities = doc.capabilities === undefined
+    ? [...DEFAULT_MCP_CAPABILITIES]
+    : parseMcpCapabilities(doc.capabilities);
+  if (!capabilities) return { ok: false, error: "invalid_grant" };
   const client = await findClient(doc.clientId);
   const access = generateKeySecret();
   const refresh = generateKeySecret();
@@ -139,9 +146,8 @@ export async function exchangeCode(input: { code: string; clientId: string; redi
     createdBy: doc.email,
     tenantId: doc.tenantId ?? "axion",
     oauthClientId: doc.clientId,
-    // OAuth consent currently requests the single broad `host` scope. Preserve that
-    // contract explicitly; an owner can narrow this credential later in Settings.
-    capabilities: [...MCP_CAPABILITIES],
+    // Keep the protocol-level `host` scope stable; tool permissions come from KQA consent.
+    capabilities,
   });
   if (!created.ok) return { ok: false, error: "server_error" };
   return { ok: true, access, refresh, expiresIn: Math.floor(TOKEN_TTL_MS / 1000) };
