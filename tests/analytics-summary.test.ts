@@ -9,6 +9,23 @@ const respondent = (value?: string | number | string[], note?: string): Analytic
 });
 
 describe("descriptive question summaries", () => {
+  it("returns exact summaries for a one-person cohort without suppression", () => {
+    const choice: Question = { id: "q", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] };
+    const number: Question = { id: "q", type: "number", label: "Budget" };
+
+    expect(summarizeQuestion(choice, [respondent("yes")])).toMatchObject({
+      eligibleCount: 1,
+      answeredCount: 1,
+      missingCount: 0,
+      distributionDenominator: 1,
+      distribution: [
+        { value: "yes", label: "Yes", count: 1, percent: 100 },
+        { value: "no", label: "No", count: 0, percent: 0 },
+      ],
+    });
+    expect(summarizeQuestion(number, [respondent(7)]).numeric).toEqual({ n: 1, min: 7, max: 7, mean: 7, median: 7 });
+  });
+
   it("keeps eligible, missing, note-only, valid, and unmapped counts distinct", () => {
     const q: Question = { id: "q", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] };
     const summary = summarizeQuestion(q, [respondent("yes"), respondent("no"), respondent("retired"), respondent(undefined, "More context"), respondent()]);
