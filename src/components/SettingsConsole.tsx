@@ -23,10 +23,10 @@ interface KeyRow {
 }
 
 interface TenantAudit {
-  collections: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number }>;
+  collections: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number; otherTenant: number }>;
   blockingIntegrity: Record<string, number>;
   legacyEventReferences: Record<string, number>;
-  preflight: { readyForReviewedBackfill: boolean };
+  preflight: { tenantIdsMatchAxion: boolean; readyForReviewedBackfill: boolean };
 }
 
 interface AccountSettings {
@@ -118,10 +118,12 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
 
   const legacyCollections = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes"];
   const unscopedLegacyCount = legacyCollections.reduce((sum, name) => sum + (tenantAudit?.collections[name]?.missingTenant ?? 0), 0);
+  const otherTenantCount = legacyCollections.reduce((sum, name) => sum + (tenantAudit?.collections[name]?.otherTenant ?? 0), 0);
   const integrityFindings = [
     ...Object.entries(tenantAudit?.blockingIntegrity ?? {}),
     ["eventsInterviewParticipantMismatch", tenantAudit?.legacyEventReferences.eventsInterviewParticipantMismatch ?? 0] as [string, number],
     ["eventsTenantMismatch", tenantAudit?.legacyEventReferences.eventsTenantMismatch ?? 0] as [string, number],
+    ...legacyCollections.map((name) => [`${name}OtherTenant`, tenantAudit?.collections[name]?.otherTenant ?? 0] as [string, number]),
   ].filter(([, count]) => count > 0);
 
   async function assignLegacyData() {
@@ -222,7 +224,9 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           ) : (
             <div className="card-pad stack">
               {unscopedLegacyCount === 0 ? (
-                <p className="muted" role="status">All existing workspace records already have tenant ownership.</p>
+                otherTenantCount > 0
+                  ? <p className="muted" role="status">{otherTenantCount.toLocaleString()} records already belong to another tenant and need review before Axion assignment.</p>
+                  : <p className="muted" role="status">All existing workspace records already have tenant ownership.</p>
               ) : (
                 <p className="muted" role="status">{unscopedLegacyCount.toLocaleString()} existing records are still unscoped and currently visible only to Axion during the migration window.</p>
               )}
@@ -233,7 +237,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
                 </div>
               ) : (
                 <div className="callout warn" role="alert">
-                  <div><strong>Assignment is paused.</strong> The audit found conflicting tenant IDs or record links that need review.</div>
+                  <div><strong>Assignment is paused.</strong> The audit found records owned by another tenant or inconsistent record links that need review.</div>
                   {integrityFindings.length > 0 && <ul style={{ margin: "4px 0 0 18px" }}>{integrityFindings.map(([name, count]) => <li key={name}>{name}: {count.toLocaleString()}</li>)}</ul>}
                 </div>
               )}

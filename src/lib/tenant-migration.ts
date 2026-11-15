@@ -20,19 +20,14 @@ function effectiveTenant(path: string): Record<string, unknown> {
 }
 
 export async function auditTenantMigration(db: Db) {
-  const counts: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number }> = {};
-  const tenantIds = new Set<string>();
+  const counts: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number; otherTenant: number }> = {};
   for (const collection of [...OWNED, ...INSTANCE_WIDE]) {
     const documents = await count(db, collection);
     const alreadyTenantScoped = await count(db, collection, { tenantId: { $exists: true } });
-    counts[collection] = { documents, alreadyTenantScoped, missingTenant: documents - alreadyTenantScoped };
-    if (OWNED_SET.has(collection)) {
-      const grouped = await db.collection(collection).aggregate<{ _id: unknown }>([
-        { $match: { tenantId: { $exists: true } } },
-        { $group: { _id: "$tenantId" } },
-      ]).toArray();
-      for (const row of grouped) tenantIds.add(String(row._id));
-    }
+    const otherTenant = OWNED_SET.has(collection)
+      ? await count(db, collection, { tenantId: { $exists: true, $ne: AXION_TENANT_ID } })
+      : 0;
+    counts[collection] = { documents, alreadyTenantScoped, missingTenant: documents - alreadyTenantScoped, otherTenant };
   }
 
   const blockingIntegrity = {
@@ -117,7 +112,7 @@ export async function auditTenantMigration(db: Db) {
   const safeReferenceGraph = Object.values(blockingIntegrity).every((value) => value === 0)
     && legacyEventReferences.eventsInterviewParticipantMismatch === 0
     && legacyEventReferences.eventsTenantMismatch === 0;
-  const tenantIdsAreValid = [...tenantIds].every((tenantId) => tenantId === AXION_TENANT_ID || /^[0-9a-f]{24}$/i.test(tenantId));
+  const tenantIdsMatchAxion = OWNED.every((collection) => counts[collection].otherTenant === 0);
   const report = {
     mode: "read-only" as const,
     tenantTarget: { name: "Axion", slug: "axion", id: AXION_TENANT_ID },
@@ -132,9 +127,9 @@ export async function auditTenantMigration(db: Db) {
       activeApiKeysNeedAxionBinding: await count(db, "api_keys", { revokedAt: { $exists: false }, $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }] }),
     },
     preflight: {
-      tenantIdsAreValid,
+      tenantIdsMatchAxion,
       safeReferenceGraph,
-      readyForReviewedBackfill: tenantIdsAreValid && safeReferenceGraph,
+      readyForReviewedBackfill: tenantIdsMatchAxion && safeReferenceGraph,
     },
     note: "Counts only. Backfill assigns all unscoped legacy records to Axion and preserves incomplete event references. No document contents, identifiers, email addresses, answers, or secrets are returned.",
   };
