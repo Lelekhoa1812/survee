@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 const state = vi.hoisted(() => ({
   currentVersion: 2,
@@ -44,6 +45,8 @@ import { dispatchTool } from "../src/lib/mcp/tools";
 
 const candidate = "<html><body>candidate</body></html>";
 const hash = (html: string) => createHash("sha256").update(html).digest("hex");
+const callTool = (name: string, args: Record<string, unknown>, tenantId = "axion") =>
+  withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => dispatchTool(name, args));
 
 beforeEach(() => {
   state.currentVersion = 2;
@@ -56,18 +59,27 @@ beforeEach(() => {
 
 describe("MCP questionnaire version patch", () => {
   it("previews without publishing and returns hashes and diagnostics", async () => {
-    const result = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    const result = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
     expect(result.isError).toBeFalsy();
-    expect(result.structuredContent).toMatchObject({ currentVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), staticValid: true });
+    expect(result.structuredContent).toMatchObject({ currentVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), staticValid: true, previewToken: expect.any(String), previewExpiresAt: expect.any(String) });
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("refuses apply without a preview token", async () => {
+    const result = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate),
+    });
+    expect(result.structuredContent.code).toBe("preview_required");
     expect(state.publish).not.toHaveBeenCalled();
   });
 
   it("requires explicit acknowledgement for compatibility findings", async () => {
     state.compatibilityImpact = true;
-    const preview = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
-    const result = await dispatchTool("apply_questionnaire_version_patch", {
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    const result = await callTool("apply_questionnaire_version_patch", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
       candidateHash: hash(candidate), compatibilityHash: preview.structuredContent.compatibilityHash as string,
+      previewToken: preview.structuredContent.previewToken as string,
     });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("acknowledgement_required");
@@ -75,17 +87,20 @@ describe("MCP questionnaire version patch", () => {
   });
 
   it("rejects stale previews, altered candidates, and static errors", async () => {
-    const stale = await dispatchTool("apply_questionnaire_version_patch", {
-      interviewId, html: candidate, expectedVersion: 1, baseHash: state.baseHash, candidateHash: hash(candidate),
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    state.currentVersion = 3;
+    const stale = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), previewToken: preview.structuredContent.previewToken as string,
     });
     expect(stale.structuredContent.code).toBe("stale_preview");
-    const altered = await dispatchTool("apply_questionnaire_version_patch", {
-      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: "b".repeat(64),
+    state.currentVersion = 2;
+    const altered = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: `${candidate} changed`, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), previewToken: preview.structuredContent.previewToken as string,
     });
     expect(altered.structuredContent.code).toBe("candidate_changed");
     state.invalid = true;
-    const invalid = await dispatchTool("apply_questionnaire_version_patch", {
-      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate),
+    const invalid = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), previewToken: preview.structuredContent.previewToken as string,
     });
     expect(invalid.structuredContent.code).toBe("checker");
     expect(state.publish).not.toHaveBeenCalled();
@@ -93,10 +108,11 @@ describe("MCP questionnaire version patch", () => {
 
   it("publishes only the server-checked candidate using optimistic version and base-hash checks", async () => {
     state.compatibilityImpact = true;
-    const preview = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
-    const result = await dispatchTool("apply_questionnaire_version_patch", {
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    const result = await callTool("apply_questionnaire_version_patch", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
       candidateHash: hash(candidate), compatibilityHash: preview.structuredContent.compatibilityHash as string,
+      previewToken: preview.structuredContent.previewToken as string,
       acknowledgeCompatibilityImpact: true,
     });
     expect(result.isError).toBeFalsy();
@@ -106,11 +122,12 @@ describe("MCP questionnaire version patch", () => {
 
   it("requires the compatibility findings to match the reviewed preview", async () => {
     state.compatibilityImpact = true;
-    const preview = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
     state.compatibilityImpact = false;
-    const result = await dispatchTool("apply_questionnaire_version_patch", {
+    const result = await callTool("apply_questionnaire_version_patch", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
       candidateHash: hash(candidate), compatibilityHash: preview.structuredContent.compatibilityHash as string,
+      previewToken: preview.structuredContent.previewToken as string,
       acknowledgeCompatibilityImpact: true,
     });
     expect(result.structuredContent.code).toBe("stale_preview");
@@ -118,7 +135,7 @@ describe("MCP questionnaire version patch", () => {
   });
 
   it("keeps legacy uploads one-call for compatible changes while using optimistic checks", async () => {
-    const result = await dispatchTool("upload_survey_version", { interviewId, html: candidate });
+    const result = await callTool("upload_survey_version", { interviewId, html: candidate });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2, compatibilityImpact: false });
     expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "mcp_upload");
@@ -126,7 +143,7 @@ describe("MCP questionnaire version patch", () => {
 
   it("returns a non-mutating preview when legacy upload finds answer compatibility impact", async () => {
     state.compatibilityImpact = true;
-    const result = await dispatchTool("upload_survey_version", { interviewId, html: candidate });
+    const result = await callTool("upload_survey_version", { interviewId, html: candidate });
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({
       code: "acknowledgement_required",
@@ -135,25 +152,35 @@ describe("MCP questionnaire version patch", () => {
       candidateHash: hash(candidate),
       compatibilityHash: expect.any(String),
       compatibilityImpact: true,
+      previewToken: expect.any(String),
+      previewExpiresAt: expect.any(String),
     });
     expect(state.publish).not.toHaveBeenCalled();
   });
 
   it("requires the reviewed hashes and acknowledgement before legacy upload publishes an impacted candidate", async () => {
     state.compatibilityImpact = true;
-    const incomplete = await dispatchTool("upload_survey_version", {
+    const incomplete = await callTool("upload_survey_version", {
       interviewId, html: candidate, acknowledgeCompatibilityImpact: true,
     });
     expect(incomplete.structuredContent.code).toBe("preview_required");
     expect(state.publish).not.toHaveBeenCalled();
 
-    const preview = await dispatchTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false });
+    const preview = await callTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false });
     expect(preview.structuredContent.code).toBe("acknowledgement_required");
     const compatibilityHash = preview.structuredContent.compatibilityHash as string;
-
-    const published = await dispatchTool("upload_survey_version", {
+    const spoofedAcknowledgement = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
       candidateHash: hash(candidate), compatibilityHash, acknowledgeCompatibilityImpact: true,
+    });
+    expect(spoofedAcknowledgement.structuredContent.code).toBe("acknowledgement_required");
+    expect(spoofedAcknowledgement.structuredContent.previewToken).toEqual(expect.any(String));
+    expect(state.publish).not.toHaveBeenCalled();
+
+    const published = await callTool("upload_survey_version", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: hash(candidate), compatibilityHash, acknowledgeCompatibilityImpact: true,
+      previewToken: spoofedAcknowledgement.structuredContent.previewToken as string,
     });
     expect(published.isError).toBeFalsy();
     expect(published.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2, compatibilityImpact: true });
@@ -161,17 +188,73 @@ describe("MCP questionnaire version patch", () => {
   });
 
   it("rejects stale or altered legacy-upload previews", async () => {
-    const stale = await dispatchTool("upload_survey_version", {
+    const stale = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 1, baseHash: state.baseHash,
       candidateHash: hash(candidate),
     });
     expect(stale.structuredContent.code).toBe("stale_preview");
 
-    const altered = await dispatchTool("upload_survey_version", {
+    const altered = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
       candidateHash: "b".repeat(64),
     });
     expect(altered.structuredContent.code).toBe("candidate_changed");
     expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("rejects a modified or cross-tenant preview token", async () => {
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    const token = preview.structuredContent.previewToken as string;
+    const alteredToken = `${token.split(".")[0]}.invalid-signature`;
+    const tampered = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), previewToken: alteredToken,
+    });
+    expect(tampered.structuredContent.code).toBe("invalid_preview");
+
+    const wrongTenant = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), previewToken: token,
+    }, "another-tenant");
+    expect(wrongTenant.structuredContent.code).toBe("invalid_preview");
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("binds the token to the previewed file name", async () => {
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate, fileName: "survey.html" });
+    const result = await callTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, fileName: "renamed.html", expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: hash(candidate), previewToken: preview.structuredContent.previewToken as string,
+    });
+    expect(result.structuredContent.code).toBe("invalid_preview");
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("expires preview tokens after ten minutes", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-15T00:00:00.000Z"));
+      const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+      vi.setSystemTime(new Date("2026-11-15T00:11:00.000Z"));
+      const result = await callTool("apply_questionnaire_version_patch", {
+        interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), previewToken: preview.structuredContent.previewToken as string,
+      });
+      expect(result.structuredContent.code).toBe("preview_expired");
+      expect(state.publish).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects a replay after the questionnaire version has advanced", async () => {
+    const preview = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    const args = {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate),
+      previewToken: preview.structuredContent.previewToken as string,
+    };
+    const first = await callTool("apply_questionnaire_version_patch", args);
+    expect(first.isError).toBeFalsy();
+    state.currentVersion = 3;
+    const replay = await callTool("apply_questionnaire_version_patch", args);
+    expect(replay.structuredContent.code).toBe("stale_preview");
+    expect(state.publish).toHaveBeenCalledTimes(1);
   });
 });

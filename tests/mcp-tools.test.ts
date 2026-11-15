@@ -190,6 +190,23 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.questions?.find((question) => question.id === "fit")).toMatchObject({ answeredCount: 1, unmappedResponseCount: 1 });
   });
 
+  it("paginates analytics questions and keeps the requested cohort on each page", async () => {
+    const first = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: 0, limit: 1 });
+    const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; respondentCount: number }; questions: { id: string }[] } } };
+    expect(firstBody.result.isError).toBeFalsy();
+    expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 2, nextOffset: 1 });
+    expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1 });
+    expect(firstBody.result.structuredContent.questions.map((question) => question.id)).toEqual(["fit"]);
+
+    const nextOffset = firstBody.result.structuredContent.nextOffset;
+    const second = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: nextOffset!, limit: 1 });
+    const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; scope: { statuses: string[]; respondentCount: number }; questions: { id: string; numeric: { mean: number } | null }[] } } };
+    expect(secondBody.result.isError).toBeFalsy();
+    expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: null });
+    expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1 });
+    expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4 } });
+  });
+
   it("rejects empty or conflicting analytics status filters", async () => {
     const empty = await call("analyze_answers", { interviewId, statuses: [] });
     const emptyBody = await empty.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };

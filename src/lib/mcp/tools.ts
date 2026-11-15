@@ -34,7 +34,9 @@ import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { sessionSecret } from "../env";
+import { currentPrincipal } from "../tenant-context";
 import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
 
@@ -76,6 +78,81 @@ function questionList(manifest: Manifest) {
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+const PATCH_PREVIEW_TTL_SECONDS = 10 * 60;
+
+interface PatchPreviewClaims {
+  v: 1;
+  tenantId: string;
+  interviewId: string;
+  expectedVersion: number;
+  baseHash: string;
+  candidateHash: string;
+  fileNameHash: string;
+  compatibilityHash: string;
+  exp: number;
+}
+
+function fileNameHash(fileName?: string) {
+  return sha256(fileName ?? "");
+}
+
+function createPatchPreviewToken(bindings: Omit<PatchPreviewClaims, "v" | "exp" | "tenantId">) {
+  const tenantId = currentPrincipal()?.tenantId;
+  const secret = sessionSecret();
+  if (!tenantId || !secret) return null;
+  const claims: PatchPreviewClaims = {
+    v: 1,
+    ...bindings,
+    tenantId,
+    exp: Math.floor(Date.now() / 1000) + PATCH_PREVIEW_TTL_SECONDS,
+  };
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const signature = createHmac("sha256", secret).update(`kqa-mcp-questionnaire-preview:v1:${payload}`).digest("base64url");
+  return { previewToken: `${payload}.${signature}`, previewExpiresAt: new Date(claims.exp * 1000).toISOString() };
+}
+
+function verifyPatchPreviewToken(
+  token: unknown,
+  bindings: Pick<PatchPreviewClaims, "tenantId" | "interviewId" | "expectedVersion" | "baseHash" | "candidateHash" | "fileNameHash">,
+): { ok: true; claims: PatchPreviewClaims } | { ok: false; code: "preview_required" | "preview_expired" | "invalid_preview" } {
+  if (typeof token !== "string" || !token) return { ok: false, code: "preview_required" };
+  const [payload, signature, extra] = token.split(".");
+  const secret = sessionSecret();
+  if (!payload || !signature || extra !== undefined || !secret) return { ok: false, code: "invalid_preview" };
+  const expectedSignature = createHmac("sha256", secret).update(`kqa-mcp-questionnaire-preview:v1:${payload}`).digest("base64url");
+  const actualBytes = Buffer.from(signature);
+  const expectedBytes = Buffer.from(expectedSignature);
+  if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) {
+    return { ok: false, code: "invalid_preview" };
+  }
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<PatchPreviewClaims>;
+    if (
+      claims.v !== 1 || typeof claims.tenantId !== "string" || typeof claims.interviewId !== "string" ||
+      typeof claims.expectedVersion !== "number" || !Number.isInteger(claims.expectedVersion) ||
+      typeof claims.baseHash !== "string" || typeof claims.candidateHash !== "string" ||
+      typeof claims.fileNameHash !== "string" || typeof claims.compatibilityHash !== "string" ||
+      typeof claims.exp !== "number" || !Number.isInteger(claims.exp)
+    ) return { ok: false, code: "invalid_preview" };
+    if (claims.exp <= Math.floor(Date.now() / 1000)) return { ok: false, code: "preview_expired" };
+    const parsed = claims as PatchPreviewClaims;
+    if (
+      parsed.tenantId !== bindings.tenantId || parsed.interviewId !== bindings.interviewId ||
+      parsed.expectedVersion !== bindings.expectedVersion || parsed.baseHash !== bindings.baseHash ||
+      parsed.candidateHash !== bindings.candidateHash || parsed.fileNameHash !== bindings.fileNameHash
+    ) return { ok: false, code: "invalid_preview" };
+    return { ok: true, claims: parsed };
+  } catch {
+    return { ok: false, code: "invalid_preview" };
+  }
+}
+
+function previewTokenError(code: "preview_required" | "preview_expired" | "invalid_preview") {
+  if (code === "preview_required") return err("This operation requires the signed previewToken returned by a questionnaire preview.", code);
+  if (code === "preview_expired") return err("This questionnaire preview expired. Preview the candidate again before continuing.", code);
+  return err("This questionnaire preview is invalid for the current tenant, interview, or candidate. Preview again before continuing.", code);
 }
 
 function hasCompatibilityImpact(diagnostics: { code: string }[]) {
@@ -532,15 +609,31 @@ const TOOLS: ToolDef[] = [
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      const principal = currentPrincipal();
+      if (!principal?.tenantId) return err("A tenant-bound MCP request is required to preview questionnaire changes.", "tenant_context_required");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       const current = await getVersion(interview._id, interview.currentVersion);
       if (!current) return err("Current survey version not found.", "not_found");
       if (typeof args.html !== "string") return err("html is required.");
       if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
-      const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
+      const fileName = asString(args.fileName, 200);
+      const prepared = await withCompat(prepareSurvey(args.html, fileName), id);
       const candidateHtml = prepared.survey?.html ?? args.html.replace(/^\uFEFF/, "");
       const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
+      const previewToken = prepared.survey && prepared.report.ok
+        ? createPatchPreviewToken({
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          baseHash: current.htmlSha256,
+          candidateHash: sha256(candidateHtml),
+          fileNameHash: fileNameHash(fileName),
+          compatibilityHash,
+        })
+        : null;
+      if (prepared.survey && prepared.report.ok && !previewToken) {
+        return err("Secure preview signing is not configured for this request.", "preview_unavailable");
+      }
       return ok({
         ok: !!prepared.survey && prepared.report.ok,
         interviewId: id,
@@ -552,6 +645,7 @@ const TOOLS: ToolDef[] = [
         counts: prepared.report.counts,
         compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
         compatibilityHash,
+        ...(previewToken ?? {}),
         report: prepared.markdown,
         changes: prepared.report.manifest ? {
           questionCountBefore: current.manifest.questions.length,
@@ -566,7 +660,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "apply_questionnaire_version_patch",
-    description: "Publish a new immutable questionnaire version from complete HTML after preview. Requires the previewed current version and hashes; acknowledge compatibility impact when preview reports it.",
+    description: "Publish a new immutable questionnaire version from complete HTML after preview. Requires the signed, short-lived previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
     inputSchema: obj({
       interviewId: str,
       html: str,
@@ -574,30 +668,43 @@ const TOOLS: ToolDef[] = [
       expectedVersion: { type: "integer", minimum: 1 },
       baseHash: str,
       candidateHash: str,
+      previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
     }, ["interviewId", "html", "expectedVersion", "baseHash", "candidateHash"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      const principal = currentPrincipal();
+      if (!principal?.tenantId) return err("A tenant-bound MCP request is required to apply questionnaire changes.", "tenant_context_required");
+      const fileName = asString(args.fileName, 200);
+      const expectedVersion = args.expectedVersion as number;
+      const preview = verifyPatchPreviewToken(asString(args.previewToken, 1000), {
+        tenantId: principal.tenantId,
+        interviewId: id,
+        expectedVersion,
+        baseHash: args.baseHash as string,
+        candidateHash: args.candidateHash as string,
+        fileNameHash: fileNameHash(fileName),
+      });
+      if (!preview.ok) return previewTokenError(preview.code);
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       if (typeof args.html !== "string") return err("html is required.");
       if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
-      const expectedVersion = args.expectedVersion as number;
       const current = await getVersion(interview._id, interview.currentVersion);
       if (interview.currentVersion !== expectedVersion || !current || current.htmlSha256 !== args.baseHash) {
         return err("The questionnaire changed since preview. Preview again before applying.", "stale_preview");
       }
-      const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
+      const prepared = await withCompat(prepareSurvey(args.html, fileName), id);
       if (!prepared.survey || !prepared.report.ok) {
         return { ...err("The candidate did not pass the static checker.", "checker"), structuredContent: { ok: false, error: "The candidate did not pass the static checker.", code: "checker", diagnostics: prepared.report.diagnostics, report: prepared.markdown } };
       }
       const candidateHash = sha256(prepared.survey.html);
-      if (candidateHash !== args.candidateHash) return err("The candidate HTML changed since preview. Preview again before applying.", "candidate_changed");
+      if (candidateHash !== args.candidateHash || candidateHash !== preview.claims.candidateHash) return err("The candidate HTML changed since preview. Preview again before applying.", "candidate_changed");
       const impact = hasCompatibilityImpact(prepared.report.diagnostics);
       const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
-      if (args.compatibilityHash !== undefined && args.compatibilityHash !== compatibilityHash) {
+      if (preview.claims.compatibilityHash !== compatibilityHash || (args.compatibilityHash !== undefined && args.compatibilityHash !== compatibilityHash)) {
         return err("Compatibility findings changed since preview. Preview again before applying.", "stale_preview");
       }
       if (impact && args.acknowledgeCompatibilityImpact !== true) {
@@ -612,7 +719,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "upload_survey_version",
-    description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned preview and retry with expectedVersion set to its currentVersion, its hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes.",
+    description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned findings and retry with its short-lived previewToken, matching hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes.",
     inputSchema: obj({
       interviewId: str,
       html: str,
@@ -620,25 +727,27 @@ const TOOLS: ToolDef[] = [
       expectedVersion: { type: "integer", minimum: 1 },
       baseHash: str,
       candidateHash: str,
+      previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
     }, ["interviewId", "html"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      const fileName = asString(args.fileName, 200);
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       if (typeof args.html !== "string") return err("html is required.");
       if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
       const current = await getVersion(interview._id, interview.currentVersion);
       if (!current) return err("Current survey version not found.", "not_found");
-      const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
+      const prepared = await withCompat(prepareSurvey(args.html, fileName), id);
       if (!prepared.survey || !prepared.report.ok) {
         return { ...err("The file did not pass the checker.", "checker"), structuredContent: { ok: false, error: "The file did not pass the checker.", diagnostics: prepared.report.diagnostics, report: prepared.markdown } };
       }
       const candidateHash = sha256(prepared.survey.html);
       const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
-      const hasPreviewFields = args.expectedVersion !== undefined || args.baseHash !== undefined || args.candidateHash !== undefined || args.compatibilityHash !== undefined;
+      const hasPreviewFields = args.expectedVersion !== undefined || args.baseHash !== undefined || args.candidateHash !== undefined || args.previewToken !== undefined || args.compatibilityHash !== undefined;
       const hasAcknowledgement = args.acknowledgeCompatibilityImpact === true;
       const hasPreview = typeof args.expectedVersion === "number" && typeof args.baseHash === "string" && typeof args.candidateHash === "string";
       if ((hasPreviewFields || hasAcknowledgement) && !hasPreview) {
@@ -656,8 +765,37 @@ const TOOLS: ToolDef[] = [
         return err("Compatibility findings changed since preview. Preview again before uploading.", "stale_preview");
       }
       const compatibilityImpact = hasCompatibilityImpact(prepared.report.diagnostics);
-      if (compatibilityImpact && args.acknowledgeCompatibilityImpact !== true) {
-        const message = "Compatibility impact must be reviewed and acknowledged before publishing. Use preview_questionnaire_version_patch, then retry with expectedVersion set to the returned currentVersion, the returned hashes, and acknowledgeCompatibilityImpact: true.";
+      let previewToken: { previewToken: string; previewExpiresAt: string } | null = null;
+      if (compatibilityImpact && args.previewToken === undefined) {
+        const principal = currentPrincipal();
+        if (!principal?.tenantId) return err("A tenant-bound MCP request is required to review questionnaire changes.", "tenant_context_required");
+        previewToken = createPatchPreviewToken({
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          baseHash: current.htmlSha256,
+          candidateHash,
+          fileNameHash: fileNameHash(fileName),
+          compatibilityHash,
+        });
+        if (!previewToken) return err("Secure preview signing is not configured for this request.", "preview_unavailable");
+      } else if (args.previewToken !== undefined) {
+        const principal = currentPrincipal();
+        if (!principal?.tenantId) return err("A tenant-bound MCP request is required to upload questionnaire changes.", "tenant_context_required");
+        const preview = verifyPatchPreviewToken(asString(args.previewToken, 1000), {
+          tenantId: principal.tenantId,
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          baseHash: current.htmlSha256,
+          candidateHash,
+          fileNameHash: fileNameHash(fileName),
+        });
+        if (!preview.ok) return previewTokenError(preview.code);
+        if (preview.claims.compatibilityHash !== compatibilityHash || args.compatibilityHash !== compatibilityHash) {
+          return err("Compatibility findings changed since preview. Preview again before uploading.", "stale_preview");
+        }
+      }
+      if (compatibilityImpact && args.previewToken === undefined) {
+        const message = "Compatibility impact must be reviewed before publishing. Review these findings, then retry with the returned previewToken, matching version and hashes, and acknowledgeCompatibilityImpact: true.";
         return {
           ...err(message, "acknowledgement_required"),
           structuredContent: {
@@ -670,13 +808,30 @@ const TOOLS: ToolDef[] = [
             candidateHash,
             compatibilityHash,
             compatibilityImpact,
+            ...previewToken,
             diagnostics: prepared.report.diagnostics,
             report: prepared.markdown,
           },
         };
       }
-      if (compatibilityImpact && !args.compatibilityHash) {
-        return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
+      if (compatibilityImpact && args.acknowledgeCompatibilityImpact !== true) {
+        return {
+          ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"),
+          structuredContent: {
+            ok: false,
+            error: "Compatibility impact must be acknowledged before publishing.",
+            code: "acknowledgement_required",
+            interviewId: id,
+            currentVersion: interview.currentVersion,
+            baseHash: current.htmlSha256,
+            candidateHash,
+            compatibilityHash,
+            compatibilityImpact,
+            ...(typeof args.previewToken === "string" ? { previewToken: args.previewToken } : previewToken ?? {}),
+            diagnostics: prepared.report.diagnostics,
+            report: prepared.markdown,
+          },
+        };
       }
       const expectedVersion = hasPreview ? args.expectedVersion as number : interview.currentVersion;
       const expectedBaseHash = hasPreview ? args.baseHash as string : current.htmlSha256;
