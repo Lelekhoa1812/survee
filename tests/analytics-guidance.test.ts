@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/2");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/3");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -25,6 +25,10 @@ describe("versioned analytics guidance", () => {
       "multi-select",
       "causal",
       "chart",
+      "asof",
+      "keyboard-operable",
+      "histogram",
+      "box plot",
       "privacy",
       "ambiguity",
     ]) {
@@ -32,6 +36,7 @@ describe("versioned analytics guidance", () => {
     }
     expect(guidance.productConstraints.join(" ")).toContain("current-version");
     expect(guidance.reviewChecklist.length).toBeGreaterThanOrEqual(6);
+    expect(guidance.sources.map((source) => source.name)).toContain("W3C WAI, Complex Images");
   });
 
   it("documents that analytics does not suppress small cohorts", () => {
@@ -39,6 +44,7 @@ describe("versioned analytics guidance", () => {
     expect(constraints).toContain("does not enforce a minimum cohort-size threshold");
     expect(constraints).toContain("singleton counts and percentages may be returned");
     expect(constraints).toContain("disclosure rules");
+    expect(constraints).toContain("separate live read with its own asof");
   });
 
   it("returns fresh package objects so callers cannot mutate shared guidance", () => {

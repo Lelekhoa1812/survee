@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/2" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/3" as const;
 
 const PRINCIPLES = [
   {
@@ -45,7 +45,13 @@ const PRINCIPLES = [
     id: "choose-clear-chart",
     title: "Choose a chart that fits the comparison",
     guidance:
-      "Use a sorted horizontal bar chart for a small set of unordered categories; preserve the natural order for ordered scales. Use a 100% stacked bar only to compare composition across clearly defined groups, with a shared denominator and legible labels. Use a line chart only when observations are ordered time points with comparable definitions and cohorts. Prefer a table or a short written summary when exact counts, many categories, small cohorts, or caveats matter more than a visual pattern. Label the measure, cohort, valid n, denominator, and time/version; do not use a truncated bar axis that exaggerates differences.",
+      "Use a category bar chart for single-choice and dropdown responses; sort unordered categories by a stated rule and preserve the natural order of scales. For multi-select answers, plot each option's share of valid respondents and state that shares can sum above 100%. Use a 100% stacked bar only for comparable groups with a shared denominator. For number questions, KQA returns n, minimum, median, mean, and maximum, not raw values, bins, quartiles, or a distribution; show only the returned statistics and do not fabricate a histogram or box plot. KQA does not aggregate date or text values. Prefer a table or short written summary when exact counts, many categories, small cohorts, or caveats matter more than a visual pattern. Label the measure, cohort, valid n, denominator, survey version, and asOf; do not use a truncated bar axis that exaggerates differences.",
+  },
+  {
+    id: "generate-auditable-visuals",
+    title: "Make generated visuals accessible and traceable",
+    guidance:
+      "When asked to create an interactive chart or report, use only values returned by KQA tools and preserve their labels and denominators. Show the interview, survey version, cohort, and asOf beside the visual. Make controls keyboard-operable, do not rely on color or hover alone, and provide an equivalent data table or text description. Accompany the code with a concise finding, the evidence behind it, and a material limitation or follow-up question. If the requested chart needs data KQA did not return, explain the gap instead of inventing values.",
   },
   {
     id: "protect-respondents",
@@ -67,6 +73,8 @@ const REVIEW_CHECKLIST = [
   "Are scale distributions treated as ordered categories, number summaries described as numeric, and multi-select shares labeled per respondent?",
   "Does the interpretation avoid unsupported population, significance, or causal claims and identify material uncertainty?",
   "Does the chart fit the comparison, show clear labels and denominators, and avoid visual distortion?",
+  "Does generated chart code use only returned values, identify interview/version/cohort/asOf, and provide keyboard access plus an equivalent table or text description?",
+  "Are separate question pages described as separate live reads rather than one consistent snapshot?",
   "Could a small subgroup, free-text detail, or combination of attributes identify someone?",
   "Are ambiguous or unmeasured business questions called out rather than answered by assumption?",
 ] as const;
@@ -103,6 +111,11 @@ const SOURCES = [
     supports: "Matching chart forms to the message and data structure.",
   },
   {
+    name: "W3C WAI, Complex Images",
+    url: "https://www.w3.org/WAI/tutorials/images/complex/",
+    supports: "Providing long descriptions or data-table equivalents for complex charts and graphs.",
+  },
+  {
     name: "American Statistical Association, Ethical Guidelines for Statistical Practice",
     url: "https://www.amstat.org/your-career/ethical-guidelines-for-statistical-practice",
     supports: "Communicating data limitations, potential bias, and impacts on interpretation.",
@@ -124,7 +137,7 @@ export function getAnalyticsGuidance() {
   return {
     policyVersion: ANALYTICS_GUIDANCE_VERSION,
     summary:
-      "Use KQA analytics to describe the selected interview cohort, with explicit scope, denominators, missingness, and limitations. KQA has no built-in LLM; this versioned package is deterministic guidance for an integrated agent, not an automated analysis or certification.",
+      "Use KQA analytics to describe the selected interview cohort and build accessible, traceable visuals, with explicit scope, denominators, missingness, and limitations. KQA has no built-in LLM; this versioned package is deterministic guidance for an integrated agent, not an automated analysis or certification.",
     productConstraints: [
       "KQA's analyze_answers output is current-version descriptive data; it returns no raw text, names, notes, private links, score, significance test, or causal estimate.",
       "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
@@ -132,6 +145,8 @@ export function getAnalyticsGuidance() {
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
       "Scale questions provide a distribution and median, not a mean. Number summaries respect the current question's bounds.",
+      "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
+      "Each analyze_answers page is a separate live read with its own asOf; changes can occur between pages, so KQA does not provide a consistent multi-page snapshot.",
     ],
     principles: PRINCIPLES.map((principle) => ({ ...principle })),
     reviewChecklist: [...REVIEW_CHECKLIST],

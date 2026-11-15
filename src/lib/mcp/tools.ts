@@ -222,7 +222,7 @@ async function onePerson(personId: string) {
 const TOOLS: ToolDef[] = [
   {
     name: "get_analytics_guidance",
-    description: "Return deterministic, versioned interpretation guidance and primary sources for analyzing KQA survey results. KQA does not run an LLM.",
+    description: "Return deterministic, versioned guidance for interpreting KQA summaries and generating accessible, traceable charts, with primary sources. KQA does not run an LLM.",
     inputSchema: obj({}),
     async run() {
       return ok(getAnalyticsGuidance());
