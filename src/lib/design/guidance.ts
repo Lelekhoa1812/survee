@@ -140,7 +140,7 @@ const HOST_VISUAL_PROFILE = {
     typography: ["--sans", "--mono"],
   },
   coreThemeValues: {
-    light: { "--bg": "#f3f5f8", "--surface": "#ffffff", "--ink": "#0e1b2a", "--muted": "#5f7084", "--brand": "#0b2a42", "--accent": "#087960", "--focus": "#1f6feb", "--danger": "#b4261c", "--danger-ink": "#ffffff" },
+    light: { "--bg": "#f3f5f8", "--surface": "#ffffff", "--ink": "#0e1b2a", "--muted": "#596b80", "--brand": "#0b2a42", "--accent": "#087960", "--focus": "#1f6feb", "--danger": "#b4261c", "--danger-ink": "#ffffff" },
     dark: { "--bg": "#0b1622", "--surface": "#101f2e", "--ink": "#e8eef5", "--muted": "#8fa1b3", "--brand": "#dbe7f3", "--accent": "#2bb58f", "--focus": "#6aa3ff", "--danger": "#f59a92", "--danger-ink": "#07121d" },
   },
   existingConventions: [

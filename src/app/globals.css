@@ -1,7 +1,7 @@
 /* KQA host and respondent interface. Tokens match the standard questionnaire design kit so everything reads as one product. */
 :root {
   --bg: #f3f5f8; --surface: #ffffff; --surface-2: #f8fafc; --surface-3: #eef2f6;
-  --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084;
+  --ink: #0e1b2a; --ink-2: #37465a; --muted: #596b80;
   --line: #e2e7ee; --line-2: #cdd6e0; --field: #8794a5;
   --brand: #0b2a42; --brand-2: #123b5c; --brand-ink: #ffffff;
   --accent: #087960; --accent-2: #066650; --accent-soft: #e5f3ee; --accent-ink: #ffffff;

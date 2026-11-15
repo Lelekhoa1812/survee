@@ -85,7 +85,7 @@ describe("design guidance package", () => {
     expect(hostProfile.existingConventions.join(" ")).toContain("No shared spacing scale");
   });
 
-  it("keeps filled danger foreground and background contrast above WCAG AA in both host themes", () => {
+  it("keeps muted and danger text contrast above WCAG AA in both host themes", () => {
     const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
     const root = css.match(/:root\s*\{([^}]+)\}/)?.[1];
     const dark = css.match(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*:root\s*\{([^}]+)\}/)?.[1];
@@ -106,10 +106,23 @@ describe("design guidance package", () => {
       const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
       return (values[0] + 0.05) / (values[1] + 0.05);
     };
+    const blend = (foreground: string, background: string, alpha: number) => {
+      const channels = [1, 3, 5].map((index) => Math.round(
+        parseInt(foreground.slice(index, index + 2), 16) * alpha
+        + parseInt(background.slice(index, index + 2), 16) * (1 - alpha),
+      ));
+      return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+    };
 
     for (const theme of [root!, dark!]) {
+      const muted = token(theme, "--muted");
+      expect(contrast(muted, token(theme, "--bg"))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(muted, token(theme, "--surface"))).toBeGreaterThanOrEqual(4.5);
       expect(contrast(token(theme, "--danger-ink"), token(theme, "--danger"))).toBeGreaterThanOrEqual(4.5);
     }
+    const lightBg = token(root!, "--bg");
+    const landingGradientCenter = blend(token(root!, "--accent-soft"), lightBg, 0.72);
+    expect(contrast(token(root!, "--muted"), landingGradientCenter)).toBeGreaterThanOrEqual(4.7);
     expect(css).toMatch(/\.btn\.danger\.solid\s*\{[^}]*color:\s*var\(--danger-ink\)/);
     expect(css).toMatch(/\.toast\.err\s*\{[^}]*color:\s*var\(--danger-ink\)/);
     expect(css).toMatch(/\.verdict\.fail \.dot\s*\{[^}]*color:\s*var\(--danger-ink\)/);
