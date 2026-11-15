@@ -44,6 +44,8 @@ For closed questions, make the options distinct and cover the reasonable answers
 
 When the questionnaire is new or a question could materially affect a decision, pretest it with people like the intended respondents. Ask them to explain what they think the item means and how they chose an answer. The KQA checker validates structure and supported markup; it cannot judge wording quality or replace pretesting. See the sourced question-content rubric in `get_design_guidance`.
 
+For a new or materially changed respondent flow, plan a separate task-based usability session: ask representative participants to complete the questionnaire end to end, then record task completion, hesitation, errors, recovery, and misunderstandings. This is different from asking how a participant interprets one question. If no representative sessions occurred, report usability as untested; do not infer it from a prototype walkthrough, checker result, or screenshot.
+
 ### Mapping common survey shapes
 
 | The source has | Do this |

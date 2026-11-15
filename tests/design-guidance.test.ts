@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/10");
+    expect(guidance.policyVersion).toBe("kqa-design/11");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
@@ -15,7 +15,15 @@ describe("design guidance package", () => {
     expect(guidance.designPlan.output.fields).toContain("representativeSamplesAndStates");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("representative sample");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
+    expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("realistic, neutral tasks");
+    expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("label usability as untested");
+    expect(guidance.designPlan.output.fields).toContain("observedUsabilityFindings");
+    expect(guidance.designPlan.output.fields).toContain("usabilityLimitationsOrUntestedReason");
+    expect(guidance.designPlan.steps.join(" ")).toContain("representative users");
+    expect(guidance.reviewChecklist.join(" ")).toContain("realistic end-to-end tasks");
     expect(guidance.sources.find((source) => source.name === "WCAG Evaluation Methodology (WCAG-EM) 2.0")?.url).toBe("https://www.w3.org/TR/wcag-em-2/");
+    expect(guidance.sources.find((source) => source.name === "U.S. Web Design System: Design principles")?.url).toBe("https://designsystem.digital.gov/design-principles/");
+    expect(guidance.sources.find((source) => source.name === "GOV.UK Service Manual: Plan user research")?.url).toBe("https://www.gov.uk/service-manual/user-research/plan-user-research-for-your-service");
     expect(guidance.reviewChecklist.join(" ")).toContain("npm run a11y:audit");
     expect(guidance.reviewChecklist.join(" ")).toContain("disposable local account");
     expect(guidance.reviewChecklist.join(" ")).toContain("commit-scoped JSON summary");

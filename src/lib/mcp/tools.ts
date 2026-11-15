@@ -209,7 +209,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "audit_questionnaire_design",
-    description: "Run KQA's static questionnaire checker and return a review checklist for content and rendered design. Wording and pretesting require judgment; this tool does not render or certify the page.",
+    description: "Run KQA's static questionnaire checker and return a review checklist for content, usability research, and rendered design. Wording and user testing require judgment; this tool does not render, observe users, or certify the page.",
     inputSchema: obj({ html: str, fileName: str, interviewId: str }, ["html"]),
     async run(args) {
       if (typeof args.html !== "string") return err("html is required.");
@@ -223,7 +223,7 @@ const TOOLS: ToolDef[] = [
         diagnostics: prepared.report.diagnostics,
         report: prepared.markdown,
         reviewChecklist: getDesignGuidance("questionnaire").reviewChecklist,
-        limits: ["Static inspection cannot judge question wording or pretesting. It also cannot verify rendered contrast, responsive layout, keyboard operation, motion behavior, or assistive-technology announcements."],
+        limits: ["Static inspection cannot judge question wording or item pretesting, or determine whether representative users can complete realistic end-to-end tasks; those require research with relevant participants.", "It also cannot verify rendered contrast, responsive layout, keyboard operation, motion behavior, or assistive-technology announcements."],
       });
     },
   },
@@ -1378,7 +1378,7 @@ export function listToolDefs(capabilities?: readonly McpCapability[]) {
   const readOnlyTools = new Set([
     "get_analytics_guidance", "get_design_guidance", "audit_questionnaire_design", "list_interviews", "get_interview",
     "get_survey_html", "list_versions", "check_questionnaire", "list_people", "get_person", "get_answers",
-    "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
+    "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_version_patch", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
   ]);
   return TOOLS.filter(({ name }) => canCallMcpTool(name, capabilities)).map(({ name, description, inputSchema }) => {
     const readOnly = readOnlyTools.has(name);

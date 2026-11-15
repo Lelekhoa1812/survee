@@ -8,6 +8,7 @@ const PRINCIPLES = [
   { id: "question-clarity", surfaces: ["all", "questionnaire"], title: "Ask clear, neutral questions", guidance: "Ask one thing at a time in familiar, audience-appropriate language. Avoid leading assumptions, ambiguous terms, double negatives, and questions that combine multiple ideas. Give a specific reference period when asking about time-bound behavior, and make instructions match the answer the respondent is expected to provide." },
   { id: "response-options", surfaces: ["all", "questionnaire"], title: "Make response options fit the question", guidance: "For closed questions, make options distinct and cover reasonable answers. Use balanced scale labels with a consistent direction; include a neutral point, 'not applicable', 'not sure', 'prefer not to answer', or 'other' only when it fits the construct. Keep option order intentional and stable when comparing versions." },
   { id: "pretest", surfaces: ["all", "questionnaire"], title: "Pretest with intended respondents", guidance: "For new or high-impact questionnaires, ask people like the intended respondents to explain what they think a question means and how they chose an answer. Revise confusing items before fielding. This content review requires human or agent judgment and respondent research; the static KQA checker cannot perform or certify it." },
+  { id: "task-usability", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Test complete tasks with representative users", guidance: "For new or materially changed flows, observe people who represent the intended users completing realistic end-to-end tasks. Note task completion, hesitation, errors, recovery, and content misunderstandings; report who was represented, which tasks and success criteria were used, what was observed, and the limitations. If sessions were not run, say usability is untested. Keep task-based usability research distinct from question-item cognitive pretesting and WCAG evaluation." },
   { id: "accessible-interaction", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make every interaction operable", guidance: "Prefer native semantic controls with programmatic labels and keyboard behavior. Custom radio groups must follow the WAI-ARIA APG keyboard pattern. Keep focused controls fully visible, including around fixed or sticky UI (WCAG 2.4.11), and provide a non-drag alternative for dragging interactions (WCAG 2.5.7). Make errors identify the affected field and give a clear correction; announce status and errors to assistive technology. Meet WCAG 2.2 AA, including target size: pointer targets should be at least 24 × 24 CSS px or meet a WCAG exception such as sufficient spacing. Test keyboard and assistive technology behavior rather than treating static markup checks as proof." },
   { id: "responsive", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Design for narrow screens and long content", guidance: "Reflow without two-dimensional page scrolling at 320 CSS pixels where WCAG requires it; KQA questionnaires must also work from 360 px and should be checked at 390 px. Test long labels, errors, empty states, tables, and zoom, not only the happy-path screenshot." },
   { id: "motion", surfaces: ["all", "questionnaire", "host"], title: "Use motion to clarify change", guidance: "Animate only to communicate state or spatial continuity. Keep transitions brief and interruptible; honor prefers-reduced-motion and ensure the interface remains understandable with motion removed." },
@@ -28,6 +29,19 @@ const ACCESSIBILITY_EVALUATION_METHOD = {
   ],
 } as const;
 
+const TASK_BASED_USABILITY_METHOD = {
+  name: "Task-based usability sessions",
+  status: "Qualitative research evidence about observed task performance; it is not a WCAG conformance result, a representative population estimate, or proof that every user can complete the flow.",
+  when: "Plan sessions for new or materially changed flows, high-impact tasks, or recurring support and completion problems. Include end-to-end questionnaire completion for respondent journeys and realistic setup, review, or interpretation tasks for host and analytics journeys.",
+  steps: [
+    "Define the intended user roles and recruit participants who reflect the relevant experience, access needs, devices, and context. State important groups that are not represented.",
+    "Write realistic, neutral tasks and observable success criteria before the session. Do not coach participants through the intended interface path.",
+    "Observe task completion, hesitation, errors, workarounds, recovery, and misunderstandings. Ask about expectations after the task rather than leading participants toward a preferred answer.",
+    "Report the participant context, tasks, success criteria, observed outcomes, critical friction, changes made, and remaining uncertainty. Keep task results separate from item-level cognitive pretesting and WCAG evaluation.",
+    "If sessions were not run, label usability as untested and explain the reason. A prototype walkthrough, team review, automated scan, or analytics metric is not a substitute for observation with representative users.",
+  ],
+} as const;
+
 const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text: string }[] = [
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check the primary task, next action, and outcome are clear without relying on color or animation." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check semantic labels, keyboard-only operation, focus visibility, validation messages, and save/submission announcements." },
@@ -39,6 +53,7 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire"], text: "Review question wording for one clear idea, neutral language, specific reference periods, and respondent-appropriate terms; this is a content judgment, not a static checker result." },
   { surfaces: ["questionnaire"], text: "For closed questions, check options are distinct and cover reasonable answers, scales read consistently, and option ordering is intentional." },
   { surfaces: ["questionnaire"], text: "Pretest new or high-impact questions with people like the intended respondents when feasible; record uncertainty that remains." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "For new or materially changed flows, observe representative users completing realistic end-to-end tasks. Record task success, hesitation, errors, recovery, content misunderstandings, participant context, and limitations; mark usability untested when sessions were not run. This is distinct from item pretesting and WCAG evaluation." },
   { surfaces: ["questionnaire"], text: "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden." },
   { surfaces: ["analytics"], text: "For analytics, verify survey version, participant scope, cohort n, no-answer count, valid n, and multi-select denominator; state that KQA does not track item-level display eligibility." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality." },
@@ -60,6 +75,8 @@ const SOURCES = [
   { name: "GitHub Primer Product Design", url: "https://primer.style/product/", role: "First-party design-system reference for product principles, components, and tokens." },
   { name: "GOV.UK Design System", url: "https://design-system.service.gov.uk/", role: "Research-informed service design and content patterns; localize UK-specific conventions." },
   { name: "GOV.UK Service Manual: User research", url: "https://www.gov.uk/service-manual/user-research", role: "Methods for observing representative users doing realistic tasks; research evidence complements automated checks." },
+  { name: "GOV.UK Service Manual: Plan user research", url: "https://www.gov.uk/service-manual/user-research/plan-user-research-for-your-service", role: "Plan research activities for each development phase and update the plan as evidence about users and the service changes." },
+  { name: "U.S. Web Design System: Design principles", url: "https://designsystem.digital.gov/design-principles/", role: "Official federal design principles call for starting from real user needs and regularly testing assumptions and products with real people." },
   { name: "Pew Research Center: Writing Survey Questions", url: "https://www.pewresearch.org/writing-survey-questions/", role: "Survey question wording, response-option design, order effects, and pretesting; apply the research principles to KQA's supported formats." },
   { name: "AAPOR: Best Practices for Survey Research", url: "https://aapor.org/standards-and-ethics/best-practices/", role: "Professional survey research and reporting practices; use with context and do not treat the static checker as a methods review." },
   { name: "Anthropic frontend-design skill", url: "https://raw.githubusercontent.com/anthropics/skills/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/frontend-design/SKILL.md", revision: "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f", reviewedAt: "2026-11-16", contentSha256: "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3", role: "Optional subjective design-process inspiration reviewed at this immutable Git revision; not a standard and not an authority over the user's brief, WCAG, or KQA policy." },
@@ -75,13 +92,15 @@ const DESIGN_PLAN = {
     "Map semantic color, typography, spacing, shape, and elevation roles to the applicable visual profile. Reuse existing tokens where available; document any deliberate extension rather than scattering literal values.",
     "Describe information hierarchy, layout at narrow and wide widths, key components, and loading, empty, error, success, and disabled states relevant to the task.",
     "Use motion only when it clarifies a user action or state change; preserve the same meaning with prefers-reduced-motion enabled.",
-    "Build, then critique against the brief and review checklist. Inspect rendered narrow and wide layouts, keyboard operation, focus, contrast, and relevant non-happy-path states; report what was checked and what remains uncertain.",
+    "For a new or materially changed flow, plan task-based usability sessions with representative users. Define realistic tasks and success criteria, then observe completion, hesitation, errors, recovery, and misunderstandings. If sessions are not feasible, identify usability as untested.",
+    "Build, then critique against the brief and review checklist. Inspect rendered narrow and wide layouts, keyboard operation, focus, contrast, and relevant non-happy-path states. When sessions are run, report the represented users, tasks, success criteria, observations, and limits; do not imply a session occurred when it did not.",
     "For a WCAG conformance evaluation, follow the accessibility evaluation methodology below: define scope, explore essential functionality, select representative views and states, evaluate the sample against the target criteria, and document the findings and limits.",
   ],
   accessibilityEvaluationMethodology: ACCESSIBILITY_EVALUATION_METHOD,
+  taskBasedUsabilityMethodology: TASK_BASED_USABILITY_METHOD,
   output: {
-    fields: ["briefSummary", "visualDirection", "tokenMapping", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
-    evidenceRule: "State concrete checks and their results. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality.",
+    fields: ["briefSummary", "visualDirection", "tokenMapping", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
+    evidenceRule: "State concrete checks and their results. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality. Mark user research as untested unless sessions with relevant participants were actually observed.",
   },
   guardrails: [
     "WCAG 2.2 AA is the accessibility target; subjective taste heuristics never override it or the user's explicit direction.",
@@ -155,7 +174,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/10",
+    policyVersion: "kqa-design/11",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

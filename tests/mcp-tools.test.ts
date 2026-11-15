@@ -165,6 +165,7 @@ describe("MCP tools", () => {
     for (const tool of tools) expect(md).toContain(`\`${tool.name}\``);
     expect(tools.map((tool) => tool.name).sort()).toEqual(Object.keys(MCP_TOOL_CAPABILITIES).sort());
     expect(tools.every((tool) => tool.annotations && typeof tool.annotations.readOnlyHint === "boolean")).toBe(true);
+    expect(tools.find((tool) => tool.name === "preview_questionnaire_version_patch")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
     expect(tools.find((tool) => tool.name === "delete_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
   });
@@ -243,20 +244,23 @@ describe("MCP tools", () => {
       policyVersion?: string;
       principles?: { id: string; guidance: string }[];
       sources?: { name: string; url?: string; revision?: string; contentSha256?: string }[];
-      designPlan?: { output?: { fields?: string[] }; guardrails?: string[]; accessibilityEvaluationMethodology?: { source?: string; status?: string; steps?: string[] } };
+      designPlan?: { output?: { fields?: string[] }; guardrails?: string[]; accessibilityEvaluationMethodology?: { source?: string; status?: string; steps?: string[] }; taskBasedUsabilityMethodology?: { status?: string; steps?: string[] } };
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/10");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/11");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
     expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.steps?.join(" ")).toContain("representative sample");
     expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.status).toContain("informative process guidance");
+    expect(body.result.structuredContent.designPlan?.taskBasedUsabilityMethodology?.steps?.join(" ")).toContain("realistic, neutral tasks");
+    expect(body.result.structuredContent.designPlan?.output?.fields).toContain("observedUsabilityFindings");
     expect(body.result.structuredContent.visualProfile).toHaveProperty("questionnaire");
     expect(body.result.structuredContent.visualProfile).not.toHaveProperty("host");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("question-clarity");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("response-options");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("pretest");
+    expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("task-usability");
     expect(body.result.structuredContent.principles?.find((p) => p.id === "accessible-interaction")?.guidance).toContain("24 × 24 CSS px");
     expect(body.result.structuredContent.principles?.find((p) => p.id === "accessible-interaction")?.guidance).toContain("WCAG 2.4.11");
     expect(body.result.structuredContent.principles?.find((p) => p.id === "accessible-interaction")?.guidance).toContain("non-drag alternative");
@@ -266,6 +270,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI-ARIA Authoring Practices Guide: Radio Group");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI Forms Tutorial: User Notifications");
+    expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("U.S. Web Design System: Design principles");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("axe-core");
     expect(body.result.structuredContent.sources?.find((source) => source.name === "Anthropic frontend-design skill")).toMatchObject({
       url: "https://raw.githubusercontent.com/anthropics/skills/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/frontend-design/SKILL.md",
@@ -306,8 +311,10 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("question wording");
     expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("Pretest new or high-impact questions");
     expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("24 × 24 CSS px");
+    expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("realistic end-to-end tasks");
     expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot verify rendered contrast");
     expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot judge question wording");
+    expect(body.result.structuredContent.limits?.join(" ")).toContain("determine whether representative users can complete realistic end-to-end tasks");
   });
 
   it("returns scoped descriptive summaries without raw answers", async () => {
