@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { checkHtml } from "../src/lib/diagnostics/static";
 
 process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
 process.env.KQA_PUBLIC_URL = "https://kqa.example";
@@ -15,6 +17,8 @@ process.env.IMAP_PORT = "993";
 const mailRows: Record<string, unknown>[] = [];
 const sent: { message: Record<string, unknown>; options: { port?: number; secure?: boolean; requireTLS?: boolean } }[] = [];
 const searches: unknown[] = [];
+const patchTestHtml = readFileSync(new URL("../docs/template/starter.kqa.html", import.meta.url), "utf8");
+const patchTestManifest = checkHtml(patchTestHtml).manifest!;
 
 vi.mock("nodemailer", () => ({
   default: {
@@ -51,6 +55,9 @@ vi.mock("../src/lib/db", () => ({
   db: async () => { throw new Error("db() should not run in this test"); },
   col: {
     tenants: async () => ({ findOne: async (query: { _id: string; status: string }) => query._id === "axion" && query.status === "active" ? { _id: "axion" } : null }),
+    interviews: async () => ({ findOne: async () => ({ currentVersion: 1 }) }),
+    versions: async () => ({ findOne: async () => ({ manifest: patchTestManifest }) }),
+    participants: async () => ({ find: () => ({ toArray: async () => [] }) }),
     mail: async () => ({
       insertOne: async (row: Record<string, unknown>) => { mailRows.push(row); return { insertedId: row._id }; },
       find: () => ({ sort: () => ({ limit: () => ({ toArray: async () => mailRows }) }) }),
@@ -100,6 +107,7 @@ vi.mock("../src/lib/repo", async () => {
       updatedAt: new Date(),
     })),
     getVersion: vi.fn(async () => ({ version: 1, manifest: analyticsManifest })),
+    publishVersionIfCurrent: vi.fn(async () => ({ version: 2 })),
     recentEvents: vi.fn(async () => [{
       id: "event-id",
       type: "mcp",
@@ -123,7 +131,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { iterateAnalyticsParticipants } from "../src/lib/repo";
+import { getVersion, iterateAnalyticsParticipants, publishVersionIfCurrent } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -174,6 +182,58 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { error?: string; code?: string } } };
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent).toMatchObject({ error: "previewToken is required.", code: "invalid_args" });
+  });
+
+  it("previews and applies requiredness changes without sending a full HTML candidate", async () => {
+    const optionalQuestion = patchTestManifest.questions.find((question) => question.required !== true);
+    expect(optionalQuestion).toBeDefined();
+    if (!optionalQuestion) return;
+    const current = {
+      _id: new ObjectId(),
+      tenantId: "axion",
+      interviewId: new ObjectId(interviewId),
+      version: 1,
+      fileName: "starter.kqa.html",
+      html: patchTestHtml,
+      htmlSha256: createHash("sha256").update(patchTestHtml).digest("hex"),
+      bytes: Buffer.byteLength(patchTestHtml, "utf8"),
+      manifest: patchTestManifest,
+      check: { errors: 0, warnings: 0, info: 0, checkedAt: new Date().toISOString(), checkerVersion: "test" },
+      createdAt: new Date(),
+    };
+    vi.mocked(getVersion).mockResolvedValueOnce(current).mockResolvedValueOnce(current);
+
+    const changes = [{ questionId: optionalQuestion.id, required: true }];
+    const previewResponse = await call("preview_questionnaire_required_patch", { interviewId, changes });
+    const previewBody = await previewResponse.json() as { result: { isError?: boolean; structuredContent: {
+      ok?: boolean; currentVersion?: number; baseHash?: string; candidateHash?: string; previewToken?: string;
+      changes?: { questionId: string; beforeRequired: boolean; afterRequired: boolean }[]; compatibilityImpact?: boolean;
+    } } };
+    expect(previewBody.result.isError).toBeFalsy();
+    expect(previewBody.result.structuredContent).toMatchObject({
+      ok: true,
+      currentVersion: 1,
+      baseHash: current.htmlSha256,
+      changes: [{ questionId: optionalQuestion.id, beforeRequired: false, afterRequired: true }],
+      compatibilityImpact: false,
+    });
+    expect(previewBody.result.structuredContent.candidateHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(previewBody.result.structuredContent.previewToken).toBeTruthy();
+
+    const applyResponse = await call("apply_questionnaire_required_patch", {
+      interviewId,
+      changes,
+      expectedVersion: 1,
+      baseHash: previewBody.result.structuredContent.baseHash,
+      candidateHash: previewBody.result.structuredContent.candidateHash,
+      previewToken: previewBody.result.structuredContent.previewToken,
+    });
+    const applyBody = await applyResponse.json() as { result: { isError?: boolean; structuredContent: { version?: number; changes?: unknown[] } } };
+    expect(applyBody.result.isError).toBeFalsy();
+    expect(applyBody.result.structuredContent).toMatchObject({ version: 2, changes: [{ questionId: optionalQuestion.id, beforeRequired: false, afterRequired: true }] });
+    expect(vi.mocked(publishVersionIfCurrent)).toHaveBeenCalledWith(interviewId, 1, current.htmlSha256, expect.objectContaining({
+      html: expect.stringContaining('"required": true'),
+    }));
   });
 
   it("returns sourced design guidance for the requested product surface", async () => {

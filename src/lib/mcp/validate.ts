@@ -7,6 +7,8 @@ interface Schema {
   additionalProperties?: boolean;
   enum?: unknown[];
   items?: Schema;
+  minItems?: number;
+  maxItems?: number;
   minimum?: number;
   maximum?: number;
 }
@@ -39,6 +41,8 @@ function check(schema: Schema, value: unknown, path: string): string | null {
   }
   if (schema.type === "array") {
     if (!Array.isArray(value)) return `${where} must be a list.`;
+    if (schema.minItems !== undefined && value.length < schema.minItems) return `${where} must contain at least ${schema.minItems} item${schema.minItems === 1 ? "" : "s"}.`;
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) return `${where} must contain at most ${schema.maxItems} items.`;
     if (schema.items) {
       for (let i = 0; i < value.length; i++) {
         const nested = check(schema.items, value[i], `${where}[${i}]`);

@@ -8,6 +8,8 @@ export interface JsonOk {
   value: unknown;
   /** path (for example "questions[3].id") -> offset where that value starts. "" is the root. */
   starts: Map<string, number>;
+  /** Same path -> offset immediately after its value. */
+  ends: Map<string, number>;
   /** path of an object -> offset of each of its keys, for pointing at unknown fields. */
   keyStarts: Map<string, number>;
 }
@@ -19,6 +21,7 @@ export interface JsonErr {
 
 export function parseJsonWithPositions(text: string): JsonOk | JsonErr {
   const starts = new Map<string, number>();
+  const ends = new Map<string, number>();
   const keyStarts = new Map<string, number>();
   let i = 0;
 
@@ -90,6 +93,7 @@ export function parseJsonWithPositions(text: string): JsonOk | JsonErr {
       ws();
       if (text[i] === "}") {
         i++;
+        ends.set(path, i);
         return obj;
       }
       for (;;) {
@@ -109,6 +113,7 @@ export function parseJsonWithPositions(text: string): JsonOk | JsonErr {
         }
         if (text[i] === "}") {
           i++;
+          ends.set(path, i);
           return obj;
         }
         throw new Fail(i, `Expected "," or "}" after a value, found ${describe(text[i])}. A comma is probably missing between two entries`);
@@ -120,6 +125,7 @@ export function parseJsonWithPositions(text: string): JsonOk | JsonErr {
       ws();
       if (text[i] === "]") {
         i++;
+        ends.set(path, i);
         return arr;
       }
       for (;;) {
@@ -133,21 +139,29 @@ export function parseJsonWithPositions(text: string): JsonOk | JsonErr {
         }
         if (text[i] === "]") {
           i++;
+          ends.set(path, i);
           return arr;
         }
         throw new Fail(i, `Expected "," or "]" after a value, found ${describe(text[i])}. A comma is probably missing between two entries`);
       }
     }
-    if (c === '"' || c === "'") return parseString();
+    if (c === '"' || c === "'") {
+      const value = parseString();
+      ends.set(path, i);
+      return value;
+    }
     if (c === "-" || (c !== undefined && c >= "0" && c <= "9")) {
       const m = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/.exec(text.slice(i));
       if (!m) throw new Fail(i, "Invalid number");
       i += m[0].length;
-      return Number(m[0]);
+      const value = Number(m[0]);
+      ends.set(path, i);
+      return value;
     }
     for (const [word, val] of [["true", true], ["false", false], ["null", null]] as const) {
       if (text.startsWith(word, i)) {
         i += word.length;
+        ends.set(path, i);
         return val;
       }
     }
@@ -163,7 +177,7 @@ export function parseJsonWithPositions(text: string): JsonOk | JsonErr {
     const value = parseValue("");
     ws();
     if (i < text.length) throw new Fail(i, `Unexpected ${describe(text[i])} after the end of the manifest`);
-    return { ok: true, value, starts, keyStarts };
+    return { ok: true, value, starts, ends, keyStarts };
   } catch (e) {
     if (e instanceof Fail) return { ok: false, message: e.message, offset: e.offset };
     throw e;
