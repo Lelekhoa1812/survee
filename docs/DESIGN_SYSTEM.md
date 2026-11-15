@@ -1,8 +1,12 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/5` · reviewed 15 November 2026
+Version: `kqa-design/6` · reviewed 16 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
+
+The tool also returns a structured `designPlan` contract for moving from a user brief through design, implementation, and critique. Its `inputs`, `steps`, `output.fields`, and `guardrails` are intended to make agent work repeatable and reviewable. Visual-taste guidance is heuristic: preserve the user's explicit direction and product context, and do not present a subjective preference as a standard. WCAG 2.2 AA remains the accessibility target.
+
+For host surfaces, `visualProfile.host` exposes the default KQA visual direction, semantic token names, and core light/dark token values from `src/app/globals.css`. The default is a heuristic when the user has not supplied a different brand or theme; it is not a template to force onto every interview. Contrast still needs verification for the actual foreground/background pairing. The stylesheet does not currently define a shared spacing scale. Questionnaire guidance is separate because its HTML runs in a sandboxed iframe and does not inherit host CSS variables; `visualProfile.questionnaire` exposes tokens and layout conventions from [`template/starter.kqa.html`](template/starter.kqa.html), while [`FORMAT.md`](FORMAT.md) documents the supported controls and runtime. Analytics guidance emphasizes legible labels, provenance, denominators, non-color chart alternatives, and singleton disclosure signals; KQA does not suppress small groups by default.
 
 ## Product constraints
 
@@ -54,6 +58,6 @@ This is the product-specific design policy for KQA's host console, respondent qu
 - [GOV.UK Service Manual: User research](https://www.gov.uk/service-manual/user-research) describes methods for observing representative users completing realistic tasks; research complements automated checks.
 - [Pew Research Center: Writing Survey Questions](https://www.pewresearch.org/writing-survey-questions/) discusses question wording, response-option design, order effects, and pretesting.
 - [AAPOR: Best Practices for Survey Research](https://aapor.org/standards-and-ethics/best-practices/) provides professional survey research and reporting practices; apply it with context rather than treating a static checker as a methods review.
-- [Anthropic's frontend-design skill](https://github.com/anthropics/skills/tree/main/skills/frontend-design) is optional inspiration for design iteration and critique. Its preferences are subjective and do not override accessibility standards or KQA product policy.
+- [Anthropic's frontend-design skill](https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md) is optional, subjective inspiration for brief-grounded visual direction and critique. It is not a standard and does not override the user's direction, WCAG, or KQA product policy.
 
 These sources inform the policy; this policy is not a claim that KQA has passed a full accessibility audit, questionnaire-methods review, or usability study. Content review and respondent pretesting require judgment and research. Automated checks, browser screenshots, keyboard walkthroughs, and assistive-technology review each provide different evidence and should be recorded separately.

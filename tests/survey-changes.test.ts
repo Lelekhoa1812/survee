@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Question } from "../src/lib/format/schema";
-import { FIELD_LABELS, fieldsForQuestion, formatQuestionFieldValue, summarizeQuestionChanges } from "../src/lib/survey-changes";
+import { FIELD_LABELS, fieldsForQuestion, formatQuestionFieldValue, summarizeQuestionChanges, summarizeSectionChanges } from "../src/lib/survey-changes";
 
 function question(id: string, extra: Partial<Question> = {}): Question {
   return { id, type: "text", label: `Question ${id}`, ...extra };
@@ -81,5 +81,29 @@ describe("survey candidate question changes", () => {
 
     expect(summarizeQuestionChanges(before, inserted).moved).toEqual([]);
     expect(summarizeQuestionChanges(before, removed).moved).toEqual([]);
+  });
+
+  it("summarizes section additions, removals, edits, and order changes independently", () => {
+    const before = [
+      { id: "intro", title: "Introduction", description: "Start here" },
+      { id: "main", title: "Main" },
+      { id: "closing", title: "Closing" },
+    ];
+    const after = [
+      { id: "main", title: "Main questions", description: "Updated guidance" },
+      { id: "intro", title: "Introduction", description: "Start here" },
+      { id: "new", title: "New section" },
+    ];
+
+    expect(summarizeSectionChanges(before, after)).toEqual({
+      added: [{ id: "new", title: "New section" }],
+      removed: [{ id: "closing", title: "Closing" }],
+      updated: [{
+        previous: { id: "main", title: "Main" },
+        section: { id: "main", title: "Main questions", description: "Updated guidance" },
+        fields: ["title", "description"],
+      }],
+      moved: [{ id: "intro", beforePosition: 1, afterPosition: 2 }],
+    });
   });
 });

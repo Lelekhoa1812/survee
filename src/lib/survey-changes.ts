@@ -28,6 +28,16 @@ export interface QuestionChanges {
   moved: Array<{ id: string; beforePosition: number; afterPosition: number }>;
 }
 
+export const SECTION_FIELDS = ["title", "description"] as const satisfies readonly (keyof Section)[];
+export type SectionField = (typeof SECTION_FIELDS)[number];
+
+export interface SectionChanges {
+  added: Section[];
+  removed: Section[];
+  updated: Array<{ previous: Section; section: Section; fields: SectionField[] }>;
+  moved: Array<{ id: string; beforePosition: number; afterPosition: number }>;
+}
+
 function longestCommonSubsequence<T>(before: T[], after: T[]): T[] {
   const lengths = Array.from({ length: before.length + 1 }, () => Array<number>(after.length + 1).fill(0));
   for (let i = before.length - 1; i >= 0; i -= 1) {
@@ -55,6 +65,19 @@ function longestCommonSubsequence<T>(before: T[], after: T[]): T[] {
   return sequence;
 }
 
+function movedItems<T extends { id: string }>(before: T[], after: T[]): Array<{ id: string; beforePosition: number; afterPosition: number }> {
+  const beforeById = new Map(before.map((item) => [item.id, item]));
+  const afterById = new Map(after.map((item) => [item.id, item]));
+  const beforeOrder = before.filter((item) => afterById.has(item.id)).map((item) => item.id);
+  const afterOrder = after.filter((item) => beforeById.has(item.id)).map((item) => item.id);
+  const stationary = new Set(longestCommonSubsequence(beforeOrder, afterOrder));
+  const beforePositions = new Map(before.map((item, index) => [item.id, index + 1]));
+  const afterPositions = new Map(after.map((item, index) => [item.id, index + 1]));
+  return beforeOrder.length === afterOrder.length && beforeOrder.some((id, index) => id !== afterOrder[index])
+    ? afterOrder.flatMap((id) => stationary.has(id) ? [] : [{ id, beforePosition: beforePositions.get(id)!, afterPosition: afterPositions.get(id)! }])
+    : [];
+}
+
 export function summarizeQuestionChanges(before: Question[], after: Question[]): QuestionChanges {
   const beforeById = new Map(before.map((question) => [question.id, question]));
   const afterById = new Map(after.map((question) => [question.id, question]));
@@ -67,21 +90,22 @@ export function summarizeQuestionChanges(before: Question[], after: Question[]):
     return fields.length ? [{ previous, question, fields }] : [];
   });
 
-  // Compare only questions present in both versions, so inserting or deleting an
-  // unrelated question doesn't make every later question look reordered.
-  const beforeOrder = before.filter((question) => afterById.has(question.id)).map((question) => question.id);
-  const afterOrder = after.filter((question) => beforeById.has(question.id)).map((question) => question.id);
-  const stationary = new Set(longestCommonSubsequence(beforeOrder, afterOrder));
-  const beforePositions = new Map(before.map((question, index) => [question.id, index + 1]));
-  const afterPositions = new Map(after.map((question, index) => [question.id, index + 1]));
-  const moved = beforeOrder.length === afterOrder.length && beforeOrder.some((id, index) => id !== afterOrder[index])
-    ? afterOrder.flatMap((id) => {
-      if (stationary.has(id)) return [];
-      return [{ id, beforePosition: beforePositions.get(id)!, afterPosition: afterPositions.get(id)! }];
-    })
-    : [];
+  // Compare only ids present in both versions so additions/removals don't look like reorders.
+  return { added, removed, updated, moved: movedItems(before, after) };
+}
 
-  return { added, removed, updated, moved };
+export function summarizeSectionChanges(before: Section[], after: Section[]): SectionChanges {
+  const beforeById = new Map(before.map((section) => [section.id, section]));
+  const afterById = new Map(after.map((section) => [section.id, section]));
+  const added = after.filter((section) => !beforeById.has(section.id));
+  const removed = before.filter((section) => !afterById.has(section.id));
+  const updated = after.flatMap((section) => {
+    const previous = beforeById.get(section.id);
+    if (!previous) return [];
+    const fields = SECTION_FIELDS.filter((field) => JSON.stringify(previous[field] ?? null) !== JSON.stringify(section[field] ?? null));
+    return fields.length ? [{ previous, section, fields }] : [];
+  });
+  return { added, removed, updated, moved: movedItems(before, after) };
 }
 
 export function formatQuestionFieldValue(field: QuestionField, question: Question, sections: Section[]): string {

@@ -238,9 +238,19 @@ describe("MCP tools", () => {
 
   it("returns sourced design guidance for the requested product surface", async () => {
     const res = await call("get_design_guidance", { surface: "questionnaire" });
-    const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string; guidance: string }[]; sources?: { name: string }[] } } };
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: {
+      policyVersion?: string;
+      principles?: { id: string; guidance: string }[];
+      sources?: { name: string; url?: string }[];
+      designPlan?: { output?: { fields?: string[] }; guardrails?: string[] };
+      visualProfile?: Record<string, unknown>;
+    } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/5");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/6");
+    expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
+    expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
+    expect(body.result.structuredContent.visualProfile).toHaveProperty("questionnaire");
+    expect(body.result.structuredContent.visualProfile).not.toHaveProperty("host");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("question-clarity");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("response-options");
     expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("pretest");
@@ -252,6 +262,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI-ARIA Authoring Practices Guide: Radio Group");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI Forms Tutorial: User Notifications");
+    expect(body.result.structuredContent.sources?.find((source) => source.name === "Anthropic frontend-design skill")?.url).toBe("https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md");
   });
 
   it("returns review checklists scoped to the requested surface", async () => {

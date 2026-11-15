@@ -22,7 +22,7 @@ Before writing, make sure you know:
 
 Ask at most one round of questions. If you can proceed with a sensible default, do so and state the assumption in your reply.
 
-Use the `get_design_guidance` MCP tool when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). Treat accessibility requirements as testable constraints and visual taste as a reasoned design choice. For a live interview, preserve ids and inspect compatibility findings before changing a version.
+Use `get_design_guidance` with `surface: "questionnaire"` when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) and `FORMAT.md`. Follow its brief-to-review plan, use the scoped questionnaire profile from `template/starter.kqa.html` unless the host gives a different theme, and report the visual rationale plus checks performed. Treat accessibility requirements as testable constraints and visual taste as a reasoned, user-brief-grounded choice. For a live interview, preserve ids and inspect the semantic and compatibility changes before applying a version.
 
 ## Step 2. Design the manifest first
 

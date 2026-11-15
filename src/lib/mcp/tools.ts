@@ -47,6 +47,7 @@ import {
   type QuestionnairePreviewFailure,
 } from "../questionnaire-preview";
 import { currentPrincipal } from "../tenant-context";
+import { summarizeQuestionChanges, summarizeSectionChanges } from "../survey-changes";
 import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
 import { patchRequiredQuestions, type RequiredQuestionChange } from "./questionnaire-required-patch";
@@ -168,7 +169,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_design_guidance",
-    description: "Return KQA's sourced, versioned design principles for questionnaires, the host console, or analytics. No LLM is built into KQA.",
+    description: "Return KQA's sourced, versioned design principles, structured design plan, and surface-specific visual profile for questionnaires, the host console, or analytics. No LLM is built into KQA.",
     inputSchema: obj({ surface: { type: "string", enum: ["all", "questionnaire", "host", "analytics"] } }),
     async run(args) {
       const surface = (asString(args.surface, 24) || "all") as DesignSurface;
@@ -671,6 +672,12 @@ const TOOLS: ToolDef[] = [
       if (prepared.survey && prepared.report.ok && !previewToken) {
         return err("Secure preview signing is not configured for this request.", "preview_unavailable");
       }
+      const questionChanges = prepared.report.manifest
+        ? summarizeQuestionChanges(current.manifest.questions, prepared.report.manifest.questions)
+        : null;
+      const sectionChanges = prepared.report.manifest
+        ? summarizeSectionChanges(current.manifest.sections ?? [], prepared.report.manifest.sections ?? [])
+        : null;
       return ok({
         ok: !!prepared.survey && prepared.report.ok,
         interviewId: id,
@@ -691,6 +698,40 @@ const TOOLS: ToolDef[] = [
           questionsAfter: questionList(prepared.report.manifest),
           sectionsBefore: current.manifest.sections ?? [],
           sectionsAfter: prepared.report.manifest.sections ?? [],
+          questionChanges: questionChanges && {
+            counts: {
+              added: questionChanges.added.length,
+              removed: questionChanges.removed.length,
+              updated: questionChanges.updated.length,
+              moved: questionChanges.moved.length,
+            },
+            addedIds: questionChanges.added.map((question) => question.id),
+            removedIds: questionChanges.removed.map((question) => question.id),
+            updated: questionChanges.updated.map(({ previous, question, fields }) => ({
+              id: question.id,
+              fields,
+              before: Object.fromEntries(fields.map((field) => [field, previous[field] ?? null])),
+              after: Object.fromEntries(fields.map((field) => [field, question[field] ?? null])),
+            })),
+            moved: questionChanges.moved,
+          },
+          sectionChanges: sectionChanges && {
+            counts: {
+              added: sectionChanges.added.length,
+              removed: sectionChanges.removed.length,
+              updated: sectionChanges.updated.length,
+              moved: sectionChanges.moved.length,
+            },
+            addedIds: sectionChanges.added.map((section) => section.id),
+            removedIds: sectionChanges.removed.map((section) => section.id),
+            updated: sectionChanges.updated.map(({ previous, section, fields }) => ({
+              id: section.id,
+              fields,
+              before: Object.fromEntries(fields.map((field) => [field, previous[field] ?? null])),
+              after: Object.fromEntries(fields.map((field) => [field, section[field] ?? null])),
+            })),
+            moved: sectionChanges.moved,
+          },
         } : null,
       });
     },

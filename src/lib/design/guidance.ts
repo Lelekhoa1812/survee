@@ -43,12 +43,95 @@ const SOURCES = [
   { name: "GOV.UK Service Manual: User research", url: "https://www.gov.uk/service-manual/user-research", role: "Methods for observing representative users doing realistic tasks; research evidence complements automated checks." },
   { name: "Pew Research Center: Writing Survey Questions", url: "https://www.pewresearch.org/writing-survey-questions/", role: "Survey question wording, response-option design, order effects, and pretesting; apply the research principles to KQA's supported formats." },
   { name: "AAPOR: Best Practices for Survey Research", url: "https://aapor.org/standards-and-ethics/best-practices/", role: "Professional survey research and reporting practices; use with context and do not treat the static checker as a methods review." },
-  { name: "Anthropic frontend-design skill", url: "https://github.com/anthropics/skills/tree/main/skills/frontend-design", role: "Optional subjective design-process inspiration; not a standard and not an authority over KQA policy." },
+  { name: "Anthropic frontend-design skill", url: "https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md", role: "Optional subjective design-process inspiration; not a standard and not an authority over the user's brief, WCAG, or KQA policy." },
 ];
 
+const DESIGN_PLAN = {
+  purpose: "A repeatable brief-to-build-to-review contract for the connected agent. Treat the user's stated visual direction and constraints as authoritative; ask only when a missing choice would materially change the result.",
+  inputs: ["surface", "audience", "primary user task", "brand/theme references", "content and data density", "technical and accessibility constraints"],
+  steps: [
+    "Restate the audience, primary task, and user-provided theme constraints; identify assumptions that materially affect the design.",
+    "Choose a visual direction from the product's subject matter and supplied references. Explain why it fits; do not apply a generic style recipe by default. Taste guidance is heuristic and must yield to the user's brief.",
+    "Map semantic color, typography, spacing, shape, and elevation roles to the applicable visual profile. Reuse existing tokens where available; document any deliberate extension rather than scattering literal values.",
+    "Describe information hierarchy, layout at narrow and wide widths, key components, and loading, empty, error, success, and disabled states relevant to the task.",
+    "Use motion only when it clarifies a user action or state change; preserve the same meaning with prefers-reduced-motion enabled.",
+    "Build, then critique against the brief and review checklist. Inspect rendered narrow and wide layouts, keyboard operation, focus, contrast, and relevant non-happy-path states; report what was checked and what remains uncertain.",
+  ],
+  output: {
+    fields: ["briefSummary", "visualDirection", "tokenMapping", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "reviewEvidence", "openQuestions"],
+    evidenceRule: "State concrete checks and their results. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality.",
+  },
+  guardrails: [
+    "WCAG 2.2 AA is the accessibility target; subjective taste heuristics never override it or the user's explicit direction.",
+    "Do not add motion, gradients, cards, display type, or decorative labels merely because a design heuristic suggests them; use only when justified by this brief and task.",
+    "Do not invent brand facts or claim user research occurred when it did not.",
+  ],
+  surfaceInstructions: {
+    host: "Use the host visual profile below as the source of truth for existing tokens. Add or change tokens centrally and check both light and dark themes.",
+    questionnaire: "The questionnaire is rendered in a sandboxed iframe. The host page's CSS variables are not inherited. Follow docs/FORMAT.md and the starter questionnaire kit; define or override tokens inside the questionnaire document and keep styles within supported frame constraints.",
+    analytics: "Prioritize comparison, provenance, denominator clarity, and accessible chart alternatives. Treat color as supplemental encoding and retain readable labels or tables. Do not suppress small groups by default; preserve singleton disclosure signals and state limits.",
+  },
+} as const;
+
+const HOST_VISUAL_PROFILE = {
+  source: "src/app/globals.css",
+  themeModes: ["light", "prefers-color-scheme: dark"],
+  direction: "When no custom brand direction is supplied, use a calm, precise, private, operational tone: deep navy for framework, restrained teal for action/progress, neutral surfaces for dense work, and clear text hierarchy. This is a product-specific default heuristic; preserve the user's brief.",
+  composition: [
+    "Give each page one clear task. Place title, context, and status before the controls that act on them.",
+    "Use lists or tables for record management and reserve charts for comparisons. Avoid nested-card framing when spacing and headings can establish hierarchy.",
+    "Keep destructive actions visually distinct, secondary until needed, and confirmed; communicate status with text or icons as well as color.",
+  ],
+  surfacePatterns: {
+    host: "For desktop host pages, the shared frame uses a centered 1160 px content width. Put the page purpose, current state, and primary action in the first scan path; keep respondent identity, progress, and delivery status legible in dense lists.",
+    analytics: "Put cohort and status scope near the result. Show participant count, valid denominator, and no-answer count with each interpretation; pair charts with readable labels or a table. Do not suppress small groups by default; preserve singleton disclosure signals and state limits.",
+  },
+  tokens: {
+    canvas: ["--bg"], surfaces: ["--surface", "--surface-2", "--surface-3"],
+    text: ["--ink", "--ink-2", "--muted"], borders: ["--line", "--line-2", "--field"],
+    brand: ["--brand", "--brand-2", "--brand-ink"],
+    accent: ["--accent", "--accent-2", "--accent-soft", "--accent-ink"],
+    status: ["--warn", "--warn-soft", "--warn-line", "--danger", "--danger-soft", "--danger-line", "--info", "--info-soft", "--info-line"],
+    focus: ["--focus"], shape: ["--r", "--r-sm", "--r-xs"], elevation: ["--shadow-sm", "--shadow", "--shadow-lg"],
+    typography: ["--sans", "--mono"],
+  },
+  coreThemeValues: {
+    light: { "--bg": "#f3f5f8", "--surface": "#ffffff", "--ink": "#0e1b2a", "--muted": "#5f7084", "--brand": "#0b2a42", "--accent": "#087960", "--focus": "#1f6feb" },
+    dark: { "--bg": "#0b1622", "--surface": "#101f2e", "--ink": "#e8eef5", "--muted": "#8fa1b3", "--brand": "#dbe7f3", "--accent": "#2bb58f", "--focus": "#6aa3ff" },
+  },
+  existingConventions: [
+    "Semantic CSS variables have light values at :root and dark overrides under prefers-color-scheme: dark.",
+    "Use --focus for visible keyboard focus, semantic status colors with text or icons, and the existing IBM Plex/system font stacks.",
+    "No shared spacing scale is currently defined; choose a small consistent scale for new work and add tokens centrally if it needs reuse.",
+  ],
+  constraints: ["Token names describe roles; verify rendered contrast in both themes instead of assuming every color pairing passes.", "Do not hard-code replacements for established semantic tokens in individual components."],
+} as const;
+
+const QUESTIONNAIRE_VISUAL_PROFILE = {
+  source: "docs/template/starter.kqa.html",
+  direction: "A clear, respondent-first reading experience with a quiet contents rail on wide screens and one focused reading column. This starter direction is optional when the interview owner supplies a different theme.",
+  tokens: ["--bg", "--surface", "--surface-2", "--ink", "--ink-2", "--muted", "--line", "--line-2", "--field", "--brand", "--accent", "--accent-soft", "--accent-ink", "--focus", "--danger", "--r", "--r-sm", "--shadow", "--sans", "--mono"],
+  coreThemeValues: {
+    light: { "--bg": "#f3f5f8", "--surface": "#ffffff", "--ink": "#0e1b2a", "--brand": "#0b2a42", "--accent": "#087960", "--focus": "#1f6feb", "--danger": "#b4261c" },
+    dark: { "--bg": "#0b1622", "--surface": "#101f2e", "--ink": "#e8eef5", "--brand": "#07121d", "--accent": "#2bb58f", "--focus": "#6aa3ff", "--danger": "#f59a92" },
+  },
+  layoutConventions: [
+    "The starter contents rail is 248 px and appears above 900 px; below that, use a single-column questionnaire layout.",
+    "The starter reading column is at most 860 px, uses 16 px base text, and has 44 px scale targets.",
+    "The starter supports prefers-reduced-motion by removing transitions and smooth scrolling.",
+  ],
+  constraints: [
+    "The starter kit runs inside the questionnaire iframe; host CSS variables and fonts do not cross the sandbox boundary.",
+    "Copy the starter style block unchanged when using the house design, then add scoped rules after it. Follow docs/FORMAT.md for supported browser and markup behavior.",
+  ],
+} as const;
+
 export function getDesignGuidance(surface: DesignSurface = "all") {
+  const surfaceInstructions: Record<string, string> = surface === "all"
+    ? { ...DESIGN_PLAN.surfaceInstructions }
+    : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/5",
+    policyVersion: "kqa-design/6",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
@@ -56,6 +139,14 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
       "There is no in-app question builder and no scoring. Keep authoring as HTML plus the KQA checker, and keep analytics descriptive.",
       "Keep original question and option ids stable when revising a live interview; explain data-compatibility findings before applying a new version.",
     ],
+    designPlan: { ...DESIGN_PLAN, surfaceInstructions },
+    visualProfile: surface === "questionnaire"
+      ? { questionnaire: QUESTIONNAIRE_VISUAL_PROFILE }
+      : surface === "host"
+        ? { host: HOST_VISUAL_PROFILE }
+        : surface === "analytics"
+          ? { host: HOST_VISUAL_PROFILE, analytics: DESIGN_PLAN.surfaceInstructions.analytics }
+          : { host: HOST_VISUAL_PROFILE, questionnaire: QUESTIONNAIRE_VISUAL_PROFILE, analytics: DESIGN_PLAN.surfaceInstructions.analytics },
     principles: PRINCIPLES.filter((principle) => surface === "all" || principle.surfaces.includes(surface)),
     reviewChecklist: REVIEW_CHECKLIST_ITEMS
       .filter((item) => surface === "all" || item.surfaces.includes(surface))

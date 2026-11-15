@@ -62,6 +62,16 @@ describe("MCP questionnaire version patch", () => {
     const result = await callTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ currentVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate), staticValid: true, previewToken: expect.any(String), previewExpiresAt: expect.any(String) });
+    expect(result.structuredContent.changes).toMatchObject({
+      questionChanges: {
+        counts: { added: 0, removed: 0, updated: 1, moved: 0 },
+        addedIds: [],
+        removedIds: [],
+        updated: [{ id: "q1", fields: ["label"], before: { label: "Old" }, after: { label: "New" } }],
+        moved: [],
+      },
+      sectionChanges: { counts: { added: 0, removed: 0, updated: 0, moved: 0 } },
+    });
     expect(state.publish).not.toHaveBeenCalled();
   });
 
