@@ -36,6 +36,14 @@ Write the manifest before any markup. For each question decide:
 
 Group questions into sections of about 5 to 8. Give each section an `id`, `title` and a one-line `description`.
 
+### Review the question content
+
+Before writing markup, check that each item asks one clear thing in familiar, neutral language. Avoid leading assumptions, vague terms, double negatives, and questions that combine separate ideas. State a specific reference period when asking about time-bound behavior.
+
+For closed questions, make the options distinct and cover the reasonable answers. Keep scale labels balanced and in a consistent direction. Add choices such as "not applicable", "not sure", "prefer not to answer", or "other" only when they fit the question. Keep option values stable across versions so existing answers remain interpretable.
+
+When the questionnaire is new or a question could materially affect a decision, pretest it with people like the intended respondents. Ask them to explain what they think the item means and how they chose an answer. The KQA checker validates structure and supported markup; it cannot judge wording quality or replace pretesting. See the sourced question-content rubric in `get_design_guidance`.
+
 ### Mapping common survey shapes
 
 | The source has | Do this |

@@ -147,13 +147,15 @@ describe("MCP tools", () => {
   });
 
   it("returns sourced design guidance for the requested product surface", async () => {
-    const res = await call("get_design_guidance", { surface: "analytics" });
+    const res = await call("get_design_guidance", { surface: "questionnaire" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string }[]; sources?: { name: string }[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/1");
-    expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("honest-analytics");
-    expect(body.result.structuredContent.principles?.map((p) => p.id)).not.toContain("theme-fit");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/2");
+    expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("question-clarity");
+    expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("response-options");
+    expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("pretest");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 Quick Reference");
+    expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
   });
 
   it("returns static design findings with a separate visual-review checklist", async () => {
@@ -164,7 +166,10 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.ok).toBe(true);
     expect(body.result.structuredContent.diagnostics).toBeDefined();
     expect(body.result.structuredContent.reviewChecklist?.length).toBeGreaterThan(4);
+    expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("question wording");
+    expect(body.result.structuredContent.reviewChecklist?.join(" ")).toContain("Pretest new or high-impact questions");
     expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot verify rendered contrast");
+    expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot judge question wording");
   });
 
   it("returns scoped descriptive summaries without raw answers", async () => {

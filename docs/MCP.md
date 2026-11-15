@@ -97,7 +97,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `send_invite` | Email one person's private link. One message per call |
 | `check_invite_delivery` | IMAP check of the message id KQA stored. `delivered`, `bounced`, or `unknown` |
 
-`get_design_guidance` is a deterministic instruction package; KQA does not include or call an LLM. `audit_questionnaire_design` runs the same static checker used by uploads and returns the checklist for rendered review. Static diagnostics cannot verify contrast, layout, keyboard interaction, motion, or assistive-technology behavior.
+`get_design_guidance` is a deterministic instruction package; KQA does not include or call an LLM. The questionnaire rubric also covers wording, response-option design, and respondent pretesting. These content checks require agent or human judgment and are not static checker findings. `audit_questionnaire_design` runs the same static checker used by uploads and returns the checklist for rendered review. Static diagnostics cannot verify question quality, contrast, layout, keyboard interaction, motion, or assistive-technology behavior.
 
 `get_analytics_guidance` returns the versioned `kqa-analytics/2` package for an integrated agent. It describes how to scope and interpret the descriptive summaries, explain missingness and multi-select denominators, choose charts, protect respondent privacy, and state limits on inference. It is guidance only: KQA does not generate or certify the downstream analysis.
 

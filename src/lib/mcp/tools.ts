@@ -239,7 +239,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "audit_questionnaire_design",
-    description: "Run KQA's static questionnaire checker and return the design review checklist. This does not render the page or prove visual quality or WCAG conformance.",
+    description: "Run KQA's static questionnaire checker and return a review checklist for content and rendered design. Wording and pretesting require judgment; this tool does not render or certify the page.",
     inputSchema: obj({ html: str, fileName: str, interviewId: str }, ["html"]),
     async run(args) {
       if (typeof args.html !== "string") return err("html is required.");
@@ -253,7 +253,7 @@ const TOOLS: ToolDef[] = [
         diagnostics: prepared.report.diagnostics,
         report: prepared.markdown,
         reviewChecklist: DESIGN_REVIEW_CHECKLIST,
-        limits: ["Static inspection cannot verify rendered contrast, responsive layout, keyboard operation, motion behavior, or assistive-technology announcements."],
+        limits: ["Static inspection cannot judge question wording or pretesting. It also cannot verify rendered contrast, responsive layout, keyboard operation, motion behavior, or assistive-technology announcements."],
       });
     },
   },
