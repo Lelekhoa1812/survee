@@ -286,6 +286,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-controls { padding: 16px; display: grid; gap: 14px; }
 .analysis-control-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(180px, .7fr); gap: 12px; }
 .analysis-control-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.analysis-freshness { margin: 0; color: var(--muted); font-size: 12.5px; }
 .analysis-cohort-options { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; border: 0; }
 .analysis-cohort-options legend { float: left; margin-right: 4px; padding: 0; color: var(--ink-2); font-size: 13px; font-weight: 600; }
 .analysis-cohort-option { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; white-space: nowrap; cursor: pointer; }
@@ -309,6 +310,9 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-bar-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .analysis-table-wrap { border: 1px solid var(--line); border-radius: 9px; }
 .analysis-table-wrap table.t th { position: static; }
+.analysis-compare-table { min-width: 700px; }
+.analysis-compare-table th:first-child, .analysis-compare-table td:first-child { min-width: 180px; }
+.analysis-cohort-denom { display: block; margin-top: 4px; color: var(--ink-2); font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
 .analysis-total { font-weight: 600; background: var(--surface-2); }
 .analysis-total th { text-align: left; }
 .analysis-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 0; }

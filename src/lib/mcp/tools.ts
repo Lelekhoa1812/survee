@@ -1,6 +1,7 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
-import { createQuestionSummaryAccumulator } from "../analytics/summary";
+import { analyticsCohortForStatuses } from "../analytics/cohorts";
+import { createQuestionSummaryAccumulator, summarizeQuestionCohorts, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { DESIGN_REVIEW_CHECKLIST, getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
@@ -317,12 +318,13 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected respondent statuses, with explicit scope, denominators, missingness, and caveats. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected respondent statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       questionId: str,
       submittedOnly: bool,
       statuses: { type: "array", items: { type: "string", enum: ["invited", "in_progress", "submitted"] } },
+      compareStatuses: bool,
       offset: { type: "integer", minimum: 0 },
       limit: { type: "integer", minimum: 1, maximum: 100 },
     }, ["interviewId"]),
@@ -351,18 +353,34 @@ const TOOLS: ToolDef[] = [
       const offset = typeof args.offset === "number" ? args.offset : 0;
       const limit = typeof args.limit === "number" ? args.limit : 25;
       const page = questions.slice(offset, offset + limit);
-      const accumulators = new Map(page.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
-      let respondentCount = 0;
-      let submittedCount = 0;
-      for await (const respondent of iterateAnalyticsParticipants(id, page.map((question) => question.id), { statuses })) {
-        respondentCount += 1;
-        if (respondent.status === "submitted") submittedCount += 1;
-        for (const question of page) accumulators.get(question.id)!.add(respondent);
+      const cohort = analyticsCohortForStatuses(statuses);
+      if (!cohort) return err("statuses must contain at least one status.");
+      const compareRequested = args.compareStatuses === true;
+      const statusCounts: Record<typeof allStatuses[number], number> = { invited: 0, in_progress: 0, submitted: 0 };
+      const statusSummaries = {} as Record<typeof allStatuses[number], Record<string, QuestionSummary>>;
+      let selectedSummaries: Record<string, QuestionSummary>;
+      let asOf: string;
+      if (compareRequested) {
+        const cohortAnalysis = await summarizeQuestionCohorts(page, iterateAnalyticsParticipants(id, page.map((question) => question.id), { statuses }));
+        Object.assign(statusCounts, cohortAnalysis.statusCounts);
+        selectedSummaries = cohortAnalysis.summaries[cohort.key];
+        for (const status of statuses) statusSummaries[status] = cohortAnalysis.summaries[status];
+        asOf = cohortAnalysis.asOf;
+      } else {
+        const accumulators = new Map(page.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
+        for await (const respondent of iterateAnalyticsParticipants(id, page.map((question) => question.id), { statuses })) {
+          statusCounts[respondent.status] += 1;
+          for (const accumulator of accumulators.values()) accumulator.add(respondent);
+        }
+        selectedSummaries = Object.fromEntries([...accumulators].map(([questionId, accumulator]) => [questionId, accumulator.finish()]));
+        asOf = new Date().toISOString();
       }
+      const respondentCount = statuses.reduce((count, status) => count + statusCounts[status], 0);
+      const submittedCount = statuses.includes("submitted") ? statusCounts.submitted : 0;
       return ok({
         interviewId: id,
         surveyVersion: version.version,
-        asOf: new Date().toISOString(),
+        asOf,
         scope: {
           statuses,
           respondentCount,
@@ -377,13 +395,26 @@ const TOOLS: ToolDef[] = [
           id: question.id,
           type: question.type,
           label: question.label,
-          ...accumulators.get(question.id)!.finish(),
+          ...selectedSummaries[question.id],
         })),
+        ...(compareRequested ? {
+          statusCohorts: statuses.map((status) => ({
+            status,
+            respondentCount: statusCounts[status],
+            questions: page.map((question) => ({
+              id: question.id,
+              type: question.type,
+              label: question.label,
+              ...statusSummaries[status][question.id],
+            })),
+          })),
+        } : {}),
         methodology: [
           "Summaries use the current survey version and the respondent statuses shown in scope.",
           "answeredCount counts non-empty stored values, including values that are incompatible with the current version; unmapped values are excluded from valid numeric summaries and distributions.",
           "missingCount uses respondents in scope; distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
+          ...(compareRequested ? ["The selected status cohorts were computed in one respondent scan and share this asOf time; changes during the live read are not isolated by a database snapshot."] : []),
           "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
         ],
       });

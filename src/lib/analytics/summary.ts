@@ -61,6 +61,8 @@ export interface CohortAnalyticsRespondent extends AnalyticsRespondent {
 }
 
 export interface QuestionCohortSummaries {
+  /** Time the shared status scan completed; every status cohort in this result uses this value. */
+  asOf: string;
   statusCounts: Record<ParticipantStatus, number>;
   summaries: Record<AnalyticsCohortKey, Record<string, QuestionSummary>>;
 }
@@ -250,5 +252,5 @@ export async function summarizeQuestionCohorts(
     summaries[cohort.key] = byQuestion;
   }
 
-  return { statusCounts, summaries };
+  return { asOf: new Date().toISOString(), statusCounts, summaries };
 }

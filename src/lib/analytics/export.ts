@@ -4,10 +4,18 @@ import type { QuestionSummary } from "./summary";
 export interface AnalyticsExportItem {
   question: Question;
   summary: QuestionSummary;
+  /** Optional per-row cohort label for side-by-side exports. */
+  cohort?: string;
+}
+
+export interface AnalyticsExportMetadata {
+  interviewId?: string;
+  surveyVersion?: number;
+  asOf?: string;
 }
 
 const HEADERS = [
-  "question_id", "question", "type", "cohort", "measure", "answer_value", "answer_label",
+  "question_id", "question", "type", "cohort", "interview_id", "survey_version", "as_of", "measure", "answer_value", "answer_label",
   "count", "percent", "valid_responses", "eligible", "answered", "missing", "note_only", "unmapped", "min", "q1", "median", "q3", "mean", "max",
 ];
 
@@ -23,11 +31,11 @@ function row(values: (string | number | null | undefined)[]): string {
   return values.map(cell).join(",");
 }
 
-/** Export aggregate summaries only. Respondent names, notes, and free-text answers are never read here. */
-export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string): string {
+/** Export aggregate summaries with their source cohort and time. Respondent names, notes, and free text are never read here. */
+export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, metadata: AnalyticsExportMetadata = {}): string {
   const rows = [row(HEADERS)];
-  for (const { question, summary } of items) {
-    const base = [question.id, question.label, question.type, cohort];
+  for (const { question, summary, cohort: itemCohort } of items) {
+    const base = [question.id, question.label, question.type, itemCohort ?? cohort, metadata.interviewId, metadata.surveyVersion, metadata.asOf];
     if (summary.distribution.length) {
       for (const option of summary.distribution) {
         rows.push(row([

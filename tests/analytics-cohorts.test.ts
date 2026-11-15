@@ -34,6 +34,7 @@ describe("analytics status cohorts", () => {
 
     const result = await summarizeQuestionCohorts([choice, number], stream(rows));
 
+    expect(Number.isNaN(Date.parse(result.asOf))).toBe(false);
     expect(result.statusCounts).toEqual({ invited: 1, in_progress: 1, submitted: 1 });
     expect(result.summaries.everyone.choice.distribution.map(({ value, count }) => ({ value, count }))).toEqual([
       { value: "yes", count: 2 },

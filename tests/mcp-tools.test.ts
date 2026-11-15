@@ -116,6 +116,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
+import { iterateAnalyticsParticipants } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -194,6 +195,22 @@ describe("MCP tools", () => {
     expect(body.result.isError).toBeFalsy();
     expect(body.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1, submittedCount: 0, submittedOnly: false });
     expect(body.result.structuredContent.questions?.find((question) => question.id === "fit")).toMatchObject({ answeredCount: 1, unmappedResponseCount: 1 });
+  });
+
+  it("compares selected statuses from one scan and one shared asOf", async () => {
+    const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    const res = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { respondentCount: number; statuses: string[] }; statusCohorts: { status: string; respondentCount: number; questions: { id: string; eligibleCount: number; answeredCount: number; unmappedResponseCount: number }[] }[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(Number.isNaN(Date.parse(body.result.structuredContent.asOf))).toBe(false);
+    expect(body.result.structuredContent.scope).toMatchObject({ respondentCount: 2, statuses: ["invited", "submitted"] });
+    expect(body.result.structuredContent.statusCohorts.map(({ status, respondentCount }) => ({ status, respondentCount }))).toEqual([
+      { status: "invited", respondentCount: 1 },
+      { status: "submitted", respondentCount: 1 },
+    ]);
+    expect(body.result.structuredContent.statusCohorts[0].questions[0]).toMatchObject({ id: "fit", eligibleCount: 1, answeredCount: 1, unmappedResponseCount: 1 });
+    expect(body.result.structuredContent.statusCohorts[1].questions[0]).toMatchObject({ id: "fit", eligibleCount: 1, answeredCount: 1, unmappedResponseCount: 0 });
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
   });
 
   it("paginates analytics questions and keeps the requested cohort on each page", async () => {

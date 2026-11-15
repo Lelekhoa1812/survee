@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/4");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/5");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -19,6 +19,8 @@ describe("versioned analytics guidance", () => {
     for (const phrase of [
       "business question",
       "submittedonly",
+      "comparestatuses",
+      "shared asof",
       "missing",
       "unmapped",
       "median",

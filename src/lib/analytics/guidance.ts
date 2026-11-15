@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/4" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/5" as const;
 
 const PRINCIPLES = [
   {
@@ -15,7 +15,7 @@ const PRINCIPLES = [
     id: "name-the-cohort",
     title: "Make respondent scope explicit",
     guidance:
-      "State whether the result includes all people in the interview, only submitted people, or a caller-selected status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. State question eligibility, valid-answer n, and the denominator for each result. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
+      "State whether the result includes all people in the interview, only submitted people, or a caller-selected status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one respondent scan and one shared asOf; each question page is still a separate live read. State each group's eligible count, question eligibility, valid-answer n, and denominator. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
   },
   {
     id: "show-missingness",
@@ -70,6 +70,7 @@ const PRINCIPLES = [
 const REVIEW_CHECKLIST = [
   "Does the answer name the decision, question, questionnaire version, respondent scope, and time period that were actually analyzed?",
   "Are eligible, answered, missing, unmapped, and valid-answer denominators distinguished where available?",
+  "Do side-by-side status groups come from one scan, share an asOf, and show each group's denominator?",
   "Are scale distributions treated as ordered categories, number summaries described as numeric, and multi-select shares labeled per respondent?",
   "Does the interpretation avoid unsupported population, significance, or causal claims and identify material uncertainty?",
   "Does the chart fit the comparison, show clear labels and denominators, and avoid visual distortion?",
@@ -152,6 +153,7 @@ export function getAnalyticsGuidance() {
       "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
       "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
       "Each analyze_answers page is a separate live read with its own asOf; changes can occur between pages, so KQA does not provide a consistent multi-page snapshot.",
+      "When compareStatuses is true, status groups on one page share a respondent scan and asOf; this live read does not use a frozen database snapshot.",
     ],
     principles: PRINCIPLES.map((principle) => ({ ...principle })),
     reviewChecklist: [...REVIEW_CHECKLIST],

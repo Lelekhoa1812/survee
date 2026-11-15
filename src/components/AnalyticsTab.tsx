@@ -8,6 +8,7 @@ import { ANALYTICS_COHORTS, analyticsCohortForStatuses, type AnalyticsCohortKey 
 import type { Question, QuestionType } from "@/lib/format/schema";
 import type { ParticipantStatus } from "@/lib/repo/types";
 import type { InterviewData } from "./interview-types";
+import { fullTime } from "@/lib/time";
 import { Badge, CopyButton, Icon } from "./ui";
 
 type Display = "chart" | "table";
@@ -17,6 +18,7 @@ const STATUS_LABELS: Record<ParticipantStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
 };
+const COMPARE_STATUSES: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
 
 const TYPE_LABELS: Record<QuestionType, string> = {
   single: "Single choice",
@@ -165,8 +167,82 @@ function QuestionAnalysis({ question, summary, display }: { question: Question; 
   );
 }
 
+function ComparisonQuestion({ question, summaries }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary> }) {
+  const distributionQuestion = question.type === "single" || question.type === "multi" || question.type === "select" || question.type === "scale";
+  const numericQuestion = question.type === "number";
+  const distributionRows = summaries.invited.distribution;
+  const numericRows: { label: string; value: (summary: QuestionSummary) => string }[] = [
+    { label: "Valid responses", value: (summary) => String(summary.numeric?.n ?? 0) },
+    { label: "Minimum", value: (summary) => summary.numeric ? formatNumber(summary.numeric.min) : "—" },
+    { label: "Q1", value: (summary) => summary.numeric ? formatNumber(summary.numeric.q1) : "—" },
+    { label: "Median", value: (summary) => summary.numeric ? formatNumber(summary.numeric.median) : "—" },
+    { label: "Q3", value: (summary) => summary.numeric ? formatNumber(summary.numeric.q3) : "—" },
+    { label: "Mean", value: (summary) => summary.numeric ? formatNumber(summary.numeric.mean) : "—" },
+    { label: "Maximum", value: (summary) => summary.numeric ? formatNumber(summary.numeric.max) : "—" },
+  ];
+  const countRows: { label: string; value: (summary: QuestionSummary) => number }[] = [
+    { label: "Answered", value: (summary) => summary.answeredCount },
+    { label: "Missing", value: (summary) => summary.missingCount },
+    { label: "Note only", value: (summary) => summary.noteOnlyCount },
+    { label: "Unmapped", value: (summary) => summary.unmappedResponseCount },
+  ];
+
+  return (
+    <article className="analysis-question">
+      <div className="analysis-question-head">
+        <div>
+          <h3>{question.label}</h3>
+          <div className="analysis-meta"><span className="code-chip">{question.id}</span><span>{TYPE_LABELS[question.type]}</span>{question.required && <Badge kind="info" plain>Required</Badge>}</div>
+        </div>
+        <p className="analysis-response-count">Three status groups</p>
+      </div>
+      <div className="table-wrap analysis-table-wrap analysis-compare-table-wrap" role="region" aria-label={`${question.label} status comparison table`} tabIndex={0}>
+        <table className="t analysis-compare-table">
+          <caption className="sr">{question.label}: invited, in progress, and submitted status comparison</caption>
+          <thead>
+            <tr>
+              <th scope="col">Measure</th>
+              {COMPARE_STATUSES.map((status) => <th scope="col" key={status}>{STATUS_LABELS[status]}<span className="analysis-cohort-denom">Eligible n={summaries[status].eligibleCount}</span></th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {distributionQuestion && (
+              <>
+                <tr className="analysis-total"><th scope="row">Valid responses (n)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].distributionDenominator}</td>)}</tr>
+                {distributionRows.map((option) => (
+                  <tr key={option.value}>
+                    <th scope="row">{option.label}</th>
+                    {COMPARE_STATUSES.map((status) => {
+                      const value = summaries[status].distribution.find((item) => item.value === option.value);
+                      return <td key={status}>{value ? `${value.count} (${formatPercentage(value.percent)})` : "—"}</td>;
+                    })}
+                  </tr>
+                ))}
+                {question.type === "scale" && <tr><th scope="row">Median (ordinal)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].scaleMedian === null ? "—" : formatNumber(summaries[status].scaleMedian!)}</td>)}</tr>}
+              </>
+            )}
+            {numericQuestion && numericRows.map((row, index) => (
+              <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
+                <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
+              </tr>
+            ))}
+            {!distributionQuestion && !numericQuestion && countRows.map((row, index) => (
+              <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
+                <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {distributionQuestion && <p className="analysis-text-note">Percentages use each status group&apos;s valid-response count above. Checkbox percentages are respondent shares and can total more than 100%.</p>}
+      {(question.type === "text" || question.type === "longtext" || question.type === "date") && <p className="analysis-text-note">Text and date values are not aggregated. This comparison shows response counts only.</p>}
+    </article>
+  );
+}
+
 export function AnalyticsTab({ data }: { data: InterviewData }) {
   const [cohortKey, setCohortKey] = useState<AnalyticsCohortKey>("everyone");
+  const [compareStatuses, setCompareStatuses] = useState(false);
   const [display, setDisplay] = useState<Display>("chart");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<QuestionType | "all">("all");
@@ -184,8 +260,15 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   }, [data.manifest.questions, search, typeFilter]);
   const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
   const summaries = useMemo(() => new Map(questions.map((question) => [question.id, cohortSummaries[question.id]])), [questions, cohortSummaries]);
-  const exportItems = useMemo(() => questions.map((question) => ({ question, summary: summaries.get(question.id)! })), [questions, summaries]);
-  const csv = useMemo(() => buildAnalyticsCsv(exportItems, cohortLabel), [exportItems, cohortLabel]);
+  const exportItems = useMemo(() => compareStatuses
+    ? questions.flatMap((question) => COMPARE_STATUSES.map((status) => ({ question, summary: data.analysis!.summaries[status][question.id], cohort: STATUS_LABELS[status] })))
+    : questions.map((question) => ({ question, summary: summaries.get(question.id)! })),
+  [questions, summaries, compareStatuses, data.analysis]);
+  const csv = useMemo(() => buildAnalyticsCsv(exportItems, cohortLabel, {
+    interviewId: data.interview.id,
+    surveyVersion: data.interview.currentVersion,
+    asOf: data.analysis?.asOf,
+  }), [exportItems, cohortLabel, data.interview.id, data.interview.currentVersion, data.analysis?.asOf]);
   const submitted = cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : 0;
   const inProgress = cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : 0;
 
@@ -230,15 +313,19 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
-        <p className="analysis-caveat">Choose which participant statuses to include. Each question shows answered and eligible counts; distribution percentages use valid answers. Checkbox percentages can total more than 100%. Free-text answers and notes are excluded.</p>
+        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question shows eligible and valid-answer denominators. Checkbox percentages can total more than 100%. Text and note content are excluded.</p>
+        {data.analysis?.asOf && <p className="analysis-freshness" role="status">Analytics read completed {fullTime(data.analysis.asOf)}. Status groups share one live scan; updates during that scan may be observed.</p>}
       </section>
 
-      <div className="stats analysis-stats">
+      {compareStatuses ? <div className="stats analysis-stats">
+        {COMPARE_STATUSES.map((status) => <div className="stat" key={status}><b>{statusCounts[status]}</b><span>{STATUS_LABELS[status]}</span></div>)}
+        <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
+      </div> : <div className="stats analysis-stats">
         <div className="stat"><b>{eligibleCount}</b><span>{cohortLabel} in cohort</span></div>
         <div className="stat"><b>{submitted}</b><span>Submitted in cohort</span></div>
         <div className="stat"><b>{inProgress}</b><span>In progress in cohort</span></div>
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
-      </div>
+      </div>}
 
       <section className="card analysis-controls" aria-label="Analysis controls">
         <div className="analysis-control-grid">
@@ -255,7 +342,11 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
         </div>
         <div className="analysis-control-footer">
-          <fieldset className="analysis-cohort-options">
+          <div className="seg" role="group" aria-label="Cohort view">
+            <button type="button" aria-pressed={!compareStatuses} onClick={() => setCompareStatuses(false)}>One cohort</button>
+            <button type="button" aria-pressed={compareStatuses} onClick={() => setCompareStatuses(true)}>Compare statuses</button>
+          </div>
+          {!compareStatuses && <fieldset className="analysis-cohort-options">
             <legend>Include participant statuses</legend>
             {(["invited", "in_progress", "submitted"] as const).map((status) => (
               <label key={status} className="analysis-cohort-option">
@@ -268,11 +359,11 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
                 <span>{STATUS_LABELS[status]} <span className="muted">({statusCounts[status]})</span></span>
               </label>
             ))}
-          </fieldset>
-          <div className="seg" role="group" aria-label="Display format">
+          </fieldset>}
+          {!compareStatuses && <div className="seg" role="group" aria-label="Display format">
             <button type="button" aria-pressed={display === "chart"} onClick={() => setDisplay("chart")}>Chart</button>
             <button type="button" aria-pressed={display === "table"} onClick={() => setDisplay("table")}>Table</button>
-          </div>
+          </div>}
           <div className="row wrap analysis-export-actions">
             <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={!questions.length} />
             <button type="button" className="btn sm" onClick={downloadCsv} disabled={!questions.length}><Icon name="download" size={14} /> Download CSV</button>
@@ -280,12 +371,14 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         </div>
       </section>
 
-      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {eligibleCount} {eligibleCount === 1 ? "person" : "people"} in this cohort</p>
+      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${eligibleCount} ${eligibleCount === 1 ? "person" : "people"} in this cohort`}</p>
       {groups.length ? groups.map((group) => (
         <section key={group.id} className="stack" style={{ gap: 10 }}>
           <h2 className="section-title">{group.title}</h2>
           <div className="card analysis-question-list">
-            {group.questions.map((question) => <QuestionAnalysis key={question.id} question={question} summary={summaries.get(question.id)!} display={display} />)}
+            {group.questions.map((question) => compareStatuses
+              ? <ComparisonQuestion key={question.id} question={question} summaries={{ invited: data.analysis!.summaries.invited[question.id], in_progress: data.analysis!.summaries.in_progress[question.id], submitted: data.analysis!.summaries.submitted[question.id] }} />
+              : <QuestionAnalysis key={question.id} question={question} summary={summaries.get(question.id)!} display={display} />)}
           </div>
         </section>
       )) : (

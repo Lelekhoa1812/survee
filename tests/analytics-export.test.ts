@@ -22,9 +22,11 @@ describe("analytics CSV export", () => {
     const csv = buildAnalyticsCsv([
       { question: choice, summary: summarizeQuestion(choice, people) },
       { question: paragraph, summary: summarizeQuestion(paragraph, people) },
-    ], "Everyone");
+    ], "Everyone", { interviewId: "interview-123", surveyVersion: 2, asOf: "2026-11-15T00:00:00.000Z" });
 
     expect(csv).toContain("\"distribution\"");
+    expect(csv.split("\r\n")[0]).toContain('"cohort","interview_id","survey_version","as_of","measure"');
+    expect(csv).toContain('"Everyone","interview-123","2","2026-11-15T00:00:00.000Z"');
     expect(csv).toContain(`"'=HYPERLINK(""https://example.test"")"`);
     expect(csv).toContain("\"response_count\"");
     expect(csv.split("\r\n")[0]).toContain('"eligible","answered","missing","note_only","unmapped"');
@@ -45,6 +47,15 @@ describe("analytics CSV export", () => {
     expect(summary.distributionDenominator).toBe(1);
     const csv = buildAnalyticsCsv([{ question: option, summary }], "Everyone");
     expect(csv).toContain('"1","2","2","0","0","1"');
+  });
+
+  it("keeps per-status cohort labels in comparison exports", () => {
+    const choice = questionSchema.parse({ id: "choice", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] });
+    const summary = summarizeQuestion(choice, [{ answers: { choice: { value: "yes", updatedAt: "2026-11-15T00:00:00.000Z" } } }]);
+    const csv = buildAnalyticsCsv([{ question: choice, summary, cohort: "Submitted" }], "Everyone", {
+      interviewId: "interview-123", surveyVersion: 3, asOf: "2026-11-15T00:00:00.000Z",
+    });
+    expect(csv.split("\r\n")[1]).toContain('"Submitted","interview-123","3","2026-11-15T00:00:00.000Z"');
   });
 
   it("exports type-7 quartiles with the numeric summary", () => {

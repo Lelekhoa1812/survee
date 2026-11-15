@@ -58,6 +58,7 @@ export interface InterviewData {
   publicOrigin: string | null;
   /** Aggregate-only answers for analysis routes. No respondent identifiers or raw text values. */
   analysis?: {
+    asOf: string;
     statusCounts: Record<ParticipantStatus, number>;
     summaries: Record<AnalyticsCohortKey, Record<string, QuestionSummary>>;
   };
