@@ -142,6 +142,7 @@ export async function publishVersionIfCurrent(
   expectedVersion: number,
   expectedBaseHash: string,
   survey: NewSurvey,
+  source: "mcp_patch" | "mcp_upload" = "mcp_patch",
 ): Promise<{ version: number } | { conflict: true } | null> {
   const oid = toOid(id);
   if (!oid) return null;
@@ -177,7 +178,7 @@ export async function publishVersionIfCurrent(
     await versions.deleteOne(tenantFilter(tenantId, { _id: doc._id })).catch(() => {});
     return { conflict: true };
   }
-  logEvent(tenantId, oid, "version", undefined, { version, source: "mcp_patch" });
+  logEvent(tenantId, oid, "version", undefined, { version, source });
   return { version };
 }
 

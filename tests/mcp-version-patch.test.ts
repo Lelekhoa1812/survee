@@ -64,8 +64,10 @@ describe("MCP questionnaire version patch", () => {
 
   it("requires explicit acknowledgement for compatibility findings", async () => {
     state.compatibilityImpact = true;
+    const preview = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
     const result = await dispatchTool("apply_questionnaire_version_patch", {
-      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate),
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: hash(candidate), compatibilityHash: preview.structuredContent.compatibilityHash as string,
     });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("acknowledgement_required");
@@ -91,12 +93,85 @@ describe("MCP questionnaire version patch", () => {
 
   it("publishes only the server-checked candidate using optimistic version and base-hash checks", async () => {
     state.compatibilityImpact = true;
+    const preview = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
     const result = await dispatchTool("apply_questionnaire_version_patch", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
-      candidateHash: hash(candidate), acknowledgeCompatibilityImpact: true,
+      candidateHash: hash(candidate), compatibilityHash: preview.structuredContent.compatibilityHash as string,
+      acknowledgeCompatibilityImpact: true,
     });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2 });
     expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }));
+  });
+
+  it("requires the compatibility findings to match the reviewed preview", async () => {
+    state.compatibilityImpact = true;
+    const preview = await dispatchTool("preview_questionnaire_version_patch", { interviewId, html: candidate });
+    state.compatibilityImpact = false;
+    const result = await dispatchTool("apply_questionnaire_version_patch", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: hash(candidate), compatibilityHash: preview.structuredContent.compatibilityHash as string,
+      acknowledgeCompatibilityImpact: true,
+    });
+    expect(result.structuredContent.code).toBe("stale_preview");
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy uploads one-call for compatible changes while using optimistic checks", async () => {
+    const result = await dispatchTool("upload_survey_version", { interviewId, html: candidate });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2, compatibilityImpact: false });
+    expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "mcp_upload");
+  });
+
+  it("returns a non-mutating preview when legacy upload finds answer compatibility impact", async () => {
+    state.compatibilityImpact = true;
+    const result = await dispatchTool("upload_survey_version", { interviewId, html: candidate });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      code: "acknowledgement_required",
+      currentVersion: 2,
+      baseHash: state.baseHash,
+      candidateHash: hash(candidate),
+      compatibilityHash: expect.any(String),
+      compatibilityImpact: true,
+    });
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("requires the reviewed hashes and acknowledgement before legacy upload publishes an impacted candidate", async () => {
+    state.compatibilityImpact = true;
+    const incomplete = await dispatchTool("upload_survey_version", {
+      interviewId, html: candidate, acknowledgeCompatibilityImpact: true,
+    });
+    expect(incomplete.structuredContent.code).toBe("preview_required");
+    expect(state.publish).not.toHaveBeenCalled();
+
+    const preview = await dispatchTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false });
+    expect(preview.structuredContent.code).toBe("acknowledgement_required");
+    const compatibilityHash = preview.structuredContent.compatibilityHash as string;
+
+    const published = await dispatchTool("upload_survey_version", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: hash(candidate), compatibilityHash, acknowledgeCompatibilityImpact: true,
+    });
+    expect(published.isError).toBeFalsy();
+    expect(published.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2, compatibilityImpact: true });
+    expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "mcp_upload");
+  });
+
+  it("rejects stale or altered legacy-upload previews", async () => {
+    const stale = await dispatchTool("upload_survey_version", {
+      interviewId, html: candidate, expectedVersion: 1, baseHash: state.baseHash,
+      candidateHash: hash(candidate),
+    });
+    expect(stale.structuredContent.code).toBe("stale_preview");
+
+    const altered = await dispatchTool("upload_survey_version", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: "b".repeat(64),
+    });
+    expect(altered.structuredContent.code).toBe("candidate_changed");
+    expect(state.publish).not.toHaveBeenCalled();
   });
 });

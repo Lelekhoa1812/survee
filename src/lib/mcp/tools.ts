@@ -11,7 +11,6 @@ import { inviteLink } from "../mail/policy";
 import { currentMail } from "../mail/state";
 import {
   addParticipants,
-  addVersion,
   createInterview,
   deleteInterview,
   deleteParticipant,
@@ -81,6 +80,14 @@ function sha256(value: string) {
 
 function hasCompatibilityImpact(diagnostics: { code: string }[]) {
   return diagnostics.some((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code));
+}
+
+function hashCompatibilityFindings(diagnostics: { code: string }[]) {
+  const findings = diagnostics
+    .filter((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code))
+    .map((diagnostic) => JSON.stringify(diagnostic))
+    .sort();
+  return sha256(JSON.stringify(findings));
 }
 
 function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[]) {
@@ -533,6 +540,7 @@ const TOOLS: ToolDef[] = [
       if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
       const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
       const candidateHtml = prepared.survey?.html ?? args.html.replace(/^\uFEFF/, "");
+      const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
       return ok({
         ok: !!prepared.survey && prepared.report.ok,
         interviewId: id,
@@ -543,6 +551,7 @@ const TOOLS: ToolDef[] = [
         diagnostics: prepared.report.diagnostics,
         counts: prepared.report.counts,
         compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
+        compatibilityHash,
         report: prepared.markdown,
         changes: prepared.report.manifest ? {
           questionCountBefore: current.manifest.questions.length,
@@ -565,6 +574,7 @@ const TOOLS: ToolDef[] = [
       expectedVersion: { type: "integer", minimum: 1 },
       baseHash: str,
       candidateHash: str,
+      compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
     }, ["interviewId", "html", "expectedVersion", "baseHash", "candidateHash"]),
     async run(args) {
@@ -586,9 +596,14 @@ const TOOLS: ToolDef[] = [
       const candidateHash = sha256(prepared.survey.html);
       if (candidateHash !== args.candidateHash) return err("The candidate HTML changed since preview. Preview again before applying.", "candidate_changed");
       const impact = hasCompatibilityImpact(prepared.report.diagnostics);
-      if (impact && args.acknowledgeCompatibilityImpact !== true) {
-        return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics } };
+      const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
+      if (args.compatibilityHash !== undefined && args.compatibilityHash !== compatibilityHash) {
+        return err("Compatibility findings changed since preview. Preview again before applying.", "stale_preview");
       }
+      if (impact && args.acknowledgeCompatibilityImpact !== true) {
+        return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics, compatibilityHash } };
+      }
+      if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
       const published = await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey);
       if (!published) return err("Interview not found.", "not_found");
       if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
@@ -597,20 +612,86 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "upload_survey_version",
-    description: "Replace the live questionnaire. A failed check stores nothing.",
-    inputSchema: obj({ interviewId: str, html: str, fileName: str }, ["interviewId", "html"]),
+    description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned preview and retry with expectedVersion set to its currentVersion, its hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes.",
+    inputSchema: obj({
+      interviewId: str,
+      html: str,
+      fileName: str,
+      expectedVersion: { type: "integer", minimum: 1 },
+      baseHash: str,
+      candidateHash: str,
+      compatibilityHash: str,
+      acknowledgeCompatibilityImpact: bool,
+    }, ["interviewId", "html"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
-      if (!(await getInterview(id))) return err("Interview not found.", "not_found");
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
       if (typeof args.html !== "string") return err("html is required.");
       if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
+      const current = await getVersion(interview._id, interview.currentVersion);
+      if (!current) return err("Current survey version not found.", "not_found");
       const prepared = await withCompat(prepareSurvey(args.html, asString(args.fileName, 200)), id);
       if (!prepared.survey || !prepared.report.ok) {
-        return { ...err("The file did not pass the checker.", "checker"), structuredContent: { ok: false, error: "The file did not pass the checker.", markdown: prepared.markdown } };
+        return { ...err("The file did not pass the checker.", "checker"), structuredContent: { ok: false, error: "The file did not pass the checker.", diagnostics: prepared.report.diagnostics, report: prepared.markdown } };
       }
-      const version = await addVersion(id, prepared.survey);
-      return version ? ok({ version, interviewId: id, report: { ok: true, counts: prepared.report.counts } }) : err("Interview not found.", "not_found");
+      const candidateHash = sha256(prepared.survey.html);
+      const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
+      const hasPreviewFields = args.expectedVersion !== undefined || args.baseHash !== undefined || args.candidateHash !== undefined || args.compatibilityHash !== undefined;
+      const hasAcknowledgement = args.acknowledgeCompatibilityImpact === true;
+      const hasPreview = typeof args.expectedVersion === "number" && typeof args.baseHash === "string" && typeof args.candidateHash === "string";
+      if ((hasPreviewFields || hasAcknowledgement) && !hasPreview) {
+        return err("expectedVersion, baseHash, and candidateHash from a reviewed preview must be provided together.", "preview_required");
+      }
+      if (hasPreview) {
+        if (interview.currentVersion !== args.expectedVersion || current.htmlSha256 !== args.baseHash) {
+          return err("The questionnaire changed since preview. Preview again before uploading.", "stale_preview");
+        }
+        if (candidateHash !== args.candidateHash) {
+          return err("The candidate HTML changed since preview. Preview again before uploading.", "candidate_changed");
+        }
+      }
+      if (args.compatibilityHash !== undefined && args.compatibilityHash !== compatibilityHash) {
+        return err("Compatibility findings changed since preview. Preview again before uploading.", "stale_preview");
+      }
+      const compatibilityImpact = hasCompatibilityImpact(prepared.report.diagnostics);
+      if (compatibilityImpact && args.acknowledgeCompatibilityImpact !== true) {
+        const message = "Compatibility impact must be reviewed and acknowledged before publishing. Use preview_questionnaire_version_patch, then retry with expectedVersion set to the returned currentVersion, the returned hashes, and acknowledgeCompatibilityImpact: true.";
+        return {
+          ...err(message, "acknowledgement_required"),
+          structuredContent: {
+            ok: false,
+            error: message,
+            code: "acknowledgement_required",
+            interviewId: id,
+            currentVersion: interview.currentVersion,
+            baseHash: current.htmlSha256,
+            candidateHash,
+            compatibilityHash,
+            compatibilityImpact,
+            diagnostics: prepared.report.diagnostics,
+            report: prepared.markdown,
+          },
+        };
+      }
+      if (compatibilityImpact && !args.compatibilityHash) {
+        return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
+      }
+      const expectedVersion = hasPreview ? args.expectedVersion as number : interview.currentVersion;
+      const expectedBaseHash = hasPreview ? args.baseHash as string : current.htmlSha256;
+      const published = await publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, prepared.survey, "mcp_upload");
+      if (!published) return err("Interview not found.", "not_found");
+      if ("conflict" in published) return err("The questionnaire changed while uploading. Preview again before uploading.", "stale_preview");
+      return ok({
+        ok: true,
+        version: published.version,
+        previousVersion: expectedVersion,
+        interviewId: id,
+        candidateHash,
+        compatibilityImpact,
+        report: { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics },
+      });
     },
   },
   {
