@@ -169,7 +169,95 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
   );
 }
 
-export function ComparisonQuestion({ question, summaries, showHeading = true }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary>; showHeading?: boolean }) {
+function ComparisonDistributionChart({ question, summaries }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary> }) {
+  const rows = summaries.invited.distribution;
+  return (
+    <div className="analysis-compare-chart">
+      <div className="analysis-compare-legend" role="list" aria-label="Status group valid response counts">
+        {COMPARE_STATUSES.map((status) => (
+          <span className={`analysis-compare-legend-item analysis-status-${status}`} role="listitem" key={status}>
+            <i aria-hidden="true" />{STATUS_LABELS[status]} · valid n={summaries[status].distributionDenominator}
+          </span>
+        ))}
+      </div>
+      <div className="analysis-compare-options" role="list" aria-label={`Answer shares by status for ${question.label}`}>
+        {rows.map((option) => (
+          <div className="analysis-compare-option" role="listitem" key={option.value}>
+            <h4>{option.label}</h4>
+            <div className="analysis-compare-series-list">
+              {COMPARE_STATUSES.map((status) => {
+                const summary = summaries[status];
+                const value = summary.distribution.find((row) => row.value === option.value);
+                const count = value?.count ?? 0;
+                const percent = summary.distributionDenominator ? value?.percent ?? 0 : null;
+                const width = percent === null ? 0 : Math.max(0, Math.min(100, percent));
+                const percentLabel = percent === null ? "—" : formatPercentage(percent);
+                return (
+                  <div
+                    className={`analysis-compare-series analysis-status-${status}`}
+                    role="group"
+                    aria-label={`${STATUS_LABELS[status]}: ${count} of ${summary.distributionDenominator} valid responses${percent === null ? "" : `, ${percentLabel}`}`}
+                    key={status}
+                  >
+                    <span className="analysis-compare-series-label">{status === "in_progress" ? "In progress" : status === "invited" ? "Invited" : "Submitted"}</span>
+                    <div className="analysis-compare-track" aria-hidden="true"><i style={{ width: `${width}%` }} /></div>
+                    <span className="analysis-compare-value">{count} ({percentLabel})</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ComparisonNumericChart({ summaries }: { summaries: Record<ParticipantStatus, QuestionSummary> }) {
+  const values = COMPARE_STATUSES.flatMap((status) => {
+    const stats = summaries[status].numeric;
+    return stats ? [stats.min, stats.q1, stats.median, stats.q3, stats.max] : [];
+  });
+  if (!values.length) return <p className="analysis-empty">No valid numeric responses to compare yet.</p>;
+
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const span = maximum - minimum;
+  if (!Number.isFinite(span)) {
+    return <p className="analysis-text-note">The shared numeric range is too wide to draw on a finite linear axis. Use the data table for exact summaries.</p>;
+  }
+  const position = (value: number) => span === 0 ? 50 : ((value - minimum) / span) * 100;
+  return (
+    <div className="analysis-compare-numeric">
+      <p className="analysis-text-note">Each status uses the same linear scale. The box spans Q1–Q3; the marker is the median and the line shows minimum–maximum.</p>
+      <div className="analysis-compare-range-list" role="list" aria-label="Numeric ranges by status">
+        {COMPARE_STATUSES.map((status) => {
+          const summary = summaries[status];
+          const stats = summary.numeric;
+          return (
+            <div className="analysis-compare-range-row" role="listitem" key={status}>
+              <div className="analysis-compare-range-heading">
+                <strong>{STATUS_LABELS[status]}</strong>
+                <span>valid n={stats?.n ?? 0}</span>
+              </div>
+              {stats ? <>
+                <div className={`analysis-compare-range analysis-status-${status}`} role="img" aria-label={`${STATUS_LABELS[status]} numeric range: minimum ${formatNumber(stats.min)}, first quartile ${formatNumber(stats.q1)}, median ${formatNumber(stats.median)}, third quartile ${formatNumber(stats.q3)}, maximum ${formatNumber(stats.max)}; valid n=${stats.n}`}>
+                  <span className="analysis-compare-whisker" aria-hidden="true" style={{ left: `${position(stats.min)}%`, width: `${position(stats.max) - position(stats.min)}%` }} />
+                  <span className="analysis-compare-box" aria-hidden="true" style={{ left: `${position(stats.q1)}%`, width: `${position(stats.q3) - position(stats.q1)}%` }} />
+                  <span className="analysis-compare-median" aria-hidden="true" style={{ left: `${position(stats.median)}%` }} />
+                </div>
+                <p className="analysis-compare-range-values">Min {formatNumber(stats.min)} · Q1 {formatNumber(stats.q1)} · Median {formatNumber(stats.median)} · Q3 {formatNumber(stats.q3)} · Max {formatNumber(stats.max)}</p>
+              </> : <p className="analysis-compare-range-empty">No valid numeric responses.</p>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="analysis-compare-range-axis"><span>Min {formatNumber(minimum)}</span><span>Max {formatNumber(maximum)}</span></div>
+    </div>
+  );
+}
+
+function ComparisonTable({ question, summaries }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary> }) {
   const distributionQuestion = question.type === "single" || question.type === "multi" || question.type === "select" || question.type === "scale";
   const numericQuestion = question.type === "number";
   const distributionRows = summaries.invited.distribution;
@@ -190,6 +278,53 @@ export function ComparisonQuestion({ question, summaries, showHeading = true }: 
   ];
 
   return (
+    <div className="table-wrap analysis-table-wrap analysis-compare-table-wrap" role="region" aria-label={`${question.label} status comparison table`} tabIndex={0}>
+      <table className="t analysis-compare-table">
+        <caption className="sr">{question.label}: invited, in progress, and submitted status comparison</caption>
+        <thead>
+          <tr>
+            <th scope="col">Measure</th>
+            {COMPARE_STATUSES.map((status) => <th scope="col" key={status}>{STATUS_LABELS[status]}<span className="analysis-cohort-denom">Cohort n={summaries[status].cohortCount}</span></th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {distributionQuestion && (
+            <>
+              <tr className="analysis-total"><th scope="row">Valid responses (n)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].distributionDenominator}</td>)}</tr>
+              {distributionRows.map((option) => (
+                <tr key={option.value}>
+                  <th scope="row">{option.label}</th>
+                  {COMPARE_STATUSES.map((status) => {
+                    const value = summaries[status].distribution.find((item) => item.value === option.value);
+                    const percent = summaries[status].distributionDenominator ? formatPercentage(value?.percent ?? 0) : "—";
+                    return <td key={status}>{value ? `${value.count} (${percent})` : "—"}</td>;
+                  })}
+                </tr>
+              ))}
+              {question.type === "scale" && <tr><th scope="row">Median (ordinal)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].scaleMedian === null ? "—" : formatNumber(summaries[status].scaleMedian!)}</td>)}</tr>}
+            </>
+          )}
+          {numericQuestion && numericRows.map((row, index) => (
+            <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
+              <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
+            </tr>
+          ))}
+          {countRows.map((row, index) => (
+            <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
+              <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ComparisonQuestion({ question, summaries, showHeading = true, display = "table" }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary>; showHeading?: boolean; display?: Display }) {
+  const distributionQuestion = question.type === "single" || question.type === "multi" || question.type === "select" || question.type === "scale";
+  const numericQuestion = question.type === "number";
+
+  return (
     <article className="analysis-question">
       {showHeading && <div className="analysis-question-head">
         <div>
@@ -198,47 +333,17 @@ export function ComparisonQuestion({ question, summaries, showHeading = true }: 
         </div>
         <p className="analysis-response-count">Three status groups</p>
       </div>}
-      <div className="table-wrap analysis-table-wrap analysis-compare-table-wrap" role="region" aria-label={`${question.label} status comparison table`} tabIndex={0}>
-        <table className="t analysis-compare-table">
-          <caption className="sr">{question.label}: invited, in progress, and submitted status comparison</caption>
-          <thead>
-            <tr>
-              <th scope="col">Measure</th>
-              {COMPARE_STATUSES.map((status) => <th scope="col" key={status}>{STATUS_LABELS[status]}<span className="analysis-cohort-denom">Cohort n={summaries[status].cohortCount}</span></th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {distributionQuestion && (
-              <>
-                <tr className="analysis-total"><th scope="row">Valid responses (n)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].distributionDenominator}</td>)}</tr>
-                {distributionRows.map((option) => (
-                  <tr key={option.value}>
-                    <th scope="row">{option.label}</th>
-                    {COMPARE_STATUSES.map((status) => {
-                      const value = summaries[status].distribution.find((item) => item.value === option.value);
-                      const percent = summaries[status].distributionDenominator ? formatPercentage(value?.percent ?? 0) : "—";
-                      return <td key={status}>{value ? `${value.count} (${percent})` : "—"}</td>;
-                    })}
-                  </tr>
-                ))}
-                {question.type === "scale" && <tr><th scope="row">Median (ordinal)</th>{COMPARE_STATUSES.map((status) => <td key={status}>{summaries[status].scaleMedian === null ? "—" : formatNumber(summaries[status].scaleMedian!)}</td>)}</tr>}
-              </>
-            )}
-            {numericQuestion && numericRows.map((row, index) => (
-              <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
-                <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
-              </tr>
-            ))}
-            {countRows.map((row, index) => (
-              <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
-                <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {display === "table" ? <ComparisonTable question={question} summaries={summaries} /> : <>
+        {distributionQuestion && <ComparisonDistributionChart question={question} summaries={summaries} />}
+        {numericQuestion && <ComparisonNumericChart summaries={summaries} />}
+        {!distributionQuestion && !numericQuestion && <p className="analysis-text-note">There is no comparison chart for this question type. Use the data table for counts; text and date values are not aggregated.</p>}
+        <details className="analysis-compare-table-details">
+          <summary>Show data table</summary>
+          <ComparisonTable question={question} summaries={summaries} />
+        </details>
+      </>}
       {distributionQuestion && <p className="analysis-text-note">Percentages use each status group&apos;s valid-response count above. Checkbox percentages are respondent shares and can total more than 100%.</p>}
-      {(question.type === "text" || question.type === "longtext" || question.type === "date") && <p className="analysis-text-note">Text and date values are not aggregated. This comparison shows response counts only.</p>}
+      {display === "table" && (question.type === "text" || question.type === "longtext" || question.type === "date") && <p className="analysis-text-note">Text and date values are not aggregated. This comparison shows response counts only.</p>}
     </article>
   );
 }
@@ -276,7 +381,7 @@ function SegmentResults({ question, result, compareStatuses, display }: { questi
               </p>}
             </div>
             {compareStatuses && statusSummaries
-              ? <ComparisonQuestion question={question} showHeading={false} summaries={{
+              ? <ComparisonQuestion question={question} showHeading={false} display={display} summaries={{
                   invited: statusSummaries.invited![question.id],
                   in_progress: statusSummaries.in_progress![question.id],
                   submitted: statusSummaries.submitted![question.id],
@@ -483,10 +588,10 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
               </label>
             ))}
           </fieldset>}
-          {!compareStatuses && <div className="seg" role="group" aria-label="Display format">
+          <div className="seg" role="group" aria-label="Display format">
             <button type="button" aria-pressed={display === "chart"} onClick={() => setDisplay("chart")}>Chart</button>
             <button type="button" aria-pressed={display === "table"} onClick={() => setDisplay("table")}>Table</button>
-          </div>}
+          </div>
           <div className="row wrap analysis-export-actions">
             <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={segmentMode ? !currentSegmentResult : !questions.length} />
             <button type="button" className="btn sm" onClick={downloadCsv} disabled={segmentMode ? !currentSegmentResult : !questions.length}><Icon name="download" size={14} /> Download CSV</button>
@@ -534,7 +639,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           <h2 className="section-title">{group.title}</h2>
           <div className="card analysis-question-list">
             {group.questions.map((question) => compareStatuses
-              ? <ComparisonQuestion key={question.id} question={question} summaries={{ invited: data.analysis!.summaries.invited[question.id], in_progress: data.analysis!.summaries.in_progress[question.id], submitted: data.analysis!.summaries.submitted[question.id] }} />
+              ? <ComparisonQuestion key={question.id} question={question} display={display} summaries={{ invited: data.analysis!.summaries.invited[question.id], in_progress: data.analysis!.summaries.in_progress[question.id], submitted: data.analysis!.summaries.submitted[question.id] }} />
               : <QuestionAnalysis key={question.id} question={question} summary={summaries.get(question.id)!} display={display} />)}
           </div>
         </section>

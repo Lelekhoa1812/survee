@@ -700,7 +700,7 @@ const TOOLS: ToolDef[] = [
       previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
-    }, ["interviewId", "html", "expectedVersion", "baseHash", "candidateHash"]),
+    }, ["interviewId", "html", "expectedVersion", "baseHash", "candidateHash", "previewToken"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");

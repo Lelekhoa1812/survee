@@ -65,11 +65,11 @@ describe("MCP questionnaire version patch", () => {
     expect(state.publish).not.toHaveBeenCalled();
   });
 
-  it("refuses apply without a preview token", async () => {
+  it("rejects apply without a schema-required preview token", async () => {
     const result = await callTool("apply_questionnaire_version_patch", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash, candidateHash: hash(candidate),
     });
-    expect(result.structuredContent.code).toBe("preview_required");
+    expect(result.structuredContent).toMatchObject({ code: "invalid_args", error: "previewToken is required." });
     expect(state.publish).not.toHaveBeenCalled();
   });
 

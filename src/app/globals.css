@@ -349,6 +349,38 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-table-wrap table.t th { position: static; }
 .analysis-compare-table { min-width: 700px; }
 .analysis-compare-table th:first-child, .analysis-compare-table td:first-child { min-width: 180px; }
+.analysis-compare-chart, .analysis-compare-numeric { display: grid; gap: 14px; }
+.analysis-status-invited { --analysis-series-color: var(--muted); }
+.analysis-status-in_progress { --analysis-series-color: var(--info); }
+.analysis-status-submitted { --analysis-series-color: var(--accent); }
+.analysis-compare-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.analysis-compare-legend-item { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-2); font-size: 12.5px; }
+.analysis-compare-legend-item i { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--analysis-series-color); }
+.analysis-compare-options { display: grid; gap: 2px; }
+.analysis-compare-option { display: grid; gap: 9px; padding: 12px 0; border-top: 1px solid var(--line); }
+.analysis-compare-option h4 { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.analysis-compare-series-list { display: grid; gap: 7px; }
+.analysis-compare-series { display: grid; grid-template-columns: minmax(82px, 110px) minmax(48px, 1fr) minmax(82px, auto); align-items: center; gap: 10px; color: var(--ink-2); font-size: 12.5px; }
+.analysis-compare-series-label { min-width: 0; }
+.analysis-compare-track { height: 9px; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.analysis-compare-track i { display: block; height: 100%; border-radius: inherit; background: var(--analysis-series-color); }
+.analysis-compare-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.analysis-compare-numeric { display: grid; gap: 8px; }
+.analysis-compare-range-list { display: grid; gap: 12px; }
+.analysis-compare-range-row { display: grid; gap: 3px; }
+.analysis-compare-range-heading { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.analysis-compare-range-heading span, .analysis-compare-range-values { color: var(--muted); font-variant-numeric: tabular-nums; }
+.analysis-compare-range { position: relative; height: 28px; margin: 0 8px; }
+.analysis-compare-range::before { position: absolute; top: 13px; left: 0; right: 0; height: 2px; background: var(--line-2); content: ""; }
+.analysis-compare-whisker { position: absolute; top: 13px; height: 2px; min-width: 2px; background: var(--analysis-series-color); }
+.analysis-compare-box { position: absolute; top: 4px; height: 20px; min-width: 2px; border: 1px solid var(--analysis-series-color); border-radius: 4px; background: color-mix(in srgb, var(--analysis-series-color) 18%, var(--surface)); }
+.analysis-compare-median { position: absolute; top: 1px; bottom: 1px; width: 2px; background: var(--analysis-series-color); transform: translateX(-1px); }
+.analysis-compare-range-values { font-size: 12px; overflow-wrap: anywhere; }
+.analysis-compare-range-empty { color: var(--muted); font-size: 13px; }
+.analysis-compare-range-axis { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 7px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.analysis-compare-table-details { border-top: 1px solid var(--line); padding-top: 6px; }
+.analysis-compare-table-details summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; color: var(--info); font-size: 13px; font-weight: 600; }
+.analysis-compare-table-details[open] { display: grid; gap: 8px; }
 .analysis-cohort-denom { display: block; margin-top: 4px; color: var(--ink-2); font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
 .analysis-total { font-weight: 600; background: var(--surface-2); }
 .analysis-total th { text-align: left; }
@@ -595,6 +627,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
   .analysis-segment-statuses { text-align: left; }
   .analysis-response-count { white-space: normal; }
   .analysis-bar-row { grid-template-columns: minmax(72px, 90px) minmax(48px, 1fr) 84px; gap: 7px; font-size: 12.5px; }
+  .analysis-compare-series { grid-template-columns: minmax(70px, 82px) minmax(34px, 1fr) minmax(72px, auto); gap: 7px; font-size: 12px; }
   .analysis-intro-head { display: grid; }
   .rs-bar-in { padding: 0 14px; gap: 10px; }
   .rs-progress { display: none; }

@@ -160,6 +160,22 @@ describe("MCP tools", () => {
     expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
   });
 
+  it("publishes the preview token as required for questionnaire patch application", async () => {
+    const tool = listToolDefs().find(({ name }) => name === "apply_questionnaire_version_patch");
+    expect(tool?.inputSchema.required).toContain("previewToken");
+
+    const res = await call("apply_questionnaire_version_patch", {
+      interviewId,
+      html: "<html><body></body></html>",
+      expectedVersion: 1,
+      baseHash: "base",
+      candidateHash: "candidate",
+    });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { error?: string; code?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toMatchObject({ error: "previewToken is required.", code: "invalid_args" });
+  });
+
   it("returns sourced design guidance for the requested product surface", async () => {
     const res = await call("get_design_guidance", { surface: "questionnaire" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string; guidance: string }[]; sources?: { name: string }[] } } };
