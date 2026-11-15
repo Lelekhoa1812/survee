@@ -15,7 +15,7 @@ const PRINCIPLES = [
     id: "name-the-cohort",
     title: "Make respondent scope explicit",
     guidance:
-      "State whether the result includes all people in the interview or only submitted people. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly restricts it to submitted people. State question eligibility, valid-answer n, and the denominator for each result. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
+      "State whether the result includes all people in the interview, only submitted people, or a caller-selected status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. State question eligibility, valid-answer n, and the denominator for each result. Do not describe invited people as respondents when they supplied no answers. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
   },
   {
     id: "show-missingness",
@@ -127,7 +127,7 @@ export function getAnalyticsGuidance() {
       "Use KQA analytics to describe the selected interview cohort, with explicit scope, denominators, missingness, and limitations. KQA has no built-in LLM; this versioned package is deterministic guidance for an integrated agent, not an automated analysis or certification.",
     productConstraints: [
       "KQA's analyze_answers output is current-version descriptive data; it returns no raw text, names, notes, private links, score, significance test, or causal estimate.",
-      "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people.",
+      "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
       "Scale questions provide a distribution and median, not a mean. Number summaries respect the current question's bounds.",

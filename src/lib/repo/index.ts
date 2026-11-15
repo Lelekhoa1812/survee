@@ -189,6 +189,10 @@ export interface AnalyticsParticipant {
   answers: AnswerMap;
 }
 
+export interface AnalyticsParticipantScope {
+  statuses?: ParticipantStatus[];
+}
+
 /**
  * Stream only the selected answer fields and status for analytics. Identity, private links,
  * raw note content, timestamps, and answers to unrelated questions never leave this repository helper.
@@ -196,7 +200,7 @@ export interface AnalyticsParticipant {
 export async function* iterateAnalyticsParticipants(
   interviewId: string,
   questionIds: string[],
-  submittedOnly = false,
+  scope: boolean | AnalyticsParticipantScope = false,
 ): AsyncGenerator<AnalyticsParticipant> {
   const oid = toOid(interviewId);
   if (!oid) return;
@@ -206,8 +210,12 @@ export async function* iterateAnalyticsParticipants(
     projection[`answers.${questionId}.value`] = 1;
     projection[`answers.${questionId}.note`] = 1;
   }
-  const statuses: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
-  const filter = { interviewId: oid, status: submittedOnly ? "submitted" as const : { $in: statuses } };
+  const defaultStatuses: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
+  const statuses = typeof scope === "boolean"
+    ? scope ? ["submitted" as const] : defaultStatuses
+    : scope.statuses ?? defaultStatuses;
+  const statusFilter = statuses.length === 1 ? statuses[0] : { $in: statuses };
+  const filter = { interviewId: oid, status: statusFilter };
   const cursor = (await col.participants()).find(filter, { projection }).batchSize(250);
   try {
     for await (const participant of cursor) {

@@ -60,4 +60,12 @@ describe("analytics participant query", () => {
       { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
     );
   });
+
+  it("filters a caller-selected status subset in Mongo", async () => {
+    for await (const _row of iterateAnalyticsParticipants(interviewId.toHexString(), ["fit"], { statuses: ["invited", "in_progress"] })) { /* consume cursor */ }
+    expect(mongoMocks.find).toHaveBeenCalledWith(
+      { interviewId, status: { $in: ["invited", "in_progress"] } },
+      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
+    );
+  });
 });

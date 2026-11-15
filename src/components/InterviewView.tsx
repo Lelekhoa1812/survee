@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnswersTab } from "./AnswersTab";
+import { AnalyticsTab } from "./AnalyticsTab";
 import { ExportTab } from "./ExportTab";
 import { InviteActions, PersonEmailEditor } from "./InviteActions";
 import type { InterviewData } from "./interview-types";
@@ -12,7 +13,7 @@ import { SurveyTab } from "./SurveyTab";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { relTime } from "@/lib/time";
 
-type Tab = "overview" | "people" | "answers" | "survey" | "export";
+type Tab = "overview" | "people" | "answers" | "analysis" | "survey" | "export";
 
 export function useOrigin(): string {
   const [o, setO] = useState("");
@@ -52,7 +53,7 @@ export function InterviewView({ data, initialTab }: { data: InterviewData; initi
     else toast(res.data.error ?? "Could not change the status.", "err");
   }
 
-  const tabs: [Tab, string, number?][] = [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? people.length : undefined], ["answers", "Answers", submitted + inProgress || undefined], ["survey", "Survey"], ["export", "Export"]];
+  const tabs: [Tab, string, number?][] = [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? people.length : undefined], ["answers", "Answers", submitted + inProgress || undefined], ["analysis", "Analysis"], ["survey", "Survey"], ["export", "Export"]];
 
   return (
     <main className="page">
@@ -141,6 +142,7 @@ export function InterviewView({ data, initialTab }: { data: InterviewData; initi
 
       {tab === "people" && <PeopleTab data={data} origin={origin} refresh={refresh} />}
       {tab === "answers" && <AnswersTab data={data} />}
+      {tab === "analysis" && <AnalyticsTab data={data} />}
       {tab === "survey" && <SurveyTab data={data} refresh={refresh} />}
       {tab === "export" && <ExportTab data={data} />}
 

@@ -47,6 +47,6 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     versions: versions.map((v) => ({ version: v.version, fileName: v.fileName, bytes: v.bytes, createdAt: v.createdAt.toISOString(), check: { errors: v.check.errors, warnings: v.check.warnings, info: v.check.info }, questions: v.manifest.questions.length })),
     events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? names.get(e.participantId) : undefined, meta: e.meta })),
   };
-  const initial = ["overview", "people", "answers", "survey", "export"].includes(tab ?? "") ? (tab as string) : "overview";
+  const initial = ["overview", "people", "answers", "analysis", "survey", "export"].includes(tab ?? "") ? (tab as string) : "overview";
   return <InterviewView data={data} initialTab={initial} />;
 }

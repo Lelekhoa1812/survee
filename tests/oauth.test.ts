@@ -7,6 +7,8 @@ process.env.KQA_MCP_TOKEN = "t".repeat(43);
 interface Client { clientId: string; name: string; redirectUris: string[]; createdAt: Date }
 interface Code { _id: { toHexString(): string }; hash: string; clientId: string; redirectUri: string; challenge: string; email: string; expiresAt: Date }
 interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; note?: string }
+type ExistenceCondition = { $exists: boolean };
+type DateCondition = Date | ExistenceCondition;
 
 const clients: Client[] = [];
 const codes: Code[] = [];
@@ -21,8 +23,10 @@ vi.mock("../src/lib/db", () => ({
     oauthCodes: async () => ({
       insertOne: async (doc: Code) => { codes.push(doc); },
       findOne: async (query: { hash: string }) => codes.find((item) => item.hash === query.hash) ?? null,
-      deleteOne: async (query: { _id: { toHexString(): string } }) => {
-        const index = codes.findIndex((item) => item._id.toHexString() === query._id.toHexString());
+      deleteOne: async (query: { _id: { toHexString(): string }; hash: string; expiresAt: { $gt: Date } }) => {
+        const index = codes.findIndex((item) => item._id.toHexString() === query._id.toHexString()
+          && item.hash === query.hash
+          && item.expiresAt.getTime() > query.expiresAt.$gt.getTime());
         if (index >= 0) codes.splice(index, 1);
         return { deletedCount: index >= 0 ? 1 : 0 };
       },
@@ -30,11 +34,15 @@ vi.mock("../src/lib/db", () => ({
     apiKeys: async () => ({
       insertOne: async (doc: Key) => { keys.push(doc); return { insertedId: doc._id }; },
       findOne: async (query: { hash?: string; refreshHash?: string }) => keys.find((item) => query.hash ? item.hash === query.hash : item.refreshHash === query.refreshHash) ?? null,
-      updateOne: async (query: { _id?: { toHexString(): string }; hash?: string; refreshHash?: string }, update: { $set?: Partial<Key> }) => {
+      updateOne: async (query: { _id?: { toHexString(): string }; hash?: string; refreshHash?: string; revokedAt?: ExistenceCondition; expiresAt?: DateCondition }, update: { $set?: Partial<Key> }) => {
         const item = keys.find((entry) => {
-          if (query._id) return entry._id.toHexString() === query._id.toHexString();
-          if (query.hash) return entry.hash === query.hash;
-          return entry.refreshHash === query.refreshHash;
+          if (query._id && entry._id.toHexString() !== query._id.toHexString()) return false;
+          if (query.hash && entry.hash !== query.hash) return false;
+          if (query.refreshHash && entry.refreshHash !== query.refreshHash) return false;
+          if (query.revokedAt?.$exists === false && entry.revokedAt !== undefined) return false;
+          if (query.expiresAt instanceof Date && entry.expiresAt?.getTime() !== query.expiresAt.getTime()) return false;
+          if (query.expiresAt && !(query.expiresAt instanceof Date) && query.expiresAt.$exists === false && entry.expiresAt !== undefined) return false;
+          return true;
         });
         if (!item || !update.$set) return { matchedCount: 0 };
         Object.assign(item, update.$set);
@@ -44,7 +52,7 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
-import { allowedRedirect, authorizationServerMetadata, exchangeCode, protectedResourceMetadata, registerClient, s256, wwwAuthenticate } from "../src/lib/mcp/oauth";
+import { allowedRedirect, authorizationServerMetadata, exchangeCode, issueCode, protectedResourceMetadata, registerClient, s256, wwwAuthenticate } from "../src/lib/mcp/oauth";
 import { authenticateApiKey, rotateOAuthKey } from "../src/lib/repo/keys";
 
 describe("OAuth discovery and PKCE", () => {
@@ -83,7 +91,6 @@ describe("OAuth discovery and PKCE", () => {
 
     const verifier = "a".repeat(48);
     const challenge = s256(verifier);
-    const { issueCode } = await import("../src/lib/mcp/oauth");
     const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge, email: "admin@axion.local" });
     const bad = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier: "wrong-verifier-value-with-enough-length" });
     expect(bad.ok).toBe(false);
@@ -102,5 +109,36 @@ describe("OAuth discovery and PKCE", () => {
     expect(await authenticateApiKey(rotated.access)).toBe(true);
     expect(await rotateOAuthKey(good.refresh)).toBeNull();
     expect(createHash("sha256").update(verifier).digest("base64url")).toBe(challenge);
+  });
+
+  it("allows only one concurrent exchange of an authorization code", async () => {
+    const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "parallel-code-verifier-value-1234567890";
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axion.local" });
+    const input = { code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier };
+
+    const results = await Promise.all([exchangeCode(input), exchangeCode(input)]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(keys).toHaveLength(1);
+  });
+
+  it("allows only one concurrent refresh-token rotation", async () => {
+    const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "parallel-refresh-verifier-value-123456";
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axion.local" });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+
+    const rotations = await Promise.all([rotateOAuthKey(exchanged.refresh), rotateOAuthKey(exchanged.refresh)]);
+    const successful = rotations.filter((rotation) => rotation !== null);
+
+    expect(successful).toHaveLength(1);
+    expect(keys).toHaveLength(1);
+    expect(await authenticateApiKey(exchanged.access)).toBe(false);
+    if (successful[0]) expect(await authenticateApiKey(successful[0].access)).toBe(true);
+    expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
   });
 });

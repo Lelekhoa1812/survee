@@ -143,13 +143,27 @@ const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export async function rotateOAuthKey(refreshSecret: string): Promise<{ access: string; refresh: string; expiresIn: number } | null> {
   if (refreshSecret.length < MIN_SECRET || refreshSecret.length > MAX_SECRET) return null;
   const c = await col.apiKeys();
-  const doc = await c.findOne({ refreshHash: hashKey(refreshSecret) });
+  const previousRefreshHash = hashKey(refreshSecret);
+  const doc = await c.findOne({ refreshHash: previousRefreshHash });
   if (!doc || doc.revokedAt) return null;
-  if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return null;
+  const now = new Date();
+  if (doc.expiresAt && doc.expiresAt.getTime() <= now.getTime()) return null;
   const access = generateKeySecret();
   const refresh = generateKeySecret();
   const { prefix, suffix } = splitSecret(access);
-  const expiresAt = new Date(Date.now() + OAUTH_TTL_MS);
-  await c.updateOne({ _id: doc._id }, { $set: { hash: hashKey(access), refreshHash: hashKey(refresh), prefix, suffix, expiresAt } });
+  const expiresAt = new Date(now.getTime() + OAUTH_TTL_MS);
+  // Compare-and-swap the old refresh hash and the state checked above. Only
+  // one concurrent request can replace this refresh token; revocation or an
+  // expiry change racing with rotation also causes the claim to fail.
+  const rotated = await c.updateOne(
+    {
+      _id: doc._id,
+      refreshHash: previousRefreshHash,
+      revokedAt: { $exists: false },
+      expiresAt: doc.expiresAt ?? { $exists: false },
+    },
+    { $set: { hash: hashKey(access), refreshHash: hashKey(refresh), prefix, suffix, expiresAt } },
+  );
+  if (rotated.matchedCount !== 1) return null;
   return { access, refresh, expiresIn: Math.floor(OAUTH_TTL_MS / 1000) };
 }

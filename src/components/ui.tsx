@@ -116,7 +116,7 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function CopyButton({ text, label = "Copy", done = "Copied", className = "btn sm", icon = true, getText, ariaLabel }: { text?: string; label?: string; done?: string; className?: string; icon?: boolean; getText?: () => string; ariaLabel?: string }) {
+export function CopyButton({ text, label = "Copy", done = "Copied", className = "btn sm", icon = true, getText, ariaLabel, disabled = false }: { text?: string; label?: string; done?: string; className?: string; icon?: boolean; getText?: () => string; ariaLabel?: string; disabled?: boolean }) {
   const [ok, setOk] = useState(false);
   const toast = useToast();
   useEffect(() => {
@@ -129,6 +129,7 @@ export function CopyButton({ text, label = "Copy", done = "Copied", className = 
       type="button"
       className={className}
       aria-label={ariaLabel || undefined}
+      disabled={disabled}
       onClick={async () => {
         const good = await copyText(getText ? getText() : (text ?? ""));
         if (good) setOk(true);

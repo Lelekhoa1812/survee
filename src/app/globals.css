@@ -271,6 +271,40 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .tally-value { white-space: nowrap; }
 .question-stats, .question-warning { font-size: 13.5px; color: var(--ink-2); }
 .question-warning { color: var(--warn); }
+.analysis-intro { padding: 18px 20px; display: grid; gap: 8px; }
+.analysis-intro-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.analysis-intro h2 { font-size: 17px; font-weight: 600; }
+.analysis-intro p { color: var(--ink-2); font-size: 13.5px; }
+.analysis-caveat { padding-top: 8px; border-top: 1px solid var(--line); }
+.analysis-stats .stat { padding: 12px 16px; }
+.analysis-stats .stat b { font-size: 24px; }
+.analysis-controls { padding: 16px; display: grid; gap: 14px; }
+.analysis-control-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(180px, .7fr); gap: 12px; }
+.analysis-control-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.analysis-export-actions { margin-left: auto; }
+.analysis-result-count { font-size: 13px; }
+.analysis-question-list { overflow: hidden; }
+.analysis-question { display: grid; gap: 12px; padding: 18px 20px; border-top: 1px solid var(--line); }
+.analysis-question:first-child { border-top: 0; }
+.analysis-question-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.analysis-question h3 { font-size: 15px; font-weight: 600; line-height: 1.45; }
+.analysis-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+.analysis-response-count { flex: 0 0 auto; padding-top: 2px; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+.analysis-response-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.analysis-chart { display: grid; gap: 8px; }
+.analysis-bar-row { display: grid; grid-template-columns: minmax(100px, 220px) minmax(60px, 1fr) minmax(92px, auto); align-items: center; gap: 10px; font-size: 13.5px; }
+.analysis-bar-label { min-width: 0; overflow-wrap: anywhere; }
+.analysis-bar-row .bar { height: 9px; }
+.analysis-bar-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.analysis-table-wrap { border: 1px solid var(--line); border-radius: 9px; }
+.analysis-table-wrap table.t th { position: static; }
+.analysis-total { font-weight: 600; background: var(--surface-2); }
+.analysis-total th { text-align: left; }
+.analysis-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 0; }
+.analysis-stat-grid > div { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.analysis-stat-grid dt { color: var(--muted); font-size: 12px; }
+.analysis-stat-grid dd { margin-top: 3px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.analysis-empty, .analysis-text-note { color: var(--muted); font-size: 13px; }
 .person-card { border-top: 1px solid var(--line); }
 .person-card:first-child { border-top: 0; }
 .person-card > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) 150px 130px 20px; gap: 16px; align-items: center; padding: 14px 20px; }
@@ -375,6 +409,13 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
   .page-head h1 { font-size: 22px; }
   .ans { grid-template-columns: 1fr; gap: 4px; }
   .tally-row { grid-template-columns: minmax(72px, 90px) 1fr 74px; gap: 7px; }
+  .analysis-control-grid { grid-template-columns: 1fr; }
+  .analysis-control-footer { align-items: flex-start; }
+  .analysis-export-actions { margin-left: 0; }
+  .analysis-question-head { display: grid; }
+  .analysis-response-count { white-space: normal; }
+  .analysis-bar-row { grid-template-columns: minmax(72px, 90px) minmax(48px, 1fr) 84px; gap: 7px; font-size: 12.5px; }
+  .analysis-intro-head { display: grid; }
   .rs-bar-in { padding: 0 14px; gap: 10px; }
   .rs-progress { display: none; }
   .save-state { min-width: 0; }

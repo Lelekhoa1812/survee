@@ -115,10 +115,13 @@ export async function issueCode(input: { clientId: string; redirectUri: string; 
 
 export async function exchangeCode(input: { code: string; clientId: string; redirectUri: string; verifier: string }): Promise<{ ok: true; access: string; refresh: string; expiresIn: number } | { ok: false; error: string }> {
   const codes = await col.oauthCodes();
-  const doc = await codes.findOne({ hash: hashKey(input.code) });
+  const codeHash = hashKey(input.code);
+  const doc = await codes.findOne({ hash: codeHash });
   if (!doc) return { ok: false, error: "invalid_grant" };
-  await codes.deleteOne({ _id: doc._id });
-  if (doc.expiresAt.getTime() <= Date.now()) return { ok: false, error: "invalid_grant" };
+  // Claim the code atomically. A read followed by an unconditional delete lets
+  // two simultaneous token requests both exchange the same authorization code.
+  const claimed = await codes.deleteOne({ _id: doc._id, hash: codeHash, expiresAt: { $gt: new Date() } });
+  if (claimed.deletedCount !== 1) return { ok: false, error: "invalid_grant" };
   if (doc.clientId !== input.clientId || doc.redirectUri !== input.redirectUri) return { ok: false, error: "invalid_grant" };
   if (!challengesMatch(s256(input.verifier), doc.challenge)) return { ok: false, error: "invalid_grant" };
   const client = await findClient(doc.clientId);

@@ -1,11 +1,11 @@
 # KQA
 
-Host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB as they type. Review and export everything from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, and also a dropdown, a number, a scale, or a date. KQA does not score answers.
+Host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, and also a dropdown, a number, a scale, or a date. KQA does not score answers.
 
 | Portal | Address | For |
 |---|---|---|
 | Respondent | `https://{base_url}/{token}` | The person answering. No account. Autosaves. Submit locks it |
-| Host | `https://{base_url}/admin` | Create interviews, upload files, add people, review answers, export |
+| Host | `https://{base_url}/admin` | Create interviews, upload files, add people, analyze response patterns, review answers, export |
 
 ## Why it exists
 

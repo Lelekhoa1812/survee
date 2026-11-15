@@ -303,11 +303,12 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries with explicit respondent scope, denominators, missingness, and caveats. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected respondent statuses, with explicit scope, denominators, missingness, and caveats. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       questionId: str,
       submittedOnly: bool,
+      statuses: { type: "array", items: { type: "string", enum: ["invited", "in_progress", "submitted"] } },
       offset: { type: "integer", minimum: 0 },
       limit: { type: "integer", minimum: 1, maximum: 100 },
     }, ["interviewId"]),
@@ -325,14 +326,21 @@ const TOOLS: ToolDef[] = [
         if (!question) return err("Question not found in the current survey version.", "not_found");
         questions = [question];
       }
+      const allStatuses = ["invited", "in_progress", "submitted"] as const;
       const submittedOnly = args.submittedOnly === true;
+      const requestedStatuses = Array.isArray(args.statuses) ? [...new Set(args.statuses)] as typeof allStatuses[number][] : undefined;
+      if (requestedStatuses?.length === 0) return err("statuses must contain at least one status.");
+      if (submittedOnly && requestedStatuses?.some((status) => status !== "submitted")) {
+        return err("submittedOnly cannot be combined with non-submitted statuses.");
+      }
+      const statuses = requestedStatuses ?? (submittedOnly ? ["submitted"] : [...allStatuses]);
       const offset = typeof args.offset === "number" ? args.offset : 0;
       const limit = typeof args.limit === "number" ? args.limit : 25;
       const page = questions.slice(offset, offset + limit);
       const accumulators = new Map(page.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
       let respondentCount = 0;
       let submittedCount = 0;
-      for await (const respondent of iterateAnalyticsParticipants(id, page.map((question) => question.id), submittedOnly)) {
+      for await (const respondent of iterateAnalyticsParticipants(id, page.map((question) => question.id), { statuses })) {
         respondentCount += 1;
         if (respondent.status === "submitted") submittedCount += 1;
         for (const question of page) accumulators.get(question.id)!.add(respondent);
@@ -342,10 +350,10 @@ const TOOLS: ToolDef[] = [
         surveyVersion: version.version,
         asOf: new Date().toISOString(),
         scope: {
-          statuses: submittedOnly ? ["submitted"] : ["invited", "in_progress", "submitted"],
+          statuses,
           respondentCount,
           submittedCount,
-          submittedOnly,
+          submittedOnly: statuses.length === 1 && statuses[0] === "submitted",
         },
         questionCount: questions.length,
         offset,

@@ -103,12 +103,12 @@ vi.mock("../src/lib/repo", async () => {
       { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
       { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
     ]),
-    iterateAnalyticsParticipants: vi.fn(async function* (_id: string, _questionIds: string[], submittedOnly = false) {
+    iterateAnalyticsParticipants: vi.fn(async function* (_id: string, _questionIds: string[], scope: { statuses?: ("invited" | "in_progress" | "submitted")[] } = {}) {
       const people = [
         { status: "submitted" as const, answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
         { status: "invited" as const, answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
       ];
-      for (const person of people) if (!submittedOnly || person.status === "submitted") yield person;
+      for (const person of people) if (!scope.statuses || scope.statuses.includes(person.status)) yield person;
     }),
   };
 });
@@ -174,6 +174,26 @@ describe("MCP tools", () => {
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
     expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");
+  });
+
+  it("narrows analytics to selected statuses", async () => {
+    const res = await call("analyze_answers", { interviewId, statuses: ["invited"] });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { scope?: { statuses: string[]; respondentCount: number; submittedCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number }[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1, submittedCount: 0, submittedOnly: false });
+    expect(body.result.structuredContent.questions?.find((question) => question.id === "fit")).toMatchObject({ answeredCount: 1, unmappedResponseCount: 1 });
+  });
+
+  it("rejects empty or conflicting analytics status filters", async () => {
+    const empty = await call("analyze_answers", { interviewId, statuses: [] });
+    const emptyBody = await empty.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(emptyBody.result.isError).toBe(true);
+    expect(emptyBody.result.structuredContent.error).toContain("at least one status");
+
+    const conflict = await call("analyze_answers", { interviewId, submittedOnly: true, statuses: ["invited"] });
+    const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(conflictBody.result.isError).toBe(true);
+    expect(conflictBody.result.structuredContent.error).toContain("cannot be combined");
   });
 
   it("sends one invite through the mocked SMTP transport", async () => {
