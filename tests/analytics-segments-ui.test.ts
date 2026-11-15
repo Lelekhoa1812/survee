@@ -66,12 +66,12 @@ const data = {
 
 function segmentResponse(url: URL) {
   const dimension = questions.find((question) => question.id === url.searchParams.get("segmentBy"))!;
-  const outcome = questions.find((question) => question.id === url.searchParams.get("questionId"))!;
+  const outcomes = url.searchParams.getAll("questionId").map((id) => questions.find((question) => question.id === id)!);
   const statuses = (url.searchParams.get("statuses") ?? "").split(",") as ParticipantStatus[];
   const dimensionOptions = dimension.options ?? [];
   const segments = dimensionOptions.map((option) => {
     const members = rows.filter((row) => statuses.includes(row.status) && row.answers[dimension.id]?.value === option.value);
-    const summaries = summarizeQuestion(outcome, members);
+    const summaries = Object.fromEntries(outcomes.map((outcome) => [outcome.id, summarizeQuestion(outcome, members)]));
     return {
       key: `answer:${option.value}`,
       kind: "answer",
@@ -89,10 +89,11 @@ function segmentResponse(url: URL) {
         in_progress: members.filter((row) => row.status === "in_progress").length,
         submitted: members.filter((row) => row.status === "submitted").length,
       },
-      summaries: { [outcome.id]: summaries },
-      statusSummaries: Object.fromEntries(statuses.map((status) => [status, {
-        [outcome.id]: summarizeQuestion(outcome, members.filter((row) => row.status === status)),
-      }])),
+      summaries,
+      statusSummaries: Object.fromEntries(statuses.map((status) => [status, Object.fromEntries(outcomes.map((outcome) => [
+        outcome.id,
+        summarizeQuestion(outcome, members.filter((row) => row.status === status)),
+      ]))])),
     };
   });
   const statusCounts = { invited: 1, in_progress: 1, submitted: 1 };
@@ -100,7 +101,7 @@ function segmentResponse(url: URL) {
     ok: true,
     asOf: "2026-11-15T00:01:00.000Z",
     segmentBy: { id: dimension.id, type: dimension.type, label: dimension.label },
-    outcome: { id: outcome.id, type: outcome.type, label: outcome.label },
+    outcomes: outcomes.map((outcome) => ({ id: outcome.id, type: outcome.type, label: outcome.label })),
     scope: { statuses, participantCount: statuses.length, statusCounts, compareStatuses: url.searchParams.get("compareStatuses") === "true" },
     segments,
     methodology: [],
@@ -157,6 +158,13 @@ async function click(button: HTMLButtonElement) {
   });
 }
 
+async function clickInput(input: HTMLInputElement) {
+  await act(async () => {
+    input.click();
+    await Promise.resolve();
+  });
+}
+
 async function change(select: HTMLSelectElement, value: string) {
   await act(async () => {
     select.value = value;
@@ -191,10 +199,13 @@ describe("answer-segment analytics UI", () => {
     expect(host.querySelector(".analysis-disclosure-note")?.textContent).toContain("does not apply a minimum size");
     expect(host.querySelector(".analysis-disclosure-flag")?.textContent).toContain("Singleton group");
 
-    await change(host.querySelector<HTMLSelectElement>("#analysis-segment-outcome")!, "satisfaction");
-    expect(host.querySelector(".analysis-segment-result-head")?.textContent).toContain("Satisfaction");
+    await clickInput(host.querySelector<HTMLInputElement>('[data-question-id="satisfaction"]')!);
+    await clickInput(host.querySelector<HTMLInputElement>('[data-question-id="budget"]')!);
+    expect(host.querySelector(".analysis-segment-result-head")?.textContent).toContain("3 outcome questions");
+    expect(host.textContent).toContain("Satisfaction");
+    expect(host.textContent).toContain("Budget");
     expect(host.textContent).toContain("Agree");
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("questionId=satisfaction");
+    expect(new URL(String(fetchMock.mock.calls.at(-1)?.[0]), window.location.href).searchParams.getAll("questionId")).toEqual(["region", "satisfaction", "budget"]);
 
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Compare statuses")!);
     expect(host.textContent).toContain("Invited 1 · In progress 0 · Submitted 0");
@@ -204,6 +215,8 @@ describe("answer-segment analytics UI", () => {
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Copy CSV")!);
     expect(copied).toHaveLength(1);
     expect(copied[0]).toContain('"satisfaction","Satisfaction","single","Department = Operations · Invited · not started"');
+    expect(copied[0]).toContain('"budget","Budget","number","Department = Operations · Invited · not started"');
+    expect(copied[0]).toContain('"region","Region","single","Department = Operations · Invited · not started"');
     expect(copied[0]).toContain('"interview-1","1","2026-11-15T00:01:00.000Z"');
     expect(copied[0]).toContain('"true","invited",');
     expect(copied[0]).toContain("Singleton signals cover counts of one only");

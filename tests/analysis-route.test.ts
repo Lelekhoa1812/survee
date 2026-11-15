@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
     manifest: { questions: [
       { id: "fit", type: "single", label: "Strategic fit", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { id: "budget", type: "number", label: "Budget", min: 0, max: 10 },
+      { id: "confidence", type: "single", label: "Confidence", options: [{ value: "high", label: "High" }, { value: "low", label: "Low" }] },
     ] },
   },
   rows: [] as any[],
@@ -38,9 +39,9 @@ describe("interview answer-segmentation route", () => {
   beforeEach(() => {
     state.denied = null;
     state.rows = [
-      { status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 } } },
-      { status: "invited", answers: { fit: { value: "retired" }, budget: { value: 4 } } },
-      { status: "in_progress", answers: { fit: { note: "private note" }, budget: { value: 3 } } },
+      { status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } },
+      { status: "invited", answers: { fit: { value: "retired" }, budget: { value: 4 }, confidence: { value: "low" } } },
+      { status: "in_progress", answers: { fit: { note: "private note" }, budget: { value: 3 }, confidence: { value: "high" } } },
     ];
     state.getInterview.mockReset().mockResolvedValue(state.interview);
     state.getVersion.mockReset().mockResolvedValue(state.version);
@@ -74,12 +75,29 @@ describe("interview answer-segmentation route", () => {
     expect(body.methodology.join(" ")).toContain("No minimum group threshold is applied");
   });
 
+  it("summarizes several selected outcomes from one projected participant scan", async () => {
+    const response = await GET(request("segmentBy=fit&questionId=budget&questionId=confidence"), { params: Promise.resolve({ id: "interview" }) });
+    const body = await response.json() as { ok: boolean; outcomes: { id: string }[]; segments: { summaries: Record<string, unknown> }[]; methodology: string[] };
+    expect(response.status).toBe(200);
+    expect(body.outcomes.map(({ id }) => id)).toEqual(["budget", "confidence"]);
+    expect(body.segments[0].summaries).toHaveProperty("budget");
+    expect(body.segments[0].summaries).toHaveProperty("confidence");
+    expect(state.iterate).toHaveBeenCalledOnce();
+    expect(state.iterate).toHaveBeenCalledWith("interview", ["fit", "budget", "confidence"], { statuses: ["invited", "in_progress", "submitted"] });
+    expect(body.methodology.join(" ")).toContain("All selected outcome summaries");
+  });
+
   it("rejects free-form numeric dimensions and self-outcomes before scanning participants", async () => {
     const invalidDimension = await GET(request("segmentBy=budget&questionId=fit"), { params: Promise.resolve({ id: "interview" }) });
     expect(invalidDimension.status).toBe(400);
     expect(state.iterate).not.toHaveBeenCalled();
     const sameQuestion = await GET(request("segmentBy=fit&questionId=fit"), { params: Promise.resolve({ id: "interview" }) });
     expect(sameQuestion.status).toBe(400);
+    const duplicateQuestion = await GET(request("segmentBy=fit&questionId=budget&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
+    expect(duplicateQuestion.status).toBe(400);
+    const tooMany = Array.from({ length: 21 }, (_, index) => `questionId=q${index}`).join("&");
+    const overLimit = await GET(request(`segmentBy=fit&${tooMany}`), { params: Promise.resolve({ id: "interview" }) });
+    expect(overLimit.status).toBe(400);
     expect(state.iterate).not.toHaveBeenCalled();
   });
 });

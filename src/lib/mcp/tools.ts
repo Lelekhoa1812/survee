@@ -327,10 +327,11 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare a selected outcome across a closed categorical answer. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer in one shared scan. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       questionId: str,
+      questionIds: { type: "array", minItems: 1, maxItems: 20, uniqueItems: true, items: str },
       segmentBy: str,
       submittedOnly: bool,
       statuses: { type: "array", items: { type: "string", enum: ["invited", "in_progress", "submitted"] } },
@@ -347,16 +348,29 @@ const TOOLS: ToolDef[] = [
       if (!version) return err("Survey version not found.", "not_found");
       let questions = version.manifest.questions;
       const questionId = asString(args.questionId, 64);
+      const requestedQuestionIds = args.questionIds;
       const segmentById = asString(args.segmentBy, 64);
       const segmentQuestion = segmentById ? questions.find((item) => item.id === segmentById) : undefined;
       if (segmentById && !segmentQuestion) return err("Segmentation question not found in the current survey version.", "not_found");
       if (segmentById && !canSegmentByAnswer(segmentQuestion)) return err("Segment by a single-choice, dropdown, checkbox, or scale question. Text, date, and free-form number questions cannot define groups.");
+      if (requestedQuestionIds !== undefined) {
+        if (!segmentById) return err("questionIds can only be used with segmentBy.");
+        if (questionId) return err("Use either questionId or questionIds, not both.");
+        if (!Array.isArray(requestedQuestionIds) || requestedQuestionIds.length < 1 || requestedQuestionIds.length > 20) return err("questionIds must contain between 1 and 20 outcome question IDs.");
+        const selectedIds = requestedQuestionIds.map((value) => asString(value, 64));
+        if (selectedIds.some((value) => !value)) return err("Each questionIds entry must be a non-empty question ID.");
+        if (new Set(selectedIds).size !== selectedIds.length) return err("questionIds must not contain duplicates.");
+        if (selectedIds.includes(segmentById)) return err("Choose outcome questions other than the segmentation question.");
+        const selectedQuestions = selectedIds.map((selectedId) => questions.find((item) => item.id === selectedId));
+        if (selectedQuestions.some((item) => !item)) return err("An outcome question was not found in the current survey version.", "not_found");
+        questions = selectedQuestions as typeof questions;
+      }
       if (segmentById && questionId === segmentById) return err("Choose an outcome question other than the segmentation question.");
-      if (questionId) {
+      if (questionId && requestedQuestionIds === undefined) {
         const question = questions.find((item) => item.id === questionId);
         if (!question) return err("Question not found in the current survey version.", "not_found");
         questions = [question];
-      } else if (segmentById) {
+      } else if (segmentById && requestedQuestionIds === undefined) {
         questions = questions.filter((item) => item.id !== segmentById);
       }
       const allStatuses = ["invited", "in_progress", "submitted"] as const;
@@ -369,6 +383,9 @@ const TOOLS: ToolDef[] = [
       const statuses = requestedStatuses ?? (submittedOnly ? ["submitted"] : [...allStatuses]);
       const offset = typeof args.offset === "number" ? args.offset : 0;
       const limit = typeof args.limit === "number" ? args.limit : 25;
+      if (requestedQuestionIds !== undefined && (offset !== 0 || limit < questions.length)) {
+        return err("questionIds returns every selected outcome in one scan; use offset 0 and a limit at least as large as the selected list.");
+      }
       const page = questions.slice(offset, offset + limit);
       const cohort = analyticsCohortForStatuses(statuses);
       if (!cohort) return err("statuses must contain at least one status.");
@@ -388,6 +405,7 @@ const TOOLS: ToolDef[] = [
           surveyVersion: version.version,
           asOf: segmented.asOf,
           segmentBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
+          outcomes: page.map((question) => ({ id: question.id, type: question.type, label: question.label })),
           scope: {
             statuses,
             participantCount,

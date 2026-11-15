@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/10" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/11" as const;
 
 const PRINCIPLES = [
   {
@@ -21,7 +21,7 @@ const PRINCIPLES = [
     id: "explore-answer-segments",
     title: "Use closed answers for exploratory segments",
     guidance:
-      "Use analyze_answers segmentBy to compare one outcome question across a single-choice, dropdown, checkbox, or scale answer. Keep the segment question out of the outcome summary. Show each group's participant count and outcome valid-answer denominator; percentages use the valid answers in that group. Checkbox segments overlap because one person may select several options, so do not add those group counts or shares together. No-answer and unmapped dimension values are separate groups when present; no-answer does not mean the item was shown. KQA returns singleton and zero-count option groups without suppression. disclosureRisk.singletonSegment flags a one-person segment; disclosureRisk.singletonStatusGroups lists one-person status groups when status summaries are included. These are singleton signals only, not a complete identifiability assessment; an empty signal is not an anonymity guarantee, and downstream disclosure rules still apply.",
+      "Use analyze_answers segmentBy with questionIds to compare up to 20 outcome questions across a single-choice, dropdown, checkbox, or scale answer in one participant scan. questionId remains available for one outcome. Keep the segment question out of the outcome summary. Show each group's participant count and each outcome's valid-answer denominator; percentages use the valid answers in that group. Checkbox segments overlap because one person may select several options, so do not add those group counts or shares together. No-answer and unmapped dimension values are separate groups when present; no-answer does not mean the item was shown. KQA returns singleton and zero-count option groups without suppression. disclosureRisk.singletonSegment flags a one-person segment; disclosureRisk.singletonStatusGroups lists one-person status groups when status summaries are included. These are singleton signals only, not a complete identifiability assessment; an empty signal is not an anonymity guarantee, and downstream disclosure rules still apply.",
   },
   {
     id: "show-missingness",
@@ -155,8 +155,8 @@ export function getAnalyticsGuidance() {
       "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
       "KQA does not enforce a minimum cohort-size threshold; singleton counts and percentages may be returned. Integrated agents should state small-n limitations and follow the host's disclosure rules.",
       "QuestionSummary.disclosureRisk flags singleton cohort, answer, no-answer, note-only, unmapped, valid-denominator, distribution-value, and numeric-summary counts. singletonDistributionValues lists the current-version values with a count of one. This is a detectable-signal set, not an identifiability assessment or anonymity guarantee.",
-      "analyze_answers segmentBy groups outcomes by one closed categorical current-version answer; checkbox groups can overlap, and answer-group counts include singleton and zero-count options.",
-      "Segment disclosureRisk metadata flags singleton segments and, for status comparisons, singleton status groups. Question-level disclosureRisk metadata accompanies each ordinary, status, and segmented summary. Neither metadata shape assesses combinations of attributes or guarantees anonymity.",
+      "analyze_answers segmentBy groups up to 20 selected outcome questions by one closed categorical current-version answer in one shared participant scan; checkbox groups can overlap, and answer-group counts include singleton and zero-count options. questionIds selects the outcomes; questionId remains available for one outcome.",
+      "All selected outcomes in one segmented analysis share the same status scope, participant scan, and asOf. Segment disclosureRisk metadata flags singleton segments and, for status comparisons, singleton status groups. Question-level disclosureRisk metadata accompanies each ordinary, status, and segmented summary. Neither metadata shape assesses combinations of attributes or guarantees anonymity.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
       "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",

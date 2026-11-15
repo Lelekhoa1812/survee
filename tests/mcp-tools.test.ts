@@ -77,6 +77,7 @@ const analyticsManifest = {
   questions: [
     { id: "fit", type: "single" as const, label: "Strategic fit", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
     { id: "budget", type: "number" as const, label: "Budget" },
+    { id: "confidence", type: "single" as const, label: "Confidence", options: [{ value: "high", label: "High" }, { value: "low", label: "Low" }] },
   ],
 };
 
@@ -115,13 +116,13 @@ vi.mock("../src/lib/repo", async () => {
       meta: { tool: "get_design_guidance", ok: true, actor: { kind: "api_key", id: "0123456789abcdef01234567", name: "Reporting agent" } },
     }]),
     listParticipants: vi.fn(async () => [
-      { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
-      { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
+      { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } } },
+      { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "low", updatedAt: "2026-11-13T00:00:00.000Z" } } },
     ]),
     iterateAnalyticsParticipants: vi.fn(async function* (_id: string, _questionIds: string[], scope: { statuses?: ("invited" | "in_progress" | "submitted")[] } = {}) {
       const people = [
-        { status: "submitted" as const, answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
-        { status: "invited" as const, answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
+        { status: "submitted" as const, answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } } },
+        { status: "invited" as const, answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "low", updatedAt: "2026-11-13T00:00:00.000Z" } } },
       ];
       for (const person of people) if (!scope.statuses || scope.statuses.includes(person.status)) yield person;
     }),
@@ -345,6 +346,40 @@ describe("MCP tools", () => {
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
   });
 
+  it("summarizes selected outcomes together across answer segments in one scan", async () => {
+    const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    const res = await call("analyze_answers", { interviewId, segmentBy: "fit", questionIds: ["budget", "confidence"], compareStatuses: true });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: {
+      outcomes: { id: string }[];
+      segments: { questions: { id: string; numeric: { n: number } | null }[]; statusCohorts: { questions: { id: string }[] }[] }[];
+      methodology: string[];
+    } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.outcomes.map(({ id }) => id)).toEqual(["budget", "confidence"]);
+    const yes = body.result.structuredContent.segments.find((segment) => segment.questions.some((question) => question.id === "budget"));
+    expect(yes?.questions.map(({ id }) => id)).toEqual(["budget", "confidence"]);
+    expect(yes?.questions[0].numeric).toMatchObject({ n: 1 });
+    expect(yes?.statusCohorts[2].questions.map(({ id }) => id)).toEqual(["budget", "confidence"]);
+    expect(body.result.structuredContent.methodology.join(" ")).toContain("one participant scan");
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls.at(-1)?.[1]).toEqual(["fit", "budget", "confidence"]);
+  });
+
+  it("rejects duplicate and segmentation IDs in selected MCP outcomes", async () => {
+    const duplicate = await call("analyze_answers", { interviewId, segmentBy: "fit", questionIds: ["budget", "budget"] });
+    const duplicateBody = await duplicate.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(duplicateBody.result.isError).toBe(true);
+    expect(duplicateBody.result.structuredContent.error).toContain("must not contain duplicates");
+    const dimension = await call("analyze_answers", { interviewId, segmentBy: "fit", questionIds: ["fit", "budget"] });
+    const dimensionBody = await dimension.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(dimensionBody.result.isError).toBe(true);
+    expect(dimensionBody.result.structuredContent.error).toContain("other than the segmentation question");
+    const paged = await call("analyze_answers", { interviewId, segmentBy: "fit", questionIds: ["budget", "confidence"], limit: 1 });
+    const pagedBody = await paged.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(pagedBody.result.isError).toBe(true);
+    expect(pagedBody.result.structuredContent.error).toContain("every selected outcome in one scan");
+  });
+
   it("rejects numeric questions as answer-segmentation dimensions", async () => {
     const res = await call("analyze_answers", { interviewId, segmentBy: "budget", questionId: "fit" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
@@ -384,7 +419,7 @@ describe("MCP tools", () => {
     const first = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: 0, limit: 1 });
     const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string }[] } } };
     expect(firstBody.result.isError).toBeFalsy();
-    expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 2, nextOffset: 1 });
+    expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 3, nextOffset: 1 });
     expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(firstBody.result.structuredContent.questions.map((question) => question.id)).toEqual(["fit"]);
 
@@ -392,9 +427,15 @@ describe("MCP tools", () => {
     const second = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: nextOffset!, limit: 1 });
     const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string; numeric: { mean: number } | null }[] } } };
     expect(secondBody.result.isError).toBeFalsy();
-    expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: null });
+    expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: 2 });
     expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4, q1: 4, q3: 4 } });
+
+    const third = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: secondBody.result.structuredContent.nextOffset!, limit: 1 });
+    const thirdBody = await third.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; questions: { id: string }[] } } };
+    expect(thirdBody.result.isError).toBeFalsy();
+    expect(thirdBody.result.structuredContent).toMatchObject({ offset: 2, limit: 1, nextOffset: null });
+    expect(thirdBody.result.structuredContent.questions.map(({ id }) => id)).toEqual(["confidence"]);
   });
 
   it("rejects empty or conflicting analytics status filters", async () => {

@@ -4,7 +4,7 @@ import { fail, guardAdmin, json } from "@/lib/http";
 import { getInterview, getVersion, iterateAnalyticsParticipants } from "@/lib/repo";
 import type { ParticipantStatus } from "@/lib/repo/types";
 
-/** Return aggregate-only answer segments for one selected outcome question. */
+/** Return aggregate-only answer segments for up to 20 selected outcome questions in one scan. */
 export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews/[id]/analysis">) {
   const denied = await guardAdmin();
   if (denied) return denied;
@@ -16,13 +16,15 @@ export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews
 
   const url = new URL(req.url);
   const segmentById = (url.searchParams.get("segmentBy") ?? "").trim();
-  const outcomeId = (url.searchParams.get("questionId") ?? "").trim();
-  if (!segmentById || !outcomeId) return fail(400, "Choose a segmentation question and an outcome question.");
+  const outcomeIds = url.searchParams.getAll("questionId").map((id) => id.trim());
+  if (!segmentById || !outcomeIds.length || outcomeIds.some((id) => !id)) return fail(400, "Choose a segmentation question and one or more outcome questions.");
+  if (outcomeIds.length > 20) return fail(400, "Choose no more than 20 outcome questions for one analysis read.");
+  if (new Set(outcomeIds).size !== outcomeIds.length) return fail(400, "Choose each outcome question only once.");
   const segmentQuestion = version.manifest.questions.find((question) => question.id === segmentById);
-  const outcomeQuestion = version.manifest.questions.find((question) => question.id === outcomeId);
+  const outcomes = outcomeIds.map((outcomeId) => version.manifest.questions.find((question) => question.id === outcomeId));
   if (!segmentQuestion) return fail(404, "Segmentation question not found in the current survey version.");
-  if (!outcomeQuestion) return fail(404, "Outcome question not found in the current survey version.");
-  if (segmentQuestion.id === outcomeQuestion.id) return fail(400, "Choose an outcome question other than the segmentation question.");
+  if (outcomes.some((question) => !question)) return fail(404, "An outcome question was not found in the current survey version.");
+  if (outcomeIds.includes(segmentQuestion.id)) return fail(400, "Choose outcome questions other than the segmentation question.");
   if (!canSegmentByAnswer(segmentQuestion)) return fail(400, "Segment by a single-choice, dropdown, checkbox, or scale question. Text, date, and free-form number questions cannot define groups.");
 
   const requested = (url.searchParams.get("statuses") ?? ANALYTICS_STATUSES.join(",")).split(",").map((status) => status.trim());
@@ -32,10 +34,11 @@ export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews
   const statuses = ANALYTICS_STATUSES.filter((status) => requested.includes(status)) as ParticipantStatus[];
   if (!statuses.length) return fail(400, "Choose one or more supported participant statuses.");
   const compareStatuses = url.searchParams.get("compareStatuses") === "true";
+  const selectedOutcomes = outcomes as NonNullable<(typeof outcomes)[number]>[];
   const analysis = await summarizeAnswerSegments(
     segmentQuestion,
-    [outcomeQuestion],
-    iterateAnalyticsParticipants(id, [segmentQuestion.id, outcomeQuestion.id], { statuses }),
+    selectedOutcomes,
+    iterateAnalyticsParticipants(id, [segmentQuestion.id, ...selectedOutcomes.map((question) => question.id)], { statuses }),
     statuses,
     compareStatuses,
   );
@@ -46,11 +49,12 @@ export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews
     surveyVersion: version.version,
     asOf: analysis.asOf,
     segmentBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
-    outcome: { id: outcomeQuestion.id, type: outcomeQuestion.type, label: outcomeQuestion.label },
+    outcomes: selectedOutcomes.map((question) => ({ id: question.id, type: question.type, label: question.label })),
+    ...(selectedOutcomes.length === 1 ? { outcome: { id: selectedOutcomes[0].id, type: selectedOutcomes[0].type, label: selectedOutcomes[0].label } } : {}),
     scope: { statuses, participantCount, statusCounts: analysis.statusCounts, compareStatuses },
     segments: analysis.segments,
     methodology: [
-      "Answer segments use the selected current-version question and only the participant statuses shown in scope. Outcome summaries exclude the segmentation question and use the same projected participant scan.",
+      "Answer segments use the selected current-version question and only the participant statuses shown in scope. All selected outcome summaries exclude the segmentation question and use the same projected participant scan and asOf.",
       "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
       "No stored answer includes blank and note-only dimension responses; it does not mean the person was eligible to see a routed question. Invalid stored dimension values appear as Unmapped answer.",
       "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Each segment includes disclosureRisk.singletonSegment and, when status summaries are returned, disclosureRisk.singletonStatusGroups. Every outcome QuestionSummary also carries singleton signals for its cohort, answer, no-answer, note-only, unmapped, valid-answer denominator, distribution values, and numeric summaries. These signals only detect counts of one; they do not assess attribute combinations or guarantee anonymity. Outcome percentages use that segment's valid-answer denominator.",

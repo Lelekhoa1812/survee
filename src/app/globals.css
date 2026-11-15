@@ -331,6 +331,13 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-controls { padding: 16px; display: grid; gap: 14px; }
 .analysis-control-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(180px, .7fr); gap: 12px; }
 .analysis-segment-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+.analysis-outcome-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
+.analysis-outcome-picker legend { padding: 0; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.analysis-outcome-picker > p { margin-top: 3px; font-size: 12px; }
+.analysis-outcome-options { display: grid; gap: 4px; max-height: 220px; overflow: auto; margin-top: 8px; padding: 6px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.analysis-outcome-option { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 36px; padding: 4px 6px; color: var(--ink-2); font-size: 13px; cursor: pointer; }
+.analysis-outcome-option input { accent-color: var(--accent); }
+.analysis-outcome-option .muted { font-size: 11.5px; }
 .analysis-control-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .analysis-freshness { margin: 0; color: var(--muted); font-size: 12.5px; }
 .analysis-cohort-options { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; border: 0; }
@@ -354,6 +361,8 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-segment-head p { font-size: 12.5px; }
 .analysis-segment-statuses { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
 .analysis-segment .analysis-question { padding: 0; border: 0; }
+.analysis-segment-outcome { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.analysis-segment-outcome > h4 { color: var(--ink); font-size: 13px; font-weight: 600; }
 .analysis-segment-message { padding: 14px 16px; }
 .analysis-question { display: grid; gap: 12px; padding: 18px 20px; border-top: 1px solid var(--line); }
 .analysis-question:first-child { border-top: 0; }
