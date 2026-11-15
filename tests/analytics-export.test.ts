@@ -27,7 +27,23 @@ describe("analytics CSV export", () => {
     expect(csv).toContain("\"distribution\"");
     expect(csv).toContain(`"'=HYPERLINK(""https://example.test"")"`);
     expect(csv).toContain("\"response_count\"");
+    expect(csv.split("\r\n")[0]).toContain('"eligible","answered","missing","note_only","unmapped"');
+    expect(csv).toContain('"2","2","2","0","0","0"');
+    expect(csv).toContain('"1","2","1","1","1","0"');
     expect(csv).not.toContain("Private response text");
     expect(csv).not.toContain("Private note");
+  });
+
+  it("keeps answered and valid counts separate for an unmapped legacy value", () => {
+    const option = questionSchema.parse({ id: "choice", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] });
+    const summary = summarizeQuestion(option, [
+      { answers: { choice: { value: "yes", updatedAt: "2026-11-15T00:00:00.000Z" } } },
+      { answers: { choice: { value: "old-option", updatedAt: "2026-11-15T00:00:00.000Z" } } },
+    ]);
+    expect(summary.answeredCount).toBe(2);
+    expect(summary.unmappedResponseCount).toBe(1);
+    expect(summary.distributionDenominator).toBe(1);
+    const csv = buildAnalyticsCsv([{ question: option, summary }], "Everyone");
+    expect(csv).toContain('"1","2","2","0","0","1"');
   });
 });

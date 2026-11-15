@@ -40,15 +40,18 @@ function DistributionChart({ question, summary }: { question: Question; summary:
     return <p className="analysis-empty">No valid responses to chart yet.</p>;
   }
   return (
-    <div className="analysis-chart" role="list" aria-label={`Answer distribution for ${question.label}`}>
-      {summary.distribution.map((option) => (
-        <div className="analysis-bar-row" role="listitem" key={option.value}>
-          <span className="analysis-bar-label" title={option.label}>{option.label}</span>
-          <div className="bar" aria-hidden="true"><i style={{ width: `${Math.min(100, option.percent)}%` }} /></div>
-          <span className="analysis-bar-value">{option.count} <span className="muted">({formatPercentage(option.percent)})</span></span>
-        </div>
-      ))}
-    </div>
+    <>
+      <p className="muted analysis-valid-n">Valid responses: n={summary.distributionDenominator}</p>
+      <div className="analysis-chart" role="list" aria-label={`Answer distribution for ${question.label}; ${summary.distributionDenominator} valid responses`}>
+        {summary.distribution.map((option) => (
+          <div className="analysis-bar-row" role="listitem" key={option.value}>
+            <span className="analysis-bar-label" title={option.label}>{option.label}</span>
+            <div className="bar" aria-hidden="true"><i style={{ width: `${Math.min(100, option.percent)}%` }} /></div>
+            <span className="analysis-bar-value">{option.count} <span className="muted">({formatPercentage(option.percent)})</span></span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
