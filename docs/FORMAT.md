@@ -124,7 +124,7 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `required` | no | all | `true` blocks Submit until answered. Default `false` |
 | `options` | yes for `single`, `multi`, `select` | those three | 2 to 50 items of `{ "value", "label" }`. Not allowed on other types |
 | `note` | no | all | `true`, or `{ "label", "placeholder", "maxLength" }`. Enables an optional free-text note stored beside the answer. Up to 5000 characters |
-| `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and the span may not exceed 20 steps. `min` must not exceed `max` |
+| `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and uses safely representable whole-number bounds, with `min` below `max` and a span of at most 20 steps |
 | `step` | no | `number`, `scale` | Positive number |
 | `maxLength` | no | `text`, `longtext` | Default 500 for `text`, 20000 for `longtext` |
 | `custom` | no | all | `true` when the answer is set from script with `KQA.set()` and has no `data-kqa` control |

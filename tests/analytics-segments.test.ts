@@ -99,6 +99,12 @@ describe("answer-segment analytics", () => {
     expect(scans).toBe(0);
   });
 
+  it("rejects unsafe scale bounds before deriving answer groups", async () => {
+    const scale: Question = { id: "rating", type: "scale", label: "Rating", min: 10_000_000_000_000_000, max: 10_000_000_000_000_002 };
+    expect(canSegmentByAnswer(scale)).toBe(false);
+    await expect(summarizeAnswerSegments(scale, [outcome], (async function* () {})())).rejects.toThrow("using safe integer bounds");
+  });
+
   it("keeps exact numeric Type-7 summaries when status observations are combined", async () => {
     const numericOutcome: Question = { id: "amount", type: "number", label: "Amount" };
     const result = await summarizeAnswerSegments(topics, [numericOutcome], (async function* () {

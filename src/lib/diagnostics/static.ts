@@ -665,7 +665,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
     if (t === "scale") {
       const lo = min ?? 1;
       const hi = max ?? 5;
-      if (!Number.isInteger(lo) || !Number.isInteger(hi) || hi <= lo || hi - lo > LIMITS.scaleSpanMax) add(ctx, "KQA212", `${p}${qid ? ` (${qid})` : ""} is a scale from ${lo} to ${hi}. Scales use whole numbers, min below max, and at most ${LIMITS.scaleSpanMax} steps.`, undefined, { offset: m.at(p), path: p, questionId: qid });
+      if (!Number.isSafeInteger(lo) || !Number.isSafeInteger(hi) || hi <= lo || hi - lo > LIMITS.scaleSpanMax) add(ctx, "KQA212", `${p}${qid ? ` (${qid})` : ""} is a scale from ${lo} to ${hi}. Scales use safely representable whole numbers, min below max, and at most ${LIMITS.scaleSpanMax} steps.`, undefined, { offset: m.at(p), path: p, questionId: qid });
     } else if (t === "number") {
       if (min !== undefined && max !== undefined && min >= max) add(ctx, "KQA212", `${p}${qid ? ` (${qid})` : ""} has min ${min} which is not below max ${max}.`, undefined, { offset: m.at(p), path: p, questionId: qid });
     } else if (typeof type === "string" && (q.min !== undefined || q.max !== undefined || q.step !== undefined)) {

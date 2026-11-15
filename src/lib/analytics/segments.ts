@@ -51,12 +51,15 @@ const MAX_SCALE_SEGMENT_VALUES = LIMITS.scaleSpanMax + 1;
 
 function hasBoundedScaleSegments(question: Question): boolean {
   const bounds = scaleBounds(question);
+  const first = Math.ceil(bounds.min);
+  const last = Math.floor(bounds.max);
   const count = Math.floor(bounds.max) - Math.ceil(bounds.min) + 1;
-  return Number.isFinite(count) && count <= MAX_SCALE_SEGMENT_VALUES;
+  return bounds.max > bounds.min && Number.isSafeInteger(first) && Number.isSafeInteger(last)
+    && Number.isFinite(count) && count > 0 && count <= MAX_SCALE_SEGMENT_VALUES;
 }
 
 function scaleSegmentationError(): string {
-  return `Scale segmentation supports at most ${MAX_SCALE_SEGMENT_VALUES} integer answer groups. Update the scale range before analyzing it.`;
+  return `Scale segmentation supports at most ${MAX_SCALE_SEGMENT_VALUES} integer answer groups using safe integer bounds. Update the scale range before analyzing it.`;
 }
 
 function definitions(question: Question): SegmentDefinition[] {

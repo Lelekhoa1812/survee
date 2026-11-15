@@ -229,7 +229,7 @@ A question's "section" does not match any id in "sections", so the review screen
 
 Severity: **error**
 
-min must be lower than max, scales must be whole numbers spanning at most 20 steps, and step must be positive.
+min must be lower than max, scale bounds must be safely representable whole numbers spanning at most 20 steps, and step must be positive.
 
 **How to fix:** Fix "min", "max" and "step" on this question.
 

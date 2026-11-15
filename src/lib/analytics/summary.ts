@@ -1,5 +1,5 @@
 import { isAnswered, validateAnswer } from "../format/answers";
-import type { AnswerMap, Question } from "../format/schema";
+import { LIMITS, scaleBounds, type AnswerMap, type Question } from "../format/schema";
 import { ANALYTICS_COHORTS, ANALYTICS_STATUSES, type AnalyticsCohortKey } from "./cohorts";
 import type { ParticipantStatus } from "../repo/types";
 
@@ -151,10 +151,20 @@ function scaleValueAtRank(rows: readonly { value: string; count: number }[], ran
 function initialDistribution(q: Question) {
   const choiceType = q.type === "single" || q.type === "select" || q.type === "multi";
   const rows = choiceType ? q.options?.map((option) => ({ value: option.value, label: option.label, count: 0 })) ?? [] : [];
-  const lower = q.type === "scale" ? q.min ?? 1 : 1;
-  const upper = q.type === "scale" ? q.max ?? 5 : 0;
   if (q.type === "scale") {
-    for (let value = Math.ceil(lower); value <= Math.floor(upper); value += 1) rows.push({ value: String(value), label: String(value), count: 0 });
+    const bounds = scaleBounds(q);
+    const first = Math.ceil(bounds.min);
+    const last = Math.floor(bounds.max);
+    const count = last - first + 1;
+    const maxCategories = LIMITS.scaleSpanMax + 1;
+    if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || bounds.max <= bounds.min
+      || !Number.isFinite(count) || count < 1 || count > maxCategories) {
+      throw new Error(`Scale summaries require a non-empty range of at most ${maxCategories} safely representable integer categories.`);
+    }
+    for (let index = 0; index < count; index += 1) {
+      const value = first + index;
+      rows.push({ value: String(value), label: String(value), count: 0 });
+    }
   }
   return rows;
 }

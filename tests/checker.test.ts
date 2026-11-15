@@ -92,6 +92,7 @@ describe("manifest rules", () => {
   it("rejects duplicate option values", () => expect(codes(checkHtml(swap(STARTER, '"value": "speed"', '"value": "accuracy"')))).toContain("KQA210"));
   it("rejects an unknown section", () => expect(codes(checkHtml(swap(STARTER, '"section": "writing", "required": true', '"section": "nope", "required": true')))).toContain("KQA211"));
   it("rejects a bad scale", () => expect(codes(checkHtml(swap(STARTER, '"id": "confidence", "type": "scale", "section": "writing", "min": 1, "max": 5', '"id": "confidence", "type": "scale", "section": "writing", "min": 5, "max": 1')))).toContain("KQA212"));
+  it("rejects scale bounds outside the safe integer range", () => expect(codes(checkHtml(swap(STARTER, '"id": "confidence", "type": "scale", "section": "writing", "min": 1, "max": 5', '"id": "confidence", "type": "scale", "section": "writing", "min": 10000000000000000, "max": 10000000000000002')))).toContain("KQA212"));
   it("warns about a misspelt field", () => {
     const d = find(checkHtml(swap(STARTER, '"required": true,\n      "label": "Which area', '"require": true,\n      "label": "Which area')), "KQA216");
     expect(d?.message).toMatch(/Did you mean "required"/);

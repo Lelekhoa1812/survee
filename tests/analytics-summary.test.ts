@@ -131,6 +131,17 @@ describe("descriptive question summaries", () => {
     expect(summary.distributionDenominator).toBe(3);
   });
 
+  it("bounds scale category allocation and rejects unsafe integer bounds", () => {
+    const maximum = createQuestionSummaryAccumulator({ id: "q", type: "scale", label: "Scale", min: 1, max: 21 });
+    expect(maximum.finish().distribution).toHaveLength(21);
+    expect(() => createQuestionSummaryAccumulator({ id: "q", type: "scale", label: "Large scale", min: 1, max: 1_000_000_000 }))
+      .toThrow("at most 21 safely representable integer categories");
+    expect(() => createQuestionSummaryAccumulator({ id: "q", type: "scale", label: "Unsafe scale", min: 10_000_000_000_000_000, max: 10_000_000_000_000_002 }))
+      .toThrow("safely representable integer categories");
+    expect(() => createQuestionSummaryAccumulator({ id: "q", type: "scale", label: "Empty scale", min: 5, max: 5 }))
+      .toThrow("non-empty range");
+  });
+
   it("preserves both observed central categories for an even ordinal scale cohort", () => {
     const q: Question = { id: "q", type: "scale", label: "Agreement", min: 1, max: 5 };
     const summary = summarizeQuestion(q, [respondent(1), respondent(2)]);
