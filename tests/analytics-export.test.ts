@@ -61,6 +61,20 @@ describe("analytics CSV export", () => {
     expect(csv.split("\r\n")[1]).toContain('"Submitted","interview-123","3","2026-11-15T00:00:00.000Z"');
   });
 
+  it("carries singleton disclosure signals with grouped CSV rows", () => {
+    const number = questionSchema.parse({ id: "score", type: "number", label: "Score" });
+    const summary = summarizeQuestion(number, [{ answers: { score: { value: 3, updatedAt: "2026-11-15T00:00:00.000Z" } } }]);
+    const csv = buildAnalyticsCsv([{
+      question: number,
+      summary,
+      cohort: "Region = North · Submitted",
+      disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] },
+    }], "Everyone");
+
+    expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_singleton_segment","disclosure_risk_singleton_status_groups","disclosure_risk_note"');
+    expect(csv).toContain('"true","submitted","Singleton signals only; no minimum group threshold or anonymity guarantee."');
+  });
+
   it("exports type-7 quartiles with the numeric summary", () => {
     const number = questionSchema.parse({ id: "score", type: "number", label: "Score" });
     const summary = summarizeQuestion(number, [

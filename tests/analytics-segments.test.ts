@@ -53,11 +53,12 @@ describe("answer-segment analytics", () => {
     expect(result).toMatchObject({ participantCount: 5, statusCounts: { invited: 1, in_progress: 1, submitted: 3 } });
     expect(alpha).toMatchObject({ participantCount: 2, statusCounts: { invited: 1, in_progress: 0, submitted: 1 }, summaries: { outcome: { cohortCount: 2, distributionDenominator: 2 } } });
     expect(alpha?.summaries.outcome.distribution).toMatchObject([{ value: "yes", count: 1, percent: 50 }, { value: "no", count: 1, percent: 50 }]);
-    expect(beta).toMatchObject({ participantCount: 1, summaries: { outcome: { cohortCount: 1 } } });
+    expect(beta).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, summaries: { outcome: { cohortCount: 1 } } });
     expect(gamma).toMatchObject({ participantCount: 0, summaries: { outcome: { cohortCount: 0, distributionDenominator: 0 } } });
     expect(noAnswer).toMatchObject({ label: "No stored answer", participantCount: 2, statusCounts: { in_progress: 1, submitted: 1 } });
     expect(unmapped).toMatchObject({ label: "Unmapped answer", participantCount: 1, summaries: { outcome: { cohortCount: 1 } } });
     expect(alpha?.statusSummaries?.submitted?.outcome.distributionDenominator).toBe(1);
+    expect(alpha?.disclosureRisk).toEqual({ singletonSegment: false, singletonStatusGroups: ["invited", "submitted"] });
     expect(JSON.stringify(result)).not.toContain("private note");
     expect(JSON.stringify(result)).not.toContain("retired");
   });

@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/8");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/9");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -54,6 +54,7 @@ describe("versioned analytics guidance", () => {
     const constraints = getAnalyticsGuidance().productConstraints.join(" ").toLowerCase();
     expect(constraints).toContain("does not enforce a minimum cohort-size threshold");
     expect(constraints).toContain("singleton counts and percentages may be returned");
+    expect(constraints).toContain("disclosurerisk metadata flags singleton segments");
     expect(constraints).toContain("disclosure rules");
     expect(constraints).toContain("separate live read with its own asof");
   });

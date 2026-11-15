@@ -78,6 +78,12 @@ function segmentResponse(url: URL) {
       value: option.value,
       label: option.label,
       participantCount: members.length,
+      disclosureRisk: {
+        singletonSegment: members.length === 1,
+        singletonStatusGroups: url.searchParams.get("compareStatuses") === "true"
+          ? statuses.filter((status) => members.filter((row) => row.status === status).length === 1)
+          : [],
+      },
       statusCounts: {
         invited: members.filter((row) => row.status === "invited").length,
         in_progress: members.filter((row) => row.status === "in_progress").length,
@@ -181,6 +187,8 @@ describe("answer-segment analytics UI", () => {
     expect(host.textContent).toContain("Operations");
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("segmentBy=department");
     expect(host.querySelector(".analysis-segment-result-head")?.textContent).toContain("Region");
+    expect(host.querySelector(".analysis-disclosure-note")?.textContent).toContain("does not apply a minimum size");
+    expect(host.querySelector(".analysis-disclosure-flag")?.textContent).toContain("Singleton group");
 
     await change(host.querySelector<HTMLSelectElement>("#analysis-segment-outcome")!, "satisfaction");
     expect(host.querySelector(".analysis-segment-result-head")?.textContent).toContain("Satisfaction");
@@ -189,12 +197,14 @@ describe("answer-segment analytics UI", () => {
 
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Compare statuses")!);
     expect(host.textContent).toContain("Invited 1 · In progress 0 · Submitted 0");
+    expect(host.textContent).toContain("One-person status group");
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("compareStatuses=true");
 
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Copy CSV")!);
     expect(copied).toHaveLength(1);
     expect(copied[0]).toContain('"satisfaction","Satisfaction","single","Department = Operations · Invited · not started"');
     expect(copied[0]).toContain('"interview-1","1","2026-11-15T00:01:00.000Z"');
+    expect(copied[0]).toContain('"true","invited","Singleton signals only; no minimum group threshold or anonymity guarantee."');
   });
 
   it("hides and disables stale results while compare and cohort scopes are loading", async () => {

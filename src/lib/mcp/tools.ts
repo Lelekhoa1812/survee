@@ -404,6 +404,7 @@ const TOOLS: ToolDef[] = [
             value: segment.value ?? null,
             label: segment.label,
             participantCount: segment.participantCount,
+            disclosureRisk: segment.disclosureRisk,
             statusCounts: segment.statusCounts,
             questions: page.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.summaries[question.id] })),
             ...(compareRequested ? {
@@ -418,7 +419,7 @@ const TOOLS: ToolDef[] = [
             "Answer segments use the selected current-version question and only the participant statuses shown in scope. Outcome summaries exclude the segmentation question and use the same projected participant scan.",
             "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
             "No stored answer includes blank and note-only dimension responses; it does not mean the person was eligible to see a routed question. Invalid stored dimension values appear as Unmapped answer.",
-            "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Outcome percentages use that segment's valid-answer denominator; this is a descriptive result, not an anonymity guarantee.",
+            "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Each segment includes disclosureRisk.singletonSegment and, when status summaries are returned, disclosureRisk.singletonStatusGroups as singleton signals only; an empty signal does not mean a group is safe or anonymous. Outcome percentages use that segment's valid-answer denominator; this is a descriptive result, not an anonymity guarantee.",
             ...(compareRequested ? ["Status summaries for all selected answer segments share this asOf and one participant scan; updates during the live read are not isolated by a database snapshot."] : []),
           ],
         });

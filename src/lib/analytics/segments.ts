@@ -6,12 +6,20 @@ import { createQuestionSummaryAccumulator, type CohortAnalyticsRespondent, type 
 
 export type AnswerSegmentKind = "answer" | "no_answer" | "unmapped";
 
+export interface AnswerSegmentDisclosureRisk {
+  /** A detectable singleton signal, not a complete assessment of identifiability. */
+  singletonSegment: boolean;
+  /** Status groups with one person when per-status summaries are returned. */
+  singletonStatusGroups: ParticipantStatus[];
+}
+
 export interface AnswerSegmentGroup {
   key: string;
   kind: AnswerSegmentKind;
   value?: string;
   label: string;
   participantCount: number;
+  disclosureRisk: AnswerSegmentDisclosureRisk;
   statusCounts: Record<ParticipantStatus, number>;
   summaries: Record<string, QuestionSummary>;
   statusSummaries?: Partial<Record<ParticipantStatus, Record<string, QuestionSummary>>>;
@@ -118,14 +126,21 @@ export async function summarizeAnswerSegments(
         }
         return {
           key: group.key, kind: group.kind, ...(group.value === undefined ? {} : { value: group.value }), label: group.label,
-          participantCount: group.participantCount, statusCounts: group.statusCounts,
+          participantCount: group.participantCount,
+          disclosureRisk: {
+            singletonSegment: group.participantCount === 1,
+            singletonStatusGroups: statuses.filter((status) => group.statusCounts[status] === 1),
+          },
+          statusCounts: group.statusCounts,
           summaries: Object.fromEntries([...combined].map(([id, accumulator]) => [id, accumulator.finish()])),
           statusSummaries,
         };
       }
       return {
         key: group.key, kind: group.kind, ...(group.value === undefined ? {} : { value: group.value }), label: group.label,
-        participantCount: group.participantCount, statusCounts: group.statusCounts,
+        participantCount: group.participantCount,
+        disclosureRisk: { singletonSegment: group.participantCount === 1, singletonStatusGroups: [] },
+        statusCounts: group.statusCounts,
         summaries: Object.fromEntries([...(group.combined ?? [])].map(([id, accumulator]) => [id, accumulator.finish()])),
       };
     });

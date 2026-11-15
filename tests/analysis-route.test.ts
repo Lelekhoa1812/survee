@@ -58,13 +58,13 @@ describe("interview answer-segmentation route", () => {
 
   it("returns aggregate-only outcome summaries in each segment with one scan", async () => {
     const response = await GET(request("segmentBy=fit&questionId=budget&compareStatuses=true"), { params: Promise.resolve({ id: "interview" }) });
-    const body = await response.json() as { ok: boolean; asOf: string; scope: { participantCount: number; compareStatuses: boolean }; segments: { label: string; kind: string; participantCount: number; summaries: { budget: { numeric: { n: number; mean: number } | null } }; statusSummaries?: Record<string, Record<string, unknown>> }[]; methodology: string[] };
+    const body = await response.json() as { ok: boolean; asOf: string; scope: { participantCount: number; compareStatuses: boolean }; segments: { label: string; kind: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; summaries: { budget: { numeric: { n: number; mean: number } | null } }; statusSummaries?: Record<string, Record<string, unknown>> }[]; methodology: string[] };
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ ok: true, scope: { participantCount: 3, compareStatuses: true } });
     expect(Number.isNaN(Date.parse(body.asOf))).toBe(false);
-    expect(body.segments.find((segment) => segment.label === "Yes")).toMatchObject({ participantCount: 1, summaries: { budget: { numeric: { n: 1, mean: 2 } } } });
-    expect(body.segments.find((segment) => segment.kind === "no_answer")).toMatchObject({ label: "No stored answer", participantCount: 1 });
-    expect(body.segments.find((segment) => segment.kind === "unmapped")).toMatchObject({ label: "Unmapped answer", participantCount: 1, summaries: { budget: { numeric: { n: 1, mean: 4 } } } });
+    expect(body.segments.find((segment) => segment.label === "Yes")).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, summaries: { budget: { numeric: { n: 1, mean: 2 } } } });
+    expect(body.segments.find((segment) => segment.kind === "no_answer")).toMatchObject({ label: "No stored answer", participantCount: 1, disclosureRisk: { singletonSegment: true } });
+    expect(body.segments.find((segment) => segment.kind === "unmapped")).toMatchObject({ label: "Unmapped answer", participantCount: 1, disclosureRisk: { singletonSegment: true }, summaries: { budget: { numeric: { n: 1, mean: 4 } } } });
     expect(body.segments.find((segment) => segment.label === "No")?.participantCount).toBe(0);
     expect(state.iterate).toHaveBeenCalledOnce();
     expect(state.iterate).toHaveBeenCalledWith("interview", ["fit", "budget"], { statuses: ["invited", "in_progress", "submitted"] });

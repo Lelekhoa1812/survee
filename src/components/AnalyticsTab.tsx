@@ -19,6 +19,11 @@ const STATUS_LABELS: Record<ParticipantStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
 };
+const STATUS_SHORT_LABELS: Record<ParticipantStatus, string> = {
+  invited: "Invited",
+  in_progress: "In progress",
+  submitted: "Submitted",
+};
 const COMPARE_STATUSES: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
 const SEGMENTABLE_TYPES = new Set<QuestionType>(["single", "select", "multi", "scale"]);
 
@@ -367,8 +372,10 @@ function SegmentResults({ question, result, compareStatuses, display }: { questi
         </div>
         <span className="code-chip">{question.id}</span>
       </header>
+      <p className="analysis-disclosure-note">Small groups and combinations of attributes can make people identifiable. KQA keeps every group visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
       {result.segments.map((segment) => {
         const statusSummaries = segment.statusSummaries;
+        const singletonStatuses = segment.disclosureRisk.singletonStatusGroups.map((status) => STATUS_SHORT_LABELS[status]);
         return (
           <article key={segment.key} className="analysis-segment">
             <div className="analysis-segment-head">
@@ -380,6 +387,8 @@ function SegmentResults({ question, result, compareStatuses, display }: { questi
                 Invited {segment.statusCounts.invited} · In progress {segment.statusCounts.in_progress} · Submitted {segment.statusCounts.submitted}
               </p>}
             </div>
+            {segment.disclosureRisk.singletonSegment && <p className="analysis-disclosure-flag">Singleton group · 1 person in this segment.</p>}
+            {!segment.disclosureRisk.singletonSegment && singletonStatuses.length > 0 && <p className="analysis-disclosure-flag">One-person status group{singletonStatuses.length === 1 ? "" : "s"} · {singletonStatuses.join(", ")}.</p>}
             {compareStatuses && statusSummaries
               ? <ComparisonQuestion question={question} showHeading={false} display={display} summaries={{
                   invited: statusSummaries.invited![question.id],
@@ -446,9 +455,17 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     return currentSegmentResult.segments.flatMap((segment) => compareStatuses
       ? COMPARE_STATUSES.flatMap((status) => {
           const summary = segment.statusSummaries?.[status]?.[outcomeQuestion.id];
-          return summary ? [{ question: outcomeQuestion, summary, cohort: `${segmentQuestion.label} = ${segment.label} · ${STATUS_LABELS[status]}` }] : [];
+          return summary ? [{
+            question: outcomeQuestion,
+            summary,
+            cohort: `${segmentQuestion.label} = ${segment.label} · ${STATUS_LABELS[status]}`,
+            disclosureRisk: {
+              singletonSegment: segment.statusCounts[status] === 1,
+              singletonStatusGroups: segment.statusCounts[status] === 1 ? [status] : [],
+            },
+          }] : [];
         })
-      : [{ question: outcomeQuestion, summary: segment.summaries[outcomeQuestion.id], cohort: `${segmentQuestion.label} = ${segment.label}` }]);
+      : [{ question: outcomeQuestion, summary: segment.summaries[outcomeQuestion.id], cohort: `${segmentQuestion.label} = ${segment.label}`, disclosureRisk: segment.disclosureRisk }]);
   }, [currentSegmentResult, outcomeQuestion, segmentQuestion, compareStatuses]);
   const activeExportItems = segmentMode ? segmentExportItems : exportItems;
   const csv = useMemo(() => buildAnalyticsCsv(activeExportItems, cohortLabel, {

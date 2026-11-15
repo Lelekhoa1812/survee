@@ -314,14 +314,14 @@ describe("MCP tools", () => {
       asOf: string;
       segmentBy: { id: string; label: string };
       scope: { participantCount: number; statuses: string[] };
-      segments: { kind: string; label: string; participantCount: number; questions: { id: string; numeric: { n: number; mean: number } | null }[]; statusCohorts: { status: string; participantCount: number; questions: { numeric: { n: number; mean: number } | null }[] }[] }[];
+      segments: { kind: string; label: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; questions: { id: string; numeric: { n: number; mean: number } | null }[]; statusCohorts: { status: string; participantCount: number; questions: { numeric: { n: number; mean: number } | null }[] }[] }[];
       methodology: string[];
     } } };
     expect(body.result.isError).toBeFalsy();
     expect(body.result.structuredContent.segmentBy).toMatchObject({ id: "fit", label: "Strategic fit" });
     expect(body.result.structuredContent.scope).toMatchObject({ participantCount: 2, statuses: ["invited", "in_progress", "submitted"] });
     const yes = body.result.structuredContent.segments.find((segment) => segment.label === "Yes");
-    expect(yes).toMatchObject({ participantCount: 1, statusCohorts: [{ status: "invited", participantCount: 0 }, { status: "in_progress", participantCount: 0 }, { status: "submitted", participantCount: 1 }] });
+    expect(yes).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, statusCohorts: [{ status: "invited", participantCount: 0 }, { status: "in_progress", participantCount: 0 }, { status: "submitted", participantCount: 1 }] });
     expect(yes?.questions[0]).toMatchObject({ id: "budget", numeric: { n: 1, mean: 2 } });
     const unmapped = body.result.structuredContent.segments.find((segment) => segment.kind === "unmapped");
     expect(unmapped).toMatchObject({ label: "Unmapped answer", participantCount: 1, statusCounts: { invited: 1, in_progress: 0, submitted: 0 } });

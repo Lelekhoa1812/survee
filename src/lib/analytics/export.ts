@@ -1,4 +1,5 @@
 import type { Question } from "../format/schema";
+import type { ParticipantStatus } from "../repo/types";
 import type { QuestionSummary } from "./summary";
 
 export interface AnalyticsExportItem {
@@ -6,6 +7,8 @@ export interface AnalyticsExportItem {
   summary: QuestionSummary;
   /** Optional per-row cohort label for side-by-side exports. */
   cohort?: string;
+  /** Singleton signals for grouped results; does not certify anonymity or safety. */
+  disclosureRisk?: { singletonSegment: boolean; singletonStatusGroups: ParticipantStatus[] };
 }
 
 export interface AnalyticsExportMetadata {
@@ -17,9 +20,11 @@ export interface AnalyticsExportMetadata {
 const HEADERS = [
   "question_id", "question", "type", "cohort", "interview_id", "survey_version", "as_of", "measure", "answer_value", "answer_label",
   "count", "percent", "valid_responses", "cohort_count", "answered", "no_answer", "no_answer_note", "note_only", "unmapped", "min", "q1", "median", "q3", "mean", "max",
+  "disclosure_risk_singleton_segment", "disclosure_risk_singleton_status_groups", "disclosure_risk_note",
 ];
 
 const NO_ANSWER_NOTE = "KQA does not track conditional or routed item display; no_answer may include people who did not see this question.";
+const DISCLOSURE_RISK_NOTE = "Singleton signals only; no minimum group threshold or anonymity guarantee.";
 
 function cell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
@@ -36,34 +41,35 @@ function row(values: (string | number | null | undefined)[]): string {
 /** Export aggregate summaries with their source cohort and time. Respondent names, notes, and free text are never read here. */
 export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, metadata: AnalyticsExportMetadata = {}): string {
   const rows = [row(HEADERS)];
-  for (const { question, summary, cohort: itemCohort } of items) {
+  for (const { question, summary, cohort: itemCohort, disclosureRisk } of items) {
     const base = [question.id, question.label, question.type, itemCohort ?? cohort, metadata.interviewId, metadata.surveyVersion, metadata.asOf];
+    const risk = disclosureRisk ? [disclosureRisk.singletonSegment ? "true" : "false", disclosureRisk.singletonStatusGroups.join("|"), DISCLOSURE_RISK_NOTE] : [null, null, null];
     if (summary.distribution.length) {
       for (const option of summary.distribution) {
         rows.push(row([
           ...base, "distribution", option.value, option.label, option.count, summary.distributionDenominator ? option.percent : null,
           summary.distributionDenominator, summary.cohortCount, summary.answeredCount, summary.noAnswerCount,
-          NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount, null, null, null, null, null, null,
+          NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount, null, null, null, null, null, null, ...risk,
         ]));
       }
       if (summary.scaleMedian !== null) {
         rows.push(row([
           ...base, "ordinal_scale_median", null, null, null, null, summary.distributionDenominator,
           summary.cohortCount, summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount,
-          summary.unmappedResponseCount, null, null, summary.scaleMedian, null, null, null,
+          summary.unmappedResponseCount, null, null, summary.scaleMedian, null, null, null, ...risk,
         ]));
       }
     } else if (question.type === "number") {
       rows.push(row([
         ...base, "numeric_summary", null, null, null, null, summary.numeric?.n ?? 0, summary.cohortCount,
         summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount, summary.unmappedResponseCount,
-        summary.numeric?.min, summary.numeric?.q1, summary.numeric?.median, summary.numeric?.q3, summary.numeric?.mean, summary.numeric?.max,
+        summary.numeric?.min, summary.numeric?.q1, summary.numeric?.median, summary.numeric?.q3, summary.numeric?.mean, summary.numeric?.max, ...risk,
       ]));
     } else {
       rows.push(row([
         ...base, "response_count", null, null, summary.answeredCount, null, summary.answeredCount,
         summary.cohortCount, summary.answeredCount, summary.noAnswerCount, NO_ANSWER_NOTE, summary.noteOnlyCount,
-        summary.unmappedResponseCount, null, null, null, null, null, null,
+        summary.unmappedResponseCount, null, null, null, null, null, null, ...risk,
       ]));
     }
   }
