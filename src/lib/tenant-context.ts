@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { cookies } from "next/headers";
-import { AXION_TENANT_ID } from "./env";
+import { AXION_TENANT_ID, axionLegacyTenantFallbackEnabled } from "./env";
 import { SESSION_COOKIE, verifySession } from "./auth";
 
 export interface TenantPrincipal {
@@ -43,9 +43,9 @@ export async function currentTenantId(): Promise<string | null> {
   }
 }
 
-/** Scope a Mongo filter. During migration only, Axion can also see documents that have no tenantId. */
+/** Scope a Mongo filter. Axion can include legacy unscoped rows until the owner completes the reviewed cutover. */
 export function tenantFilter<T extends Record<string, unknown>>(tenantId: string, filter: T = {} as T): Record<string, unknown> {
-  const ownerScope = tenantId === AXION_TENANT_ID
+  const ownerScope = tenantId === AXION_TENANT_ID && axionLegacyTenantFallbackEnabled()
     ? { $or: [{ tenantId }, { tenantId: { $exists: false } }] }
     : { tenantId };
   return Object.keys(filter).length ? { $and: [ownerScope, filter] } : ownerScope;

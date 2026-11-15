@@ -29,6 +29,30 @@ function emptyAuditDb(eventMismatch = 0, tenantMismatch = 0, otherTenantCount = 
   } as unknown as Db;
 }
 
+function backfillDb(verifyWrites: boolean): Db {
+  let interviewScoped = false;
+  return {
+    collection(name: string) {
+      return {
+        countDocuments: async (filter: Record<string, unknown> = {}) => {
+          if (name !== "interviews") return 0;
+          if (Object.keys(filter).length === 0) return 1;
+          const tenantFilter = filter.tenantId as Record<string, unknown> | undefined;
+          if (tenantFilter?.$ne === "axion") return 0;
+          if (tenantFilter?.$exists === true) return interviewScoped ? 1 : 0;
+          return 0;
+        },
+        aggregate: () => ({ toArray: async () => [] }),
+        updateOne: async () => ({ upsertedCount: 0 }),
+        updateMany: async () => {
+          if (name === "interviews" && verifyWrites) interviewScoped = true;
+          return { modifiedCount: verifyWrites && name === "interviews" ? 1 : 0 };
+        },
+      };
+    },
+  } as unknown as Db;
+}
+
 describe("tenant migration preflight", () => {
   it("allows assignment when only missing legacy event links need preservation", async () => {
     const audit = await auditTenantMigration(emptyAuditDb());
@@ -55,5 +79,10 @@ describe("tenant migration preflight", () => {
     const writes = vi.fn();
     await expect(backfillLegacyTenant(emptyAuditDb(0, 0, 1, writes))).rejects.toThrow("Tenant preflight is not ready");
     expect(writes).not.toHaveBeenCalled();
+  });
+
+  it("checks the final audit and refuses to report a backfill that left unscoped records", async () => {
+    await expect(backfillLegacyTenant(backfillDb(false))).rejects.toThrow("Tenant backfill verification found unscoped records");
+    await expect(backfillLegacyTenant(backfillDb(true))).resolves.toMatchObject({ interviews: 1 });
   });
 });

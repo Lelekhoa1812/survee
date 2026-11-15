@@ -1,5 +1,5 @@
 import type { Db } from "mongodb";
-import { AXION_TENANT_ID } from "./env";
+import { AXION_TENANT_ID, axionLegacyTenantFallbackEnabled } from "./env";
 import type { TenantDoc } from "./repo/types";
 
 const OWNED = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes"] as const;
@@ -116,6 +116,7 @@ export async function auditTenantMigration(db: Db) {
   const report = {
     mode: "read-only" as const,
     tenantTarget: { name: "Axion", slug: "axion", id: AXION_TENANT_ID },
+    axionLegacyTenantFallbackEnabled: axionLegacyTenantFallbackEnabled(),
     collections: counts,
     blockingIntegrity,
     legacyEventReferences,
@@ -153,6 +154,10 @@ export async function backfillLegacyTenant(db: Db): Promise<Record<string, numbe
       { $set: { tenantId: AXION_TENANT_ID } },
     );
     modified[collection] = result.modifiedCount;
+  }
+  const verification = await auditTenantMigration(db);
+  if (!verification.preflight.readyForReviewedBackfill || OWNED.some((collection) => verification.collections[collection].missingTenant > 0)) {
+    throw new Error("Tenant backfill verification found unscoped records or inconsistent ownership; review the audit before retrying.");
   }
   return modified;
 }

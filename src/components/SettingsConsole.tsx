@@ -23,6 +23,7 @@ interface KeyRow {
 }
 
 interface TenantAudit {
+  axionLegacyTenantFallbackEnabled: boolean;
   collections: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number; otherTenant: number }>;
   blockingIntegrity: Record<string, number>;
   legacyEventReferences: Record<string, number>;
@@ -333,9 +334,11 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
               {unscopedLegacyCount === 0 ? (
                 otherTenantCount > 0
                   ? <p className="muted" role="status">{otherTenantCount.toLocaleString()} records already belong to another tenant and need review before Axion assignment.</p>
-                  : <p className="muted" role="status">All existing workspace records already have tenant ownership.</p>
+                  : tenantAudit.axionLegacyTenantFallbackEnabled
+                    ? <p className="muted" role="status">All existing workspace records have tenant ownership. Axion’s legacy fallback remains enabled; after the reviewed backfill and a zero-unscoped audit, set <code>KQA_AXION_LEGACY_TENANT_FALLBACK=false</code> in Vercel and redeploy to enforce strict tenant filters.</p>
+                    : <p className="muted" role="status">All existing workspace records have tenant ownership, and Axion uses strict tenant filters.</p>
               ) : (
-                <p className="muted" role="status">{unscopedLegacyCount.toLocaleString()} existing records are still unscoped and currently visible only to Axion during the migration window.</p>
+                <p className="muted" role="status">{unscopedLegacyCount.toLocaleString()} existing records are still unscoped. {tenantAudit.axionLegacyTenantFallbackEnabled ? "They remain visible to Axion while the migration fallback is enabled." : "They are hidden from Axion queries while strict tenant filters are enabled."}</p>
               )}
               {tenantAudit.preflight.readyForReviewedBackfill ? (
                 <div className="row wrap" style={{ justifyContent: "space-between" }}>

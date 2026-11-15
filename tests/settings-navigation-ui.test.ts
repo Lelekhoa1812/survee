@@ -10,6 +10,7 @@ function renderSettings(mayManageLegacy: boolean) {
     envToken: false,
     origin: null,
     tenantAudit: {
+      axionLegacyTenantFallbackEnabled: true,
       collections: {},
       blockingIntegrity: {},
       legacyEventReferences: {},
@@ -56,5 +57,13 @@ describe("settings section navigation", () => {
     expect(html).toContain("No records change during this review");
     expect(html).toContain("attestation that a current database backup is available");
     expect(html).toContain("The app cannot verify the backup");
+    expect(html).toContain("Axion’s legacy fallback remains enabled");
+  });
+
+  it("explains how to complete the strict Axion tenant-filter cutover", () => {
+    const html = renderSettings(true);
+
+    expect(html).toContain("KQA_AXION_LEGACY_TENANT_FALLBACK=false");
+    expect(html).toContain("zero-unscoped audit");
   });
 });

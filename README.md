@@ -54,6 +54,7 @@ In development the legacy Axion owner login falls back to `admin@axiob.local` / 
 | `SESSION_SECRET` | Signs the admin session cookie. Required in production. `openssl rand -base64 32` |
 | `KQA_PUBLIC_URL` | Public origin used in invite emails, such as `https://your-host`. Required to send. The copied link on screen can still be the address you are visiting |
 | `KQA_MCP_TOKEN` | Axion-bound service bearer for `POST /api/mcp`. Named keys created in Settings are also accepted and scoped to their workspace. Not the admin password. `openssl rand -base64 32` |
+| `KQA_AXION_LEGACY_TENANT_FALLBACK` | Defaults to enabled for Axion data during migration. After a reviewed backfill and a zero-unscoped audit, set to `false` and redeploy to enforce strict tenant filters |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Send interview invites, account verification, email changes and password resets. Port 587, STARTTLS. The password is never written into the repo |
 | `IMAP_HOST`, `IMAP_PORT` | On-demand bounce check. Port 993. Uses the same `SMTP_USER` and `SMTP_PASSWORD` |
 
@@ -94,4 +95,4 @@ The respondent E2E, offline, concurrency, security and state-screenshot checks c
 
 ## Deploying
 
-Vercel. Set the environment variables above, including `KQA_MCP_TOKEN`, `KQA_PUBLIC_URL`, and the SMTP and IMAP names. Make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`. Review the owner-only Axion data audit and verify a current database backup before assigning tenant IDs. Do not put the SMTP password or the MCP token in the repository.
+Vercel. Set the environment variables above, including `KQA_MCP_TOKEN`, `KQA_PUBLIC_URL`, and the SMTP and IMAP names. Make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`. Review the owner-only Axion data audit and verify a current database backup before assigning tenant IDs. After the backfill completes and the audit reports zero unscoped owned records, set `KQA_AXION_LEGACY_TENANT_FALLBACK=false` in Vercel and redeploy to make Axion filters strict; setting it earlier hides untagged legacy records. Do not put the SMTP password or the MCP token in the repository.

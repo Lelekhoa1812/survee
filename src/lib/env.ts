@@ -7,6 +7,15 @@ const allowDevDefaults = !isProd && !process.env.VERCEL;
 export const AXION_TENANT_ID = "axion";
 export const AXION_OWNER_EMAIL = "admin@axiob.local";
 
+/**
+ * Keep Axion's legacy-record compatibility path until its reviewed backfill is complete.
+ * Set KQA_AXION_LEGACY_TENANT_FALLBACK=false after the audit reports zero unscoped
+ * owned records and the backfill has been verified.
+ */
+export function axionLegacyTenantFallbackEnabled(): boolean {
+  return process.env.KQA_AXION_LEGACY_TENANT_FALLBACK?.trim().toLowerCase() !== "false";
+}
+
 export function mongoUri(): string {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("MONGODB_URI is not set. Add it to .env (local) or to the Vercel project environment variables.");
