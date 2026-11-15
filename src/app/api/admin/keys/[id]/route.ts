@@ -1,13 +1,14 @@
 import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
 import { deleteApiKey, updateApiKey } from "@/lib/repo/keys";
+import { parseMcpCapabilities, type McpCapability } from "@/lib/mcp/capabilities";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   const { id } = await ctx.params;
-  const body = await readJson<{ name?: unknown; note?: unknown; expiresAt?: unknown; revoked?: unknown }>(req);
+  const body = await readJson<{ name?: unknown; note?: unknown; expiresAt?: unknown; revoked?: unknown; capabilities?: unknown }>(req);
   if (!body.ok) return body.res;
-  const patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean } = {};
+  const patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean; capabilities?: McpCapability[] } = {};
   if ("name" in body.data) {
     const name = str(body.data.name, 80);
     if (!name) return fail(400, "Give the key a name.");
@@ -22,6 +23,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("revoked" in body.data) {
     if (typeof body.data.revoked !== "boolean") return fail(400, "Revoked must be true or false.");
     patch.revoked = body.data.revoked;
+  }
+  if ("capabilities" in body.data) {
+    const capabilities = parseMcpCapabilities(body.data.capabilities);
+    if (!capabilities) return fail(400, "Choose at least one valid access permission.");
+    patch.capabilities = capabilities;
   }
   if (!Object.keys(patch).length) return fail(400, "Nothing to change.");
   const updated = await updateApiKey(id, patch);

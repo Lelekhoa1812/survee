@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { col } from "../db";
 import { createApiKey, generateKeySecret, hashKey } from "../repo/keys";
+import { MCP_CAPABILITIES } from "./capabilities";
 
 export const OAUTH_SCOPE = "host";
 const CODE_TTL_MS = 5 * 60 * 1000;
@@ -138,6 +139,9 @@ export async function exchangeCode(input: { code: string; clientId: string; redi
     createdBy: doc.email,
     tenantId: doc.tenantId ?? "axion",
     oauthClientId: doc.clientId,
+    // OAuth consent currently requests the single broad `kqa` scope. Preserve that
+    // contract explicitly; an owner can narrow this credential later in Settings.
+    capabilities: [...MCP_CAPABILITIES],
   });
   if (!created.ok) return { ok: false, error: "server_error" };
   return { ok: true, access, refresh, expiresIn: Math.floor(TOKEN_TTL_MS / 1000) };

@@ -22,7 +22,25 @@ Stateless Streamable HTTP. One JSON-RPC request, one JSON response. There is no 
 
 ChatGPT connects to `https://<your-host>/api/mcp` with no pasted token. It discovers `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, then the host signs in and chooses Allow. That creates a key under Settings named after the app. The key is bound to the signed-in workspace. Revoke or delete the key to disconnect it. Other agents can use a workspace key or `KQA_MCP_TOKEN`.
 
-Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is a tenant-bound service principal that always operates in the legacy **Axion** workspace; a request cannot select a different tenant. A host can also create named keys under Settings. Each key is permanently bound to the signed-in workspace and has a name, a note, an optional expiry, and a value. The value is shown once. The database stores a SHA-256 hash plus a short fingerprint. A key can be revoked, restored, or deleted. Revoked, expired, and deleted keys are rejected.
+Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is a tenant-bound service principal with full tool access that always operates in the legacy **Axion** workspace; a request cannot select a different tenant. A host can also create named keys under Settings. Each key is permanently bound to the signed-in workspace and has a name, a note, an optional expiry, a set of permissions, and a value. New named keys default to interview setup and aggregate-analysis read access. The host can grant only the capabilities the agent needs, and changes apply on the next request. The value is shown once. The database stores a SHA-256 hash plus a short fingerprint. A key can be revoked, restored, or deleted. Revoked, expired, and deleted keys are rejected.
+
+### Credential permissions
+
+`tools/list` returns only tools available to that credential, and the server checks permission again for every `tools/call`. Hiding a tool from the list is not the authorization boundary. `initialize` and `ping` remain available to any authenticated credential.
+
+| Capability | Tools |
+|---|---|
+| `interviews:read` | `get_design_guidance`, `audit_questionnaire_design`, `list_interviews`, `get_interview`, `get_survey_html`, `list_versions`, `check_questionnaire`, `preview_questionnaire_version_patch` |
+| `analytics:read` | `get_analytics_guidance`, `analyze_answers` |
+| `respondents:read` | `list_people`, `get_person`, `get_answers`, `get_status`, `list_events`, `export_interview`, `get_mail_status` |
+| `respondents:manage` | `add_people`, `update_person`, `remove_person`, `reopen_person`, `regenerate_link` |
+| `interviews:manage` | `create_interview`, `update_interview` |
+| `questionnaires:manage` | `apply_questionnaire_version_patch`, `upload_survey_version` |
+| `email:send` | `send_invite` |
+| `email:check` | `check_invite_delivery` |
+| `interviews:delete` | `delete_interview` |
+
+The `respondents:read` permission includes direct identifiers, private links, individual answers, and full interview exports; grant it only to agents that need respondent-level review. `interviews:delete` permanently removes an interview and related records. Existing named keys created before permissions were introduced retain full access until an owner edits them. Settings labels those credentials **Full access (legacy)** so owners can review and narrow them. OAuth connections currently request the broad `kqa` scope and start with all capabilities; an owner can narrow them in Settings. The Axion deployment token remains full access and is rotated through the deployment host.
 
 Neither credential is the admin password, the session cookie, or a respondent link. Send it only in the Authorization header. A token in the query string is rejected. A missing bearer, the admin cookie, or a query-string token is HTTP 401 and does not touch the database. The server token is compared before any database call. Any other bearer is one lookup by hash. A failed lookup is the same HTTP 401.
 
@@ -45,7 +63,7 @@ Example client entry (no secret in the file; the client reads the env var):
 
 ## What the tools do
 
-Every tool uses the same bearer check. Arguments are checked against the published schema before the tool runs: required fields, types, enums, and unknown fields. A string sent where an integer is required is rejected, and `list_events` rejects a limit below 1. An omitted `version` or `limit` still means the current version or the default of 30. Failures are a short error, not a stack trace. The questionnaire HTML is never put in an email. There is no score.
+Every tool uses the same bearer check and per-key capability check. Tool definitions include MCP read-only, destructive, idempotent, and external-world hints. Arguments are checked against the published schema before the tool runs: required fields, types, enums, and unknown fields. A string sent where an integer is required is rejected, and `list_events` rejects a limit below 1. An omitted `version` or `limit` still means the current version or the default of 30. Failures are a short error, not a stack trace. The questionnaire HTML is never put in an email. There is no score.
 
 | Tool | What it does |
 |---|---|

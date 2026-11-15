@@ -316,6 +316,12 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 /* ---- modal, toast */
 .scrim { position: fixed; inset: 0; background: rgba(8, 18, 30, .5); backdrop-filter: blur(3px); z-index: 80; display: grid; place-items: center; padding: 20px; animation: fade .15s ease; }
 .modal { width: min(520px, 100%); background: var(--surface); border-radius: 16px; border: 1px solid var(--line); box-shadow: var(--shadow-lg); padding: 24px; display: grid; gap: 16px; max-height: calc(100dvh - 40px); overflow: auto; animation: pop .18s ease; }
+.modal.key-permission-modal { grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+.modal.key-permission-modal > .stack { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.modal.key-permission-modal > .stack > *, .modal.key-permission-modal fieldset, .modal.key-permission-modal .key-value-row { min-width: 0; }
+.modal.key-permission-modal .input { min-width: 0; }
+.modal.key-permission-modal .key-value-row > .input { max-width: 100%; }
+.modal.key-permission-modal > .actions { position: sticky; bottom: 0; padding-top: 12px; border-top: 1px solid var(--line); background: var(--surface); }
 .modal h2 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
 .modal.answers-modal > h2 { padding: 18px 20px 0; }
 .modal.answers-modal .card-head { padding-top: 10px; }

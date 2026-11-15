@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ObjectId } from "mongodb";
 
 process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
 process.env.KQA_MCP_TOKEN = "t".repeat(43);
@@ -13,6 +14,7 @@ interface Doc {
   createdAt: Date;
   createdBy: string;
   note?: string;
+  capabilities?: unknown;
   revokedAt?: Date;
   expiresAt?: Date;
   lastUsedAt?: Date;
@@ -73,6 +75,14 @@ function post(token: string) {
   }));
 }
 
+function callTool(token: string, name: string, args: Record<string, unknown>) {
+  return handleMcp(new Request("https://kqa.example/api/mcp", {
+    method: "POST",
+    headers: { accept: "application/json, text/event-stream", "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } }),
+  }));
+}
+
 describe("API keys as MCP credentials", () => {
   beforeEach(() => {
     docs.splice(0, docs.length);
@@ -120,5 +130,63 @@ describe("API keys as MCP credentials", () => {
   it("refuses a key value that copies the server token", async () => {
     const created = await withTenantPrincipal({ tenantId: "axion", role: "owner", email: "admin@axiob.local", userId: "000000000000000000000001", source: "session" }, () => createApiKey({ name: "Same", secret: process.env.KQA_MCP_TOKEN!, createdBy: "admin@axiob.local" }));
     expect(created.ok).toBe(false);
+  });
+
+  it("limits new keys in tools/list and rechecks permissions at call time", async () => {
+    await withTenantPrincipal({ tenantId: "axion", role: "owner", email: "admin@axiob.local", userId: "000000000000000000000001", source: "session" }, async () => {
+      const secret = generateKeySecret();
+      const created = await createApiKey({ name: "Read-only agent", secret, createdBy: "admin@axiob.local" });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      expect(created.key.capabilities).toEqual(["interviews:read", "analytics:read"]);
+
+      const listed = await (await post(secret)).json() as { result: { tools: { name: string }[] } };
+      const names = listed.result.tools.map((tool) => tool.name);
+      expect(names).toContain("list_interviews");
+      expect(names).toContain("analyze_answers");
+      expect(names).not.toContain("get_answers");
+      expect(names).not.toContain("send_invite");
+      expect(names).not.toContain("delete_interview");
+
+      for (const [name, args] of [
+        ["send_invite", { personId: new ObjectId().toHexString() }],
+        ["delete_interview", { interviewId: new ObjectId().toHexString(), confirmName: "Interview" }],
+      ] as const) {
+        const response = await callTool(secret, name, args);
+        const body = await response.json() as { result: { isError?: boolean; structuredContent?: { code?: string } } };
+        expect(body.result.isError).toBe(true);
+        expect(body.result.structuredContent?.code).toBe("forbidden");
+      }
+
+      const changed = await updateApiKey(created.key.id, { capabilities: ["interviews:delete"] });
+      expect(changed.ok && changed.key.capabilities).toEqual(["interviews:delete"]);
+      const narrowedList = await (await post(secret)).json() as { result: { tools: { name: string }[] } };
+      expect(narrowedList.result.tools.map((tool) => tool.name)).toEqual(["delete_interview"]);
+    });
+  });
+
+  it("retains full access for a legacy key with no stored capability field", async () => {
+    const { hashKey } = await import("../src/lib/repo/keys");
+    const secret = generateKeySecret();
+    docs.push({
+      _id: new ObjectId(), tenantId: "axion", hash: hashKey(secret), name: "Legacy", prefix: secret.slice(0, 12), suffix: secret.slice(-4),
+      createdAt: new Date(), createdBy: "admin@axiob.local",
+    });
+    const response = await post(secret);
+    const body = await response.json() as { result: { tools: { name: string }[] } };
+    expect(body.result.tools.map((tool) => tool.name)).toContain("delete_interview");
+    expect(body.result.tools.map((tool) => tool.name)).toContain("send_invite");
+  });
+
+  it("fails closed when a stored capability list is malformed", async () => {
+    const { hashKey } = await import("../src/lib/repo/keys");
+    const secret = generateKeySecret();
+    docs.push({
+      _id: new ObjectId(), tenantId: "axion", hash: hashKey(secret), name: "Corrupt", prefix: secret.slice(0, 12), suffix: secret.slice(-4),
+      createdAt: new Date(), createdBy: "admin@axiob.local", capabilities: ["analytics:read", "unknown:all"],
+    });
+    const response = await post(secret);
+    const body = await response.json() as { result: { tools: { name: string }[] } };
+    expect(body.result.tools).toEqual([]);
   });
 });

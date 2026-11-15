@@ -100,6 +100,32 @@ try {
         if (!(await page.$('[role="dialog"]'))) errors.push(`${label}: migration confirmation did not open as a dialog`);
         await shot("migration-confirm", false);
       }
+      if (await page.$('[role="dialog"]')) await page.keyboard.press("Escape");
+      await page.evaluate(() => document.querySelector(".page-head button")?.click());
+      await sleep(250);
+      const permissionForm = await page.evaluate(() => {
+        const dialog = document.querySelector('[role="dialog"]');
+        const checkboxes = [...(dialog?.querySelectorAll('fieldset input[type="checkbox"]') ?? [])];
+        const form = dialog?.querySelector('.stack');
+        const createButton = [...(dialog?.querySelectorAll("button") ?? [])].find((button) => button.textContent?.includes("Create key"));
+        const dialogRect = dialog?.getBoundingClientRect();
+        const createRect = createButton?.getBoundingClientRect();
+        return {
+          open: !!dialog,
+          permissionCount: checkboxes.length,
+          selectedCount: checkboxes.filter((input) => input.checked).length,
+          showsLegacyWarning: !!dialog?.textContent?.includes("This existing key has full legacy access"),
+          hasCreateAction: !!dialogRect && !!createRect && createRect.top >= dialogRect.top && createRect.bottom <= dialogRect.bottom,
+          hasHorizontalOverflow: !!form && form.scrollWidth > form.clientWidth + 1,
+        };
+      });
+      if (!permissionForm.open) errors.push(`${label}: new-key permissions did not open in a dialog`);
+      if (permissionForm.permissionCount !== 9) errors.push(`${label}: expected nine named-key permission choices, found ${permissionForm.permissionCount}`);
+      if (permissionForm.selectedCount !== 2) errors.push(`${label}: expected two least-privilege default permissions, found ${permissionForm.selectedCount}`);
+      if (permissionForm.showsLegacyWarning) errors.push(`${label}: new-key dialog shows the legacy-key warning`);
+      if (!permissionForm.hasCreateAction) errors.push(`${label}: new-key dialog has no Create key action`);
+      if (permissionForm.hasHorizontalOverflow) errors.push(`${label}: new-key permission form has horizontal overflow`);
+      await shot("key-permissions", false);
     }
     await page.close();
   }

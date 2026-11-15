@@ -1,5 +1,6 @@
 import type { ObjectId } from "mongodb";
 import type { AnswerMap, Manifest } from "../format/schema";
+import type { McpCapability } from "../mcp/capabilities";
 
 export type InterviewMode = "single" | "multi";
 export type InterviewStatus = "open" | "closed";
@@ -212,6 +213,8 @@ export interface ApiKeyDoc {
   lastUsedAt?: Date;
   expiresAt?: Date;
   revokedAt?: Date;
+  /** Missing on older API keys, which retain full tool access until an owner assigns capabilities. */
+  capabilities?: McpCapability[];
   /** Set when ChatGPT or another OAuth client created this key. */
   oauthClientId?: string;
   refreshHash?: string;
@@ -230,6 +233,8 @@ export interface ApiKeyView {
   revokedAt: string | null;
   status: "active" | "revoked" | "expired";
   via: "key" | "oauth";
+  /** Missing means a legacy full-access key. */
+  capabilities?: McpCapability[];
 }
 
 // ---- shapes handed to pages and APIs (plain JSON, ids and dates as strings)

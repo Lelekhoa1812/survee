@@ -5,6 +5,7 @@ import { mcpToken } from "../env";
 import type { ApiKeyDoc, ApiKeyView } from "./types";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
+import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities, type McpCapability } from "../mcp/capabilities";
 
 const MIN_SECRET = 32;
 const MAX_SECRET = 256;
@@ -41,6 +42,9 @@ function statusOf(doc: ApiKeyDoc, now = Date.now()): ApiKeyView["status"] {
 }
 
 export function toKeyView(doc: ApiKeyDoc): ApiKeyView {
+  const capabilities = doc.capabilities === undefined
+    ? undefined
+    : parseMcpCapabilities(doc.capabilities) ?? [];
   return {
     id: doc._id.toHexString(),
     name: doc.name,
@@ -54,6 +58,7 @@ export function toKeyView(doc: ApiKeyDoc): ApiKeyView {
     revokedAt: doc.revokedAt ? doc.revokedAt.toISOString() : null,
     status: statusOf(doc),
     via: doc.oauthClientId ? "oauth" : "key",
+    ...(capabilities === undefined ? {} : { capabilities }),
   };
 }
 
@@ -64,9 +69,11 @@ export async function listApiKeys(): Promise<ApiKeyView[]> {
   return docs.map(toKeyView);
 }
 
-export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; tenantId?: string; oauthClientId?: string; refreshSecret?: string }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
+export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; tenantId?: string; oauthClientId?: string; refreshSecret?: string; capabilities?: McpCapability[] }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
   const problem = validateKeySecret(input.secret);
   if (problem) return { ok: false, error: problem };
+  const capabilities = input.capabilities ?? [...DEFAULT_MCP_CAPABILITIES];
+  if (!parseMcpCapabilities(capabilities)) return { ok: false, error: "Choose at least one valid access permission." };
   const tenantId = input.tenantId ?? await currentTenantId();
   if (!tenantId) return { ok: false, error: "An authenticated tenant is required." };
   const { prefix, suffix } = splitSecret(input.secret);
@@ -80,6 +87,7 @@ export async function createApiKey(input: { name: string; note?: string; secret:
     hash: hashKey(input.secret),
     createdAt: new Date(),
     createdBy: input.createdBy,
+    capabilities,
     expiresAt: input.expiresAt ?? undefined,
     ...(input.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
     ...(input.refreshSecret ? { refreshHash: hashKey(input.refreshSecret) } : {}),
@@ -95,8 +103,9 @@ export async function createApiKey(input: { name: string; note?: string; secret:
   return { ok: true, key: toKeyView(doc), secret: input.secret };
 }
 
-export async function updateApiKey(id: string, patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean }): Promise<{ ok: true; key: ApiKeyView } | { ok: false; error: string }> {
+export async function updateApiKey(id: string, patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean; capabilities?: McpCapability[] }): Promise<{ ok: true; key: ApiKeyView } | { ok: false; error: string }> {
   if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
+  if (patch.capabilities !== undefined && !parseMcpCapabilities(patch.capabilities)) return { ok: false, error: "Choose at least one valid access permission." };
   const tenantId = await currentTenantId();
   if (!tenantId) return { ok: false, error: "Key not found." };
   const c = await col.apiKeys();
@@ -113,6 +122,7 @@ export async function updateApiKey(id: string, patch: { name?: string; note?: st
     if (patch.expiresAt) $set.expiresAt = patch.expiresAt;
     else $unset.expiresAt = "";
   }
+  if (patch.capabilities !== undefined) $set.capabilities = patch.capabilities;
   if (patch.revoked === true && !existing.revokedAt) $set.revokedAt = new Date();
   if (patch.revoked === false) $unset.revokedAt = "";
   const update: { $set?: Partial<ApiKeyDoc>; $unset?: Record<string, ""> } = {};
@@ -138,11 +148,16 @@ export async function deleteApiKey(id: string): Promise<{ ok: true } | { ok: fal
  * Updates last-used at most once a minute. Callers treat false and a database error the same: unauthorized.
  */
 export async function authenticateApiKey(secret: string): Promise<boolean> {
-  return (await authenticateApiKeyTenant(secret)) !== null;
+  return (await authenticateApiKeyAccess(secret)) !== null;
 }
 
 /** Authenticate a bearer and return its immutable tenant binding. */
 export async function authenticateApiKeyTenant(secret: string): Promise<string | null> {
+  return (await authenticateApiKeyAccess(secret))?.tenantId ?? null;
+}
+
+/** Authenticate a bearer and return its immutable tenant binding and tool permissions. */
+export async function authenticateApiKeyAccess(secret: string): Promise<{ tenantId: string; capabilities?: McpCapability[] } | null> {
   if (secret.length < MIN_SECRET || secret.length > MAX_SECRET || /\s/.test(secret)) return null;
   const c = await col.apiKeys();
   const doc = await c.findOne({ hash: hashKey(secret) });
@@ -150,7 +165,9 @@ export async function authenticateApiKeyTenant(secret: string): Promise<string |
   if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return null;
   const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
   if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
-  return doc.tenantId ?? AXION_TENANT_ID;
+  if (doc.capabilities === undefined) return { tenantId: doc.tenantId ?? AXION_TENANT_ID };
+  const capabilities = parseMcpCapabilities(doc.capabilities) ?? [];
+  return { tenantId: doc.tenantId ?? AXION_TENANT_ID, capabilities };
 }
 
 const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;

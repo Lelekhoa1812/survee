@@ -2,6 +2,7 @@ import { authorizeMcp } from "./auth";
 import { requestOrigin, wwwAuthenticate } from "./oauth";
 import { dispatchTool, listToolDefs } from "./tools";
 import { withTenantPrincipal } from "../tenant-context";
+import type { McpCapability } from "./capabilities";
 
 const PROTOCOL = "2025-06-18";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -66,7 +67,7 @@ async function readBody(req: Request): Promise<{ ok: true; data: unknown } | { o
   }
 }
 
-async function handleOne(msg: RpcRequest): Promise<unknown | null> {
+async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promise<unknown | null> {
   if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
     return rpcError(msg?.id ?? null, -32600, "Invalid request.");
   }
@@ -79,15 +80,15 @@ async function handleOne(msg: RpcRequest): Promise<unknown | null> {
       protocolVersion: protocolVersion(params.protocolVersion),
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "kqa", version: "1.0.0" },
-      instructions: "KQA host tools. Send invites with send_invite. Check delivery with check_invite_delivery. This server does not read a mailbox except for message ids it stored.",
+      instructions: "KQA host tools. Available tools reflect this credential's permissions; ask the workspace owner to grant a capability if a tool is unavailable. Send invites with send_invite. Check delivery with check_invite_delivery. This server does not read a mailbox except for message ids it stored.",
     });
   }
   if (msg.method === "ping") return rpcResult(msg.id ?? null, {});
-  if (msg.method === "tools/list") return rpcResult(msg.id ?? null, { tools: listToolDefs() });
+  if (msg.method === "tools/list") return rpcResult(msg.id ?? null, { tools: listToolDefs(capabilities) });
   if (msg.method === "tools/call") {
     const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown };
     if (typeof params.name !== "string") return rpcError(msg.id ?? null, -32602, "Tool name is required.");
-    const result = await dispatchTool(params.name, params.arguments ?? {});
+    const result = await dispatchTool(params.name, params.arguments ?? {}, capabilities);
     return rpcResult(msg.id ?? null, result);
   }
   return rpcError(msg.id ?? null, -32601, `Unknown method: ${msg.method}`);
@@ -105,7 +106,7 @@ export async function handleMcp(req: Request): Promise<Response> {
     if (!messages.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
     const replies: unknown[] = [];
     for (const message of messages) {
-      const reply = await handleOne(message as RpcRequest);
+      const reply = await handleOne(message as RpcRequest, auth.capabilities);
       if (reply) replies.push(reply);
     }
     if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });

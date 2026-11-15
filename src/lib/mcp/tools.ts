@@ -37,6 +37,7 @@ import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
 import { createHash } from "node:crypto";
 import { validateToolArgs } from "./validate";
+import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
 
 export interface ToolResult {
   content: { type: "text"; text: string }[];
@@ -752,8 +753,30 @@ const TOOLS: ToolDef[] = [
   },
 ];
 
-export function listToolDefs() {
-  return TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }));
+export function listToolDefs(capabilities?: readonly McpCapability[]) {
+  const readOnlyTools = new Set([
+    "get_analytics_guidance", "get_design_guidance", "audit_questionnaire_design", "list_interviews", "get_interview",
+    "get_survey_html", "list_versions", "check_questionnaire", "list_people", "get_person", "get_answers",
+    "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status",
+  ]);
+  return TOOLS.filter(({ name }) => canCallMcpTool(name, capabilities)).map(({ name, description, inputSchema }) => {
+    const readOnly = readOnlyTools.has(name);
+    const destructive = ["delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "upload_survey_version"].includes(name);
+    const external = name === "send_invite" || name === "check_invite_delivery";
+    return {
+      name,
+      title: name.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" "),
+      description,
+      inputSchema,
+      annotations: {
+        readOnlyHint: readOnly,
+        destructiveHint: destructive,
+        // Mutations also append an audit event, so repeating one is observably different.
+        idempotentHint: readOnly,
+        openWorldHint: external,
+      },
+    };
+  });
 }
 
 async function finish(tool: string, result: ToolResult, interviewId?: string): Promise<ToolResult> {
@@ -762,11 +785,12 @@ async function finish(tool: string, result: ToolResult, interviewId?: string): P
   return result;
 }
 
-export async function dispatchTool(name: string, args: unknown): Promise<ToolResult> {
+export async function dispatchTool(name: string, args: unknown, capabilities?: readonly McpCapability[]): Promise<ToolResult> {
   const tool = TOOLS.find((item) => item.name === name);
   if (!tool) return err(`Unknown tool: ${name}`);
   const record = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
   const interviewId = record && typeof record.interviewId === "string" ? record.interviewId : undefined;
+  if (!canCallMcpTool(name, capabilities)) return finish(tool.name, err("This credential is not permitted to call this tool.", "forbidden"), interviewId);
   if (!record) return finish(tool.name, err("arguments must be an object.", "invalid_args"), interviewId);
   const guarded = tool.guard?.(record);
   if (guarded) return finish(tool.name, guarded, interviewId);

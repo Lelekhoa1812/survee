@@ -115,6 +115,7 @@ vi.mock("../src/lib/repo", async () => {
 
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
+import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -137,7 +138,12 @@ beforeEach(() => {
 describe("MCP tools", () => {
   it("documents every registered tool", () => {
     const md = readFileSync(new URL("../docs/MCP.md", import.meta.url), "utf8");
-    for (const tool of listToolDefs()) expect(md).toContain(`\`${tool.name}\``);
+    const tools = listToolDefs();
+    for (const tool of tools) expect(md).toContain(`\`${tool.name}\``);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(Object.keys(MCP_TOOL_CAPABILITIES).sort());
+    expect(tools.every((tool) => tool.annotations && typeof tool.annotations.readOnlyHint === "boolean")).toBe(true);
+    expect(tools.find((tool) => tool.name === "delete_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
   });
 
   it("returns sourced design guidance for the requested product surface", async () => {

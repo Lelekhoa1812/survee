@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
 import { AccountSettingsPanel } from "./AccountSettingsPanel";
+import { DEFAULT_MCP_CAPABILITIES, describeCapabilities, MCP_CAPABILITIES, MCP_CAPABILITY_INFO, type McpCapability } from "@/lib/mcp/capabilities";
 
 interface KeyRow {
   id: string;
@@ -18,6 +19,7 @@ interface KeyRow {
   revokedAt: string | null;
   status: "active" | "revoked" | "expired";
   via?: "key" | "oauth";
+  capabilities?: McpCapability[];
 }
 
 interface TenantAudit {
@@ -146,7 +148,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
       <div className="page-head">
         <div>
           <h1>Settings</h1>
-          <p>Create named keys for agents, revoke or restore them, and see when each one was last used. The value is shown once, then only a fingerprint remains.</p>
+          <p>Create named keys with only the access each agent needs. Revoke or restore them and see when each one was last used. The value is shown once, then only a fingerprint remains.</p>
         </div>
         <button className="btn primary right" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New key</button>
       </div>
@@ -200,8 +202,8 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
             </div>
             <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
               {envToken
-                ? "This token always operates in the Axion workspace. Keys created here are bound to this workspace and provide the same read and write access within it. Rotate the environment token in the host that runs this app."
-                : "No environment token is set, so only keys created here can call the agent API. Each key is limited to this workspace."}
+                ? "This token always operates in the Axion workspace with full tool access. Rotate it in the host that runs this app. New named keys can be restricted to specific tasks."
+                : "No environment token is set. Named keys are limited to this workspace and can be restricted to specific tasks."}
             </p>
           </div>
         </section>
@@ -292,7 +294,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           <div className="card empty" style={{ border: 0, boxShadow: "none" }}>
             <div className="ico"><Icon name="lock" size={22} /></div>
             <h3>No keys yet</h3>
-            <p>A key lets an agent list this workspace’s interviews, send invites, and export answers. Name it after the agent or machine that will hold it. You can revoke it without changing other workspaces.</p>
+            <p>A key grants only the permissions you select. New keys can list interviews and read aggregate analysis by default. Name each key after its agent or machine; you can change its permissions or revoke it without changing other workspace credentials.</p>
             <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> Create a key</button>
           </div>
         ) : visible.length === 0 ? (
@@ -304,6 +306,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
                 <tr>
                   <th>Name</th>
                   <th>Value</th>
+                  <th>Access</th>
                   <th>Note</th>
                   <th>Last used</th>
                   <th>Expires</th>
@@ -319,6 +322,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
                       <div className="desc">Added {relTime(key.createdAt)} · {key.createdBy}</div>
                     </td>
                     <td data-label="Value"><span className="code-chip" title="The full value is not stored">{key.prefix}…{key.suffix}</span></td>
+                    <td data-label="Access"><span className="muted">{describeCapabilities(key.capabilities)}</span></td>
                     <td className="c-wide" data-label="Note"><span className="muted">{key.note || "—"}</span></td>
                     <td data-label="Last used"><span title={fullTime(key.lastUsedAt ?? undefined)}>{key.lastUsedAt ? relTime(key.lastUsedAt) : "Never"}</span></td>
                     <td data-label="Expires"><span title={fullTime(key.expiresAt ?? undefined)}>{key.expiresAt ? fullTime(key.expiresAt) : "None"}</span></td>
@@ -362,7 +366,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           initial={editing}
           onClose={() => { if (!busy) setEditing(null); }}
           onSubmit={async (draft) => {
-            const data = await mutate(`/api/admin/keys/${editing.id}`, "PATCH", { name: draft.name, note: draft.note, expiresAt: draft.expiresAt }, `Saved “${draft.name}”.`);
+            const data = await mutate(`/api/admin/keys/${editing.id}`, "PATCH", { name: draft.name, note: draft.note, expiresAt: draft.expiresAt, capabilities: draft.capabilities }, `Saved “${draft.name}”.`);
             if (data) setEditing(null);
           }}
         />
@@ -438,28 +442,31 @@ function toLocalInput(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; busy: boolean; initial?: KeyRow; onClose: () => void; onSubmit: (draft: { name: string; note: string; value: string; expiresAt: string | null }) => Promise<void> }) {
+function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; busy: boolean; initial?: KeyRow; onClose: () => void; onSubmit: (draft: { name: string; note: string; value: string; expiresAt: string | null; capabilities: McpCapability[] }) => Promise<void> }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
   const [value, setValue] = useState("");
   const [showValue, setShowValue] = useState(false);
   const [expires, setExpires] = useState(toLocalInput(initial?.expiresAt ?? null));
+  const [capabilities, setCapabilities] = useState<McpCapability[]>(initial?.capabilities ?? (initial ? [...MCP_CAPABILITIES] : [...DEFAULT_MCP_CAPABILITIES]));
   const [error, setError] = useState("");
 
   return (
     <Modal
       title={title}
       onClose={onClose}
+      className="key-permission-modal"
       actions={
         <>
           <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>Cancel</button>
           <button className="btn primary" type="button" disabled={busy} onClick={async () => {
             const trimmed = name.trim();
             if (!trimmed) { setError("Give the key a name."); return; }
+            if (capabilities.length === 0) { setError("Select at least one permission."); return; }
             if (value.trim() && value.trim().length < 32) { setError("A key value needs at least 32 characters, or leave it blank to generate one."); return; }
             if (/\s/.test(value)) { setError("A key value cannot contain spaces."); return; }
             setError("");
-            await onSubmit({ name: trimmed, note: note.trim(), value: value.trim(), expiresAt: expires ? new Date(expires).toISOString() : null });
+            await onSubmit({ name: trimmed, note: note.trim(), value: value.trim(), expiresAt: expires ? new Date(expires).toISOString() : null, capabilities });
           }}>{busy ? <Spinner /> : null} {initial ? "Save" : "Create key"}</button>
         </>
       }
@@ -476,14 +483,35 @@ function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; b
         {!initial && (
           <div className="field">
             <span className="label">Value</span>
-            <div className="row">
-              <input className="input mono" style={{ flex: 1 }} type={showValue ? "text" : "password"} autoComplete="off" spellCheck={false} value={value} maxLength={256} onChange={(e) => setValue(e.target.value)} placeholder="Leave blank to generate" aria-label="Key value" />
+            <div className="row wrap key-value-row">
+              <input className="input mono" style={{ flex: "1 1 130px", minWidth: 0, width: "auto" }} type={showValue ? "text" : "password"} autoComplete="off" spellCheck={false} value={value} maxLength={256} onChange={(e) => setValue(e.target.value)} placeholder="Leave blank to generate" aria-label="Key value" />
               <button className="btn sm" type="button" onClick={() => setShowValue((v) => !v)}>{showValue ? "Hide" : "Show"}</button>
               <button className="btn sm" type="button" onClick={() => { setValue(generateLocal()); setShowValue(true); }}>Generate</button>
             </div>
             <span className="hint">At least 32 characters, no spaces. Generating here lets you copy it before you save. The server still shows it once after creation.</span>
           </div>
         )}
+        <fieldset className="stack" style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 12 }}>
+          <legend className="label" style={{ padding: "0 5px" }}>Permissions</legend>
+          {initial && initial.capabilities === undefined && <p className="callout warn" style={{ margin: 0 }}>This existing key has full legacy access. The selected permissions take effect as soon as you save.</p>}
+          {!initial && <p className="hint" style={{ margin: 0 }}>New keys start with interview and aggregate-analysis read access. Add only what this agent needs.</p>}
+          {MCP_CAPABILITIES.map((capability) => (
+            <label key={capability} className="row wrap" style={{ alignItems: "flex-start", gap: 9 }}>
+              <input
+                type="checkbox"
+                checked={capabilities.includes(capability)}
+                onChange={(event) => setCapabilities((current) => event.target.checked
+                  ? [...current, capability]
+                  : current.filter((item) => item !== capability))}
+                style={{ marginTop: 4 }}
+              />
+              <span style={{ flex: 1, minWidth: 190 }}>
+                <strong style={{ display: "block" }}>{MCP_CAPABILITY_INFO[capability].label}</strong>
+                <span className="hint">{MCP_CAPABILITY_INFO[capability].description}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <label className="field">
           <span>Expiry</span>
           <input className="input" type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} />

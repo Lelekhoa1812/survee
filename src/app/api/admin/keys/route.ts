@@ -1,5 +1,6 @@
 import { fail, guardAdmin, json, readJson, str, adminSession } from "@/lib/http";
 import { createApiKey, generateKeySecret, listApiKeys } from "@/lib/repo/keys";
+import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities } from "@/lib/mcp/capabilities";
 
 export async function GET() {
   const denied = await guardAdmin();
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   const session = await adminSession();
   if (!session) return fail(401, "Sign in to continue.");
-  const body = await readJson<{ name?: unknown; note?: unknown; value?: unknown; expiresAt?: unknown }>(req);
+  const body = await readJson<{ name?: unknown; note?: unknown; value?: unknown; expiresAt?: unknown; capabilities?: unknown }>(req);
   if (!body.ok) return body.res;
   const name = str(body.data.name, 80);
   if (!name) return fail(400, "Give the key a name.");
@@ -21,7 +22,9 @@ export async function POST(req: Request) {
   const secret = supplied || generateKeySecret();
   const expires = parseExpiry(body.data.expiresAt);
   if (!expires.ok) return fail(400, expires.error);
-  const created = await createApiKey({ name, note, secret, expiresAt: expires.date, createdBy: session.email });
+  const capabilities = body.data.capabilities === undefined ? [...DEFAULT_MCP_CAPABILITIES] : parseMcpCapabilities(body.data.capabilities);
+  if (!capabilities) return fail(400, "Choose at least one valid access permission.");
+  const created = await createApiKey({ name, note, secret, expiresAt: expires.date, createdBy: session.email, capabilities });
   if (!created.ok) return fail(400, created.error);
   return json({ ok: true, key: created.key, secret: created.secret }, 201);
 }
