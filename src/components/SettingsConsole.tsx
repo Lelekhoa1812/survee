@@ -150,14 +150,21 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
       <div className="page-head">
         <div>
           <h1>Settings</h1>
-          <p>Create named keys with only the access each agent needs. Revoke or restore them and see when each one was last used. The value is shown once, then only a fingerprint remains.</p>
+          <p>Manage your workspace account, connect an agent, and control named keys. The full value of a new key is shown once, then only a fingerprint remains.</p>
         </div>
         <button className="btn primary right" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New key</button>
       </div>
 
-      {account && <AccountSettingsPanel account={account} />}
+      <nav className="settings-section-nav" aria-label="Settings sections">
+        {account && <a href="#workspace-account">Workspace account</a>}
+        <a href="#agent-connection">Agent connection</a>
+        <a href="#api-keys">API keys</a>
+        {mayManageLegacy && <a href="#legacy-data">Axion legacy data</a>}
+      </nav>
 
-      <div className="settings-grid">
+      {account && <div id="workspace-account" className="settings-anchor"><AccountSettingsPanel account={account} /></div>}
+
+      <div id="agent-connection" className="settings-grid settings-anchor">
         <section className="card">
           <div className="card-head">
             <Icon name="link" size={16} />
@@ -211,46 +218,6 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
         </section>
       </div>
 
-      {mayManageLegacy && (
-        <section className="card" style={{ marginBottom: 16 }}>
-          <div className="card-head">
-            <Icon name="shield" size={16} />
-            <div><h2>Axion data ownership</h2><div className="sub">Review and assign the existing host data to the Axion workspace.</div></div>
-          </div>
-          {tenantAuditError ? (
-            <div className="card-pad"><p className="muted" role="status">The read-only migration audit could not reach the database.</p></div>
-          ) : !tenantAudit ? (
-            <div className="card-pad"><p className="muted" role="status">Migration counts are unavailable.</p></div>
-          ) : (
-            <div className="card-pad stack">
-              {unscopedLegacyCount === 0 ? (
-                otherTenantCount > 0
-                  ? <p className="muted" role="status">{otherTenantCount.toLocaleString()} records already belong to another tenant and need review before Axion assignment.</p>
-                  : <p className="muted" role="status">All existing workspace records already have tenant ownership.</p>
-              ) : (
-                <p className="muted" role="status">{unscopedLegacyCount.toLocaleString()} existing records are still unscoped and currently visible only to Axion during the migration window.</p>
-              )}
-              {tenantAudit.preflight.readyForReviewedBackfill ? (
-                <div className="row wrap" style={{ justifyContent: "space-between" }}>
-                  <span className="hint">The record links pass the integrity checks. Assignment adds Axion tenant IDs and preserves all records, including events with incomplete links.</span>
-                  {unscopedLegacyCount > 0 && <button className="btn" type="button" onClick={() => setMigrationOpen(true)}>Review assignment</button>}
-                </div>
-              ) : (
-                <div className="callout warn" role="alert">
-                  <div><strong>Assignment is paused.</strong> The audit found records owned by another tenant or inconsistent record links that need review.</div>
-                  {integrityFindings.length > 0 && <ul style={{ margin: "4px 0 0 18px" }}>{integrityFindings.map(([name, count]) => <li key={name}>{name}: {count.toLocaleString()}</li>)}</ul>}
-                </div>
-              )}
-              {unscopedLegacyCount > 0 && (
-                <p className="hint">
-                  Legacy event references retained: {tenantAudit.legacyEventReferences.eventsWithoutInterview ?? 0} missing interviews, {tenantAudit.legacyEventReferences.eventsWithoutParticipant ?? 0} missing participants, and {tenantAudit.legacyEventReferences.eventsWithoutInterviewId ?? 0} without an interview ID. No records are deleted.
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
       {revealed && (
         <section className="card" style={{ marginBottom: 16, borderColor: "var(--accent)" }}>
           <div className="card-head">
@@ -270,7 +237,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
         </section>
       )}
 
-      <section className="card">
+      <section id="api-keys" className="card settings-anchor">
         <div className="card-head" style={{ flexWrap: "wrap" }}>
           <Icon name="lock" size={16} />
           <div style={{ flex: 1, minWidth: 160 }}>
@@ -349,6 +316,47 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           </div>
         )}
       </section>
+
+      {mayManageLegacy && (
+        <section id="legacy-data" className="card settings-legacy-section settings-anchor">
+          <div className="card-head">
+            <Icon name="shield" size={16} />
+            <div><h2>Axion legacy data</h2><div className="sub">Owner-only review and assignment of existing host records.</div></div>
+          </div>
+          {tenantAuditError ? (
+            <div className="card-pad"><p className="muted" role="status">The read-only migration audit could not reach the database.</p></div>
+          ) : !tenantAudit ? (
+            <div className="card-pad"><p className="muted" role="status">Migration counts are unavailable.</p></div>
+          ) : (
+            <div className="card-pad stack">
+              <p className="settings-legacy-intro">Review the ownership audit here. No records change during this review; a separate owner-only assignment requires a typed confirmation and your attestation that a current database backup is available. The app cannot verify the backup.</p>
+              {unscopedLegacyCount === 0 ? (
+                otherTenantCount > 0
+                  ? <p className="muted" role="status">{otherTenantCount.toLocaleString()} records already belong to another tenant and need review before Axion assignment.</p>
+                  : <p className="muted" role="status">All existing workspace records already have tenant ownership.</p>
+              ) : (
+                <p className="muted" role="status">{unscopedLegacyCount.toLocaleString()} existing records are still unscoped and currently visible only to Axion during the migration window.</p>
+              )}
+              {tenantAudit.preflight.readyForReviewedBackfill ? (
+                <div className="row wrap" style={{ justifyContent: "space-between" }}>
+                  <span className="hint">The record links pass the integrity checks. Assignment adds Axion tenant IDs and preserves all records, including events with incomplete links.</span>
+                  {unscopedLegacyCount > 0 && <button className="btn" type="button" onClick={() => setMigrationOpen(true)}>Review assignment</button>}
+                </div>
+              ) : (
+                <div className="callout warn" role="alert">
+                  <div><strong>Assignment is paused.</strong> The audit found records owned by another tenant or inconsistent record links that need review.</div>
+                  {integrityFindings.length > 0 && <ul style={{ margin: "4px 0 0 18px" }}>{integrityFindings.map(([name, count]) => <li key={name}>{name}: {count.toLocaleString()}</li>)}</ul>}
+                </div>
+              )}
+              {unscopedLegacyCount > 0 && (
+                <p className="hint">
+                  Legacy event references retained: {tenantAudit.legacyEventReferences.eventsWithoutInterview ?? 0} missing interviews, {tenantAudit.legacyEventReferences.eventsWithoutParticipant ?? 0} missing participants, and {tenantAudit.legacyEventReferences.eventsWithoutInterviewId ?? 0} without an interview ID. No records are deleted.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {creating && (
         <KeyForm
