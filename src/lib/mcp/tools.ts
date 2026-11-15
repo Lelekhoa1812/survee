@@ -1,6 +1,6 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
-import { summarizeQuestion } from "../analytics/summary";
+import { createQuestionSummaryAccumulator } from "../analytics/summary";
 import { DESIGN_REVIEW_CHECKLIST, getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
 import { parseEmail } from "../mail/address";
@@ -17,6 +17,7 @@ import {
   getInterview,
   getParticipant,
   getVersion,
+  iterateAnalyticsParticipants,
   listInterviews,
   listParticipants,
   listVersions,
@@ -306,19 +307,24 @@ const TOOLS: ToolDef[] = [
         questions = [question];
       }
       const submittedOnly = args.submittedOnly === true;
-      let respondents = await listParticipants(id);
-      if (submittedOnly) respondents = respondents.filter((person) => person.status === "submitted");
       const offset = typeof args.offset === "number" ? args.offset : 0;
       const limit = typeof args.limit === "number" ? args.limit : 25;
       const page = questions.slice(offset, offset + limit);
-      const submittedCount = respondents.filter((person) => person.status === "submitted").length;
+      const accumulators = new Map(page.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
+      let respondentCount = 0;
+      let submittedCount = 0;
+      for await (const respondent of iterateAnalyticsParticipants(id, page.map((question) => question.id), submittedOnly)) {
+        respondentCount += 1;
+        if (respondent.status === "submitted") submittedCount += 1;
+        for (const question of page) accumulators.get(question.id)!.add(respondent);
+      }
       return ok({
         interviewId: id,
         surveyVersion: version.version,
         asOf: new Date().toISOString(),
         scope: {
           statuses: submittedOnly ? ["submitted"] : ["invited", "in_progress", "submitted"],
-          respondentCount: respondents.length,
+          respondentCount,
           submittedCount,
           submittedOnly,
         },
@@ -330,11 +336,12 @@ const TOOLS: ToolDef[] = [
           id: question.id,
           type: question.type,
           label: question.label,
-          ...summarizeQuestion(question, respondents),
+          ...accumulators.get(question.id)!.finish(),
         })),
         methodology: [
           "Summaries use the current survey version and the respondent statuses shown in scope.",
-          "answeredCount and missingCount use respondents in scope; distribution percentages use valid answers that match the current options or scale.",
+          "answeredCount counts non-empty stored values, including values that are incompatible with the current version; unmapped values are excluded from valid numeric summaries and distributions.",
+          "missingCount uses respondents in scope; distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
           "Number summaries are descriptive; scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
         ],

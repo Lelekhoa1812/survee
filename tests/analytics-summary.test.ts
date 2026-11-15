@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { summarizeQuestion, type AnalyticsRespondent } from "../src/lib/analytics/summary";
+import { formatPercentage } from "../src/lib/analytics/format";
 import type { Question } from "../src/lib/format/schema";
 
 const at = "2026-11-15T00:00:00.000Z";
@@ -38,6 +39,20 @@ describe("descriptive question summaries", () => {
     expect(summary.answeredCount).toBe(4);
   });
 
+  it("excludes out-of-range number values from descriptive statistics", () => {
+    const q: Question = { id: "q", type: "number", label: "Budget", min: 0, max: 10 };
+    const summary = summarizeQuestion(q, [respondent(2), respondent(99), respondent("bad")]);
+    expect(summary.numeric).toEqual({ n: 1, min: 2, max: 2, mean: 2, median: 2 });
+    expect(summary).toMatchObject({ answeredCount: 3, unmappedResponseCount: 2 });
+  });
+
+  it("keeps finite means and medians for large finite numeric values", () => {
+    const q: Question = { id: "q", type: "number", label: "Large value" };
+    const summary = summarizeQuestion(q, [respondent(Number.MAX_VALUE), respondent(Number.MAX_VALUE)]);
+    expect(summary.numeric?.mean).toBe(Number.MAX_VALUE);
+    expect(Number.isFinite(summary.numeric?.median)).toBe(true);
+  });
+
   it("shows scale distributions and a median without calculating a mean", () => {
     const q: Question = { id: "q", type: "scale", label: "Agreement", min: 1, max: 5 };
     const summary = summarizeQuestion(q, [respondent(1), respondent("2"), respondent(5), respondent(6)]);
@@ -45,5 +60,10 @@ describe("descriptive question summaries", () => {
     expect(summary.numeric).toBeNull();
     expect(summary.unmappedResponseCount).toBe(1);
     expect(summary.distributionDenominator).toBe(3);
+  });
+
+  it("does not round a nonzero option share down to zero percent", () => {
+    expect(formatPercentage((1 / 201) * 100)).toBe("0.5%");
+    expect(formatPercentage((1 / 2001) * 100)).toBe("<0.1%");
   });
 });

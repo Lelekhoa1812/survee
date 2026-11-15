@@ -103,6 +103,13 @@ vi.mock("../src/lib/repo", async () => {
       { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
       { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
     ]),
+    iterateAnalyticsParticipants: vi.fn(async function* (_id: string, _questionIds: string[], submittedOnly = false) {
+      const people = [
+        { status: "submitted" as const, answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
+        { status: "invited" as const, answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
+      ];
+      for (const person of people) if (!submittedOnly || person.status === "submitted") yield person;
+    }),
   };
 });
 

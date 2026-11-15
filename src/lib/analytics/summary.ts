@@ -1,4 +1,4 @@
-import { isAnswered } from "../format/answers";
+import { isAnswered, validateAnswer } from "../format/answers";
 import type { AnswerMap, Question } from "../format/schema";
 
 export interface AnalyticsRespondent {
@@ -45,10 +45,10 @@ function numericValue(value: unknown): number | null {
 
 function median(sorted: number[]): number {
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  return sorted.length % 2 ? sorted[middle] : sorted[middle - 1] / 2 + sorted[middle] / 2;
 }
 
-function valueDistribution(q: Question, respondents: AnalyticsRespondent[]) {
+function initialDistribution(q: Question) {
   const choiceType = q.type === "single" || q.type === "select" || q.type === "multi";
   const rows = choiceType ? q.options?.map((option) => ({ value: option.value, label: option.label, count: 0 })) ?? [] : [];
   const lower = q.type === "scale" ? q.min ?? 1 : 1;
@@ -56,86 +56,96 @@ function valueDistribution(q: Question, respondents: AnalyticsRespondent[]) {
   if (q.type === "scale") {
     for (let value = Math.ceil(lower); value <= Math.floor(upper); value += 1) rows.push({ value: String(value), label: String(value), count: 0 });
   }
-
-  const byValue = new Map(rows.map((row) => [row.value, row]));
-  let denominator = 0;
-  let unmappedResponseCount = 0;
-  for (const respondent of respondents) {
-    if (!isAnswered(q, respondent.answers)) continue;
-    const raw = respondent.answers[q.id]?.value;
-    const values = Array.isArray(raw) ? [...new Set(raw)] : [raw];
-    const normalized = values.map((value) => q.type === "scale" ? numericValue(value) : value);
-    const shapeValid = q.type === "multi" ? Array.isArray(raw) : !Array.isArray(raw);
-    const valid = shapeValid && normalized.every((value) => value !== null && byValue.has(String(value)));
-    if (!valid) {
-      unmappedResponseCount += 1;
-      continue;
-    }
-    denominator += 1;
-    for (const value of normalized) byValue.get(String(value))!.count += 1;
-  }
-  return {
-    distributionDenominator: denominator,
-    unmappedResponseCount,
-    distribution: rows.map((row) => ({
-      ...row,
-      percent: denominator ? (row.count / denominator) * 100 : 0,
-    })),
-  };
+  return rows;
 }
 
 /**
  * Descriptive, current-version summary only. It never scores responses or infers meaning from text.
  * Text answers stay in the answer-review view and are not included in this aggregate.
  */
-export function summarizeQuestion(q: Question, respondents: AnalyticsRespondent[]): QuestionSummary {
-  const answered = respondents.filter((respondent) => isAnswered(q, respondent.answers));
-  const noteOnlyCount = respondents.filter((respondent) => {
-    const answer = respondent.answers[q.id];
-    return !isAnswered(q, respondent.answers) && typeof answer?.note === "string" && answer.note.trim() !== "";
-  }).length;
+export function createQuestionSummaryAccumulator(q: Question) {
+  const distributionRows = initialDistribution(q);
+  const byValue = new Map(distributionRows.map((row) => [row.value, row]));
+  const hasDistribution = q.type === "single" || q.type === "select" || q.type === "multi" || q.type === "scale";
+  const hasNumericSummary = q.type === "number" || q.type === "scale";
+  let eligibleCount = 0;
+  let answeredCount = 0;
+  let noteOnlyCount = 0;
+  let distributionDenominator = 0;
+  let distributionUnmappedResponseCount = 0;
+  let numericUnmappedResponseCount = 0;
+  const numericValues: number[] = [];
 
-  let distribution: ReturnType<typeof valueDistribution> | null = null;
-  if (q.type === "single" || q.type === "select" || q.type === "multi" || q.type === "scale") {
-    distribution = valueDistribution(q, respondents);
+  function add(respondent: AnalyticsRespondent) {
+    eligibleCount += 1;
+    const answer = respondent.answers[q.id];
+    const answered = isAnswered(q, respondent.answers);
+    if (!answered && typeof answer?.note === "string" && answer.note.trim() !== "") noteOnlyCount += 1;
+    if (!answered) return;
+    answeredCount += 1;
+
+    if (hasDistribution) {
+      const raw = answer?.value;
+      const values = Array.isArray(raw) ? [...new Set(raw)] : [raw];
+      const normalized = values.map((value) => q.type === "scale" ? numericValue(value) : value);
+      const shapeValid = q.type === "multi" ? Array.isArray(raw) : !Array.isArray(raw);
+      const valid = shapeValid && normalized.every((value) => value !== null && byValue.has(String(value)));
+      if (!valid) distributionUnmappedResponseCount += 1;
+      else {
+        distributionDenominator += 1;
+        for (const value of normalized) byValue.get(String(value))!.count += 1;
+      }
+    }
+
+    if (hasNumericSummary) {
+      const result = validateAnswer(q, answer?.value);
+      const value = result.ok && typeof result.value === "number" ? result.value : null;
+      if (value === null) numericUnmappedResponseCount += 1;
+      else numericValues.push(value);
+    }
   }
 
-  let numeric: DescriptiveStats | null = null;
-  let scaleMedian: number | null = null;
-  let numericUnmappedResponseCount = 0;
-  if (q.type === "number" || q.type === "scale") {
-    const values: number[] = [];
-    for (const respondent of answered) {
-      const value = numericValue(respondent.answers[q.id]?.value);
-      const valid = value !== null && (q.type !== "scale" || (Number.isInteger(value) && value >= (q.min ?? 1) && value <= (q.max ?? 5)));
-      if (!valid) {
-        numericUnmappedResponseCount += 1;
-        continue;
-      }
-      values.push(value);
-    }
-    values.sort((a, b) => a - b);
-    if (q.type === "number" && values.length) {
+  function finish(): QuestionSummary {
+    numericValues.sort((a, b) => a - b);
+    let numeric: DescriptiveStats | null = null;
+    let scaleMedian: number | null = null;
+    if (q.type === "number" && numericValues.length) {
+      // Divide each value before adding so a sum of otherwise valid finite values cannot overflow.
+      const mean = numericValues.reduce((average, value, index) => {
+        const count = index + 1;
+        return average * ((count - 1) / count) + value / count;
+      }, 0);
       numeric = {
-        n: values.length,
-        min: values[0],
-        max: values[values.length - 1],
-        mean: values.reduce((sum, value) => sum + value, 0) / values.length,
-        median: median(values),
+        n: numericValues.length,
+        min: numericValues[0],
+        max: numericValues[numericValues.length - 1],
+        mean,
+        median: median(numericValues),
       };
     }
-    if (q.type === "scale" && values.length) scaleMedian = median(values);
+    if (q.type === "scale" && numericValues.length) scaleMedian = median(numericValues);
+
+    return {
+      eligibleCount,
+      answeredCount,
+      missingCount: eligibleCount - answeredCount,
+      noteOnlyCount,
+      unmappedResponseCount: Math.max(distributionUnmappedResponseCount, numericUnmappedResponseCount),
+      distributionDenominator,
+      distribution: distributionRows.map((row) => ({
+        ...row,
+        percent: distributionDenominator ? (row.count / distributionDenominator) * 100 : 0,
+      })),
+      numeric,
+      scaleMedian,
+    };
   }
 
-  return {
-    eligibleCount: respondents.length,
-    answeredCount: answered.length,
-    missingCount: respondents.length - answered.length,
-    noteOnlyCount,
-    unmappedResponseCount: Math.max(distribution?.unmappedResponseCount ?? 0, numericUnmappedResponseCount),
-    distributionDenominator: distribution?.distributionDenominator ?? 0,
-    distribution: distribution?.distribution ?? [],
-    numeric,
-    scaleMedian,
-  };
+  return { add, finish };
+}
+
+export function summarizeQuestion(q: Question, respondents: AnalyticsRespondent[]): QuestionSummary {
+  const summary = createQuestionSummaryAccumulator(q);
+  for (const respondent of respondents) summary.add(respondent);
+  return summary.finish();
 }

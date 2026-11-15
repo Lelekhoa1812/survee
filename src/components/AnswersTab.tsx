@@ -8,6 +8,7 @@ import { PreviewFrame } from "./PreviewFrame";
 import { Badge, Icon } from "./ui";
 import { fullTime } from "@/lib/time";
 import { summarizeQuestion, type QuestionSummary } from "@/lib/analytics/summary";
+import { formatPercentage } from "@/lib/analytics/format";
 
 const STATUS: Record<PersonRow["status"], { label: string; kind: "" | "info" | "ok" }> = { invited: { label: "Not started", kind: "" }, in_progress: { label: "In progress", kind: "info" }, submitted: { label: "Submitted", kind: "ok" } };
 
@@ -24,7 +25,7 @@ function Tally({ q, summary }: { q: Question; summary: QuestionSummary }) {
         <div key={r.value} className="tally-row">
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.label}>{r.label}</span>
           <div className="bar" aria-hidden="true"><i style={{ width: `${(r.count / max) * 100}%` }} /></div>
-          <span className="muted tally-value" style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.count} <span>({Math.round(r.percent)}%)</span></span>
+          <span className="muted tally-value" style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.count} <span>({formatPercentage(r.percent)})</span></span>
         </div>
       ))}
     </div>

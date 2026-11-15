@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { col } from "../db";
 import { parseEmail } from "../mail/address";
 import { progress, validateAnswer } from "../format/answers";
-import { LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
+import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import type { InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
@@ -139,6 +139,50 @@ export async function listParticipants(interviewId: string): Promise<Participant
   if (!oid) return [];
   const docs = await (await col.participants()).find({ interviewId: oid }).sort({ createdAt: 1 }).toArray();
   return docs.map(participantView);
+}
+
+export interface AnalyticsParticipant {
+  status: ParticipantStatus;
+  answers: AnswerMap;
+}
+
+/**
+ * Stream only the selected answer fields and status for analytics. Identity, private links,
+ * raw note content, timestamps, and answers to unrelated questions never leave this repository helper.
+ */
+export async function* iterateAnalyticsParticipants(
+  interviewId: string,
+  questionIds: string[],
+  submittedOnly = false,
+): AsyncGenerator<AnalyticsParticipant> {
+  const oid = toOid(interviewId);
+  if (!oid) return;
+  const projection: Record<string, 0 | 1> = { _id: 0, status: 1 };
+  const selectedQuestionIds = [...new Set(questionIds)].filter((questionId) => ID_RE.test(questionId));
+  for (const questionId of selectedQuestionIds) {
+    projection[`answers.${questionId}.value`] = 1;
+    projection[`answers.${questionId}.note`] = 1;
+  }
+  const statuses: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
+  const filter = { interviewId: oid, status: submittedOnly ? "submitted" as const : { $in: statuses } };
+  const cursor = (await col.participants()).find(filter, { projection }).batchSize(250);
+  try {
+    for await (const participant of cursor) {
+      const answers: AnswerMap = {};
+      for (const questionId of selectedQuestionIds) {
+        const stored = participant.answers?.[questionId];
+        if (!stored) continue;
+        answers[questionId] = {
+          ...(stored.value === undefined ? {} : { value: stored.value }),
+          ...(typeof stored.note === "string" && stored.note.trim() ? { note: "present" } : {}),
+          updatedAt: "",
+        };
+      }
+      yield { status: participant.status, answers };
+    }
+  } finally {
+    await cursor.close();
+  }
 }
 
 export async function addParticipants(interviewId: string, people: { name: string; note?: string; email?: string }[]): Promise<ParticipantView[]> {
