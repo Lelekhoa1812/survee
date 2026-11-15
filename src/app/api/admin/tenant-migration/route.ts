@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { AXION_TENANT_ID } from "@/lib/env";
 import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
 import { adminSession } from "@/lib/http";
 import { auditTenantMigration, backfillLegacyTenant } from "@/lib/tenant-migration";
@@ -8,6 +9,7 @@ export async function GET() {
   if (denied) return denied;
   const session = await adminSession();
   if (!session || session.role !== "owner") return fail(403, "Only the workspace owner can review tenant migration.");
+  if (session.tenantId !== AXION_TENANT_ID) return fail(403, "Legacy tenant migration is available only to the Axion workspace owner.");
   try {
     return json({ ok: true, audit: await auditTenantMigration(await db()) });
   } catch {
@@ -20,6 +22,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   const session = await adminSession();
   if (!session || session.role !== "owner") return fail(403, "Only the workspace owner can assign the legacy data.");
+  if (session.tenantId !== AXION_TENANT_ID) return fail(403, "Legacy tenant migration is available only to the Axion workspace owner.");
   const body = await readJson<{ confirmation?: unknown; backupConfirmed?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
   if (str(body.data.confirmation, 80) !== "ASSIGN LEGACY DATA TO AXION") return fail(400, "Type the confirmation phrase exactly.");
