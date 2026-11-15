@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { SettingsConsole } from "../src/components/SettingsConsole";
 
 function renderSettings(mayManageLegacy: boolean) {
+  const role = mayManageLegacy ? "owner" : "member";
   return renderToStaticMarkup(createElement(SettingsConsole, {
     initialKeys: [],
     loadError: false,
+    canManageKeys: role === "owner",
     envToken: false,
     origin: null,
     tenantAudit: {
@@ -21,7 +23,7 @@ function renderSettings(mayManageLegacy: boolean) {
     account: {
       tenantName: "Axion",
       email: "admin@axiob.local",
-      role: mayManageLegacy ? "owner" : "member",
+      role,
       emailVerified: true,
       legacyBootstrap: false,
     },
@@ -46,9 +48,13 @@ describe("settings section navigation", () => {
     }
 
     expect(ownerNav).toContain('href="#legacy-data"');
+    expect(ownerNav).toContain('href="#api-keys"');
     expect(ownerHtml).toContain('id="legacy-data"');
     expect(memberNav).not.toContain('href="#legacy-data"');
+    expect(memberNav).not.toContain('href="#api-keys"');
     expect(memberHtml).not.toContain('id="legacy-data"');
+    expect(memberHtml).not.toContain('id="api-keys"');
+    expect(memberHtml).not.toContain("New key");
   });
 
   it("explains that the backup check is an owner attestation", () => {

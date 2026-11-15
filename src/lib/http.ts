@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySession } from "./auth";
 import { LIMITS } from "./format/schema";
 import { isSessionRevoked } from "./repo";
 import { loadAccountPrincipal } from "./repo/accounts";
+import type { TenantRole } from "./repo/types";
 
 export function json(data: unknown, status = 200, extra?: Record<string, string>): NextResponse {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store", ...extra } });
@@ -51,8 +52,10 @@ export async function sameOrigin(): Promise<boolean> {
 }
 
 /** Returns a response to send back when the caller may not continue, or null when they may. */
-export async function guardAdmin(opts: { mutating?: boolean } = {}): Promise<NextResponse | null> {
-  if (!(await adminSession())) return fail(401, "Sign in to continue.");
+export async function guardAdmin(opts: { mutating?: boolean; roles?: readonly TenantRole[] } = {}): Promise<NextResponse | null> {
+  const session = await adminSession();
+  if (!session) return fail(401, "Sign in to continue.");
+  if (opts.roles && !opts.roles.includes(session.role)) return fail(403, "Your workspace role does not allow this action.");
   if (opts.mutating && !(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
   return null;
 }

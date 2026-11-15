@@ -47,7 +47,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "expired", label: "Expired" },
 ];
 
-export function SettingsConsole({ initialKeys, loadError, envToken, origin, tenantAudit: initialTenantAudit, tenantAuditError, mayManageLegacy, account }: { initialKeys: KeyRow[] | null; loadError: boolean; envToken: boolean; origin: string | null; tenantAudit: TenantAudit | null; tenantAuditError: boolean; mayManageLegacy: boolean; account: AccountSettings | null }) {
+export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToken, origin, tenantAudit: initialTenantAudit, tenantAuditError, mayManageLegacy, account }: { initialKeys: KeyRow[] | null; loadError: boolean; canManageKeys: boolean; envToken: boolean; origin: string | null; tenantAudit: TenantAudit | null; tenantAuditError: boolean; mayManageLegacy: boolean; account: AccountSettings | null }) {
   const toast = useToast();
   const [keys, setKeys] = useState<KeyRow[] | null>(initialKeys);
   const [failed, setFailed] = useState(loadError);
@@ -151,15 +151,15 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
       <div className="page-head">
         <div>
           <h1>Settings</h1>
-          <p>Manage your workspace account, connect an agent, and control named keys. The full value of a new key is shown once, then only a fingerprint remains.</p>
+          <p>{canManageKeys ? "Manage your workspace account, connect an agent, and control named keys. The full value of a new key is shown once, then only a fingerprint remains." : "Manage your workspace account and connect an agent."}</p>
         </div>
-        <button className="btn primary right" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New key</button>
+        {canManageKeys && <button className="btn primary right" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New key</button>}
       </div>
 
       <nav className="settings-section-nav" aria-label="Settings sections">
         {account && <a href="#workspace-account">Workspace account</a>}
         <a href="#agent-connection">Agent connection</a>
-        <a href="#api-keys">API keys</a>
+        {canManageKeys && <a href="#api-keys">API keys</a>}
         {mayManageLegacy && <a href="#legacy-data">Axion legacy data</a>}
       </nav>
 
@@ -238,7 +238,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
         </section>
       )}
 
-      <section id="api-keys" className="card settings-anchor">
+      {canManageKeys && <section id="api-keys" className="card settings-anchor">
         <div className="card-head" style={{ flexWrap: "wrap" }}>
           <Icon name="lock" size={16} />
           <div style={{ flex: 1, minWidth: 160 }}>
@@ -316,7 +316,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
             </table>
           </div>
         )}
-      </section>
+      </section>}
 
       {mayManageLegacy && (
         <section id="legacy-data" className="card settings-legacy-section settings-anchor">
@@ -361,7 +361,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
         </section>
       )}
 
-      {creating && (
+      {canManageKeys && creating && (
         <KeyForm
           title="New key"
           busy={busy}
@@ -374,7 +374,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           }}
         />
       )}
-      {editing && (
+      {canManageKeys && editing && (
         <KeyForm
           title={`Edit “${editing.name}”`}
           busy={busy}
@@ -386,7 +386,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           }}
         />
       )}
-      {revoking && (
+      {canManageKeys && revoking && (
         <Modal
           title={`Revoke “${revoking.name}”`}
           onClose={() => { if (!busy) setRevoking(null); }}
@@ -403,7 +403,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
           <p>Calls that use this key start failing immediately. The Axion server token is unchanged. You can restore the key later; restoring does not show the value again.</p>
         </Modal>
       )}
-      {deleting && (
+      {canManageKeys && deleting && (
         <DeleteKeyDialog
           name={deleting.name}
           busy={busy}

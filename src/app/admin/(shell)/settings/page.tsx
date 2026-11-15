@@ -11,12 +11,15 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const session = await adminSession();
+  const canManageKeys = session?.role === "owner" || session?.role === "admin";
   let keys = null;
   let loadError = false;
-  try {
-    keys = await listApiKeys();
-  } catch {
-    loadError = true;
+  if (canManageKeys) {
+    try {
+      keys = await listApiKeys();
+    } catch {
+      loadError = true;
+    }
   }
   let tenantAudit: Awaited<ReturnType<typeof auditTenantMigration>> | null = null;
   let tenantAuditError = false;
@@ -36,5 +39,5 @@ export default async function SettingsPage() {
     emailVerified: session.emailVerified,
     legacyBootstrap: session.legacyBootstrap,
   } : null;
-  return <SettingsConsole initialKeys={keys} loadError={loadError} envToken={mcpToken() !== null} origin={origin.ok ? origin.origin : null} tenantAudit={tenantAudit} tenantAuditError={tenantAuditError} mayManageLegacy={mayManageLegacy} account={account} />;
+  return <SettingsConsole initialKeys={keys} loadError={loadError} canManageKeys={canManageKeys} envToken={mcpToken() !== null} origin={origin.ok ? origin.origin : null} tenantAudit={tenantAudit} tenantAuditError={tenantAuditError} mayManageLegacy={mayManageLegacy} account={account} />;
 }

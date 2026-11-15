@@ -3,7 +3,7 @@ import { deleteApiKey, updateApiKey } from "@/lib/repo/keys";
 import { parseMcpCapabilities, type McpCapability } from "@/lib/mcp/capabilities";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await ctx.params;
   const body = await readJson<{ name?: unknown; note?: unknown; expiresAt?: unknown; revoked?: unknown; capabilities?: unknown }>(req);
@@ -36,7 +36,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await ctx.params;
   const removed = await deleteApiKey(id);
