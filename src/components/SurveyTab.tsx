@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { Diagnostic } from "@/lib/diagnostics/types";
 import type { Question, Section } from "@/lib/format/schema";
+import { FIELD_LABELS, fieldsForQuestion, formatQuestionFieldValue, summarizeQuestionChanges } from "@/lib/survey-changes";
 import type { InterviewData } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
 import { Uploader, type UploadState } from "./Uploader";
@@ -32,31 +33,10 @@ interface CandidatePreview {
     sectionsAfter: Section[];
   };
 }
-const QUESTION_FIELDS: (keyof Question)[] = ["label", "type", "required", "section", "options", "min", "max", "step", "help", "note", "maxLength", "custom"];
-const FIELD_LABELS: Partial<Record<keyof Question, string>> = {
-  label: "wording", type: "response type", required: "required status", section: "section",
-  options: "response options", min: "minimum", max: "maximum", step: "step", help: "help text",
-  note: "note field", maxLength: "text length", custom: "custom response behavior",
-};
-
 function sectionSummary(sections: Section[]) {
   return sections.length
     ? sections.map((section) => `${section.title} (${section.id})${section.description ? ` — ${section.description}` : ""}`).join("; ")
     : "none";
-}
-
-function summarizeChanges(before: Question[], after: Question[]) {
-  const beforeById = new Map(before.map((question) => [question.id, question]));
-  const afterById = new Map(after.map((question) => [question.id, question]));
-  const added = after.filter((question) => !beforeById.has(question.id));
-  const removed = before.filter((question) => !afterById.has(question.id));
-  const updated = after.flatMap((question) => {
-    const previous = beforeById.get(question.id);
-    if (!previous) return [];
-    const fields = QUESTION_FIELDS.filter((field) => JSON.stringify(previous[field] ?? null) !== JSON.stringify(question[field] ?? null));
-    return fields.length ? [{ question, fields: fields.map((field) => FIELD_LABELS[field] ?? String(field)) }] : [];
-  });
-  return { added, removed, updated };
 }
 
 export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () => void }) {
@@ -74,7 +54,7 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
   const answered = data.people.reduce((n, p) => n + p.answered, 0);
   const endpoint = `/api/admin/interviews/${data.interview.id}/versions`;
   const compatibilityFindings = preview?.diagnostics.filter((diagnostic) => diagnostic.category === "compat") ?? [];
-  const changes = preview ? summarizeChanges(preview.changes.questionsBefore, preview.changes.questionsAfter) : null;
+  const changes = preview ? summarizeQuestionChanges(preview.changes.questionsBefore, preview.changes.questionsAfter) : null;
   const sectionsChanged = !!preview && JSON.stringify(preview.changes.sectionsBefore) !== JSON.stringify(preview.changes.sectionsAfter);
   const canPreview = upload.ok && upload.settled && !busy;
   const canPublish = !!preview && reviewedCandidate && (!preview.compatibilityImpact || ackCompatibility) && !busy;
@@ -206,15 +186,57 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
                 </div>
                 <div className="candidate-changes">
                   <h4>Question and section changes</h4>
-                  {changes.added.length + changes.removed.length + changes.updated.length === 0 && !sectionsChanged ? (
+                  {changes.added.length + changes.removed.length + changes.updated.length + changes.moved.length === 0 && !sectionsChanged ? (
                     <p className="muted">No question or section definitions changed. Review the rendered theme and layout below.</p>
                   ) : (
-                    <ul>
-                      {changes.added.map((question) => <li key={`added-${question.id}`}><strong>Added {question.id}:</strong> {question.label} <span className="muted">({question.type})</span></li>)}
-                      {changes.removed.map((question) => <li key={`removed-${question.id}`}><strong>Removed {question.id}:</strong> {question.label}</li>)}
-                      {changes.updated.map(({ question, fields }) => <li key={`updated-${question.id}`}><strong>Updated {question.id}:</strong> {question.label} <span className="muted">({fields.join(", ")})</span></li>)}
-                      {sectionsChanged && <li><strong>Sections changed:</strong> before: {sectionSummary(preview.changes.sectionsBefore)}; after: {sectionSummary(preview.changes.sectionsAfter)}.</li>}
-                    </ul>
+                    <div className="candidate-change-list">
+                      {changes.added.map((question) => (
+                        <article className="candidate-question-change" key={`added-${question.id}`}>
+                          <h5>Added {question.id}</h5>
+                          <dl className="candidate-question-fields">
+                            {fieldsForQuestion(question).map((field) => <div key={field}><dt>{FIELD_LABELS[field]}</dt><dd className="candidate-question-value">{formatQuestionFieldValue(field, question, preview.changes.sectionsAfter)}</dd></div>)}
+                          </dl>
+                        </article>
+                      ))}
+                      {changes.removed.map((question) => (
+                        <article className="candidate-question-change" key={`removed-${question.id}`}>
+                          <h5>Removed {question.id}</h5>
+                          <dl className="candidate-question-fields">
+                            {fieldsForQuestion(question).map((field) => <div key={field}><dt>{FIELD_LABELS[field]}</dt><dd className="candidate-question-value">{formatQuestionFieldValue(field, question, preview.changes.sectionsBefore)}</dd></div>)}
+                          </dl>
+                        </article>
+                      ))}
+                      {changes.updated.map(({ previous, question, fields }) => (
+                        <article className="candidate-question-change" key={`updated-${question.id}`}>
+                          <h5>Updated {question.id}</h5>
+                          <div className="candidate-question-table-wrap" tabIndex={0} aria-label={`Scroll to read changed fields for ${question.id}`}>
+                            <table className="t candidate-question-diff" aria-label={`Changed fields for ${question.id}`}>
+                              <thead><tr><th scope="col">Field</th><th scope="col">Before</th><th scope="col">Candidate</th></tr></thead>
+                              <tbody>{fields.map((field) => (
+                                <tr key={field}>
+                                  <th scope="row">{FIELD_LABELS[field]}</th>
+                                  <td className="candidate-question-value">{formatQuestionFieldValue(field, previous, preview.changes.sectionsBefore)}</td>
+                                  <td className="candidate-question-value">{formatQuestionFieldValue(field, question, preview.changes.sectionsAfter)}</td>
+                                </tr>
+                              ))}</tbody>
+                            </table>
+                          </div>
+                        </article>
+                      ))}
+                      {changes.moved.length > 0 && (
+                        <article className="candidate-question-change">
+                          <h5>Question order changed</h5>
+                          <ul>{changes.moved.map(({ id, beforePosition, afterPosition }) => <li key={`moved-${id}`}>Moved {id}: position {beforePosition} → {afterPosition}</li>)}</ul>
+                        </article>
+                      )}
+                      {sectionsChanged && (
+                        <article className="candidate-question-change">
+                          <h5>Sections changed</h5>
+                          <p><strong>Before:</strong> {sectionSummary(preview.changes.sectionsBefore)}</p>
+                          <p><strong>Candidate:</strong> {sectionSummary(preview.changes.sectionsAfter)}</p>
+                        </article>
+                      )}
+                    </div>
                   )}
                   <p className="muted">{preview.changes.questionCountBefore} questions before · {preview.changes.questionCountAfter} after · {preview.counts.warning} checker warnings · {preview.counts.info} notes</p>
                 </div>

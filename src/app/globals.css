@@ -336,12 +336,28 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .candidate-changes ul, .candidate-compatibility ul { margin: 2px 0 0 18px; padding: 0; }
 .candidate-changes li, .candidate-compatibility li { margin-top: 5px; }
 .candidate-changes > p { margin: 0; font-size: 12.5px; }
+.candidate-change-list { display: grid; gap: 8px; }
+.candidate-question-change { min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.candidate-question-change h5 { margin: 0 0 8px; font-size: 13px; }
+.candidate-question-change p { margin: 5px 0 0; font-size: 12.5px; }
+.candidate-question-fields { display: grid; grid-template-columns: minmax(130px, 190px) minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 12.5px; }
+.candidate-question-fields dt { color: var(--muted); }
+.candidate-question-fields dd { min-width: 0; margin: 0; }
+.candidate-question-value { white-space: pre-wrap; overflow-wrap: anywhere; }
+.candidate-question-table-wrap { max-width: 100%; overflow-x: auto; }
+.candidate-question-diff { width: 100%; min-width: 460px; table-layout: fixed; font-size: 12px; }
+.candidate-question-diff th:first-child { width: 19%; }
+.candidate-question-diff td { vertical-align: top; }
 .candidate-frame { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-3); }
 .candidate-confirm { margin: 0; }
 .candidate-review .callout { align-items: flex-start; }
 .candidate-review .candidate-confirm { align-items: center; }
 .candidate-review .candidate-confirm input { flex: 0 0 auto; }
-@media (max-width: 640px) { .candidate-review-head { flex-direction: column; } }
+@media (max-width: 640px) {
+  .candidate-review-head { flex-direction: column; }
+  .candidate-question-fields { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .candidate-question-fields dd { margin-bottom: 5px; }
+}
 .analysis-empty, .analysis-text-note { color: var(--muted); font-size: 13px; }
 .person-card { border-top: 1px solid var(--line); }
 .person-card:first-child { border-top: 0; }
