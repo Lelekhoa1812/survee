@@ -270,6 +270,17 @@ export async function bootstrapLegacyAxionOwner(emailInput: string, password: st
   return accountPrincipal(user, membership, axion);
 }
 
+/** Rename an active workspace. Callers must authorize the owner's current tenant first. */
+export async function updateTenantName(tenantId: string, nameInput: string): Promise<boolean> {
+  const name = nameInput.trim();
+  if (!tenantId || tenantId.length > 80 || !name || name.length > 100 || /[\u0000-\u001f\u007f]/.test(name)) return false;
+  const result = await (await col.tenants()).updateOne(
+    { _id: tenantId, status: "active" },
+    { $set: { name, updatedAt: new Date() } },
+  );
+  return result.matchedCount === 1;
+}
+
 export async function changeAccountPassword(userId: string, currentPassword: string, nextPassword: string): Promise<number | null> {
   if (!/^[0-9a-f]{24}$/i.test(userId)) return null;
   if (nextPassword.length < 12 || nextPassword.length > 200) return null;

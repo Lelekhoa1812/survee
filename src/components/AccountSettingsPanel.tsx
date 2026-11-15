@@ -13,6 +13,9 @@ interface AccountSettings {
 
 export function AccountSettingsPanel({ account }: { account: AccountSettings }) {
   const toast = useToast();
+  const [workspaceName, setWorkspaceName] = useState(account.tenantName);
+  const [savedWorkspaceName, setSavedWorkspaceName] = useState(account.tenantName);
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
@@ -22,6 +25,26 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+
+  async function renameWorkspace(event: React.FormEvent) {
+    event.preventDefault();
+    const name = workspaceName.trim();
+    if (workspaceBusy || !name || name.length > 100 || name === savedWorkspaceName) return;
+    setWorkspaceBusy(true);
+    const result = await api<{ tenantName?: string }>("/api/admin/tenant", {
+      method: "POST",
+      body: { name },
+    });
+    setWorkspaceBusy(false);
+    if (!result.ok) {
+      toast(result.data.error ?? "The workspace name could not be updated.", "err");
+      return;
+    }
+    const saved = result.data.tenantName ?? name;
+    setWorkspaceName(saved);
+    setSavedWorkspaceName(saved);
+    toast("Workspace name updated.");
+  }
 
   async function requestEmailChange(event: React.FormEvent) {
     event.preventDefault();
@@ -74,10 +97,19 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
     <section className="card" style={{ marginBottom: 16 }}>
       <div className="card-head">
         <Icon name="shield" size={16} />
-        <div><h2>Workspace account</h2><div className="sub">{account.tenantName} · {account.role}</div></div>
+        <div><h2>Workspace account</h2><div className="sub">{workspaceName} · {account.role}</div></div>
       </div>
       <div className="card-pad settings-grid">
         <div className="stack">
+          {account.role === "owner" && <form className="stack" onSubmit={renameWorkspace}>
+            <h3 style={{ fontSize: 15 }}>Workspace name</h3>
+            <div className="field">
+              <label htmlFor="workspace-name">Name</label>
+              <input id="workspace-name" className="input" autoComplete="organization" maxLength={100} value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} required />
+              <span className="hint">This name appears in the workspace and its settings.</span>
+            </div>
+            <button className="btn" disabled={workspaceBusy || !workspaceName.trim() || workspaceName.trim() === savedWorkspaceName}>{workspaceBusy ? <Spinner /> : null} Save workspace name</button>
+          </form>}
           <div className="field">
             <span className="label">Sign-in email</span>
             <div className="row wrap"><strong>{account.email}</strong>{account.emailVerified ? <Badge kind="ok">Verified</Badge> : <Badge kind="warn">Unverified</Badge>}</div>
