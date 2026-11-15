@@ -8,7 +8,7 @@ const PASSWORD_BYTES = 64;
 const SCRYPT_N = 16_384;
 const SIGNUP_TTL_MS = 30 * 60 * 1000;
 const EMAIL_CHANGE_TTL_MS = 30 * 60 * 1000;
-const PASSWORD_RESET_TTL_MS = 2 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
 export interface AccountPrincipal {
   userId: string;
@@ -77,19 +77,8 @@ export async function authenticateAccount(emailInput: string, password: string):
   if (!membership) return null;
   const tenant = await (await col.tenants()).findOne({ _id: membership.tenantId, status: "active" });
   if (!tenant) return null;
-  if (!passwordMatches && !(await consumeTemporaryPassword(user._id, password))) return null;
+  if (!passwordMatches) return null;
   return accountPrincipal(user, membership, tenant);
-}
-
-async function consumeTemporaryPassword(userId: ObjectId, token: string): Promise<boolean> {
-  if (!token || token.length > 200) return false;
-  const tokenHash = createHash("sha256").update(token).digest("hex");
-  const resets = await col.passwordResets();
-  const now = new Date();
-  const pending = await resets.findOne({ userId, tokenHash, expiresAt: { $gt: now } });
-  if (!pending) return false;
-  const claimed = await resets.deleteOne({ _id: pending._id, userId, tokenHash, expiresAt: { $gt: new Date() } });
-  return claimed.deletedCount === 1;
 }
 
 /** Resolve a signed session against persisted membership state so removed users lose access immediately. */
@@ -298,7 +287,7 @@ export async function changeAccountPassword(userId: string, currentPassword: str
   return nextVersion;
 }
 
-/** Create a one-time temporary sign-in password without indicating whether an address has an account. */
+/** Create a one-time password reset link without indicating whether an address has an account. */
 export async function createPendingPasswordReset(input: { email: string; token: string }): Promise<ObjectId | null> {
   const email = normalizeEmail(input.email);
   const user = await (await col.users()).findOne({ email, emailVerifiedAt: { $exists: true } });
@@ -331,26 +320,28 @@ export async function removePendingPasswordReset(id: ObjectId): Promise<void> {
 }
 
 /** Consume one reset link and expire prior sessions by incrementing the user's auth version. */
-export async function completePasswordReset(token: string, nextPassword: string): Promise<boolean> {
-  if (nextPassword.length < 12 || nextPassword.length > 200) return false;
+export type CompletePasswordResetResult = { ok: true; email: string } | { ok: false };
+
+export async function completePasswordReset(token: string, nextPassword: string): Promise<CompletePasswordResetResult> {
+  if (nextPassword.length < 12 || nextPassword.length > 200) return { ok: false };
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const resets = await col.passwordResets();
   const pending = await resets.findOne({ tokenHash, expiresAt: { $gt: new Date() } });
-  if (!pending) return false;
+  if (!pending) return { ok: false };
   // Reset links issued before account-version binding was added are retired safely.
   if (pending.authVersion === undefined) {
     await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
-    return false;
+    return { ok: false };
   }
   const users = await col.users();
   const user = await users.findOne({ _id: pending.userId, emailVerifiedAt: { $exists: true } });
-  if (!user) return false;
+  if (!user) return { ok: false };
   const versionFilter = pending.authVersion === null
     ? { authVersion: { $exists: false } }
     : { authVersion: pending.authVersion };
   if ((user.authVersion ?? null) !== pending.authVersion) {
     await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
-    return false;
+    return { ok: false };
   }
   const passwordHash = await hashPassword(nextPassword);
   const result = await users.updateOne(
@@ -359,12 +350,12 @@ export async function completePasswordReset(token: string, nextPassword: string)
   );
   if (result.matchedCount !== 1) {
     await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
-    return false;
+    return { ok: false };
   }
   // Keep the link retryable when the account write fails. If this cleanup fails after the
   // account write, the stored authVersion makes the token stale and unusable on the next attempt.
   await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
-  return true;
+  return { ok: true, email: user.email };
 }
 
 export async function createPendingEmailChange(input: { userId: string; currentPassword: string; email: string; token: string }): Promise<{ ok: true; id: ObjectId } | { ok: false; error: string }> {

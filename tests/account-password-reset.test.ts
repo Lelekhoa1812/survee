@@ -94,7 +94,7 @@ describe("password reset", () => {
     expect(store.resets).toHaveLength(0);
   });
 
-  it("accepts a temporary password once for two hours without changing the saved password", async () => {
+  it("does not accept a reset token as a sign-in password", async () => {
     const userId = new ObjectId();
     const passwordHash = await hashPassword("saved account password long enough");
     const token = "temporary-sign-in-password";
@@ -104,11 +104,10 @@ describe("password reset", () => {
 
     const id = await createPendingPasswordReset({ email: "owner@example.com", token });
     expect(id).toBeInstanceOf(ObjectId);
-    expect(store.resets[0].expiresAt.getTime() - store.resets[0].createdAt.getTime()).toBe(2 * 60 * 60 * 1000);
-    await expect(authenticateAccount("owner@example.com", token)).resolves.toMatchObject({ email: "owner@example.com", tenantName: "Example" });
+    expect(store.resets[0].expiresAt.getTime() - store.resets[0].createdAt.getTime()).toBe(30 * 60 * 1000);
     await expect(authenticateAccount("owner@example.com", token)).resolves.toBeNull();
     expect(store.users[0].passwordHash).toBe(passwordHash);
-    expect(store.resets).toHaveLength(0);
+    expect(store.resets).toHaveLength(1);
   });
 
   it("changes the password once and increments the version used to invalidate sessions", async () => {
@@ -121,8 +120,8 @@ describe("password reset", () => {
       authVersion: 2, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
     });
 
-    await expect(completePasswordReset(token, "new password long enough 123")).resolves.toBe(true);
-    await expect(completePasswordReset(token, "another password long enough 456")).resolves.toBe(false);
+    await expect(completePasswordReset(token, "new password long enough 123")).resolves.toEqual({ ok: true, email: "owner@example.com" });
+    await expect(completePasswordReset(token, "another password long enough 456")).resolves.toEqual({ ok: false });
     await expect(verifyPassword("new password long enough 123", store.users[0].passwordHash)).resolves.toBe(true);
     expect(store.users[0].authVersion).toBe(3);
     expect(store.resets).toHaveLength(0);
@@ -136,7 +135,7 @@ describe("password reset", () => {
     const id = await createPendingPasswordReset({ email: "owner@example.com", token });
     expect(id).toBeInstanceOf(ObjectId);
 
-    await expect(completePasswordReset(token, "legacy account new password")).resolves.toBe(true);
+    await expect(completePasswordReset(token, "legacy account new password")).resolves.toEqual({ ok: true, email: "owner@example.com" });
     expect(store.users[0].authVersion).toBe(1);
     await expect(verifyPassword("legacy account new password", store.users[0].passwordHash)).resolves.toBe(true);
   });
@@ -156,7 +155,7 @@ describe("password reset", () => {
       store.users[0].authVersion = 5;
     };
 
-    await expect(completePasswordReset(token, "reset password long enough 123")).resolves.toBe(false);
+    await expect(completePasswordReset(token, "reset password long enough 123")).resolves.toEqual({ ok: false });
     await expect(verifyPassword("concurrent password long enough", store.users[0].passwordHash)).resolves.toBe(true);
     expect(store.users[0].authVersion).toBe(5);
     expect(store.resets).toHaveLength(0);
@@ -175,7 +174,7 @@ describe("password reset", () => {
 
     await expect(completePasswordReset(token, "retryable password long enough")).rejects.toThrow("simulated database write failure");
     expect(store.resets).toHaveLength(1);
-    await expect(completePasswordReset(token, "retryable password long enough")).resolves.toBe(true);
+    await expect(completePasswordReset(token, "retryable password long enough")).resolves.toEqual({ ok: true, email: "owner@example.com" });
     await expect(verifyPassword("retryable password long enough", store.users[0].passwordHash)).resolves.toBe(true);
     expect(store.users[0].authVersion).toBe(3);
     expect(store.resets).toHaveLength(0);

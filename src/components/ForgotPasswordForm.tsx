@@ -29,7 +29,7 @@ export function ForgotPasswordForm() {
     <form className="card auth-card" onSubmit={submit}>
       <div className="stack" style={{ gap: 10 }}>
         <BrandMark size={40} wordmark />
-        <div><h1>Forgot your password?</h1><p className="muted" style={{ marginTop: 4 }}>We’ll email a temporary sign-in password if this address belongs to a verified KQA account. It expires after 2 hours and works once.</p></div>
+        <div><h1>Forgot your password?</h1><p className="muted" style={{ marginTop: 4 }}>We’ll email a password reset link if this address belongs to a verified KQA account. It expires after 30 minutes and works once.</p></div>
       </div>
       <div className="field">
         <label htmlFor="reset-email">Email</label>
@@ -37,7 +37,7 @@ export function ForgotPasswordForm() {
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
       {message && <p className="callout ok" role="status">{message}</p>}
-      <button className="btn primary lg block" disabled={busy || !email}>{busy ? <Spinner /> : null} Email temporary password</button>
+      <button className="btn primary lg block" disabled={busy || !email}>{busy ? <Spinner /> : null} Email reset link</button>
       <p className="muted" style={{ margin: 0, textAlign: "center", fontSize: 13.5 }}><Link href="/admin/login" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Back to sign in</Link></p>
     </form>
   );

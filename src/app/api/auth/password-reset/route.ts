@@ -7,7 +7,7 @@ import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { createPendingPasswordReset, removePendingPasswordReset } from "@/lib/repo/accounts";
 import { consumeRateLimit } from "@/lib/repo";
 
-const GENERIC = "If a verified KQA account uses this address, check its inbox for a temporary sign-in password.";
+const GENERIC = "If a verified KQA account uses this address, check its inbox for a password reset link.";
 
 function clientIp(h: Headers): string {
   const platform = h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip");
@@ -51,14 +51,15 @@ export async function POST(req: Request) {
   }
   if (!pendingId) return generic();
 
-  const loginUrl = new URL("/admin/login", base.origin);
+  const resetUrl = new URL("/reset-password", base.origin);
+  resetUrl.hash = new URLSearchParams({ token }).toString();
   try {
     await sendSmtp({
       to: parsed.email,
-      subject: "Your temporary KQA sign-in password",
+      subject: "Reset your KQA password",
       messageId: newMessageId(smtp.user),
-      text: `Use this temporary password to sign in to KQA: ${token}\n\nIt expires in 2 hours and works once. Sign in at ${loginUrl.toString()}. If you did not request it, you can ignore this message.`,
-      html: `<p>Use this temporary password to sign in to KQA. It expires in 2 hours and works once:</p><p><code style="font-size:16px;word-break:break-all">${escapeHtml(token)}</code></p><p><a href="${escapeHtml(loginUrl.toString())}">Sign in to KQA</a></p><p>If you did not request it, you can ignore this message.</p>`,
+      text: `Choose a new password using this link: ${resetUrl.toString()}\n\nThe link expires in 30 minutes and works once. If you did not request this, you can ignore this message.`,
+      html: `<p>Choose a new KQA password using the link below. It expires in 30 minutes and works once.</p><p><a href="${escapeHtml(resetUrl.toString())}">Reset your password</a></p><p>If you did not request this, you can ignore this message.</p>`,
     });
   } catch {
     await removePendingPasswordReset(pendingId).catch(() => {});
