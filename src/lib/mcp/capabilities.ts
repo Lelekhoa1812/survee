@@ -14,12 +14,12 @@ export const MCP_CAPABILITIES = [
 export type McpCapability = (typeof MCP_CAPABILITIES)[number];
 
 export const MCP_CAPABILITY_INFO: Record<McpCapability, { label: string; description: string }> = {
-  "interviews:read": { label: "Interview setup", description: "List interviews, questionnaire files, versions, and static checks, and preview requiredness changes." },
+  "interviews:read": { label: "Interview setup", description: "List interviews, questionnaire files, versions, and static checks, and preview question edits." },
   "analytics:read": { label: "Aggregated analysis", description: "Read descriptive answer summaries and analytics guidance." },
   "respondents:read": { label: "Respondent details", description: "Read names, emails, private links, individual answers, exports, and event or mail status." },
   "respondents:manage": { label: "Manage respondents", description: "Add, edit, remove, reopen respondents, or regenerate private links." },
   "interviews:manage": { label: "Manage interviews", description: "Create, rename, open, or close interviews." },
-  "questionnaires:manage": { label: "Publish questionnaires", description: "Upload or publish a new questionnaire version, including requiredness changes." },
+  "questionnaires:manage": { label: "Publish questionnaires", description: "Upload or publish a new questionnaire version, including question block and requiredness changes." },
   "email:send": { label: "Send invitations", description: "Send a private-link invitation email to one respondent." },
   "email:check": { label: "Check invitation delivery", description: "Check the stored invitation message ID and update its delivery status." },
   "interviews:delete": { label: "Delete interviews", description: "Permanently delete an interview and its associated records." },
@@ -38,6 +38,7 @@ export const MCP_TOOL_CAPABILITIES = {
   get_survey_html: "interviews:read",
   list_versions: "interviews:read",
   check_questionnaire: "interviews:read",
+  preview_questionnaire_block_patch: "interviews:read",
   preview_questionnaire_required_patch: "interviews:read",
   list_people: "respondents:read",
   get_person: "respondents:read",
@@ -52,6 +53,7 @@ export const MCP_TOOL_CAPABILITIES = {
   delete_interview: "interviews:delete",
   preview_questionnaire_version_patch: "interviews:read",
   apply_questionnaire_version_patch: "questionnaires:manage",
+  apply_questionnaire_block_patch: "questionnaires:manage",
   apply_questionnaire_required_patch: "questionnaires:manage",
   upload_survey_version: "questionnaires:manage",
   add_people: "respondents:manage",

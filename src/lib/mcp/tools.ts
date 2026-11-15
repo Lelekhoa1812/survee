@@ -50,6 +50,7 @@ import { currentPrincipal } from "../tenant-context";
 import { summarizeQuestionChanges, summarizeSectionChanges } from "../survey-changes";
 import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
+import { patchQuestionnaireBlocks, type QuestionnaireBlockOperation } from "./questionnaire-block-patch";
 import { patchRequiredQuestions, type RequiredQuestionChange } from "./questionnaire-required-patch";
 
 export interface ToolResult {
@@ -75,6 +76,36 @@ const requiredChanges = {
   minItems: 1,
   maxItems: 500,
   items: obj({ questionId: str, required: bool }, ["questionId", "required"]),
+};
+const questionnaireQuestion = obj({
+  id: str,
+  type: { type: "string", enum: ["single", "multi", "select", "text", "longtext", "number", "scale", "date"] },
+  label: str,
+  help: str,
+  section: str,
+  required: bool,
+  options: { type: "array", minItems: 2, maxItems: 50, items: obj({ value: str, label: str }, ["value", "label"]) },
+  // The custom MCP argument validator defers this union to the canonical question schema in the patcher.
+  note: { anyOf: [
+    { type: "boolean" },
+    { type: "object", properties: { label: str, placeholder: str, maxLength: { type: "integer", minimum: 1, maximum: 5000 } }, additionalProperties: false },
+  ] },
+  min: { type: "number" },
+  max: { type: "number" },
+  step: { type: "number" },
+  maxLength: { type: "integer", minimum: 1, maximum: 20000 },
+  custom: bool,
+}, ["id", "type", "label"]);
+const questionnaireBlockOperations = {
+  type: "array",
+  minItems: 1,
+  maxItems: 50,
+  items: obj({
+    op: { type: "string", enum: ["add", "update", "delete"] },
+    questionId: str,
+    question: questionnaireQuestion,
+    html: str,
+  }, ["op"]),
 };
 
 function ok(data: Record<string, unknown>, text?: string): ToolResult {
@@ -935,6 +966,143 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "preview_questionnaire_block_patch",
+    description: "Preview a batch of add/update/delete operations for ordinary questions with explicit question and list markers. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed.",
+    inputSchema: obj({ interviewId: str, operations: questionnaireBlockOperations }, ["interviewId", "operations"]),
+    async run(args) {
+      const id = asString(args.interviewId, 40);
+      if (!id) return err("interviewId is required.");
+      const principal = currentPrincipal();
+      if (!principal?.tenantId) return err("A tenant-bound MCP request is required to preview questionnaire changes.", "tenant_context_required");
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
+      const current = await getVersion(interview._id, interview.currentVersion);
+      if (!current) return err("Current survey version not found.", "not_found");
+      const patched = patchQuestionnaireBlocks(current.html, args.operations as QuestionnaireBlockOperation[]);
+      if (!patched.ok) return err(patched.error, "invalid_patch");
+      const prepared = await withCompat(prepareSurvey(patched.html, current.fileName), id);
+      const candidateHtml = prepared.survey?.html ?? patched.html.replace(/^\uFEFF/, "");
+      const candidateHash = sha256(candidateHtml);
+      const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
+      const previewToken = prepared.survey && prepared.report.ok
+        ? createPatchPreviewToken({
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          baseHash: current.htmlSha256,
+          candidateHash,
+          fileNameHash: fileNameHash(current.fileName),
+          compatibilityHash,
+        })
+        : null;
+      if (prepared.survey && prepared.report.ok && !previewToken) {
+        return err("Secure preview signing is not configured for this request.", "preview_unavailable");
+      }
+      const questionsAfter = prepared.report.manifest ? questionList(prepared.report.manifest) : null;
+      const questionChanges = prepared.report.manifest
+        ? summarizeQuestionChanges(current.manifest.questions, prepared.report.manifest.questions)
+        : null;
+      return ok({
+        ok: !!prepared.survey && prepared.report.ok,
+        interviewId: id,
+        currentVersion: interview.currentVersion,
+        baseHash: current.htmlSha256,
+        candidateHash,
+        staticValid: prepared.report.ok,
+        diagnostics: prepared.report.diagnostics,
+        counts: prepared.report.counts,
+        compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
+        compatibilityHash,
+        ...(previewToken ?? {}),
+        report: prepared.markdown,
+        operationChanges: patched.changes,
+        questionsBefore: questionList(current.manifest),
+        questionsAfter,
+        questionChanges: questionChanges && {
+          counts: {
+            added: questionChanges.added.length,
+            removed: questionChanges.removed.length,
+            updated: questionChanges.updated.length,
+            moved: questionChanges.moved.length,
+          },
+          addedIds: questionChanges.added.map((question) => question.id),
+          removedIds: questionChanges.removed.map((question) => question.id),
+          updated: questionChanges.updated.map(({ previous, question, fields }) => ({
+            id: question.id,
+            fields,
+            before: Object.fromEntries(fields.map((field) => [field, previous[field] ?? null])),
+            after: Object.fromEntries(fields.map((field) => [field, question[field] ?? null])),
+          })),
+          moved: questionChanges.moved,
+        },
+      });
+    },
+  },
+  {
+    name: "apply_questionnaire_block_patch",
+    description: "Publish a previewed batch of ordinary question block edits. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
+    inputSchema: obj({
+      interviewId: str,
+      operations: questionnaireBlockOperations,
+      expectedVersion: { type: "integer", minimum: 1 },
+      baseHash: str,
+      candidateHash: str,
+      previewToken: str,
+      compatibilityHash: str,
+      acknowledgeCompatibilityImpact: bool,
+    }, ["interviewId", "operations", "expectedVersion", "baseHash", "candidateHash", "previewToken"]),
+    async run(args) {
+      const id = asString(args.interviewId, 40);
+      if (!id) return err("interviewId is required.");
+      const principal = currentPrincipal();
+      if (!principal?.tenantId) return err("A tenant-bound MCP request is required to apply questionnaire changes.", "tenant_context_required");
+      const expectedVersion = args.expectedVersion as number;
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
+      const current = await getVersion(interview._id, interview.currentVersion);
+      if (interview.currentVersion !== expectedVersion || !current || current.htmlSha256 !== args.baseHash) {
+        return err("The questionnaire changed since preview. Preview again before applying.", "stale_preview");
+      }
+      const preview = verifyPatchPreviewToken(asString(args.previewToken, 1000), {
+        tenantId: principal.tenantId,
+        interviewId: id,
+        expectedVersion,
+        baseHash: args.baseHash as string,
+        candidateHash: args.candidateHash as string,
+        fileNameHash: fileNameHash(current.fileName),
+      });
+      if (!preview.ok) return previewTokenError(preview.code);
+      const patched = patchQuestionnaireBlocks(current.html, args.operations as QuestionnaireBlockOperation[]);
+      if (!patched.ok) return err(patched.error, "invalid_patch");
+      const prepared = await withCompat(prepareSurvey(patched.html, current.fileName), id);
+      if (!prepared.survey || !prepared.report.ok) {
+        return { ...err("The candidate did not pass the static checker.", "checker"), structuredContent: { ok: false, error: "The candidate did not pass the static checker.", code: "checker", diagnostics: prepared.report.diagnostics, report: prepared.markdown } };
+      }
+      const candidateHash = sha256(prepared.survey.html);
+      if (candidateHash !== args.candidateHash || candidateHash !== preview.claims.candidateHash) return err("The candidate changed since preview. Preview again before applying.", "candidate_changed");
+      const impact = hasCompatibilityImpact(prepared.report.diagnostics);
+      const compatibilityHash = hashCompatibilityFindings(prepared.report.diagnostics);
+      if (preview.claims.compatibilityHash !== compatibilityHash || (args.compatibilityHash !== undefined && args.compatibilityHash !== compatibilityHash)) {
+        return err("Compatibility findings changed since preview. Preview again before applying.", "stale_preview");
+      }
+      if (impact && args.acknowledgeCompatibilityImpact !== true) {
+        return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics, compatibilityHash } };
+      }
+      if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
+      const published = await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey);
+      if (!published) return err("Interview not found.", "not_found");
+      if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
+      return ok({
+        ok: true,
+        interviewId: id,
+        version: published.version,
+        previousVersion: expectedVersion,
+        candidateHash,
+        operationChanges: patched.changes,
+        diagnostics: prepared.report.diagnostics,
+      });
+    },
+  },
+  {
     name: "upload_survey_version",
     description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned findings and retry with its short-lived previewToken, matching hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes.",
     inputSchema: obj({
@@ -1210,11 +1378,11 @@ export function listToolDefs(capabilities?: readonly McpCapability[]) {
   const readOnlyTools = new Set([
     "get_analytics_guidance", "get_design_guidance", "audit_questionnaire_design", "list_interviews", "get_interview",
     "get_survey_html", "list_versions", "check_questionnaire", "list_people", "get_person", "get_answers",
-    "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_required_patch",
+    "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
   ]);
   return TOOLS.filter(({ name }) => canCallMcpTool(name, capabilities)).map(({ name, description, inputSchema }) => {
     const readOnly = readOnlyTools.has(name);
-    const destructive = ["delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_required_patch", "upload_survey_version"].includes(name);
+    const destructive = ["delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_block_patch", "apply_questionnaire_required_patch", "upload_survey_version"].includes(name);
     const external = name === "send_invite" || name === "check_invite_delivery";
     return {
       name,

@@ -22,7 +22,7 @@ Before writing, make sure you know:
 
 Ask at most one round of questions. If you can proceed with a sensible default, do so and state the assumption in your reply.
 
-Use `get_design_guidance` with `surface: "questionnaire"` when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) and `FORMAT.md`. Follow its brief-to-review plan, use the scoped questionnaire profile from `template/starter.kqa.html` unless the host gives a different theme, and report the visual rationale plus checks performed. Treat accessibility requirements as testable constraints and visual taste as a reasoned, user-brief-grounded choice. For a live interview, preserve ids and inspect the semantic and compatibility changes before applying a version.
+Use `get_design_guidance` with `surface: "questionnaire"` when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) and `FORMAT.md`. Follow its brief-to-review plan, use the scoped questionnaire profile from `template/starter.kqa.html` unless the host gives a different theme, and report the visual rationale plus checks performed. Treat accessibility requirements as testable constraints and visual taste as a reasoned, user-brief-grounded choice. For a live interview, preserve ids and inspect the semantic and compatibility changes before applying a version. For supported marked ordinary questions, use the source-preserving MCP block preview/apply pair; use the complete-file pair for custom questions, arbitrary page changes, section moves, or files without reliable markers.
 
 ## Step 2. Design the manifest first
 
@@ -64,6 +64,8 @@ When the questionnaire is new or a question could materially affect a decision, 
 1. Copy `template/starter.kqa.html`. Keep its `<style>` design kit unchanged, add your rules after it.
 2. Replace the manifest with yours.
 3. For each question, copy the matching pattern from the starter and change the id, label and values. Every card follows the same shape:
+
+Keep `data-kqa-question-id="QUESTION_ID"` on each question block and `data-kqa-question-list="SECTION_ID"` on its containing list when you want agents to make source-preserving edits through MCP. For unsectioned questions, the list marker value is empty. These optional markers are described in [`FORMAT.md`](FORMAT.md).
 
 Single choice (`single`). Help text is "Pick one." Nothing is pre-checked.
 

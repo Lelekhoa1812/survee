@@ -191,10 +191,10 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
 
     <section class="kq-section" id="choices" aria-labelledby="choices-h">
       <div class="kq-section-head"><span class="kq-kicker">Part 1</span><h2 id="choices-h">Choices</h2><p>Radio buttons, checkboxes and a dropdown.</p></div>
-      <div class="kq-stack">
+      <div class="kq-stack" data-kqa-question-list="choices">
 
         <!-- single: radio buttons. All radios share data-kqa, name and differ by value. Wrap in fieldset + legend. -->
-        <article class="kq-q" id="q-priority">
+        <article class="kq-q" id="q-priority" data-kqa-question-id="priority">
           <div class="kq-q-head"><span class="kq-n">1</span><h3>Which area should we start with?</h3><span class="kq-tick" data-kqa-status="priority" aria-hidden="true"></span></div>
           <p class="kq-help">Pick one. You can change it any time before you submit.</p>
           <fieldset class="kq-options">
@@ -207,7 +207,7 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
         </article>
 
         <!-- multi: checkboxes. Same rules, type="checkbox". -->
-        <article class="kq-q" id="q-channels">
+        <article class="kq-q" id="q-channels" data-kqa-question-id="channels">
           <div class="kq-q-head"><span class="kq-n">2</span><h3>Which channels do you use today?</h3><span class="kq-tick" data-kqa-status="channels" aria-hidden="true"></span></div>
           <p class="kq-help">Tick every channel that applies.</p>
           <fieldset class="kq-options">
@@ -220,7 +220,7 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
         </article>
 
         <!-- select: one <select>; keep an empty first option as the placeholder. -->
-        <article class="kq-q" id="q-region">
+        <article class="kq-q" id="q-region" data-kqa-question-id="region">
           <div class="kq-q-head"><span class="kq-n">3</span><h3><label for="f-region">Where is your main market?</label></h3><span class="kq-tick" data-kqa-status="region" aria-hidden="true"></span></div>
           <select id="f-region" data-kqa="region">
             <option value="">Choose one…</option>
@@ -235,26 +235,26 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
 
     <section class="kq-section" id="writing" aria-labelledby="writing-h">
       <div class="kq-section-head"><span class="kq-kicker">Part 2</span><h2 id="writing-h">Writing and numbers</h2><p>Text, long text, numbers, scales and dates.</p></div>
-      <div class="kq-stack">
+      <div class="kq-stack" data-kqa-question-list="writing">
 
-        <article class="kq-q" id="q-company">
+        <article class="kq-q" id="q-company" data-kqa-question-id="company">
           <div class="kq-q-head"><span class="kq-n">4</span><h3><label for="f-company">What is your company called?</label></h3><span class="kq-tick" data-kqa-status="company" aria-hidden="true"></span></div>
           <input type="text" id="f-company" data-kqa="company" maxlength="120" autocomplete="organization">
         </article>
 
-        <article class="kq-q" id="q-goal">
+        <article class="kq-q" id="q-goal" data-kqa-question-id="goal">
           <div class="kq-q-head"><span class="kq-n">5</span><h3><label for="f-goal">What would a great result look like in three months?</label></h3><span class="kq-tick" data-kqa-status="goal" aria-hidden="true"></span></div>
           <p class="kq-help">A few sentences is plenty.</p>
           <textarea id="f-goal" data-kqa="goal" rows="4" maxlength="2000"></textarea>
         </article>
 
-        <article class="kq-q" id="q-team-size">
+        <article class="kq-q" id="q-team-size" data-kqa-question-id="team-size">
           <div class="kq-q-head"><span class="kq-n">6</span><h3><label for="f-team">How many people are in your team?</label></h3><span class="kq-tick" data-kqa-status="team-size" aria-hidden="true"></span></div>
           <input type="number" id="f-team" data-kqa="team-size" min="1" max="5000" inputmode="numeric" style="max-width: 200px">
         </article>
 
         <!-- scale: numbered radios (shown) or <input type="range" min max step> -->
-        <article class="kq-q" id="q-confidence">
+        <article class="kq-q" id="q-confidence" data-kqa-question-id="confidence">
           <div class="kq-q-head"><span class="kq-n">7</span><h3>How confident are you in your current process?</h3><span class="kq-tick" data-kqa-status="confidence" aria-hidden="true"></span></div>
           <p class="kq-help">1 is not at all, 5 is completely.</p>
           <fieldset class="kq-options">
@@ -270,13 +270,13 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
           </fieldset>
         </article>
 
-        <article class="kq-q" id="q-start-date">
+        <article class="kq-q" id="q-start-date" data-kqa-question-id="start-date">
           <div class="kq-q-head"><span class="kq-n">8</span><h3><label for="f-start">When would you like to start?</label></h3><span class="kq-tick" data-kqa-status="start-date" aria-hidden="true"></span></div>
           <input type="date" id="f-start" data-kqa="start-date" style="max-width: 220px">
         </article>
 
         <!-- custom: no data-kqa control. The page calls KQA.set() and listens for KQA.on("change"). -->
-        <article class="kq-q" id="q-stars">
+        <article class="kq-q" id="q-stars" data-kqa-question-id="stars">
           <div class="kq-q-head"><span class="kq-n">9</span><h3 id="stars-h">Rate this form</h3><span class="kq-tick" data-kqa-status="stars" aria-hidden="true"></span></div>
           <p class="kq-help">Built with script, using KQA.set. Shows how a custom control talks to the app.</p>
           <div id="stars" role="radiogroup" aria-labelledby="stars-h" style="display:flex; gap:6px"></div>
