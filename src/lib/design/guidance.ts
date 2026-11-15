@@ -22,7 +22,7 @@ const ACCESSIBILITY_EVALUATION_METHOD = {
     "Define the product, routes, themes, technologies, user groups, and conformance target in scope.",
     "Explore the product's essential functionality and identify representative views, states, and complete task paths, including important branches and errors.",
     "Select and record a representative sample; include different content types, interaction patterns, and process branches rather than relying on a single screenshot.",
-    "Evaluate each selected sample against the chosen WCAG criteria using appropriate automated and manual checks, recording the evidence and limitations for each finding.",
+    "Evaluate each selected sample against the chosen WCAG criteria using appropriate automated and manual checks. For KQA's public host routes, run npm run a11y:audit at desktop and 320 CSS px; also inspect interactive states and record each method's evidence and limits.",
     "Report the scope, sample, methods, findings, and unresolved gaps. Do not claim full-product conformance from a static scan, checklist, or unrepresentative sample.",
   ],
 } as const;
@@ -41,6 +41,7 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire"], text: "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden." },
   { surfaces: ["analytics"], text: "For analytics, verify survey version, participant scope, cohort n, no-answer count, valid n, and multi-select denominator; state that KQA does not track item-level display eligibility." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality." },
+  { surfaces: ["host"], text: "Run npm run a11y:audit on representative public host routes at desktop and 320 CSS px; review every violation and incomplete result, then perform manual keyboard, focus, content, and assistive-technology checks." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "For a conformance evaluation, define the scope, explore essential task paths, select and record representative views, states, and branches, evaluate each against the target criteria, and report findings and remaining gaps." },
 ];
 
@@ -49,6 +50,8 @@ export const DESIGN_REVIEW_CHECKLIST = REVIEW_CHECKLIST_ITEMS.map(({ text }) => 
 const SOURCES = [
   { name: "WCAG 2.2 Quick Reference", url: "https://www.w3.org/WAI/WCAG22/quickref/", role: "Normative accessibility success criteria; target WCAG 2.2 AA." },
   { name: "WCAG Evaluation Methodology (WCAG-EM) 2.0", url: "https://www.w3.org/TR/wcag-em-2/", role: "W3C Group Note published 23 July 2026 with informative, technology-agnostic process guidance for defining scope, exploring a product, selecting representative samples, evaluating them, and reporting findings; it is not a normative conformance criterion." },
+  { name: "W3C WAI: Evaluating Web Accessibility", url: "https://www.w3.org/WAI/test-evaluate/", role: "Explains that no evaluation tool alone can determine whether a site meets accessibility standards; automated findings need manual evaluation and representative sampling." },
+  { name: "axe-core", url: "https://github.com/dequelabs/axe-core", role: "Open-source browser rules engine for automated WCAG checks; its violations and incomplete results are evidence for specific rules, not a complete accessibility verdict." },
   { name: "WCAG 2.2 SC 2.5.8: Target Size (Minimum)", url: "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html", role: "Explains the Level AA 24 × 24 CSS pixel target-size criterion and its exceptions." },
   { name: "WAI-ARIA Authoring Practices Guide: Tabs", url: "https://www.w3.org/WAI/ARIA/apg/patterns/tabs/", role: "Implementation guidance for accessible tab interactions; not a conformance standard." },
   { name: "WAI-ARIA Authoring Practices Guide: Radio Group", url: "https://www.w3.org/WAI/ARIA/apg/patterns/radio/", role: "Keyboard interaction guidance for custom radio groups; native radio controls remain preferable." },
@@ -149,7 +152,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/7",
+    policyVersion: "kqa-design/8",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

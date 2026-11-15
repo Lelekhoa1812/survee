@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/7");
+    expect(guidance.policyVersion).toBe("kqa-design/8");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
@@ -15,6 +15,8 @@ describe("design guidance package", () => {
     expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("representative sample");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
     expect(guidance.sources.find((source) => source.name === "WCAG Evaluation Methodology (WCAG-EM) 2.0")?.url).toBe("https://www.w3.org/TR/wcag-em-2/");
+    expect(guidance.reviewChecklist.join(" ")).toContain("npm run a11y:audit");
+    expect(guidance.sources.find((source) => source.name === "axe-core")?.role).toContain("not a complete accessibility verdict");
   });
 
   it("scopes the visual profile to the host, questionnaire, and analytics surfaces", () => {

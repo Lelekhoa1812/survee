@@ -1,6 +1,6 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/7` · reviewed 16 November 2026
+Version: `kqa-design/8` · reviewed 16 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
@@ -46,11 +46,20 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 - For every analytic figure, are survey version, cohort, valid n, no-answer count, and multi-select denominator clear, with KQA's item-eligibility limit stated?
 - Are static checker results described only as evidence for the individual checks they cover? They do not judge wording quality, prove visual quality, or establish full WCAG conformance.
 - For a conformance evaluation, are the product scope, essential task paths, representative views/states/branches, target criteria, findings, and unresolved gaps documented?
+- For representative public host routes, was `npm run a11y:audit` run at desktop and 320 CSS px, and were violations and results needing manual review addressed?
+
+## Automated browser audit
+
+Run `npm run a11y:audit -- [baseUrl] [route ...]` with Chrome available (set `CHROME_PATH` when Chrome is not at the macOS default path). Without routes, it scans `/`, `/admin/login`, `/signup`, `/forgot-password`, and `/reset-password` at 1280 and 320 CSS px, then checks that `prefers-reduced-motion` disables CSS animation. The scan uses axe-core WCAG 2.0, 2.1, and 2.2 A/AA rules. Pass a production URL to inspect the deployed public pages.
+
+This is a repeatable sample, not a scan of authenticated host screens, respondent questionnaires, every interaction state, question wording, or assistive-technology behavior. Review axe's incomplete results manually, test keyboard and screen-reader paths, and report the exact sample and methods. A zero-violation result does not establish WCAG conformance.
 
 ## Research basis and limits
 
 - [WCAG 2.2 Quick Reference](https://www.w3.org/WAI/WCAG22/quickref/) provides the normative accessibility criteria. KQA targets Level AA.
 - [WCAG Evaluation Methodology (WCAG-EM) 2.0](https://www.w3.org/TR/wcag-em-2/) is a W3C Group Note published 23 July 2026 with informative, technology-agnostic process guidance: define scope, explore essential functionality, select representative samples, evaluate them, and report findings. It is not a normative success criterion or a claim of conformance.
+- [W3C WAI: Evaluating Web Accessibility](https://www.w3.org/WAI/test-evaluate/) explains that no evaluation tool alone can determine whether a site meets accessibility standards.
+- [axe-core](https://github.com/dequelabs/axe-core) is the open-source rules engine used by KQA's browser audit; violations and incomplete results cover only the checks its rules can evaluate.
 - [WCAG 2.2 SC 2.5.8: Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) explains the 24 × 24 CSS-pixel minimum and its exceptions.
 - [WAI-ARIA Authoring Practices Guide: Tabs](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/) provides implementation patterns for tab interactions; it is guidance, not a conformance standard.
 - [WAI-ARIA Authoring Practices Guide: Radio Group](https://www.w3.org/WAI/ARIA/apg/patterns/radio/) describes the keyboard behavior expected of custom radio groups; native radio controls are preferable when they fit.

@@ -247,7 +247,7 @@ describe("MCP tools", () => {
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/7");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/8");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
     expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.steps?.join(" ")).toContain("representative sample");
@@ -266,6 +266,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("Pew Research Center: Writing Survey Questions");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI-ARIA Authoring Practices Guide: Radio Group");
     expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WAI Forms Tutorial: User Notifications");
+    expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("axe-core");
     expect(body.result.structuredContent.sources?.find((source) => source.name === "Anthropic frontend-design skill")?.url).toBe("https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md");
   });
 
