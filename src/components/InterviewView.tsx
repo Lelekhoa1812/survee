@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { AnswersTab } from "./AnswersTab";
 import { AnalyticsTab } from "./AnalyticsTab";
 import { ExportTab } from "./ExportTab";
@@ -28,6 +28,7 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
   const toast = useToast();
   const origin = useOrigin();
   const [tab, setTab] = useState<Tab>(initialTab as Tab);
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({});
   const { interview, people, versions, events } = data;
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -36,6 +37,14 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
   const inProgress = people.filter((p) => p.status === "in_progress").length;
   const invited = people.filter((p) => p.status === "invited").length;
   const refresh = () => router.refresh();
+  const tabFocusStorageKey = `kqa:interview:${interview.id}:tab-focus`;
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem(tabFocusStorageKey) === tab) {
+      window.sessionStorage.removeItem(tabFocusStorageKey);
+      tabRefs.current[tab]?.focus();
+    }
+  }, [tab, tabFocusStorageKey]);
 
   function select(t: Tab) {
     const url = new URL(window.location.href);
@@ -58,6 +67,22 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
   }
 
   const tabs: [Tab, string, number?][] = [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? people.length : undefined], ["answers", "Answers", submitted + inProgress || undefined], ["analysis", "Analysis"], ["survey", "Survey"], ["export", "Export"]];
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: Tab) {
+    const currentIndex = tabs.findIndex(([key]) => key === current);
+    let nextIndex: number | undefined;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex === undefined) return;
+
+    event.preventDefault();
+    const next = tabs[nextIndex][0];
+    tabRefs.current[next]?.focus();
+    if (next === "analysis" || analysisOnly) window.sessionStorage.setItem(tabFocusStorageKey, next);
+    select(next);
+  }
 
   return (
     <main className="page">
@@ -82,12 +107,25 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
 
       <div className="tabs" role="tablist" aria-label="Interview sections">
         {tabs.map(([k, label, n]) => (
-          <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => select(k)}>
+          <button
+            key={k}
+            ref={(element) => { tabRefs.current[k] = element ?? undefined; }}
+            id={`interview-tab-${k}`}
+            type="button"
+            role="tab"
+            className="tab"
+            aria-selected={tab === k}
+            aria-controls="interview-panel"
+            tabIndex={tab === k ? 0 : -1}
+            onClick={() => select(k)}
+            onKeyDown={(event) => handleTabKeyDown(event, k)}
+          >
             {label}{n !== undefined && n > 0 ? <span className="count">{n}</span> : null}
           </button>
         ))}
       </div>
 
+      <div id="interview-panel" role="tabpanel" aria-labelledby={`interview-tab-${tab}`} tabIndex={0}>
       {tab === "overview" && (
         <div className="stack-lg">
           <div className="stats">
@@ -149,6 +187,7 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
       {tab === "analysis" && <AnalyticsTab data={data} />}
       {tab === "survey" && <SurveyTab data={data} refresh={refresh} />}
       {tab === "export" && <ExportTab data={data} />}
+      </div>
 
       {renaming && <EditDetails data={data} onClose={() => setRenaming(false)} onSaved={() => { setRenaming(false); refresh(); }} />}
       {deleting && (
