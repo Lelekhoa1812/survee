@@ -22,16 +22,50 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
   const out: Diagnostic[] = [];
   const nextById = new Map(next.questions.map((q) => [q.id, q]));
   const prevById = new Map(previous.questions.map((q) => [q.id, q]));
-  const hasAnswer = (a: AnswerMap, id: string) => a[id] && (a[id].value !== undefined || !!a[id].note);
+  const answeredPeopleByQuestion = new Map<string, number>();
+  const optionUsageByQuestion = new Map<string, Map<string, number>>();
+  let submitted = 0;
+
+  // Aggregate participant data once. Compatibility checks run both during admin previews and MCP
+  // version changes, so scanning every participant again for each question/option is costly.
+  for (const person of answers) {
+    if (person.status === "submitted") submitted += 1;
+    for (const [questionId, answer] of Object.entries(person.answers)) {
+      if (answer.value !== undefined || !!answer.note) {
+        answeredPeopleByQuestion.set(questionId, (answeredPeopleByQuestion.get(questionId) ?? 0) + 1);
+      }
+
+      const values = typeof answer.value === "string"
+        ? [answer.value]
+        : Array.isArray(answer.value)
+          ? answer.value
+          : [];
+      if (values.length === 0) continue;
+      let counts = optionUsageByQuestion.get(questionId);
+      if (!counts) {
+        counts = new Map();
+        optionUsageByQuestion.set(questionId, counts);
+      }
+      // Existing semantics count a person once per option, even if malformed stored data repeats it.
+      for (const value of new Set(values)) counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+
+  const nextByNewLabel = new Map<string, (typeof next.questions)[number]>();
+  for (const question of next.questions) {
+    if (prevById.has(question.id)) continue;
+    const label = question.label.trim().toLowerCase();
+    if (!nextByNewLabel.has(label)) nextByNewLabel.set(label, question);
+  }
 
   for (const q of previous.questions) {
-    const people = answers.filter((p) => hasAnswer(p.answers, q.id)).length;
+    const people = answeredPeopleByQuestion.get(q.id) ?? 0;
     const n = nextById.get(q.id);
     if (!n) {
       if (people > 0) {
         out.push(make("KQA700", `Question "${q.id}" ("${q.label}") is not in the new version, and ${people} ${people === 1 ? "person has" : "people have"} answered it.`, undefined, q.id));
       }
-      const renamed = next.questions.find((x) => !prevById.has(x.id) && x.label.trim().toLowerCase() === q.label.trim().toLowerCase());
+      const renamed = nextByNewLabel.get(q.label.trim().toLowerCase());
       if (renamed) out.push(make("KQA703", `"${q.id}" is gone and "${renamed.id}" is new, with the same label "${q.label}". If this is a rename, answers will not follow it.`, `Restore the id "${q.id}" instead of "${renamed.id}".`, q.id));
       continue;
     }
@@ -42,15 +76,11 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
       const keep = new Set(n.options.map((o) => o.value));
       const removed = q.options.filter((o) => !keep.has(o.value));
       for (const o of removed) {
-        const used = answers.filter((p) => {
-          const v = p.answers[q.id]?.value;
-          return Array.isArray(v) ? v.includes(o.value) : v === o.value;
-        }).length;
+        const used = optionUsageByQuestion.get(q.id)?.get(o.value) ?? 0;
         if (used > 0) out.push(make("KQA702", `Option "${o.value}" ("${o.label}") of "${q.id}" is not in the new version, but ${used} ${used === 1 ? "person chose" : "people chose"} it.`, undefined, q.id));
       }
     }
   }
-  const submitted = answers.filter((p) => p.status === "submitted").length;
   if (submitted > 0) {
     for (const q of next.questions) {
       if (q.required && !prevById.get(q.id)?.required) {

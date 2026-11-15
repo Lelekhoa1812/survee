@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const store = vi.hoisted(() => ({ users: [] as any[], resets: [] as any[], memberships: [] as any[], tenants: [] as any[] }));
+const store = vi.hoisted(() => ({
+  users: [] as any[], resets: [] as any[], memberships: [] as any[], tenants: [] as any[],
+  beforeUserUpdate: null as null | (() => void), failNextUserUpdate: false,
+}));
 
 vi.mock("../src/lib/db", () => ({
   col: {
@@ -16,6 +19,12 @@ vi.mock("../src/lib/db", () => ({
         return user ? { ...user } : null;
       },
       updateOne: async (query: Record<string, any>, update: Record<string, any>) => {
+        if (store.failNextUserUpdate) {
+          store.failNextUserUpdate = false;
+          throw new Error("simulated database write failure");
+        }
+        store.beforeUserUpdate?.();
+        store.beforeUserUpdate = null;
         const user = store.users.find((item) => item._id.toHexString() === query._id.toHexString()
           && (!query.emailVerifiedAt || item.emailVerifiedAt instanceof Date)
           && (!query.passwordHash || item.passwordHash === query.passwordHash)
@@ -63,6 +72,8 @@ describe("password reset", () => {
     store.resets.splice(0);
     store.memberships.splice(0);
     store.tenants.splice(0);
+    store.beforeUserUpdate = null;
+    store.failNextUserUpdate = false;
   });
 
   it("creates a hashed one-time request only for a verified account", async () => {
@@ -72,6 +83,7 @@ describe("password reset", () => {
     expect(id).toBeInstanceOf(ObjectId);
     expect(store.resets).toHaveLength(1);
     expect(store.resets[0].tokenHash).toBe(createHash("sha256").update("reset-secret").digest("hex"));
+    expect(store.resets[0].authVersion).toBe(4);
     expect(JSON.stringify(store.resets)).not.toContain("reset-secret");
   });
 
@@ -106,12 +118,65 @@ describe("password reset", () => {
     store.users.push({ _id: userId, email: "owner@example.com", passwordHash: oldHash, emailVerifiedAt: new Date(), authVersion: 2 });
     store.resets.push({
       _id: new ObjectId(), userId, tokenHash: createHash("sha256").update(token).digest("hex"),
-      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+      authVersion: 2, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
     });
 
     await expect(completePasswordReset(token, "new password long enough 123")).resolves.toBe(true);
     await expect(completePasswordReset(token, "another password long enough 456")).resolves.toBe(false);
     await expect(verifyPassword("new password long enough 123", store.users[0].passwordHash)).resolves.toBe(true);
+    expect(store.users[0].authVersion).toBe(3);
+    expect(store.resets).toHaveLength(0);
+  });
+
+  it("completes a versioned reset for an account whose authVersion was previously absent", async () => {
+    const userId = new ObjectId();
+    const oldHash = await hashPassword("previous password long enough");
+    const token = "legacy-version-reset";
+    store.users.push({ _id: userId, email: "owner@example.com", passwordHash: oldHash, emailVerifiedAt: new Date() });
+    const id = await createPendingPasswordReset({ email: "owner@example.com", token });
+    expect(id).toBeInstanceOf(ObjectId);
+
+    await expect(completePasswordReset(token, "legacy account new password")).resolves.toBe(true);
+    expect(store.users[0].authVersion).toBe(1);
+    await expect(verifyPassword("legacy account new password", store.users[0].passwordHash)).resolves.toBe(true);
+  });
+
+  it("preserves a concurrent password change and invalidates the stale reset link", async () => {
+    const userId = new ObjectId();
+    const oldHash = await hashPassword("previous password long enough");
+    const concurrentHash = await hashPassword("concurrent password long enough");
+    const token = "racing-reset";
+    store.users.push({ _id: userId, email: "owner@example.com", passwordHash: oldHash, emailVerifiedAt: new Date(), authVersion: 4 });
+    store.resets.push({
+      _id: new ObjectId(), userId, tokenHash: createHash("sha256").update(token).digest("hex"),
+      authVersion: 4, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    });
+    store.beforeUserUpdate = () => {
+      store.users[0].passwordHash = concurrentHash;
+      store.users[0].authVersion = 5;
+    };
+
+    await expect(completePasswordReset(token, "reset password long enough 123")).resolves.toBe(false);
+    await expect(verifyPassword("concurrent password long enough", store.users[0].passwordHash)).resolves.toBe(true);
+    expect(store.users[0].authVersion).toBe(5);
+    expect(store.resets).toHaveLength(0);
+  });
+
+  it("keeps the reset link retryable when the user write fails", async () => {
+    const userId = new ObjectId();
+    const oldHash = await hashPassword("previous password long enough");
+    const token = "retryable-reset";
+    store.users.push({ _id: userId, email: "owner@example.com", passwordHash: oldHash, emailVerifiedAt: new Date(), authVersion: 2 });
+    store.resets.push({
+      _id: new ObjectId(), userId, tokenHash: createHash("sha256").update(token).digest("hex"),
+      authVersion: 2, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    });
+    store.failNextUserUpdate = true;
+
+    await expect(completePasswordReset(token, "retryable password long enough")).rejects.toThrow("simulated database write failure");
+    expect(store.resets).toHaveLength(1);
+    await expect(completePasswordReset(token, "retryable password long enough")).resolves.toBe(true);
+    await expect(verifyPassword("retryable password long enough", store.users[0].passwordHash)).resolves.toBe(true);
     expect(store.users[0].authVersion).toBe(3);
     expect(store.resets).toHaveLength(0);
   });

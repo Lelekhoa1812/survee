@@ -73,6 +73,8 @@ export interface PendingPasswordResetDoc {
   _id: ObjectId;
   userId: ObjectId;
   tokenHash: string;
+  /** Account password version when the reset was requested; null represents a pre-versioned account. */
+  authVersion?: number | null;
   createdAt: Date;
   expiresAt: Date;
 }

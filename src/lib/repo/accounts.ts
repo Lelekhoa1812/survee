@@ -311,6 +311,7 @@ export async function createPendingPasswordReset(input: { email: string; token: 
     _id: id,
     userId: user._id,
     tokenHash: createHash("sha256").update(input.token).digest("hex"),
+    authVersion: user.authVersion ?? null,
     createdAt: now,
     expiresAt: new Date(now.getTime() + PASSWORD_RESET_TTL_MS),
   };
@@ -336,17 +337,34 @@ export async function completePasswordReset(token: string, nextPassword: string)
   const resets = await col.passwordResets();
   const pending = await resets.findOne({ tokenHash, expiresAt: { $gt: new Date() } });
   if (!pending) return false;
+  // Reset links issued before account-version binding was added are retired safely.
+  if (pending.authVersion === undefined) {
+    await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
+    return false;
+  }
   const users = await col.users();
   const user = await users.findOne({ _id: pending.userId, emailVerifiedAt: { $exists: true } });
   if (!user) return false;
+  const versionFilter = pending.authVersion === null
+    ? { authVersion: { $exists: false } }
+    : { authVersion: pending.authVersion };
+  if ((user.authVersion ?? null) !== pending.authVersion) {
+    await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
+    return false;
+  }
   const passwordHash = await hashPassword(nextPassword);
-  const claimed = await resets.deleteOne({ _id: pending._id, tokenHash, expiresAt: { $gt: new Date() } });
-  if (claimed.deletedCount !== 1) return false;
   const result = await users.updateOne(
-    { _id: user._id },
-    { $set: { passwordHash, updatedAt: new Date() }, $inc: { authVersion: 1 } },
+    { _id: user._id, emailVerifiedAt: { $exists: true }, passwordHash: user.passwordHash, ...versionFilter },
+    { $set: { passwordHash, authVersion: (user.authVersion ?? 0) + 1, updatedAt: new Date() } },
   );
-  return result.matchedCount === 1;
+  if (result.matchedCount !== 1) {
+    await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
+    return false;
+  }
+  // Keep the link retryable when the account write fails. If this cleanup fails after the
+  // account write, the stored authVersion makes the token stale and unusable on the next attempt.
+  await resets.deleteOne({ _id: pending._id, tokenHash }).catch(() => {});
+  return true;
 }
 
 export async function createPendingEmailChange(input: { userId: string; currentPassword: string; email: string; token: string }): Promise<{ ok: true; id: ObjectId } | { ok: false; error: string }> {
