@@ -41,8 +41,8 @@ describe("analytics status cohorts", () => {
     ]);
     expect(result.summaries.everyone.choice.distribution[0].percent).toBeCloseTo(200 / 3);
     expect(result.summaries.everyone.choice.distribution[1].percent).toBeCloseTo(100 / 3);
-    expect(result.summaries["invited,submitted"].score.numeric).toEqual({ n: 2, min: 10, max: 30, mean: 20, median: 20 });
-    expect(result.summaries.invited.score.numeric).toEqual({ n: 1, min: 10, max: 10, mean: 10, median: 10 });
+    expect(result.summaries["invited,submitted"].score.numeric).toEqual({ n: 2, min: 10, q1: 15, median: 20, q3: 25, max: 30, mean: 20 });
+    expect(result.summaries.invited.score.numeric).toEqual({ n: 1, min: 10, q1: 10, median: 10, q3: 10, max: 10, mean: 10 });
     expect(result.summaries.invited.score.eligibleCount).toBe(1);
     expect(result.summaries.submitted.choice.eligibleCount).toBe(1);
     for (const cohort of ANALYTICS_COHORTS) {

@@ -181,7 +181,8 @@ describe("MCP tools", () => {
     const fit = body.result.structuredContent.questions?.find((question) => question.id === "fit");
     expect(fit).toMatchObject({ answeredCount: 2, unmappedResponseCount: 1 });
     const budget = body.result.structuredContent.questions?.find((question) => question.id === "budget");
-    expect(budget?.numeric).toMatchObject({ n: 2, mean: 3, median: 3 });
+    expect(budget?.numeric).toMatchObject({ n: 2, mean: 3, median: 3, q1: 2.5, q3: 3.5 });
+    expect(body.result.structuredContent.methodology?.join(" ")).toContain("type-7 sample quantiles");
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
     expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");
@@ -209,7 +210,7 @@ describe("MCP tools", () => {
     expect(secondBody.result.isError).toBeFalsy();
     expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: null });
     expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], respondentCount: 1 });
-    expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4 } });
+    expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4, q1: 4, q3: 4 } });
   });
 
   it("rejects empty or conflicting analytics status filters", async () => {

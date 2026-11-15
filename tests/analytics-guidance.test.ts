@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/3");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/4");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -29,6 +29,7 @@ describe("versioned analytics guidance", () => {
       "keyboard-operable",
       "histogram",
       "box plot",
+      "type-7 sample quantiles",
       "privacy",
       "ambiguity",
     ]) {
@@ -37,6 +38,7 @@ describe("versioned analytics guidance", () => {
     expect(guidance.productConstraints.join(" ")).toContain("current-version");
     expect(guidance.reviewChecklist.length).toBeGreaterThanOrEqual(6);
     expect(guidance.sources.map((source) => source.name)).toContain("W3C WAI, Complex Images");
+    expect(guidance.sources.map((source) => source.name)).toContain("R stats, Sample Quantiles");
   });
 
   it("documents that analytics does not suppress small cohorts", () => {

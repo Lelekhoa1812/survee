@@ -455,7 +455,7 @@ const TOOLS: ToolDef[] = [
           "answeredCount counts non-empty stored values, including values that are incompatible with the current version; unmapped values are excluded from valid numeric summaries and distributions.",
           "missingCount uses respondents in scope; distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
-          "Number summaries are descriptive; scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
+          "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
         ],
       });
     },

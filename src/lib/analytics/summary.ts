@@ -17,6 +17,8 @@ export interface DistributionRow {
 export interface DescriptiveStats {
   n: number;
   min: number;
+  q1: number;
+  q3: number;
   max: number;
   mean: number;
   median: number;
@@ -75,6 +77,16 @@ function numericValue(value: unknown): number | null {
 function median(sorted: number[]): number {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : sorted[middle - 1] / 2 + sorted[middle] / 2;
+}
+
+/** Hyndman-Fan type 7 sample quantile: index=(n-1)*p with linear interpolation. */
+function quantileType7(sorted: number[], probability: number): number {
+  const index = (sorted.length - 1) * probability;
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  if (lowerIndex === upperIndex || sorted[lowerIndex] === sorted[upperIndex]) return sorted[lowerIndex];
+  const weight = index - lowerIndex;
+  return sorted[lowerIndex] * (1 - weight) + sorted[upperIndex] * weight;
 }
 
 function initialDistribution(q: Question) {
@@ -147,6 +159,8 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       numeric = {
         n: numericValues.length,
         min: numericValues[0],
+        q1: quantileType7(numericValues, 0.25),
+        q3: quantileType7(numericValues, 0.75),
         max: numericValues[numericValues.length - 1],
         mean,
         median: median(numericValues),

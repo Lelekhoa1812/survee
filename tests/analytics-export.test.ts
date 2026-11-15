@@ -46,4 +46,17 @@ describe("analytics CSV export", () => {
     const csv = buildAnalyticsCsv([{ question: option, summary }], "Everyone");
     expect(csv).toContain('"1","2","2","0","0","1"');
   });
+
+  it("exports type-7 quartiles with the numeric summary", () => {
+    const number = questionSchema.parse({ id: "score", type: "number", label: "Score" });
+    const summary = summarizeQuestion(number, [
+      { answers: { score: { value: 1, updatedAt: "2026-11-15T00:00:00.000Z" } } },
+      { answers: { score: { value: 2, updatedAt: "2026-11-15T00:00:00.000Z" } } },
+      { answers: { score: { value: 3, updatedAt: "2026-11-15T00:00:00.000Z" } } },
+      { answers: { score: { value: 4, updatedAt: "2026-11-15T00:00:00.000Z" } } },
+    ]);
+    const csv = buildAnalyticsCsv([{ question: number, summary }], "Everyone");
+    expect(csv.split("\r\n")[0]).toContain('"min","q1","median","q3","mean","max"');
+    expect(csv.split("\r\n")[1]).toContain('"1","1.75","2.5","3.25","2.5","4"');
+  });
 });

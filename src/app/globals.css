@@ -315,6 +315,14 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-stat-grid > div { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
 .analysis-stat-grid dt { color: var(--muted); font-size: 12px; }
 .analysis-stat-grid dd { margin-top: 3px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.analysis-numeric-summary { display: grid; gap: 10px; }
+.analysis-boxplot-wrap { max-width: 720px; padding: 4px 8px 0; }
+.analysis-boxplot { position: relative; height: 28px; margin: 4px 8px; }
+.analysis-boxplot-track { position: absolute; top: 13px; left: 0; right: 0; height: 2px; background: var(--line); }
+.analysis-boxplot-box { position: absolute; top: 4px; height: 20px; min-width: 2px; border: 1px solid var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+.analysis-boxplot-median { position: absolute; top: 1px; bottom: 1px; width: 2px; background: var(--accent); transform: translateX(-1px); }
+.analysis-boxplot-point { position: absolute; top: 9px; left: 50%; width: 10px; height: 10px; border: 2px solid var(--accent); border-radius: 50%; background: var(--surface); transform: translateX(-50%); }
+.analysis-boxplot-axis { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .analysis-empty, .analysis-text-note { color: var(--muted); font-size: 13px; }
 .person-card { border-top: 1px solid var(--line); }
 .person-card:first-child { border-top: 0; }

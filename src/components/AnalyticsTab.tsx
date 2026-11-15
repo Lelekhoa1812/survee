@@ -87,20 +87,46 @@ function NumericSummary({ summary, display }: { summary: QuestionSummary; displa
       <div className="table-wrap analysis-table-wrap">
         <table className="t">
           <caption className="sr">Descriptive statistics for numeric answers</caption>
-          <thead><tr><th scope="col">Valid n</th><th scope="col">Minimum</th><th scope="col">Median</th><th scope="col">Mean</th><th scope="col">Maximum</th></tr></thead>
-          <tbody><tr><td>{stats.n}</td><td>{formatNumber(stats.min)}</td><td>{formatNumber(stats.median)}</td><td>{formatNumber(stats.mean)}</td><td>{formatNumber(stats.max)}</td></tr></tbody>
+          <thead><tr><th scope="col">Valid n</th><th scope="col">Minimum</th><th scope="col">Q1</th><th scope="col">Median</th><th scope="col">Q3</th><th scope="col">Mean</th><th scope="col">Maximum</th></tr></thead>
+          <tbody><tr><td>{stats.n}</td><td>{formatNumber(stats.min)}</td><td>{formatNumber(stats.q1)}</td><td>{formatNumber(stats.median)}</td><td>{formatNumber(stats.q3)}</td><td>{formatNumber(stats.mean)}</td><td>{formatNumber(stats.max)}</td></tr></tbody>
         </table>
       </div>
     );
   }
+  const span = stats.max - stats.min;
+  const chartable = Number.isFinite(span);
+  const position = (value: number) => span === 0 ? 50 : ((value - stats.min) / span) * 100;
   return (
-    <dl className="analysis-stat-grid">
-      <div><dt>Valid n</dt><dd>{stats.n}</dd></div>
-      <div><dt>Minimum</dt><dd>{formatNumber(stats.min)}</dd></div>
-      <div><dt>Median</dt><dd>{formatNumber(stats.median)}</dd></div>
-      <div><dt>Mean</dt><dd>{formatNumber(stats.mean)}</dd></div>
-      <div><dt>Maximum</dt><dd>{formatNumber(stats.max)}</dd></div>
-    </dl>
+    <div className="analysis-numeric-summary">
+      {chartable ? (
+        <div className="analysis-boxplot-wrap">
+          <div
+            className="analysis-boxplot"
+            role="img"
+            aria-label={`Number response range and quartiles: minimum ${formatNumber(stats.min)}, first quartile ${formatNumber(stats.q1)}, median ${formatNumber(stats.median)}, third quartile ${formatNumber(stats.q3)}, maximum ${formatNumber(stats.max)}; valid n ${stats.n}.`}
+          >
+            <div className="analysis-boxplot-track" aria-hidden="true" />
+            {span === 0 ? (
+              <span className="analysis-boxplot-point" aria-hidden="true" />
+            ) : (
+              <>
+                <div className="analysis-boxplot-box" aria-hidden="true" style={{ left: `${position(stats.q1)}%`, width: `${position(stats.q3) - position(stats.q1)}%` }} />
+                <span className="analysis-boxplot-median" aria-hidden="true" style={{ left: `${position(stats.median)}%` }} />
+              </>
+            )}
+          </div>
+          <div className="analysis-boxplot-axis"><span>Min {formatNumber(stats.min)}</span><span>Max {formatNumber(stats.max)}</span></div>
+        </div>
+      ) : <p className="analysis-text-note">The numeric range is too wide to draw on a finite linear axis.</p>}
+      <dl className="analysis-stat-grid">
+        <div><dt>Valid n</dt><dd>{stats.n}</dd></div>
+        <div><dt>Q1</dt><dd>{formatNumber(stats.q1)}</dd></div>
+        <div><dt>Median</dt><dd>{formatNumber(stats.median)}</dd></div>
+        <div><dt>Q3</dt><dd>{formatNumber(stats.q3)}</dd></div>
+        <div><dt>Mean</dt><dd>{formatNumber(stats.mean)}</dd></div>
+      </dl>
+      <p className="analysis-text-note">Box spans Q1 to Q3; line marks the median. Whiskers show the minimum and maximum, not outlier fences.</p>
+    </div>
   );
 }
 

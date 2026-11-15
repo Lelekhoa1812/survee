@@ -23,7 +23,7 @@ describe("descriptive question summaries", () => {
         { value: "no", label: "No", count: 0, percent: 0 },
       ],
     });
-    expect(summarizeQuestion(number, [respondent(7)]).numeric).toEqual({ n: 1, min: 7, max: 7, mean: 7, median: 7 });
+    expect(summarizeQuestion(number, [respondent(7)]).numeric).toEqual({ n: 1, min: 7, q1: 7, median: 7, q3: 7, max: 7, mean: 7 });
   });
 
   it("keeps eligible, missing, note-only, valid, and unmapped counts distinct", () => {
@@ -51,7 +51,7 @@ describe("descriptive question summaries", () => {
   it("reports number summaries while retaining non-numeric legacy values as unmapped", () => {
     const q: Question = { id: "q", type: "number", label: "Budget" };
     const summary = summarizeQuestion(q, [respondent(1), respondent(2), respondent(3), respondent("unknown"), respondent()]);
-    expect(summary.numeric).toEqual({ n: 3, min: 1, max: 3, mean: 2, median: 2 });
+    expect(summary.numeric).toEqual({ n: 3, min: 1, q1: 1.5, median: 2, q3: 2.5, max: 3, mean: 2 });
     expect(summary.unmappedResponseCount).toBe(1);
     expect(summary.answeredCount).toBe(4);
   });
@@ -59,7 +59,7 @@ describe("descriptive question summaries", () => {
   it("excludes out-of-range number values from descriptive statistics", () => {
     const q: Question = { id: "q", type: "number", label: "Budget", min: 0, max: 10 };
     const summary = summarizeQuestion(q, [respondent(2), respondent(99), respondent("bad")]);
-    expect(summary.numeric).toEqual({ n: 1, min: 2, max: 2, mean: 2, median: 2 });
+    expect(summary.numeric).toEqual({ n: 1, min: 2, q1: 2, median: 2, q3: 2, max: 2, mean: 2 });
     expect(summary).toMatchObject({ answeredCount: 3, unmappedResponseCount: 2 });
   });
 
@@ -67,7 +67,15 @@ describe("descriptive question summaries", () => {
     const q: Question = { id: "q", type: "number", label: "Large value" };
     const summary = summarizeQuestion(q, [respondent(Number.MAX_VALUE), respondent(Number.MAX_VALUE)]);
     expect(summary.numeric?.mean).toBe(Number.MAX_VALUE);
+    expect(summary.numeric?.q1).toBe(Number.MAX_VALUE);
+    expect(summary.numeric?.q3).toBe(Number.MAX_VALUE);
     expect(Number.isFinite(summary.numeric?.median)).toBe(true);
+  });
+
+  it("uses the documented type-7 interpolation for quartiles", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const summary = summarizeQuestion(q, [respondent(1), respondent(2), respondent(3), respondent(4)]);
+    expect(summary.numeric).toMatchObject({ q1: 1.75, median: 2.5, q3: 3.25 });
   });
 
   it("shows scale distributions and a median without calculating a mean", () => {

@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/3" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/4" as const;
 
 const PRINCIPLES = [
   {
@@ -27,7 +27,7 @@ const PRINCIPLES = [
     id: "match-measure-to-statistic",
     title: "Respect the question's measurement type",
     guidance:
-      "For single-choice and dropdown questions, show category counts or valid-response shares. For ordered scales, prefer the full distribution and optionally report the median; do not report a mean for a scale or assume equal spacing between its labels. For number questions, describe the available n, range, mean, and median, and note skew or extreme values when visible. Dates and free text are not summarized by the current aggregate tool; use the relevant review or export workflow only when the task requires it.",
+      "For single-choice and dropdown questions, show category counts or valid-response shares. For ordered scales, prefer the full distribution and optionally report the median; do not report a mean for a scale or assume equal spacing between its labels. For number questions, describe n, range, Q1, median, Q3, and mean; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Note skew or extreme values only when supported by these summaries. Dates and free text are not summarized by the current aggregate tool; use the relevant review or export workflow only when the task requires it.",
   },
   {
     id: "explain-multiselect",
@@ -45,7 +45,7 @@ const PRINCIPLES = [
     id: "choose-clear-chart",
     title: "Choose a chart that fits the comparison",
     guidance:
-      "Use a category bar chart for single-choice and dropdown responses; sort unordered categories by a stated rule and preserve the natural order of scales. For multi-select answers, plot each option's share of valid respondents and state that shares can sum above 100%. Use a 100% stacked bar only for comparable groups with a shared denominator. For number questions, KQA returns n, minimum, median, mean, and maximum, not raw values, bins, quartiles, or a distribution; show only the returned statistics and do not fabricate a histogram or box plot. KQA does not aggregate date or text values. Prefer a table or short written summary when exact counts, many categories, small cohorts, or caveats matter more than a visual pattern. Label the measure, cohort, valid n, denominator, survey version, and asOf; do not use a truncated bar axis that exaggerates differences.",
+      "Use a category bar chart for single-choice and dropdown responses; sort unordered categories by a stated rule and preserve the natural order of scales. For multi-select answers, plot each option's share of valid respondents and state that shares can sum above 100%. Use a 100% stacked bar only for comparable groups with a shared denominator. For number questions, a box plot may use the returned minimum, Q1, median, Q3, and maximum; label whiskers as minimum-to-maximum, not outlier fences. KQA does not return raw number values or bins, so do not invent a histogram. KQA does not aggregate date or text values. Prefer a table or short written summary when exact counts, many categories, small cohorts, or caveats matter more than a visual pattern. Label the measure, cohort, valid n, denominator, survey version, and asOf; do not use a truncated bar axis that exaggerates differences.",
   },
   {
     id: "generate-auditable-visuals",
@@ -106,6 +106,11 @@ const SOURCES = [
     supports: "Interpretation of mean and median, including the effect of extreme values.",
   },
   {
+    name: "R stats, Sample Quantiles",
+    url: "https://stat.ethz.ch/R-manual/R-devel/library/stats/html/quantile.html",
+    supports: "Hyndman-Fan type-7 sample quantiles with linear interpolation, the default method in R.",
+  },
+  {
     name: "Office for National Statistics, Choosing a chart type",
     url: "https://service-manual.ons.gov.uk/data-visualisation/chart-types/choosing-a-chart-type",
     supports: "Matching chart forms to the message and data structure.",
@@ -144,7 +149,7 @@ export function getAnalyticsGuidance() {
       "KQA does not enforce a minimum cohort-size threshold; singleton counts and percentages may be returned. Integrated agents should state small-n limitations and follow the host's disclosure rules.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
-      "Scale questions provide a distribution and median, not a mean. Number summaries respect the current question's bounds.",
+      "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
       "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
       "Each analyze_answers page is a separate live read with its own asOf; changes can occur between pages, so KQA does not provide a consistent multi-page snapshot.",
     ],
