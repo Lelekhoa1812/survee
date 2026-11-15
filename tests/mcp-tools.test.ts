@@ -231,6 +231,38 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");
   });
 
+  it("compares a selected outcome across answer segments in one scan", async () => {
+    const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    const res = await call("analyze_answers", { interviewId, segmentBy: "fit", questionId: "budget", compareStatuses: true });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: {
+      asOf: string;
+      segmentBy: { id: string; label: string };
+      scope: { participantCount: number; statuses: string[] };
+      segments: { kind: string; label: string; participantCount: number; questions: { id: string; numeric: { n: number; mean: number } | null }[]; statusCohorts: { status: string; participantCount: number; questions: { numeric: { n: number; mean: number } | null }[] }[] }[];
+      methodology: string[];
+    } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.segmentBy).toMatchObject({ id: "fit", label: "Strategic fit" });
+    expect(body.result.structuredContent.scope).toMatchObject({ participantCount: 2, statuses: ["invited", "in_progress", "submitted"] });
+    const yes = body.result.structuredContent.segments.find((segment) => segment.label === "Yes");
+    expect(yes).toMatchObject({ participantCount: 1, statusCohorts: [{ status: "invited", participantCount: 0 }, { status: "in_progress", participantCount: 0 }, { status: "submitted", participantCount: 1 }] });
+    expect(yes?.questions[0]).toMatchObject({ id: "budget", numeric: { n: 1, mean: 2 } });
+    const unmapped = body.result.structuredContent.segments.find((segment) => segment.kind === "unmapped");
+    expect(unmapped).toMatchObject({ label: "Unmapped answer", participantCount: 1, statusCounts: { invited: 1, in_progress: 0, submitted: 0 } });
+    expect(unmapped?.questions[0]).toMatchObject({ numeric: { n: 1, mean: 4 } });
+    expect(body.result.structuredContent.methodology.join(" ")).toContain("Checkbox answers can place one person in several option segments");
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
+  });
+
+  it("rejects numeric questions as answer-segmentation dimensions", async () => {
+    const res = await call("analyze_answers", { interviewId, segmentBy: "budget", questionId: "fit" });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.error).toContain("free-form number questions cannot define groups");
+  });
+
   it("narrows analytics to selected statuses", async () => {
     const res = await call("analyze_answers", { interviewId, statuses: ["invited"] });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { scope?: { statuses: string[]; participantCount: number; respondentCount: number; submittedCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number }[] } } };

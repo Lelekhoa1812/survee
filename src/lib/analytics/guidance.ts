@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/7" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/8" as const;
 
 const PRINCIPLES = [
   {
@@ -16,6 +16,12 @@ const PRINCIPLES = [
     title: "Make participant scope explicit",
     guidance:
       "State whether the result includes all people in the interview, only submitted people, or a caller-selected participant status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one participant scan and one shared asOf; each question page is still a separate live read. scope.participantCount and statusCohorts[].participantCount count everyone in their selected status groups. respondentCount is a compatibility alias for these counts; do not describe invited people with no answers as respondents. Per-question cohortCount is everyone in the selected status group, not a count of people eligible to see that question. KQA does not record whether conditional or routed questions were displayed or applicable. State each group's participant count, cohortCount, valid-answer n, and denominator; do not infer item eligibility. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
+  },
+  {
+    id: "explore-answer-segments",
+    title: "Use closed answers for exploratory segments",
+    guidance:
+      "Use analyze_answers segmentBy to compare one outcome question across a single-choice, dropdown, checkbox, or scale answer. Keep the segment question out of the outcome summary. Show each group's participant count and outcome valid-answer denominator; percentages use the valid answers in that group. Checkbox segments overlap because one person may select several options, so do not add those group counts or shares together. No-answer and unmapped dimension values are separate groups when present; no-answer does not mean the item was shown. KQA returns singleton and zero-count option groups without suppression. These descriptive groups are not an anonymity guarantee, and downstream disclosure rules still apply.",
   },
   {
     id: "show-missingness",
@@ -148,12 +154,14 @@ export function getAnalyticsGuidance() {
       "KQA's analyze_answers output is current-version descriptive data; it returns no raw text, names, notes, private links, score, significance test, or causal estimate.",
       "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
       "KQA does not enforce a minimum cohort-size threshold; singleton counts and percentages may be returned. Integrated agents should state small-n limitations and follow the host's disclosure rules.",
+      "analyze_answers segmentBy groups outcomes by one closed categorical current-version answer; checkbox groups can overlap, and answer-group counts include singleton and zero-count options.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
       "Scale questions provide a distribution and median, not a mean. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
       "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
       "Each analyze_answers page is a separate live read with its own asOf; changes can occur between pages, so KQA does not provide a consistent multi-page snapshot.",
       "When compareStatuses is true, status groups on one page share a participant scan and asOf; this live read does not use a frozen database snapshot.",
+      "Segmented outcome summaries share the selected status scope and participant scan. No-answer and unmapped segments are named explicitly; outcome denominators are per segment, and aggregation does not guarantee anonymity.",
     ],
     principles: PRINCIPLES.map((principle) => ({ ...principle })),
     reviewChecklist: [...REVIEW_CHECKLIST],

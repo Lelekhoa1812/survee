@@ -1,6 +1,7 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
+import { canSegmentByAnswer, summarizeAnswerSegments } from "../analytics/segments";
 import { createQuestionSummaryAccumulator, summarizeQuestionCohorts, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
@@ -318,10 +319,11 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare a selected outcome across a closed categorical answer. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       questionId: str,
+      segmentBy: str,
       submittedOnly: bool,
       statuses: { type: "array", items: { type: "string", enum: ["invited", "in_progress", "submitted"] } },
       compareStatuses: bool,
@@ -337,10 +339,17 @@ const TOOLS: ToolDef[] = [
       if (!version) return err("Survey version not found.", "not_found");
       let questions = version.manifest.questions;
       const questionId = asString(args.questionId, 64);
+      const segmentById = asString(args.segmentBy, 64);
+      const segmentQuestion = segmentById ? questions.find((item) => item.id === segmentById) : undefined;
+      if (segmentById && !segmentQuestion) return err("Segmentation question not found in the current survey version.", "not_found");
+      if (segmentById && !canSegmentByAnswer(segmentQuestion)) return err("Segment by a single-choice, dropdown, checkbox, or scale question. Text, date, and free-form number questions cannot define groups.");
+      if (segmentById && questionId === segmentById) return err("Choose an outcome question other than the segmentation question.");
       if (questionId) {
         const question = questions.find((item) => item.id === questionId);
         if (!question) return err("Question not found in the current survey version.", "not_found");
         questions = [question];
+      } else if (segmentById) {
+        questions = questions.filter((item) => item.id !== segmentById);
       }
       const allStatuses = ["invited", "in_progress", "submitted"] as const;
       const submittedOnly = args.submittedOnly === true;
@@ -356,6 +365,57 @@ const TOOLS: ToolDef[] = [
       const cohort = analyticsCohortForStatuses(statuses);
       if (!cohort) return err("statuses must contain at least one status.");
       const compareRequested = args.compareStatuses === true;
+      if (segmentQuestion && canSegmentByAnswer(segmentQuestion)) {
+        const segmented = await summarizeAnswerSegments(
+          segmentQuestion,
+          page,
+          iterateAnalyticsParticipants(id, [...new Set([segmentQuestion.id, ...page.map((question) => question.id)])], { statuses }),
+          statuses,
+          compareRequested,
+        );
+        const participantCount = statuses.reduce((count, status) => count + segmented.statusCounts[status], 0);
+        const submittedCount = statuses.includes("submitted") ? segmented.statusCounts.submitted : 0;
+        return ok({
+          interviewId: id,
+          surveyVersion: version.version,
+          asOf: segmented.asOf,
+          segmentBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
+          scope: {
+            statuses,
+            participantCount,
+            respondentCount: participantCount,
+            submittedCount,
+            submittedOnly: statuses.length === 1 && statuses[0] === "submitted",
+          },
+          questionCount: questions.length,
+          offset,
+          limit,
+          nextOffset: offset + page.length < questions.length ? offset + page.length : null,
+          segments: segmented.segments.map((segment) => ({
+            key: segment.key,
+            kind: segment.kind,
+            value: segment.value ?? null,
+            label: segment.label,
+            participantCount: segment.participantCount,
+            statusCounts: segment.statusCounts,
+            questions: page.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.summaries[question.id] })),
+            ...(compareRequested ? {
+              statusCohorts: statuses.map((status) => ({
+                status,
+                participantCount: segment.statusCounts[status],
+                questions: page.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.statusSummaries?.[status]?.[question.id] })),
+              })),
+            } : {}),
+          })),
+          methodology: [
+            "Answer segments use the selected current-version question and only the participant statuses shown in scope. Outcome summaries exclude the segmentation question and use the same projected participant scan.",
+            "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
+            "No stored answer includes blank and note-only dimension responses; it does not mean the person was eligible to see a routed question. Invalid stored dimension values appear as Unmapped answer.",
+            "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Outcome percentages use that segment's valid-answer denominator; this is a descriptive result, not an anonymity guarantee.",
+            ...(compareRequested ? ["Status summaries for all selected answer segments share this asOf and one participant scan; updates during the live read are not isolated by a database snapshot."] : []),
+          ],
+        });
+      }
       const statusCounts: Record<typeof allStatuses[number], number> = { invited: 0, in_progress: 0, submitted: 0 };
       const statusSummaries = {} as Record<typeof allStatuses[number], Record<string, QuestionSummary>>;
       let selectedSummaries: Record<string, QuestionSummary>;

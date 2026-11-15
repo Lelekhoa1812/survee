@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { QuestionSummary } from "@/lib/analytics/summary";
+import type { AnswerSegmentGroup } from "@/lib/analytics/segments";
 import { formatPercentage } from "@/lib/analytics/format";
 import { buildAnalyticsCsv } from "@/lib/analytics/export";
 import { ANALYTICS_COHORTS, analyticsCohortForStatuses, type AnalyticsCohortKey } from "@/lib/analytics/cohorts";
@@ -19,6 +20,7 @@ const STATUS_LABELS: Record<ParticipantStatus, string> = {
   submitted: "Submitted",
 };
 const COMPARE_STATUSES: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
+const SEGMENTABLE_TYPES = new Set<QuestionType>(["single", "select", "multi", "scale"]);
 
 const TYPE_LABELS: Record<QuestionType, string> = {
   single: "Single choice",
@@ -132,11 +134,11 @@ function NumericSummary({ summary, display }: { summary: QuestionSummary; displa
   );
 }
 
-function QuestionAnalysis({ question, summary, display }: { question: Question; summary: QuestionSummary; display: Display }) {
+function QuestionAnalysis({ question, summary, display, showHeading = true }: { question: Question; summary: QuestionSummary; display: Display; showHeading?: boolean }) {
   const hasDistribution = summary.distribution.length > 0;
   return (
     <article className="analysis-question">
-      <div className="analysis-question-head">
+      {showHeading && <div className="analysis-question-head">
         <div>
           <h3>{question.label}</h3>
           <div className="analysis-meta">
@@ -146,7 +148,7 @@ function QuestionAnalysis({ question, summary, display }: { question: Question; 
           </div>
         </div>
         <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · cohort n={summary.cohortCount}</p>
-      </div>
+      </div>}
 
       {hasDistribution && (display === "chart"
         ? <DistributionChart question={question} summary={summary} />
@@ -167,7 +169,7 @@ function QuestionAnalysis({ question, summary, display }: { question: Question; 
   );
 }
 
-export function ComparisonQuestion({ question, summaries }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary> }) {
+export function ComparisonQuestion({ question, summaries, showHeading = true }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary>; showHeading?: boolean }) {
   const distributionQuestion = question.type === "single" || question.type === "multi" || question.type === "select" || question.type === "scale";
   const numericQuestion = question.type === "number";
   const distributionRows = summaries.invited.distribution;
@@ -189,13 +191,13 @@ export function ComparisonQuestion({ question, summaries }: { question: Question
 
   return (
     <article className="analysis-question">
-      <div className="analysis-question-head">
+      {showHeading && <div className="analysis-question-head">
         <div>
           <h3>{question.label}</h3>
           <div className="analysis-meta"><span className="code-chip">{question.id}</span><span>{TYPE_LABELS[question.type]}</span>{question.required && <Badge kind="info" plain>Required</Badge>}</div>
         </div>
         <p className="analysis-response-count">Three status groups</p>
-      </div>
+      </div>}
       <div className="table-wrap analysis-table-wrap analysis-compare-table-wrap" role="region" aria-label={`${question.label} status comparison table`} tabIndex={0}>
         <table className="t analysis-compare-table">
           <caption className="sr">{question.label}: invited, in progress, and submitted status comparison</caption>
@@ -241,10 +243,62 @@ export function ComparisonQuestion({ question, summaries }: { question: Question
   );
 }
 
+interface SegmentAnalysisResponse {
+  asOf: string;
+  segmentBy: { id: string; type: QuestionType; label: string };
+  outcome: { id: string; type: QuestionType; label: string };
+  scope: { statuses: ParticipantStatus[]; participantCount: number; statusCounts: Record<ParticipantStatus, number>; compareStatuses: boolean };
+  segments: AnswerSegmentGroup[];
+  methodology: string[];
+}
+
+function SegmentResults({ question, result, compareStatuses, display }: { question: Question; result: SegmentAnalysisResponse; compareStatuses: boolean; display: Display }) {
+  return (
+    <section className="card analysis-segment-list" aria-label={`Results grouped by ${result.segmentBy.label}`}>
+      <header className="analysis-segment-result-head">
+        <div>
+          <h2>{question.label}</h2>
+          <p className="muted">Outcome · {TYPE_LABELS[question.type]} · {result.scope.participantCount} people in selected statuses</p>
+        </div>
+        <span className="code-chip">{question.id}</span>
+      </header>
+      {result.segments.map((segment) => {
+        const statusSummaries = segment.statusSummaries;
+        return (
+          <article key={segment.key} className="analysis-segment">
+            <div className="analysis-segment-head">
+              <div>
+                <h3>{segment.label}</h3>
+                <p className="muted">{segment.participantCount} {segment.participantCount === 1 ? "participant" : "participants"} · {segment.summaries[question.id].answeredCount} outcome answers</p>
+              </div>
+              {compareStatuses && <p className="analysis-segment-statuses">
+                Invited {segment.statusCounts.invited} · In progress {segment.statusCounts.in_progress} · Submitted {segment.statusCounts.submitted}
+              </p>}
+            </div>
+            {compareStatuses && statusSummaries
+              ? <ComparisonQuestion question={question} showHeading={false} summaries={{
+                  invited: statusSummaries.invited![question.id],
+                  in_progress: statusSummaries.in_progress![question.id],
+                  submitted: statusSummaries.submitted![question.id],
+                }} />
+              : <QuestionAnalysis question={question} showHeading={false} summary={segment.summaries[question.id]} display={display} />}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
 export function AnalyticsTab({ data }: { data: InterviewData }) {
   const [cohortKey, setCohortKey] = useState<AnalyticsCohortKey>("everyone");
   const [compareStatuses, setCompareStatuses] = useState(false);
   const [display, setDisplay] = useState<Display>("chart");
+  const [segmentMode, setSegmentMode] = useState(false);
+  const [segmentById, setSegmentById] = useState("");
+  const [segmentOutcomeId, setSegmentOutcomeId] = useState("");
+  const [segmentResult, setSegmentResult] = useState<SegmentAnalysisResponse | null>(null);
+  const [segmentLoading, setSegmentLoading] = useState(false);
+  const [segmentError, setSegmentError] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<QuestionType | "all">("all");
   const cohort = ANALYTICS_COHORTS.find((item) => item.key === cohortKey) ?? ANALYTICS_COHORTS[0];
@@ -259,17 +313,33 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       return matchesType && matchesSearch;
     });
   }, [data.manifest.questions, search, typeFilter]);
+  const segmentQuestions = useMemo(() => data.manifest.questions.filter((question) => SEGMENTABLE_TYPES.has(question.type)), [data.manifest.questions]);
+  const segmentQuestion = segmentQuestions.find((question) => question.id === segmentById) ?? segmentQuestions[0];
+  const outcomeQuestions = questions.filter((question) => question.id !== segmentQuestion?.id);
+  const outcomeQuestion = outcomeQuestions.find((question) => question.id === segmentOutcomeId) ?? outcomeQuestions[0];
   const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
   const summaries = useMemo(() => new Map(questions.map((question) => [question.id, cohortSummaries[question.id]])), [questions, cohortSummaries]);
   const exportItems = useMemo(() => compareStatuses
     ? questions.flatMap((question) => COMPARE_STATUSES.map((status) => ({ question, summary: data.analysis!.summaries[status][question.id], cohort: STATUS_LABELS[status] })))
     : questions.map((question) => ({ question, summary: summaries.get(question.id)! })),
   [questions, summaries, compareStatuses, data.analysis]);
-  const csv = useMemo(() => buildAnalyticsCsv(exportItems, cohortLabel, {
+  const segmentExportItems = useMemo(() => {
+    if (!segmentResult || !outcomeQuestion || !segmentQuestion) return [];
+    return segmentResult.segments.flatMap((segment) => compareStatuses
+      ? COMPARE_STATUSES.flatMap((status) => {
+          const summary = segment.statusSummaries?.[status]?.[outcomeQuestion.id];
+          return summary ? [{ question: outcomeQuestion, summary, cohort: `${segmentQuestion.label} = ${segment.label} · ${STATUS_LABELS[status]}` }] : [];
+        })
+      : [{ question: outcomeQuestion, summary: segment.summaries[outcomeQuestion.id], cohort: `${segmentQuestion.label} = ${segment.label}` }]);
+  }, [segmentResult, outcomeQuestion, segmentQuestion, compareStatuses]);
+  const activeExportItems = segmentMode ? segmentExportItems : exportItems;
+  const csv = useMemo(() => buildAnalyticsCsv(activeExportItems, cohortLabel, {
     interviewId: data.interview.id,
     surveyVersion: data.interview.currentVersion,
-    asOf: data.analysis?.asOf,
-  }), [exportItems, cohortLabel, data.interview.id, data.interview.currentVersion, data.analysis?.asOf]);
+    asOf: segmentMode ? segmentResult?.asOf : data.analysis?.asOf,
+  }), [activeExportItems, cohortLabel, data.interview.id, data.interview.currentVersion, data.analysis?.asOf, segmentMode, segmentResult?.asOf]);
+  const selectedStatuses = compareStatuses ? COMPARE_STATUSES : cohort.statuses;
+  const selectedStatusesParam = selectedStatuses.join(",");
   const submitted = cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : 0;
   const inProgress = cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : 0;
 
@@ -290,6 +360,43 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
+  useEffect(() => {
+    if (!segmentMode || !segmentQuestion || !outcomeQuestion) {
+      setSegmentResult(null);
+      setSegmentError("");
+      setSegmentLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const query = new URLSearchParams({
+      segmentBy: segmentQuestion.id,
+      questionId: outcomeQuestion.id,
+      statuses: selectedStatusesParam,
+      compareStatuses: String(compareStatuses),
+    });
+    setSegmentResult(null);
+    setSegmentError("");
+    setSegmentLoading(true);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/admin/interviews/${encodeURIComponent(data.interview.id)}/analysis?${query}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = await response.json().catch(() => null) as (SegmentAnalysisResponse & { ok?: boolean; error?: string }) | null;
+        if (!response.ok || !body?.ok) throw new Error(body?.error || "Could not load answer segments. Try again.");
+        setSegmentResult(body);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setSegmentError(error instanceof Error ? error.message : "Could not load answer segments.");
+      } finally {
+        if (!controller.signal.aborted) setSegmentLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [segmentMode, segmentQuestion?.id, outcomeQuestion?.id, data.interview.id, selectedStatusesParam, compareStatuses]);
 
   const groups = useMemo(() => {
     const sections = data.manifest.sections ?? [];
@@ -343,6 +450,10 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
         </div>
         <div className="analysis-control-footer">
+          <div className="seg" role="group" aria-label="Analysis view">
+            <button type="button" aria-pressed={!segmentMode} onClick={() => setSegmentMode(false)}>Question summaries</button>
+            <button type="button" aria-pressed={segmentMode} disabled={!segmentQuestions.length} onClick={() => setSegmentMode(true)}>Break down by answer</button>
+          </div>
           <div className="seg" role="group" aria-label="Cohort view">
             <button type="button" aria-pressed={!compareStatuses} onClick={() => setCompareStatuses(false)}>One cohort</button>
             <button type="button" aria-pressed={compareStatuses} onClick={() => setCompareStatuses(true)}>Compare statuses</button>
@@ -366,14 +477,40 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
             <button type="button" aria-pressed={display === "table"} onClick={() => setDisplay("table")}>Table</button>
           </div>}
           <div className="row wrap analysis-export-actions">
-            <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={!questions.length} />
-            <button type="button" className="btn sm" onClick={downloadCsv} disabled={!questions.length}><Icon name="download" size={14} /> Download CSV</button>
+            <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={segmentMode ? !segmentResult : !questions.length} />
+            <button type="button" className="btn sm" onClick={downloadCsv} disabled={segmentMode ? !segmentResult : !questions.length}><Icon name="download" size={14} /> Download CSV</button>
           </div>
         </div>
+        {segmentMode && <div className="analysis-segment-controls">
+          <div className="field">
+            <label htmlFor="analysis-segment-by">Break down by answer</label>
+            <select id="analysis-segment-by" className="select" value={segmentQuestion?.id ?? ""} onChange={(event) => setSegmentById(event.target.value)}>
+              {segmentQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="analysis-segment-outcome">Outcome question</label>
+            <select id="analysis-segment-outcome" className="select" value={outcomeQuestion?.id ?? ""} onChange={(event) => setSegmentOutcomeId(event.target.value)} disabled={!outcomeQuestions.length}>
+              {outcomeQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
+            </select>
+          </div>
+        </div>}
       </section>
 
-      <p className="muted analysis-result-count" aria-live="polite">Showing {questions.length} of {data.manifest.questions.length} questions · {compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}</p>
-      {groups.length ? groups.map((group) => (
+      <p className="muted analysis-result-count" aria-live="polite">{segmentMode
+        ? segmentLoading ? "Calculating answer groups…" : `${segmentResult?.segments.length ?? 0} answer groups · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`
+        : `Showing ${questions.length} of ${data.manifest.questions.length} questions · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`}</p>
+      {segmentMode ? <>
+        {!segmentQuestions.length && <div className="card empty"><h3>No categorical questions to segment by</h3><p>Add a single-choice, dropdown, checkbox, or scale question to define answer groups.</p></div>}
+        {!outcomeQuestion && segmentQuestions.length > 0 && <div className="card empty"><h3>No outcome questions match</h3><p>Change the search or question type filter, or choose a different segmentation question.</p></div>}
+        {segmentQuestion?.type === "multi" && <p className="analysis-text-note">This checkbox question can place one person in several answer groups. Group counts and percentages overlap and must not be added together.</p>}
+        {segmentLoading && <p className="card analysis-segment-message" role="status">Calculating answer groups…</p>}
+        {segmentError && <p className="card analysis-segment-message question-warning" role="alert">{segmentError}</p>}
+        {segmentResult && outcomeQuestion && <>
+          <p className="analysis-freshness" role="status">Segment analysis completed {fullTime(segmentResult.asOf)} for n={segmentResult.scope.participantCount}. Group summaries share one live scan.</p>
+          <SegmentResults question={outcomeQuestion} result={segmentResult} compareStatuses={compareStatuses} display={display} />
+        </>}
+      </> : groups.length ? groups.map((group) => (
         <section key={group.id} className="stack" style={{ gap: 10 }}>
           <h2 className="section-title">{group.title}</h2>
           <div className="card analysis-question-list">
