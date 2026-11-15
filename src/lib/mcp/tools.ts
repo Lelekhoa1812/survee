@@ -14,10 +14,12 @@ import { inviteLink } from "../mail/policy";
 import { currentMail } from "../mail/state";
 import {
   addParticipants,
+  createAnalyticsRun,
   createInterview,
   deleteInterview,
   deleteParticipant,
   getInterview,
+  getAnalyticsRun,
   getParticipant,
   getVersion,
   iterateAnalyticsParticipants,
@@ -120,6 +122,53 @@ function asString(value: unknown, max = 500): string | undefined {
 }
 function oid(id: string): ObjectId | null {
   return /^[0-9a-f]{24}$/i.test(id) ? new ObjectId(id) : null;
+}
+
+type AnalyticsPageRow = { id: string; [key: string]: unknown };
+type AnalyticsSegmentPage = {
+  questions: AnalyticsPageRow[];
+  statusCohorts?: { status: string; participantCount: number; questions: AnalyticsPageRow[] }[];
+  [key: string]: unknown;
+};
+type AnalyticsRunPayload = Record<string, unknown> & {
+  questionCount: number;
+  questions?: AnalyticsPageRow[];
+  outcomes?: AnalyticsPageRow[];
+  segments?: AnalyticsSegmentPage[];
+};
+
+function pageAnalyticsRunResult(
+  result: AnalyticsRunPayload,
+  offset: number,
+  limit: number,
+  runId: string,
+  expiresAt: string,
+): Record<string, unknown> {
+  const questionCount = result.questionCount;
+  const end = Math.min(offset + limit, questionCount);
+  const paged: Record<string, unknown> = {
+    ...result,
+    offset,
+    limit,
+    nextOffset: end < questionCount ? end : null,
+    analysisRunId: runId,
+    analysisRunExpiresAt: expiresAt,
+  };
+  if (result.questions) paged.questions = result.questions.slice(offset, end);
+  if (result.outcomes) paged.outcomes = result.outcomes.slice(offset, end);
+  if (result.segments) {
+    paged.segments = result.segments.map((segment) => ({
+      ...segment,
+      questions: segment.questions.slice(offset, end),
+      ...(segment.statusCohorts ? {
+        statusCohorts: segment.statusCohorts.map((cohort) => ({
+          ...cohort,
+          questions: cohort.questions.slice(offset, end),
+        })),
+      } : {}),
+    }));
+  }
+  return paged;
 }
 
 function questionList(manifest: Manifest) {
@@ -378,9 +427,10 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer in one shared scan. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer in one shared scan. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; the completed aggregate pages remain stable for up to one hour. The initial scan is live, not a database snapshot. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
+      runId: str,
       questionId: str,
       questionIds: { type: "array", minItems: 1, maxItems: 20, uniqueItems: true, items: str },
       segmentBy: str,
@@ -393,6 +443,27 @@ const TOOLS: ToolDef[] = [
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      if (args.runId !== undefined) {
+        const runId = asString(args.runId, 40);
+        if (!runId || !oid(runId)) return err("runId must be an analysisRunId returned by analyze_answers.");
+        if (["questionId", "questionIds", "segmentBy", "submittedOnly", "statuses", "compareStatuses"].some((key) => args[key] !== undefined)) {
+          return err("When continuing an analysis run, pass only interviewId, runId, offset, and limit.");
+        }
+        const offset = typeof args.offset === "number" ? args.offset : 0;
+        const limit = typeof args.limit === "number" ? args.limit : 25;
+        if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+          return err("offset must be a non-negative integer and limit must be an integer from 1 to 100.");
+        }
+        const interview = await getInterview(id);
+        if (!interview) return err("Interview not found.", "not_found");
+        const run = await getAnalyticsRun(runId, id);
+        if (!run) return err("This analysis run expired or is no longer available. Start a new analysis with analyze_answers.", "analysis_run_expired");
+        const payload = run.result as AnalyticsRunPayload;
+        if (!payload || !Number.isInteger(payload.questionCount) || payload.questionCount < 0) {
+          return err("This analysis run could not be read. Start a new analysis with analyze_answers.", "analysis_run_invalid");
+        }
+        return ok(pageAnalyticsRunResult(payload, offset, limit, runId, run.expiresAt.toISOString()));
+      }
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       const version = await getVersion(interview._id, interview.currentVersion);
@@ -434,29 +505,34 @@ const TOOLS: ToolDef[] = [
       const statuses = requestedStatuses ?? (submittedOnly ? ["submitted"] : [...allStatuses]);
       const offset = typeof args.offset === "number" ? args.offset : 0;
       const limit = typeof args.limit === "number" ? args.limit : 25;
+      if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+        return err("offset must be a non-negative integer and limit must be an integer from 1 to 100.");
+      }
       if (requestedQuestionIds !== undefined && (offset !== 0 || limit < questions.length)) {
         return err("questionIds returns every selected outcome in one scan; use offset 0 and a limit at least as large as the selected list.");
       }
       const page = questions.slice(offset, offset + limit);
+      const createRun = offset + limit < questions.length;
+      const analysisQuestions = createRun ? questions : page;
       const cohort = analyticsCohortForStatuses(statuses);
       if (!cohort) return err("statuses must contain at least one status.");
       const compareRequested = args.compareStatuses === true;
       if (segmentQuestion && canSegmentByAnswer(segmentQuestion)) {
         const segmented = await summarizeAnswerSegments(
           segmentQuestion,
-          page,
-          iterateAnalyticsParticipants(id, [...new Set([segmentQuestion.id, ...page.map((question) => question.id)])], { statuses }),
+          analysisQuestions,
+          iterateAnalyticsParticipants(id, [...new Set([segmentQuestion.id, ...analysisQuestions.map((question) => question.id)])], { statuses }),
           statuses,
           compareRequested,
         );
         const participantCount = statuses.reduce((count, status) => count + segmented.statusCounts[status], 0);
         const submittedCount = statuses.includes("submitted") ? segmented.statusCounts.submitted : 0;
-        return ok({
+        const fullResult: Record<string, unknown> = {
           interviewId: id,
           surveyVersion: version.version,
           asOf: segmented.asOf,
           segmentBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
-          outcomes: page.map((question) => ({ id: question.id, type: question.type, label: question.label })),
+          outcomes: analysisQuestions.map((question) => ({ id: question.id, type: question.type, label: question.label })),
           scope: {
             statuses,
             participantCount,
@@ -465,9 +541,9 @@ const TOOLS: ToolDef[] = [
             submittedOnly: statuses.length === 1 && statuses[0] === "submitted",
           },
           questionCount: questions.length,
-          offset,
-          limit,
-          nextOffset: offset + page.length < questions.length ? offset + page.length : null,
+          offset: createRun ? 0 : offset,
+          limit: createRun ? questions.length : limit,
+          nextOffset: createRun ? null : offset + page.length < questions.length ? offset + page.length : null,
           segments: segmented.segments.map((segment) => ({
             key: segment.key,
             kind: segment.kind,
@@ -476,12 +552,12 @@ const TOOLS: ToolDef[] = [
             participantCount: segment.participantCount,
             disclosureRisk: segment.disclosureRisk,
             statusCounts: segment.statusCounts,
-            questions: page.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.summaries[question.id] })),
+            questions: analysisQuestions.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.summaries[question.id] })),
             ...(compareRequested ? {
               statusCohorts: statuses.map((status) => ({
                 status,
                 participantCount: segment.statusCounts[status],
-                questions: page.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.statusSummaries?.[status]?.[question.id] })),
+                questions: analysisQuestions.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.statusSummaries?.[status]?.[question.id] })),
               })),
             } : {}),
           })),
@@ -490,23 +566,37 @@ const TOOLS: ToolDef[] = [
             "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
             "No stored answer includes blank and note-only dimension responses; it does not mean the person was eligible to see a routed question. Invalid stored dimension values appear as Unmapped answer.",
             "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Each segment includes disclosureRisk.singletonSegment and, when status summaries are returned, disclosureRisk.singletonStatusGroups. Every outcome QuestionSummary also carries singleton signals for its cohort, answer, no-answer, note-only, unmapped, valid-answer denominator, distribution values, and numeric summaries. These signals only detect counts of one; they do not assess attribute combinations or guarantee anonymity. Outcome percentages use that segment's valid-answer denominator.",
-            ...(compareRequested ? ["Status summaries for all selected answer segments share this asOf and one participant scan; updates during the live read are not isolated by a database snapshot."] : []),
+            "This result is computed from one live participant scan; changes during the scan are not isolated by a database snapshot.",
+            ...(compareRequested ? ["Status summaries for all selected answer segments share one participant scan and this asOf time."] : []),
+            ...(createRun ? ["This completed aggregate run supports stable pagination for up to one hour. Pages share the same asOf and completed output; participant changes during the initial live scan were not isolated by a database snapshot."] : []),
           ],
-        });
+        };
+        if (createRun) {
+          const stored = await createAnalyticsRun(id, version.version, fullResult);
+          if (!stored) return err("Could not create an analysis run for this tenant and interview.");
+          if (!stored.ok) return err(
+            stored.reason === "too_large"
+              ? "The aggregate result is too large to keep as a repeatable analysis run. Select up to 20 outcome questions with questionIds, or analyze fewer outcomes at a time."
+              : "This tenant already has the maximum number of active analysis runs. Retry after an existing run expires.",
+            stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
+          );
+          return ok(pageAnalyticsRunResult(fullResult as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
+        }
+        return ok(fullResult);
       }
       const statusCounts: Record<typeof allStatuses[number], number> = { invited: 0, in_progress: 0, submitted: 0 };
       const statusSummaries = {} as Record<typeof allStatuses[number], Record<string, QuestionSummary>>;
       let selectedSummaries: Record<string, QuestionSummary>;
       let asOf: string;
       if (compareRequested) {
-        const cohortAnalysis = await summarizeQuestionCohorts(page, iterateAnalyticsParticipants(id, page.map((question) => question.id), { statuses }));
+        const cohortAnalysis = await summarizeQuestionCohorts(analysisQuestions, iterateAnalyticsParticipants(id, analysisQuestions.map((question) => question.id), { statuses }));
         Object.assign(statusCounts, cohortAnalysis.statusCounts);
         selectedSummaries = cohortAnalysis.summaries[cohort.key];
         for (const status of statuses) statusSummaries[status] = cohortAnalysis.summaries[status];
         asOf = cohortAnalysis.asOf;
       } else {
-        const accumulators = new Map(page.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
-        for await (const respondent of iterateAnalyticsParticipants(id, page.map((question) => question.id), { statuses })) {
+        const accumulators = new Map(analysisQuestions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
+        for await (const respondent of iterateAnalyticsParticipants(id, analysisQuestions.map((question) => question.id), { statuses })) {
           statusCounts[respondent.status] += 1;
           for (const accumulator of accumulators.values()) accumulator.add(respondent);
         }
@@ -515,7 +605,7 @@ const TOOLS: ToolDef[] = [
       }
       const participantCount = statuses.reduce((count, status) => count + statusCounts[status], 0);
       const submittedCount = statuses.includes("submitted") ? statusCounts.submitted : 0;
-      return ok({
+      const fullResult: Record<string, unknown> = {
         interviewId: id,
         surveyVersion: version.version,
         asOf,
@@ -527,10 +617,10 @@ const TOOLS: ToolDef[] = [
           submittedOnly: statuses.length === 1 && statuses[0] === "submitted",
         },
         questionCount: questions.length,
-        offset,
-        limit,
-        nextOffset: offset + page.length < questions.length ? offset + page.length : null,
-        questions: page.map((question) => ({
+        offset: createRun ? 0 : offset,
+        limit: createRun ? questions.length : limit,
+        nextOffset: createRun ? null : offset + page.length < questions.length ? offset + page.length : null,
+        questions: analysisQuestions.map((question) => ({
           id: question.id,
           type: question.type,
           label: question.label,
@@ -541,7 +631,7 @@ const TOOLS: ToolDef[] = [
             status,
             participantCount: statusCounts[status],
             respondentCount: statusCounts[status],
-            questions: page.map((question) => ({
+            questions: analysisQuestions.map((question) => ({
               id: question.id,
               type: question.type,
               label: question.label,
@@ -556,10 +646,23 @@ const TOOLS: ToolDef[] = [
           "cohortCount includes everyone in each selected status cohort; noAnswerCount is the count without a non-empty stored value and may include people who were not shown a conditional or routed question because KQA does not track item-level display or eligibility.",
           "eligibleCount and missingCount remain as compatibility aliases for cohortCount and noAnswerCount; they do not measure item-level eligibility or missingness. Distribution percentages use valid answers that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
-          ...(compareRequested ? ["The selected status cohorts were computed in one participant scan and share this asOf time; changes during the live read are not isolated by a database snapshot."] : []),
+          "All summaries in this result use one live participant scan; changes during the scan are not isolated by a database snapshot.",
+          ...(createRun ? ["This completed aggregate run supports stable pagination for up to one hour. Pages share the same asOf and completed output; participant changes during the initial live scan were not isolated by a database snapshot."] : []),
           "Number summaries are descriptive; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Scale responses are ordinal: scaleMedian is the lower central category retained for compatibility, and scaleMedianRange gives the one or two central observed categories. Category codes are never averaged and no scale mean is calculated. Text is not interpreted, scored, or returned.",
         ],
-      });
+      };
+      if (createRun) {
+        const stored = await createAnalyticsRun(id, version.version, fullResult);
+        if (!stored) return err("Could not create an analysis run for this tenant and interview.");
+        if (!stored.ok) return err(
+          stored.reason === "too_large"
+            ? "The aggregate result is too large to keep as a repeatable analysis run. Select one question with questionId, or use smaller questionIds selections when segmenting."
+            : "This tenant already has the maximum number of active analysis runs. Retry after an existing run expires.",
+          stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
+        );
+        return ok(pageAnalyticsRunResult(fullResult as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
+      }
+      return ok(fullResult);
     },
   },
   {

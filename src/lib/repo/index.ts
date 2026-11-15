@@ -6,7 +6,7 @@ import { progress, validateAnswer } from "../format/answers";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
-import type { InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
+import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
 import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
 
@@ -190,6 +190,7 @@ export async function deleteInterview(id: string): Promise<boolean> {
     (await col.versions()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
     (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
     (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid })),
+    (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }),
     deleteMailForInterview(oid),
   ]);
   return true;
@@ -212,6 +213,61 @@ export interface AnalyticsParticipant {
 
 export interface AnalyticsParticipantScope {
   statuses?: ParticipantStatus[];
+}
+
+export type AnalyticsRunCreateResult =
+  | { ok: true; id: string; expiresAt: string }
+  | { ok: false; reason: "too_large" | "capacity" };
+
+const ANALYTICS_RUN_TTL_MS = 60 * 60 * 1000;
+const ANALYTICS_RUN_MAX_BYTES = 1024 * 1024;
+const ANALYTICS_RUN_SLOTS_PER_TENANT = 10;
+
+/** Store an aggregate-only page set with bounded size, lifetime, and per-tenant concurrency. */
+export async function createAnalyticsRun(
+  interviewId: string,
+  surveyVersion: number,
+  result: Record<string, unknown>,
+): Promise<AnalyticsRunCreateResult | null> {
+  const oid = toOid(interviewId);
+  if (!oid || !Number.isInteger(surveyVersion) || surveyVersion < 1) return null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(result);
+  } catch {
+    return { ok: false, reason: "too_large" };
+  }
+  if (Buffer.byteLength(serialized, "utf8") > ANALYTICS_RUN_MAX_BYTES) return { ok: false, reason: "too_large" };
+
+  const runs = await col.analyticsRuns();
+  const now = new Date();
+  await runs.deleteMany({ tenantId, expiresAt: { $lte: now } });
+  for (let slot = 0; slot < ANALYTICS_RUN_SLOTS_PER_TENANT; slot += 1) {
+    const doc: AnalyticsRunDoc = {
+      _id: new ObjectId(), tenantId, interviewId: oid, slot, surveyVersion,
+      createdAt: now, expiresAt: new Date(now.getTime() + ANALYTICS_RUN_TTL_MS), result,
+    };
+    try {
+      await runs.insertOne(doc);
+      return { ok: true, id: doc._id.toHexString(), expiresAt: doc.expiresAt.toISOString() };
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === 11000) continue;
+      throw error;
+    }
+  }
+  return { ok: false, reason: "capacity" };
+}
+
+/** Runs are strictly tenant-scoped, even while legacy interview records are being migrated. */
+export async function getAnalyticsRun(id: string, interviewId: string): Promise<Pick<AnalyticsRunDoc, "result" | "surveyVersion" | "expiresAt"> | null> {
+  const runOid = toOid(id);
+  const interviewOid = toOid(interviewId);
+  const tenantId = await currentTenantId();
+  if (!runOid || !interviewOid || !tenantId) return null;
+  const run = await (await col.analyticsRuns()).findOne({ _id: runOid, tenantId, interviewId: interviewOid, expiresAt: { $gt: new Date() } });
+  return run ? { result: run.result, surveyVersion: run.surveyVersion, expiresAt: run.expiresAt } : null;
 }
 
 /**

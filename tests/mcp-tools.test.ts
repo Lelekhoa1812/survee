@@ -15,6 +15,7 @@ process.env.IMAP_HOST = "imap.example.com";
 process.env.IMAP_PORT = "993";
 
 const mailRows: Record<string, unknown>[] = [];
+const analyticsRuns = new Map<string, { result: Record<string, unknown>; expiresAt: Date }>();
 const sent: { message: Record<string, unknown>; options: { port?: number; secure?: boolean; requireTLS?: boolean } }[] = [];
 const searches: unknown[] = [];
 const patchTestHtml = readFileSync(new URL("../docs/template/starter.kqa.html", import.meta.url), "utf8");
@@ -108,6 +109,16 @@ vi.mock("../src/lib/repo", async () => {
       updatedAt: new Date(),
     })),
     getVersion: vi.fn(async () => ({ version: 1, manifest: analyticsManifest })),
+    createAnalyticsRun: vi.fn(async (_interviewId: string, _surveyVersion: number, result: Record<string, unknown>) => {
+      const id = "111111111111111111111111";
+      const expiresAt = new Date("2026-11-16T01:00:00.000Z");
+      analyticsRuns.set(id, { result, expiresAt });
+      return { ok: true as const, id, expiresAt: expiresAt.toISOString() };
+    }),
+    getAnalyticsRun: vi.fn(async (id: string) => {
+      const run = analyticsRuns.get(id);
+      return run ? { result: run.result, surveyVersion: 1, expiresAt: run.expiresAt } : null;
+    }),
     publishVersionIfCurrent: vi.fn(async () => ({ version: 2 })),
     recentEvents: vi.fn(async () => [{
       id: "event-id",
@@ -148,6 +159,7 @@ function call(name: string, args: Record<string, unknown>) {
 
 beforeEach(() => {
   mailRows.length = 0;
+  analyticsRuns.clear();
   sent.length = 0;
   searches.length = 0;
   vi.mocked(noteMcp).mockClear();
@@ -454,23 +466,28 @@ describe("MCP tools", () => {
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
   });
 
-  it("paginates analytics questions and keeps the requested cohort on each page", async () => {
+  it("paginates analytics questions from one stable aggregate run", async () => {
     const first = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: 0, limit: 1 });
-    const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string }[] } } };
+    const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { analysisRunId: string; analysisRunExpiresAt: string; offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string }[]; methodology: string[] } } };
     expect(firstBody.result.isError).toBeFalsy();
     expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 3, nextOffset: 1 });
+    expect(firstBody.result.structuredContent.analysisRunId).toMatch(/^[a-f0-9]{24}$/);
+    expect(firstBody.result.structuredContent.analysisRunExpiresAt).toBe("2026-11-16T01:00:00.000Z");
     expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(firstBody.result.structuredContent.questions.map((question) => question.id)).toEqual(["fit"]);
+    expect(firstBody.result.structuredContent.methodology.join(" ")).toContain("participant changes during the initial live scan were not isolated");
 
     const nextOffset = firstBody.result.structuredContent.nextOffset;
-    const second = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: nextOffset!, limit: 1 });
+    const callsAfterFirstPage = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    const second = await call("analyze_answers", { interviewId, runId: firstBody.result.structuredContent.analysisRunId, offset: nextOffset!, limit: 1 });
     const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string; numeric: { mean: number } | null }[] } } };
     expect(secondBody.result.isError).toBeFalsy();
     expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: 2 });
     expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4, q1: 4, q3: 4 } });
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsAfterFirstPage);
 
-    const third = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: secondBody.result.structuredContent.nextOffset!, limit: 1 });
+    const third = await call("analyze_answers", { interviewId, runId: firstBody.result.structuredContent.analysisRunId, offset: secondBody.result.structuredContent.nextOffset!, limit: 1 });
     const thirdBody = await third.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; questions: { id: string }[] } } };
     expect(thirdBody.result.isError).toBeFalsy();
     expect(thirdBody.result.structuredContent).toMatchObject({ offset: 2, limit: 1, nextOffset: null });

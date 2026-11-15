@@ -153,6 +153,20 @@ export interface EventDoc {
   meta?: Record<string, unknown>;
 }
 
+/** collection: analytics_runs. Aggregate-only output retained briefly for repeatable paging. */
+export interface AnalyticsRunDoc {
+  _id: ObjectId;
+  tenantId: string;
+  interviewId: ObjectId;
+  /** Fixed slot count bounds active stored runs for each tenant. */
+  slot: number;
+  surveyVersion: number;
+  createdAt: Date;
+  expiresAt: Date;
+  /** Completed aggregate output only; never raw participant records or free-text answers. */
+  result: Record<string, unknown>;
+}
+
 /**
  * collection: mail_messages. One row per send attempt. The body is not stored.
  * "Sent" for the current person is the latest row whose `to` and `token` still match them.

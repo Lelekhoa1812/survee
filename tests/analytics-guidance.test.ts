@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/12");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/13");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -61,7 +61,8 @@ describe("versioned analytics guidance", () => {
     expect(constraints).toContain("disclosurerisk metadata flags singleton segments");
     expect(constraints).toContain("questionsummary.disclosurerisk flags singleton");
     expect(constraints).toContain("disclosure rules");
-    expect(constraints).toContain("separate live read with its own asof");
+    expect(constraints).toContain("reuse analysisrunid as runid");
+    expect(constraints).toContain("initial participant scan is live");
   });
 
   it("returns fresh package objects so callers cannot mutate shared guidance", () => {
