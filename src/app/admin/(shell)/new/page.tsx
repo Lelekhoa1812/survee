@@ -6,7 +6,7 @@ export const metadata = { title: "New interview" };
 
 export default function NewPage() {
   return (
-    <main className="page narrow">
+    <main id="main-content" className="page narrow" tabIndex={-1}>
       <Link href="/admin" className="crumb"><Icon name="arrowLeft" size={14} /> Interviews</Link>
       <div className="page-head">
         <div>

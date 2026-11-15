@@ -41,6 +41,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: var(--accent-soft); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip-link { position: fixed; z-index: 1000; top: 12px; left: 12px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); font-weight: 600; transform: translateY(calc(-100% - 16px)); }
+.skip-link:focus { transform: translateY(0); }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); }
 .nowrap { white-space: nowrap; }

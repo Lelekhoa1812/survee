@@ -11,7 +11,7 @@ export default async function Dashboard() {
   const totals = interviews.reduce((a, i) => ({ people: a.people + i.counts.people, submitted: a.submitted + i.counts.submitted, active: a.active + (i.status === "open" ? 1 : 0) }), { people: 0, submitted: 0, active: 0 });
 
   return (
-    <main className="page">
+    <main id="main-content" className="page" tabIndex={-1}>
       <div className="page-head">
         <div>
           <h1>Interviews</h1>

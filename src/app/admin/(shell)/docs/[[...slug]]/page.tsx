@@ -29,7 +29,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug?: st
   const bundle = await buildBundle("this app");
 
   return (
-    <main className="page">
+    <main id="main-content" className="page" tabIndex={-1}>
       <div className="page-head">
         <div>
           <h1>Guide</h1>

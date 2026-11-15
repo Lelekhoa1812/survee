@@ -5,7 +5,7 @@ export const metadata = { title: "Checking" };
 
 export default function CheckPage() {
   return (
-    <main className="page narrow">
+    <main id="main-content" className="page narrow" tabIndex={-1}>
       <div className="page-head">
         <div>
           <h1>Checking</h1>

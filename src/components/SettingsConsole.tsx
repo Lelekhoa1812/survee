@@ -146,7 +146,7 @@ export function SettingsConsole({ initialKeys, loadError, envToken, origin, tena
   }
 
   return (
-    <main className="page">
+    <main id="main-content" className="page" tabIndex={-1}>
       <div className="page-head">
         <div>
           <h1>Settings</h1>

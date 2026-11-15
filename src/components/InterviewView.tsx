@@ -94,7 +94,7 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
   }
 
   return (
-    <main className="page">
+    <main id="main-content" className="page" tabIndex={-1}>
       <Link href="/admin" className="crumb"><Icon name="arrowLeft" size={14} /> Interviews</Link>
       <div className="page-head">
         <div style={{ minWidth: 0 }}>
