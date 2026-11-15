@@ -112,6 +112,31 @@ describe("signup verification completion recovery", () => {
   });
 
   it("allows only one concurrent request to activate a shared verification link", async () => {
+    const pending = store.signups[0];
+    store.users.push({
+      _id: pending.userId,
+      email: pending.email,
+      passwordHash: pending.passwordHash,
+      emailVerifiedAt: pending.createdAt,
+      createdAt: pending.createdAt,
+      updatedAt: pending.createdAt,
+    });
+    store.tenants.push({
+      _id: pending.tenantId,
+      name: pending.tenantName,
+      slug: pending.tenantSlug,
+      status: "active",
+      createdAt: pending.createdAt,
+      updatedAt: pending.createdAt,
+    });
+    store.memberships.push({
+      _id: new ObjectId(),
+      tenantId: pending.tenantId,
+      userId: pending.userId,
+      role: "owner",
+      createdAt: pending.createdAt,
+    });
+
     let reads = 0;
     let release!: () => void;
     const barrier = new Promise<void>((resolve) => { release = resolve; });
@@ -123,6 +148,7 @@ describe("signup verification completion recovery", () => {
 
     const results = await Promise.all([completeSignup(token), completeSignup(token)]);
 
+    expect(reads).toBe(2);
     expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(store.users).toHaveLength(1);
     expect(store.tenants).toHaveLength(1);
