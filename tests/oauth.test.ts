@@ -147,7 +147,7 @@ describe("OAuth discovery and PKCE", () => {
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
     expect(keys[0].capabilities).toEqual(capabilities);
     const access = await authenticateApiKeyAccess(exchanged.access);
-    expect(access).toEqual({ tenantId: "axion", capabilities });
+    expect(access).toEqual({ tenantId: "axion", auditActor: { kind: "oauth", id: keys[0]._id.toHexString(), name: "Analytics client" }, capabilities });
     const names = listToolDefs(access?.capabilities).map(({ name }) => name);
     expect(names).toContain("get_analytics_guidance");
     expect(names).toContain("analyze_answers");
@@ -159,7 +159,7 @@ describe("OAuth discovery and PKCE", () => {
     const rotated = await rotateOAuthKey(exchanged.refresh);
     expect(rotated).not.toBeNull();
     expect(keys[0].capabilities).toEqual(capabilities);
-    expect(await authenticateApiKeyAccess(rotated!.access)).toEqual({ tenantId: "axion", capabilities });
+    expect(await authenticateApiKeyAccess(rotated!.access)).toEqual({ tenantId: "axion", auditActor: { kind: "oauth", id: keys[0]._id.toHexString(), name: "Analytics client" }, capabilities });
   });
 
   it("rejects OAuth access and refresh when the tenant is suspended", async () => {

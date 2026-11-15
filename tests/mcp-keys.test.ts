@@ -21,6 +21,7 @@ interface Doc {
 }
 
 const docs: Doc[] = [];
+const eventRows: Record<string, unknown>[] = [];
 const lookups = vi.fn();
 const activeTenants = new Set<string>();
 
@@ -50,6 +51,9 @@ vi.mock("../src/lib/db", () => ({
         find: () => ({ sort: () => ({ toArray: async () => [...docs] }) }),
       };
     },
+    events: async () => ({
+      insertOne: async (row: Record<string, unknown>) => { eventRows.push(row); return { insertedId: row._id }; },
+    }),
   },
 }));
 
@@ -90,6 +94,7 @@ function callTool(token: string, name: string, args: Record<string, unknown>) {
 describe("API keys as MCP credentials", () => {
   beforeEach(() => {
     docs.splice(0, docs.length);
+    eventRows.splice(0, eventRows.length);
     lookups.mockClear();
     activeTenants.clear();
     activeTenants.add("axion");
@@ -132,6 +137,23 @@ describe("API keys as MCP credentials", () => {
     expect((await post(secret)).status).toBe(401);
     expect((await post(process.env.KQA_MCP_TOKEN!)).status).toBe(200);
     });
+  });
+
+  it("records safe API-key and service-token identities in MCP activity", async () => {
+    const secret = generateKeySecret();
+    const created = await withTenantPrincipal({ tenantId: "axion", role: "owner", email: "admin@axiob.local", userId: "000000000000000000000001", source: "session" }, () => createApiKey({ name: "Reporting agent", secret, createdBy: "admin@axiob.local" }));
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    await callTool(secret, "get_design_guidance", { surface: "analytics" });
+    const apiEvent = eventRows.at(-1) as { meta: Record<string, unknown> };
+    expect(apiEvent.meta.actor).toEqual({ kind: "api_key", id: created.key.id, name: "Reporting agent" });
+    expect(JSON.stringify(apiEvent)).not.toContain(secret);
+
+    await callTool(process.env.KQA_MCP_TOKEN!, "get_design_guidance", { surface: "analytics" });
+    const serviceEvent = eventRows.at(-1) as { meta: Record<string, unknown> };
+    expect(serviceEvent.meta.actor).toEqual({ kind: "service_token", id: "axion-service-token", name: "Axion MCP service token" });
+    expect(JSON.stringify(serviceEvent)).not.toContain(process.env.KQA_MCP_TOKEN!);
   });
 
   it("refuses a key value that copies the server token", async () => {

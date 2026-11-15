@@ -9,6 +9,12 @@ export interface TenantPrincipal {
   email?: string;
   role?: "owner" | "admin" | "member" | "service";
   source: "session" | "api_key" | "service_token";
+  /** Safe credential identity for MCP audit events. Never contains a bearer value. */
+  auditActor?: {
+    kind: "api_key" | "oauth" | "service_token";
+    id: string;
+    name: string;
+  };
 }
 
 const principalStorage = new AsyncLocalStorage<TenantPrincipal>();

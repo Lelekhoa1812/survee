@@ -100,6 +100,12 @@ vi.mock("../src/lib/repo", async () => {
       updatedAt: new Date(),
     })),
     getVersion: vi.fn(async () => ({ version: 1, manifest: analyticsManifest })),
+    recentEvents: vi.fn(async () => [{
+      id: "event-id",
+      type: "mcp",
+      at: "2026-11-13T00:00:00.000Z",
+      meta: { tool: "get_design_guidance", ok: true, actor: { kind: "api_key", id: "0123456789abcdef01234567", name: "Reporting agent" } },
+    }]),
     listParticipants: vi.fn(async () => [
       { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
       { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
@@ -138,6 +144,12 @@ beforeEach(() => {
 });
 
 describe("MCP tools", () => {
+  it("omits credential identities from MCP event listings", async () => {
+    const res = await call("list_events", { interviewId });
+    const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[] } } };
+    expect(body.result.structuredContent.events[0].meta).toEqual({ tool: "get_design_guidance", ok: true });
+  });
+
   it("documents every registered tool", () => {
     const md = readFileSync(new URL("../docs/MCP.md", import.meta.url), "utf8");
     const tools = listToolDefs();

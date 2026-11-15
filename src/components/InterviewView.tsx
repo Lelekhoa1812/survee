@@ -23,6 +23,15 @@ export function useOrigin(): string {
 
 const EVENT_TEXT: Record<string, string> = { open: "opened their link", save: "saved answers", submit: "submitted", reopen: "was reopened by you", created: "Interview created", version: "New survey version uploaded", status: "Status changed", export: "Exported answers", invite: "was emailed their link", mcp: "was updated by an agent" };
 
+function mcpActorLabel(meta?: Record<string, unknown>): string | null {
+  const actor = meta?.actor;
+  if (!actor || typeof actor !== "object" || Array.isArray(actor)) return null;
+  const value = actor as Record<string, unknown>;
+  if (typeof value.name !== "string" || !value.name || typeof value.id !== "string") return null;
+  const type = value.kind === "service_token" ? "service token" : value.kind === "oauth" ? "OAuth app" : value.kind === "api_key" ? "API key" : null;
+  return type ? `${type} “${value.name}” (${value.id.slice(-6)})` : null;
+}
+
 export function InterviewView({ data, initialTab, analysisOnly }: { data: InterviewData; initialTab: string; analysisOnly: boolean }) {
   const router = useRouter();
   const toast = useToast();
@@ -164,7 +173,7 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
               <div className="list">
                 {events.map((e) => (
                   <div key={e.id} className="list-row" style={{ gridTemplateColumns: "1fr auto", padding: "11px 20px" }}>
-                    <span>{e.person && ["open", "save", "submit", "reopen", "invite"].includes(e.type) ? <><b>{e.person}</b> {e.type === "invite" && e.meta?.result === "failed" ? "could not be emailed a link" : EVENT_TEXT[e.type]}</> : e.type === "mcp" ? <>An agent used {typeof e.meta?.tool === "string" ? e.meta.tool : "a tool"}</> : (EVENT_TEXT[e.type] ?? e.type)}{e.type === "version" && e.meta?.version ? ` (version ${String(e.meta.version)})` : ""}</span>
+                    <span>{e.person && ["open", "save", "submit", "reopen", "invite"].includes(e.type) ? <><b>{e.person}</b> {e.type === "invite" && e.meta?.result === "failed" ? "could not be emailed a link" : EVENT_TEXT[e.type]}</> : e.type === "mcp" ? <>MCP {typeof e.meta?.tool === "string" ? e.meta.tool : "tool"} via {mcpActorLabel(e.meta) ?? "an unidentified credential"}</> : (EVENT_TEXT[e.type] ?? e.type)}{e.type === "version" && e.meta?.version ? ` (version ${String(e.meta.version)})` : ""}</span>
                     <span className="muted nowrap" style={{ fontSize: 13 }}>{relTime(e.at)}</span>
                   </div>
                 ))}

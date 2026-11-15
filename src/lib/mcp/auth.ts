@@ -21,7 +21,12 @@ export async function authorizeMcp(req: Request): Promise<{ ok: true; principal:
   const expected = mcpToken();
   if (expected && tokensMatch(match[1], expected)) {
     try {
-      if (await isTenantActive(AXION_TENANT_ID)) return { ok: true, principal: { tenantId: AXION_TENANT_ID, role: "service", source: "service_token" } };
+      if (await isTenantActive(AXION_TENANT_ID)) return { ok: true, principal: {
+        tenantId: AXION_TENANT_ID,
+        role: "service",
+        source: "service_token",
+        auditActor: { kind: "service_token", id: "axion-service-token", name: "Axion MCP service token" },
+      } };
     } catch {
       return { ok: false, status: 401, error: "Unauthorized." };
     }
@@ -29,7 +34,7 @@ export async function authorizeMcp(req: Request): Promise<{ ok: true; principal:
   }
   try {
     const access = await authenticateApiKeyAccess(match[1]);
-    if (access) return { ok: true, principal: { tenantId: access.tenantId, role: "service", source: "api_key" }, ...(access.capabilities === undefined ? {} : { capabilities: access.capabilities }) };
+    if (access) return { ok: true, principal: { tenantId: access.tenantId, role: "service", source: "api_key", auditActor: access.auditActor }, ...(access.capabilities === undefined ? {} : { capabilities: access.capabilities }) };
   } catch {
     return { ok: false, status: 401, error: "Unauthorized." };
   }

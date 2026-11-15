@@ -158,7 +158,7 @@ export async function authenticateApiKeyTenant(secret: string): Promise<string |
 }
 
 /** Authenticate a bearer and return its immutable tenant binding and tool permissions. */
-export async function authenticateApiKeyAccess(secret: string): Promise<{ tenantId: string; capabilities?: McpCapability[] } | null> {
+export async function authenticateApiKeyAccess(secret: string): Promise<{ tenantId: string; auditActor: { kind: "api_key" | "oauth"; id: string; name: string }; capabilities?: McpCapability[] } | null> {
   if (secret.length < MIN_SECRET || secret.length > MAX_SECRET || /\s/.test(secret)) return null;
   const c = await col.apiKeys();
   const doc = await c.findOne({ hash: hashKey(secret) });
@@ -168,9 +168,11 @@ export async function authenticateApiKeyAccess(secret: string): Promise<{ tenant
   if (!await isTenantActive(tenantId)) return null;
   const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
   if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
-  if (doc.capabilities === undefined) return { tenantId };
+  const name = typeof doc.name === "string" ? doc.name.split(secret).join("[redacted]") : "Unnamed API key";
+  const auditActor = { kind: doc.oauthClientId ? "oauth" as const : "api_key" as const, id: doc._id.toHexString(), name };
+  if (doc.capabilities === undefined) return { tenantId, auditActor };
   const capabilities = parseMcpCapabilities(doc.capabilities) ?? [];
-  return { tenantId, capabilities };
+  return { tenantId, auditActor, capabilities };
 }
 
 const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;

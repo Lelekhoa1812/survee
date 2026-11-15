@@ -458,7 +458,12 @@ const TOOLS: ToolDef[] = [
         if (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1) return err("limit must be an integer of at least 1.");
         limit = Math.min(50, args.limit);
       }
-      return ok({ events: await recentEvents(id, limit) });
+      const events = await recentEvents(id, limit);
+      return ok({ events: events.map((event) => {
+        const meta = event.meta ? { ...event.meta } : undefined;
+        if (meta) delete meta.actor;
+        return { ...event, ...(meta ? { meta } : {}) };
+      }) });
     },
   },
   {

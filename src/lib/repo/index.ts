@@ -7,7 +7,7 @@ import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import type { InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
-import { currentTenantId, tenantFilter } from "../tenant-context";
+import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
 
 export type { InterviewSummary, ParticipantView } from "./types";
@@ -503,13 +503,19 @@ export async function clearLoginFailures(key: string): Promise<void> {
   await (await col.logins()).deleteMany({ key });
 }
 
-/** Audit an MCP tool call. Meta is the tool name and outcome only: no HTML, answers, or links. */
+/** Audit an MCP tool call. Meta contains the tool, outcome, and safe credential identity only. */
 export async function noteMcp(tool: string, ok: boolean, interviewId?: string): Promise<void> {
   const tenantId = await currentTenantId();
   if (!tenantId) return;
   const oid = interviewId ? toOid(interviewId) : null;
   const safe = /^[a-z0-9_]{1,64}$/.test(tool) ? tool : "unknown";
-  await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, ...(oid ? { interviewId: oid } : {}), type: "mcp", at: new Date(), meta: { tool: safe, ok } });
+  const auditActor = currentPrincipal()?.auditActor;
+  const actorName = typeof auditActor?.name === "string" ? auditActor.name : "Unnamed credential";
+  const safeActor = auditActor && /^[a-z0-9_-]{1,32}$/.test(auditActor.kind)
+    && /^[a-zA-Z0-9._:-]{1,120}$/.test(auditActor.id)
+    ? { kind: auditActor.kind, id: auditActor.id, name: actorName.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Unnamed credential" }
+    : undefined;
+  await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, ...(oid ? { interviewId: oid } : {}), type: "mcp", at: new Date(), meta: { tool: safe, ok, ...(safeActor ? { actor: safeActor } : {}) } });
 }
 
 // ------------------------------------------------------------------------------------------ export input
