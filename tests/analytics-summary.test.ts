@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeQuestion, type AnalyticsRespondent } from "../src/lib/analytics/summary";
+import { createQuestionSummaryAccumulator, summarizeQuestion, type AnalyticsRespondent } from "../src/lib/analytics/summary";
 import { formatPercentage } from "../src/lib/analytics/format";
 import type { Question } from "../src/lib/format/schema";
 
@@ -91,6 +91,22 @@ describe("descriptive question summaries", () => {
     const q: Question = { id: "q", type: "number", label: "Score" };
     const summary = summarizeQuestion(q, [respondent(1), respondent(2), respondent(3), respondent(4)]);
     expect(summary.numeric).toMatchObject({ q1: 1.75, median: 2.5, q3: 3.25 });
+  });
+
+  it("merges exact numeric values without exposing mutable snapshots to the merge", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const combined = createQuestionSummaryAccumulator(q);
+    const source = createQuestionSummaryAccumulator(q);
+    combined.add(respondent(1));
+    source.add(respondent(3));
+    source.add(respondent(8));
+
+    const snapshot = source.snapshot();
+    snapshot.numericValues.push(1000);
+    combined.merge(source);
+
+    expect(combined.finish().numeric).toEqual({ n: 3, min: 1, q1: 2, median: 3, q3: 5.5, max: 8, mean: 4 });
+    expect(source.finish().numeric).toEqual({ n: 2, min: 3, q1: 4.25, median: 5.5, q3: 6.75, max: 8, mean: 5.5 });
   });
 
   it("shows scale distributions and a median without calculating a mean", () => {
