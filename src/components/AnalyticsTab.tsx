@@ -314,7 +314,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
-        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. KQA does not track whether a conditional or routed question was shown, so no-answer counts may include people who did not see the question. Checkbox percentages can total more than 100%. Text and note content are excluded.</p>
+        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. KQA does not track whether a conditional or routed question was shown, so no-answer counts may include people who did not see the question. Checkbox percentages can total more than 100%. Text and note content are excluded. These summaries describe the selected interview cohort; nonresponse or self-selection can shape results. They do not establish population representativeness, statistical significance, or causal effects.</p>
         {data.analysis?.asOf && <p className="analysis-freshness" role="status">Analytics read completed {fullTime(data.analysis.asOf)}. Status groups share one live scan; updates during that scan may be observed.</p>}
       </section>
 

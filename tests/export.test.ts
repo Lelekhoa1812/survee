@@ -310,6 +310,14 @@ describe("XLSX", () => {
     const labels = summary.getColumn(1).values as unknown[];
     expect(labels).toContain("People");
     expect(labels).toContain("Question id");
+    const summaryRows = Array.from({ length: summary.rowCount }, (_, index) => summary.getRow(index + 1));
+    const questionHeader = summaryRows.find((row) => row.getCell(1).value === "Question id");
+    expect(questionHeader?.getCell(5).value).toBe("Share with stored answer");
+    const roleSummary = summaryRows.find((row) => row.getCell(1).value === "role");
+    expect(roleSummary?.getCell(4).value).toBe(2);
+    expect(roleSummary?.getCell(5).value).toBeCloseTo(2 / input.participants.length);
+    const metricNote = summaryRows.find((row) => row.getCell(1).value === "Metric note");
+    expect(metricNote?.getCell(2).value).toContain("not an item response rate");
   });
 });
 

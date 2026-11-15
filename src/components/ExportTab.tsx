@@ -4,10 +4,10 @@ import type { InterviewData } from "./interview-types";
 import { Icon } from "./ui";
 
 const FORMATS = [
-  { id: "xlsx", name: "Excel workbook", ext: ".xlsx", note: "Four sheets: Summary, one row per person, one row per answer, and People. Best for sharing and review." },
+  { id: "xlsx", name: "Excel workbook", ext: ".xlsx", note: "Four sheets: Summary, one row per person, one row per answer, and People. Useful for analysis and review." },
   { id: "csv-wide", name: "CSV, one row per person", ext: ".csv", note: "Each question is a column. Opens in Excel, Numbers and Google Sheets." },
   { id: "csv-long", name: "CSV, one row per answer", ext: ".csv", note: "Person, question, answer and note on separate rows. Best for pivot tables and analysis." },
-  { id: "md", name: "Markdown report", ext: ".md", note: "A readable write-up of every answer by section. Handy to paste into a document or to an AI agent." },
+  { id: "md", name: "Markdown report", ext: ".md", note: "A readable write-up of every answer by section for careful review." },
   { id: "json", name: "JSON", ext: ".json", note: "The full structured record including question definitions, for developers and automation." },
 ] as const;
 
@@ -18,6 +18,10 @@ export function ExportTab({ data }: { data: InterviewData }) {
       <div className="callout">
         <Icon name="info" />
         <div>Exports use survey version {data.interview.currentVersion} and include all {data.people.length} {data.people.length === 1 ? "person" : "people"}: {done} submitted, {data.people.length - done} still in progress or not started. Each file records its status.</div>
+      </div>
+      <div className="callout warn">
+        <Icon name="info" />
+        <div>Exports contain person-level information such as names, statuses, notes, answers, and free text. Share only with authorized people. Review the contents before uploading a file to an AI tool or another service.</div>
       </div>
       <div className="choice-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
         {FORMATS.map((f) => (

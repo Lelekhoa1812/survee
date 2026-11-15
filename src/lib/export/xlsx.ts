@@ -96,16 +96,20 @@ function writeSummary(wb: Workbook, input: ExportInput, people: ExportParticipan
   ws.addRow([]);
 
   const tableHeaderRow = ws.rowCount + 1;
-  const header = ["Question id", "Question", "Type", "Answered", "Response rate"];
+  const header = ["Question id", "Question", "Type", "Answered", "Share with stored answer"];
   ws.addRow(header);
   for (const q of input.manifest.questions) {
     const answered = people.filter((p) => isAnswered(q, p.answers)).length;
-    const rate = people.length ? answered / people.length : 0;
-    const row = ws.addRow([q.id, neutraliseCell(q.label), q.type, answered, rate]);
+    const share = people.length ? answered / people.length : 0;
+    const row = ws.addRow([q.id, neutraliseCell(q.label), q.type, answered, share]);
     row.getCell(5).numFmt = "0%";
   }
+  ws.addRow([
+    "Metric note",
+    "Share with stored answer = people with a stored answer divided by all participants. KQA does not track whether conditional or routed questions were shown, so this is not an item response rate.",
+  ]);
 
-  const widths = [28, 60, 14, 12, 16];
+  const widths = [28, 60, 14, 12, 28];
   widths.forEach((w, i) => (ws.getColumn(i + 1).width = w));
   applyBodyStyle(ws, ws.rowCount, header.length, new Set([1]));
   styleHeader(ws, tableHeaderRow, header.length);
