@@ -60,7 +60,7 @@ export function SignupForm() {
       <section className="card auth-card" aria-live="polite">
         <div className="stack" style={{ gap: 10 }}>
           <BrandMark size={40} wordmark />
-          <div><h1>Check your email</h1><p className="muted" style={{ marginTop: 4 }}>If this address can create an account, a verification link is on its way. It expires in 30 minutes.</p></div>
+          <div><h1>Check your email</h1><p className="muted" style={{ marginTop: 4 }}>If this address is eligible for a KQA workspace, check your inbox for next steps.</p></div>
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 13.5 }}><Link href="/admin/login" style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>Return to sign in</Link></p>
       </section>

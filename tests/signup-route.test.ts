@@ -20,7 +20,7 @@ vi.mock("@/lib/repo", () => ({ consumeRateLimit: vi.fn(async () => true) }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headerValues) }));
 
 import { POST } from "../src/app/api/auth/signup/route";
-import { createPendingSignup } from "../src/lib/repo/accounts";
+import { createPendingSignup, removePendingSignup } from "../src/lib/repo/accounts";
 import { consumeRateLimit } from "../src/lib/repo";
 import { sendSmtp } from "../src/lib/mail/smtp";
 
@@ -34,6 +34,8 @@ describe("signup validation fields", () => {
     state.body = {};
     state.headerValues = { "x-vercel-forwarded-for": "192.0.2.1" };
     vi.clearAllMocks();
+    vi.mocked(sendSmtp).mockResolvedValue({ messageId: "<test@example.com>" });
+    vi.mocked(removePendingSignup).mockResolvedValue(undefined);
   });
 
   it("identifies a missing workspace name as a field error", async () => {
@@ -64,7 +66,7 @@ describe("signup validation fields", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
-      message: "If this address can create an account, check its inbox for a verification link.",
+      message: "If this address is eligible for a KQA workspace, check its inbox for next steps.",
     });
     expect(createPendingSignup).toHaveBeenCalledWith({
       tenantName: "Research",
@@ -76,6 +78,37 @@ describe("signup validation fields", () => {
       to: "person@example.com",
       subject: "Verify your KQA account",
     }));
+  });
+
+  it("keeps existing-address signup responses generic and sends account recovery steps to that inbox", async () => {
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: false, error: "An account already uses this address." });
+
+    const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      message: "If this address is eligible for a KQA workspace, check its inbox for next steps.",
+    });
+    expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({
+      to: "person@example.com",
+      subject: "A KQA account sign-in was requested",
+      text: expect.stringContaining("reset your password"),
+    }));
+    expect(sendSmtp).not.toHaveBeenCalledWith(expect.objectContaining({ subject: "Verify your KQA account" }));
+    expect(removePendingSignup).not.toHaveBeenCalled();
+  });
+
+  it("removes a pending signup if sending its verification message fails", async () => {
+    const pendingId = new ObjectId();
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: true, id: pendingId });
+    vi.mocked(sendSmtp).mockRejectedValue(new Error("mail unavailable"));
+
+    const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, error: "We could not send the KQA message. Try again later." });
+    expect(removePendingSignup).toHaveBeenCalledWith(pendingId);
   });
 
   it("uses only the Vercel client IP for signup throttling", async () => {

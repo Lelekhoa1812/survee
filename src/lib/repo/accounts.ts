@@ -105,6 +105,9 @@ function tenantSlug(name: string): string {
 export async function createPendingSignup(input: { email: string; password: string; tenantName: string; token: string }): Promise<{ ok: true; id: ObjectId } | { ok: false; error: string }> {
   const email = normalizeEmail(input.email);
   if (email === AXION_OWNER_EMAIL) return { ok: false, error: "This address is reserved for the existing Axion owner." };
+  // Hash before checking for an existing account so the public signup path does
+  // not return immediately for addresses that are already registered.
+  const passwordHash = await hashPassword(input.password);
   const users = await col.users();
   if (await users.findOne({ email }, { projection: { _id: 1 } })) return { ok: false, error: "An account already uses this address." };
   const id = new ObjectId();
@@ -117,7 +120,7 @@ export async function createPendingSignup(input: { email: string; password: stri
     tenantName: input.tenantName.trim().slice(0, 100),
     tenantSlug: tenantSlug(input.tenantName),
     email,
-    passwordHash: await hashPassword(input.password),
+    passwordHash,
     tokenHash: createHash("sha256").update(input.token).digest("hex"),
     createdAt: now,
     expiresAt: new Date(now.getTime() + SIGNUP_TTL_MS),

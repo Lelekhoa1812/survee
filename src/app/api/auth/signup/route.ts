@@ -7,7 +7,7 @@ import { createPendingSignup, removePendingSignup } from "@/lib/repo/accounts";
 import { consumeRateLimit } from "@/lib/repo";
 import { headers } from "next/headers";
 
-const GENERIC = "If this address can create an account, check its inbox for a verification link.";
+const GENERIC = "If this address is eligible for a KQA workspace, check its inbox for next steps.";
 
 function clientIp(h: Headers): string {
   // Vercel supplies this independently of proxy-overwritable x-forwarded-for.
@@ -56,21 +56,30 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "Signup is temporarily unavailable. Try again later.");
   }
-  if (!pending.ok) return generic();
-
-  const verifyUrl = new URL("/verify", base.origin);
-  verifyUrl.hash = new URLSearchParams({ token }).toString();
+  const email = pending.ok
+    ? (() => {
+        const verifyUrl = new URL("/verify", base.origin);
+        verifyUrl.hash = new URLSearchParams({ token }).toString();
+        return {
+          subject: "Verify your KQA account",
+          text: `Verify your KQA account and create the ${tenantName} workspace: ${verifyUrl.toString()}\n\nThis link expires in 30 minutes. If you did not request this, you can ignore this message.`,
+          html: `<p>Verify your KQA account and create the <strong>${escapeHtml(tenantName)}</strong> workspace.</p><p><a href="${escapeHtml(verifyUrl.toString())}">Verify email address</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this message.</p>`,
+        };
+      })()
+    : {
+        subject: "A KQA account sign-in was requested",
+        text: `Someone tried to create a KQA workspace with this email address, but an account is already associated with it. If this was you, sign in at ${base.origin}/admin/login or reset your password at ${base.origin}/forgot-password. If you did not request this, you can ignore this message.`,
+        html: `<p>Someone tried to create a KQA workspace with this email address, but an account is already associated with it.</p><p>If this was you, <a href="${escapeHtml(`${base.origin}/admin/login`)}">sign in</a> or <a href="${escapeHtml(`${base.origin}/forgot-password`)}">reset your password</a>.</p><p>If you did not request this, you can ignore this message.</p>`,
+      };
   try {
     await sendSmtp({
       to: parsed.email,
-      subject: "Verify your KQA account",
+      ...email,
       messageId: newMessageId(smtp.user),
-      text: `Verify your KQA account and create the ${tenantName} workspace: ${verifyUrl.toString()}\n\nThis link expires in 30 minutes. If you did not request this, you can ignore this message.`,
-      html: `<p>Verify your KQA account and create the <strong>${escapeHtml(tenantName)}</strong> workspace.</p><p><a href="${escapeHtml(verifyUrl.toString())}">Verify email address</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this message.</p>`,
     });
     return generic();
   } catch {
-    await removePendingSignup(pending.id).catch(() => {});
-    return fail(503, "We could not send the verification email. Try again later.");
+    if (pending.ok) await removePendingSignup(pending.id).catch(() => {});
+    return fail(503, "We could not send the KQA message. Try again later.");
   }
 }
