@@ -48,6 +48,9 @@ export function publicBaseUrl(): { ok: true; origin: string } | { ok: false; err
     return { ok: false, error: "KQA_PUBLIC_URL must be a full http or https address." };
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return { ok: false, error: "KQA_PUBLIC_URL must start with https:// or http://." };
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+    return { ok: false, error: "KQA_PUBLIC_URL must use https:// in production." };
+  }
   if (url.username || url.password) return { ok: false, error: "KQA_PUBLIC_URL must not include a username or password." };
   return { ok: true, origin: url.origin };
 }
