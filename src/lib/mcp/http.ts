@@ -102,15 +102,13 @@ export async function handleMcp(req: Request): Promise<Response> {
     if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
     const body = await readBody(req);
     if (!body.ok) return new Response(JSON.stringify(rpcError(null, -32700, body.message)), { status: body.status, headers: JSON_HEADERS });
-    const messages = Array.isArray(body.data) ? body.data : [body.data];
-    if (!messages.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
-    const replies: unknown[] = [];
-    for (const message of messages) {
-      const reply = await handleOne(message as RpcRequest, auth.capabilities);
-      if (reply) replies.push(reply);
+    // KQA speaks MCP 2025-06-18, which removed JSON-RPC batch support. Reject
+    // arrays before dispatch so a small-message batch cannot fan out work.
+    if (Array.isArray(body.data)) {
+      return new Response(JSON.stringify(rpcError(null, -32600, "JSON-RPC batch requests are not supported.")), { status: 400, headers: JSON_HEADERS });
     }
-    if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
-    const payload = Array.isArray(body.data) ? replies : replies[0];
-    return new Response(JSON.stringify(payload), { status: 200, headers: JSON_HEADERS });
+    const reply = await handleOne(body.data as RpcRequest, auth.capabilities);
+    if (!reply) return new Response(null, { status: 202, headers: JSON_HEADERS });
+    return new Response(JSON.stringify(reply), { status: 200, headers: JSON_HEADERS });
   });
 }

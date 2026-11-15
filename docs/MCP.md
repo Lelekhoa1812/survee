@@ -8,7 +8,7 @@ Writing a questionnaire file is still [`AGENT_PLAYBOOK.md`](AGENT_PLAYBOOK.md), 
 
 ## Connect
 
-Stateless Streamable HTTP. One JSON-RPC request, one JSON response. There is no session and no long-lived stream.
+Stateless Streamable HTTP. One JSON-RPC request, one JSON response. JSON-RPC batch arrays are rejected because KQA speaks MCP `2025-06-18`, which removed batching. There is no session and no long-lived stream.
 
 | | |
 |---|---|

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 process.env.MONGODB_URI = "mongodb://127.0.0.1:9/kqa-tests-do-not-use";
 process.env.KQA_MCP_TOKEN = "t".repeat(43);
 
-const { touch } = vi.hoisted(() => ({ touch: vi.fn() }));
+const { touch, dispatch } = vi.hoisted(() => ({ touch: vi.fn(), dispatch: vi.fn() }));
 
 vi.mock("../src/lib/db", () => {
   const deny = () => {
@@ -13,6 +13,11 @@ vi.mock("../src/lib/db", () => {
   return { db: deny, col: new Proxy({}, { get: () => deny }) };
 });
 
+vi.mock("../src/lib/mcp/tools", () => ({
+  dispatchTool: dispatch,
+  listToolDefs: vi.fn(() => []),
+}));
+
 import { handleMcp } from "../src/lib/mcp/http";
 import { authorizeMcp } from "../src/lib/mcp/auth";
 
@@ -21,6 +26,14 @@ function post(headers: Record<string, string>, url = "https://kqa.example/api/mc
     method: "POST",
     headers: { accept: "application/json, text/event-stream", "content-type": "application/json", ...headers },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  }));
+}
+
+function postBody(headers: Record<string, string>, body: unknown) {
+  return handleMcp(new Request("https://kqa.example/api/mcp", {
+    method: "POST",
+    headers: { accept: "application/json, text/event-stream", "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
   }));
 }
 
@@ -47,5 +60,17 @@ describe("MCP auth", () => {
     const auth = await authorizeMcp(new Request("https://kqa.example/api/mcp", { headers: { authorization: `Bearer ${process.env.KQA_MCP_TOKEN}` } }));
     expect(auth).toMatchObject({ ok: true, principal: { tenantId: "axion", role: "service", source: "service_token" } });
     expect(touch).not.toHaveBeenCalled();
+  });
+
+  it("rejects JSON-RPC batches before dispatch", async () => {
+    dispatch.mockClear();
+    const res = await postBody({ authorization: `Bearer ${process.env.KQA_MCP_TOKEN}` }, [
+      { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "create_interview", arguments: {} } },
+      { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "create_interview", arguments: {} } },
+    ]);
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ jsonrpc: "2.0", id: null, error: { code: -32600 } });
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
