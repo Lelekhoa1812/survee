@@ -36,14 +36,14 @@ export function LoginForm({ next }: { next: string }) {
           <p className="muted" style={{ marginTop: 4 }}>Create interviews, review answers and export them.</p>
         </div>
       </div>
+      {error && <p className="field-error" role="alert">{error}</p>}
       <div className="field">
         <label htmlFor="email">Email</label>
-        <input id="email" className={`input ${error ? "error" : ""}`} type="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input id="email" className="input" type="email" autoComplete="username" autoFocus value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} required />
       </div>
       <div className="field">
         <label htmlFor="password">Password</label>
-        <PasswordInput id="password" className={`input ${error ? "error" : ""}`} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        {error && <span className="field-error" role="alert">{error}</span>}
+        <PasswordInput id="password" className="input" autoComplete="current-password" value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} required />
       </div>
       <button className="btn primary lg block" disabled={busy || !email || !password}>
         {busy ? <Spinner /> : null} Sign in

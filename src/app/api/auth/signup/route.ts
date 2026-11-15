@@ -28,11 +28,11 @@ export async function POST(req: Request) {
   const parsed = parseEmail(emailRaw);
   const password = typeof body.data.password === "string" ? body.data.password : "";
   const tenantName = str(body.data.tenantName, 100) ?? "";
-  if (!tenantName) return fail(400, "Enter a workspace name.");
-  if (!parsed.ok || !parsed.email) return fail(400, "Enter a valid email address.");
-  if (password.length < 12 || password.length > 200) return fail(400, "Use a password between 12 and 200 characters.");
+  if (!tenantName) return fail(400, "Enter a workspace name.", { field: "tenantName" });
+  if (!parsed.ok || !parsed.email) return fail(400, "Enter a valid email address.", { field: "email" });
+  if (password.length < 12 || password.length > 200) return fail(400, "Use a password between 12 and 200 characters.", { field: "password" });
   if (/\.(local|test|example|invalid)$/i.test(parsed.email.split("@")[1] ?? "")) {
-    return fail(400, "Use an email address that can receive the verification message.");
+    return fail(400, "Use an email address that can receive the verification message.", { field: "email" });
   }
 
   const smtp = smtpSettings();
