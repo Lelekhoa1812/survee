@@ -53,6 +53,35 @@ function backfillDb(verifyWrites: boolean): Db {
   } as unknown as Db;
 }
 
+function analyticsRunsMigrationDb(initialTenants: (string | undefined)[], analyticsRunsTenantMismatch = 0): { db: Db; tenants: (string | undefined)[] } {
+  const tenants = [...initialTenants];
+  return {
+    tenants,
+    db: {
+      collection(name: string) {
+        return {
+          countDocuments: async (filter: Record<string, unknown> = {}) => {
+            if (name !== "analytics_runs") return 0;
+            if (Object.keys(filter).length === 0) return tenants.length;
+            const tenantFilter = filter.tenantId as Record<string, unknown> | undefined;
+            if (tenantFilter?.$ne === "axion") return tenants.filter((tenantId) => tenantId !== undefined && tenantId !== "axion").length;
+            if (tenantFilter?.$exists === true) return tenants.filter((tenantId) => tenantId !== undefined).length;
+            return 0;
+          },
+          aggregate: () => ({ toArray: async () => name === "analytics_runs" && analyticsRunsTenantMismatch ? [{ count: analyticsRunsTenantMismatch }] : [] }),
+          updateOne: async () => ({ upsertedCount: 0 }),
+          updateMany: async () => {
+            if (name !== "analytics_runs") return { modifiedCount: 0 };
+            const missingIndexes = tenants.flatMap((tenantId, index) => tenantId === undefined ? [index] : []);
+            for (const index of missingIndexes) tenants[index] = "axion";
+            return { modifiedCount: missingIndexes.length };
+          },
+        };
+      },
+    } as unknown as Db,
+  };
+}
+
 describe("tenant migration preflight", () => {
   it("allows assignment when only missing legacy event links need preservation", async () => {
     const audit = await auditTenantMigration(emptyAuditDb());
@@ -73,6 +102,30 @@ describe("tenant migration preflight", () => {
     expect(audit.collections.interviews.otherTenant).toBe(1);
     expect(audit.preflight.tenantIdsMatchAxion).toBe(false);
     expect(audit.preflight.readyForReviewedBackfill).toBe(false);
+  });
+
+  it("counts and assigns unscoped aggregate analytics runs to Axion", async () => {
+    const { db, tenants } = analyticsRunsMigrationDb([undefined, "axion"]);
+    const before = await auditTenantMigration(db);
+
+    expect(before.collections.analytics_runs).toEqual({ documents: 2, alreadyTenantScoped: 1, missingTenant: 1, otherTenant: 0 });
+    expect(before.preflight.readyForReviewedBackfill).toBe(true);
+
+    const modified = await backfillLegacyTenant(db);
+    const after = await auditTenantMigration(db);
+    expect(modified.analytics_runs).toBe(1);
+    expect(tenants).toEqual(["axion", "axion"]);
+    expect(after.collections.analytics_runs.missingTenant).toBe(0);
+  });
+
+  it("blocks analytics-run records with cross-tenant ownership references", async () => {
+    const otherTenant = await auditTenantMigration(analyticsRunsMigrationDb(["other-tenant"]).db);
+    expect(otherTenant.collections.analytics_runs.otherTenant).toBe(1);
+    expect(otherTenant.preflight.readyForReviewedBackfill).toBe(false);
+
+    const mismatchedReference = await auditTenantMigration(analyticsRunsMigrationDb([undefined], 1).db);
+    expect(mismatchedReference.blockingIntegrity.analyticsRunsTenantMismatch).toBe(1);
+    expect(mismatchedReference.preflight.readyForReviewedBackfill).toBe(false);
   });
 
   it("does not write anything while another tenant owns legacy records", async () => {

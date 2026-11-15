@@ -261,7 +261,7 @@ describe("MCP tools", () => {
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/12");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/13");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.guardrails?.join(" ")).toContain("WCAG 2.2 AA");
     expect(body.result.structuredContent.designPlan?.accessibilityEvaluationMethodology?.steps?.join(" ")).toContain("representative sample");
@@ -298,7 +298,7 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { profileVersion?: string; policyVersion?: string; sourceFormat?: string; surface?: string; proposedMappings?: { role: string }[]; contrastChecks?: { status: string }[]; integrationProposal?: { status: string; cssOverlay: string | null } } } };
 
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/1", policyVersion: "kqa-design/12", sourceFormat: "css", surface: "host" });
+    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/1", policyVersion: "kqa-design/13", sourceFormat: "css", surface: "host" });
     expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
     expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
     expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });

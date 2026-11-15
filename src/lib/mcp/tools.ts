@@ -2,7 +2,7 @@ import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
 import { canSegmentByAnswer, summarizeAnswerSegments } from "../analytics/segments";
-import { createQuestionSummaryAccumulator, summarizeQuestionCohorts, type QuestionSummary } from "../analytics/summary";
+import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
@@ -592,10 +592,14 @@ const TOOLS: ToolDef[] = [
       let selectedSummaries: Record<string, QuestionSummary>;
       let asOf: string;
       if (compareRequested) {
-        const cohortAnalysis = await summarizeQuestionCohorts(analysisQuestions, iterateAnalyticsParticipants(id, analysisQuestions.map((question) => question.id), { statuses }));
+        const cohortAnalysis = await summarizeSelectedQuestionCohort(
+          analysisQuestions,
+          iterateAnalyticsParticipants(id, analysisQuestions.map((question) => question.id), { statuses }),
+          statuses,
+        );
         Object.assign(statusCounts, cohortAnalysis.statusCounts);
-        selectedSummaries = cohortAnalysis.summaries[cohort.key];
-        for (const status of statuses) statusSummaries[status] = cohortAnalysis.summaries[status];
+        selectedSummaries = cohortAnalysis.combined;
+        for (const status of statuses) statusSummaries[status] = cohortAnalysis.statusSummaries[status]!;
         asOf = cohortAnalysis.asOf;
       } else {
         const accumulators = new Map(analysisQuestions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));

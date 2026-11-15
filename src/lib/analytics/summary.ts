@@ -72,6 +72,7 @@ export interface QuestionSummaryAccumulatorSnapshot {
   distributionUnmappedResponseCount: number;
   numericUnmappedResponseCount: number;
   distributionCounts: { value: string; count: number }[];
+  /** Exact numeric observations for number questions; scales use bounded category counts. */
   numericValues: number[];
 }
 
@@ -106,6 +107,13 @@ export interface QuestionCohortSummaries {
   summaries: Record<AnalyticsCohortKey, Record<string, QuestionSummary>>;
 }
 
+export interface SelectedQuestionCohortSummaries {
+  asOf: string;
+  statusCounts: Record<ParticipantStatus, number>;
+  combined: Record<string, QuestionSummary>;
+  statusSummaries: Partial<Record<ParticipantStatus, Record<string, QuestionSummary>>>;
+}
+
 function numericValue(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string" && value.trim() !== "") {
@@ -128,6 +136,15 @@ function quantileType7(sorted: number[], probability: number): number {
   if (lowerIndex === upperIndex || sorted[lowerIndex] === sorted[upperIndex]) return sorted[lowerIndex];
   const weight = index - lowerIndex;
   return sorted[lowerIndex] * (1 - weight) + sorted[upperIndex] * weight;
+}
+
+function scaleValueAtRank(rows: readonly { value: string; count: number }[], rank: number): number | null {
+  let cumulative = 0;
+  for (const row of rows) {
+    cumulative += row.count;
+    if (rank < cumulative) return Number(row.value);
+  }
+  return null;
 }
 
 function initialDistribution(q: Question) {
@@ -183,7 +200,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       const result = validateAnswer(q, answer?.value);
       const value = result.ok && typeof result.value === "number" ? result.value : null;
       if (value === null) numericUnmappedResponseCount += 1;
-      else numericValues.push(value);
+      else if (q.type === "number") numericValues.push(value);
     }
   }
 
@@ -208,9 +225,12 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
         median: median(numericValues),
       };
     }
-    if (q.type === "scale" && numericValues.length) {
-      const lower = numericValues[Math.floor((numericValues.length - 1) / 2)];
-      const upper = numericValues[Math.floor(numericValues.length / 2)];
+    if (q.type === "scale" && distributionDenominator) {
+      // Scale answers have at most 21 ordered integer categories. Reuse their
+      // bounded distribution counts instead of retaining one value per person.
+      const lower = scaleValueAtRank(distributionRows, Math.floor((distributionDenominator - 1) / 2));
+      const upper = scaleValueAtRank(distributionRows, Math.floor(distributionDenominator / 2));
+      if (lower === null || upper === null) throw new Error("Valid scale counts did not map to scale categories.");
       scaleMedian = lower;
       scaleMedianRange = { lower, upper };
     }
@@ -328,4 +348,36 @@ export async function summarizeQuestionCohorts(
   }
 
   return { asOf: new Date().toISOString(), statusCounts, summaries };
+}
+
+/** Build only the selected combined cohort and its per-status summaries from one scan. */
+export async function summarizeSelectedQuestionCohort(
+  questions: Question[],
+  respondents: AsyncIterable<CohortAnalyticsRespondent>,
+  statuses: readonly ParticipantStatus[],
+): Promise<SelectedQuestionCohortSummaries> {
+  const selectedStatuses = ANALYTICS_STATUSES.filter((status) => statuses.includes(status));
+  const statusCounts: Record<ParticipantStatus, number> = { invited: 0, in_progress: 0, submitted: 0 };
+  const byStatus = new Map(selectedStatuses.map((status) => [
+    status,
+    new Map(questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)])),
+  ]));
+
+  for await (const respondent of respondents) {
+    const accumulators = byStatus.get(respondent.status);
+    if (!accumulators) continue;
+    statusCounts[respondent.status] += 1;
+    for (const accumulator of accumulators.values()) accumulator.add(respondent);
+  }
+
+  const combinedAccumulators = new Map(questions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
+  const statusSummaries: Partial<Record<ParticipantStatus, Record<string, QuestionSummary>>> = {};
+  for (const status of selectedStatuses) {
+    const accumulators = byStatus.get(status)!;
+    statusSummaries[status] = Object.fromEntries([...accumulators].map(([id, accumulator]) => [id, accumulator.finish()]));
+    for (const [id, accumulator] of accumulators) combinedAccumulators.get(id)?.merge(accumulator);
+  }
+  const combined = Object.fromEntries([...combinedAccumulators].map(([id, accumulator]) => [id, accumulator.finish()]));
+
+  return { asOf: new Date().toISOString(), statusCounts, combined, statusSummaries };
 }

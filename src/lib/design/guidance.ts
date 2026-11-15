@@ -135,13 +135,13 @@ const HOST_VISUAL_PROFILE = {
     text: ["--ink", "--ink-2", "--muted"], borders: ["--line", "--line-2", "--field"],
     brand: ["--brand", "--brand-2", "--brand-ink"],
     accent: ["--accent", "--accent-2", "--accent-soft", "--accent-ink"],
-    status: ["--warn", "--warn-soft", "--warn-line", "--danger", "--danger-soft", "--danger-line", "--info", "--info-soft", "--info-line"],
+    status: ["--warn", "--warn-soft", "--warn-line", "--danger", "--danger-ink", "--danger-soft", "--danger-line", "--info", "--info-soft", "--info-line"],
     focus: ["--focus"], shape: ["--r", "--r-sm", "--r-xs"], elevation: ["--shadow-sm", "--shadow", "--shadow-lg"],
     typography: ["--sans", "--mono"],
   },
   coreThemeValues: {
-    light: { "--bg": "#f3f5f8", "--surface": "#ffffff", "--ink": "#0e1b2a", "--muted": "#5f7084", "--brand": "#0b2a42", "--accent": "#087960", "--focus": "#1f6feb" },
-    dark: { "--bg": "#0b1622", "--surface": "#101f2e", "--ink": "#e8eef5", "--muted": "#8fa1b3", "--brand": "#dbe7f3", "--accent": "#2bb58f", "--focus": "#6aa3ff" },
+    light: { "--bg": "#f3f5f8", "--surface": "#ffffff", "--ink": "#0e1b2a", "--muted": "#5f7084", "--brand": "#0b2a42", "--accent": "#087960", "--focus": "#1f6feb", "--danger": "#b4261c", "--danger-ink": "#ffffff" },
+    dark: { "--bg": "#0b1622", "--surface": "#101f2e", "--ink": "#e8eef5", "--muted": "#8fa1b3", "--brand": "#dbe7f3", "--accent": "#2bb58f", "--focus": "#6aa3ff", "--danger": "#f59a92", "--danger-ink": "#07121d" },
   },
   existingConventions: [
     "Semantic CSS variables have light values at :root and dark overrides under prefers-color-scheme: dark.",
@@ -175,7 +175,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/12",
+    policyVersion: "kqa-design/13",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

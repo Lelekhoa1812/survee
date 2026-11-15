@@ -129,6 +129,26 @@ describe("descriptive question summaries", () => {
     expect(summary.numeric).toBeNull();
   });
 
+  it("derives exact scale medians from merged bounded category counts", () => {
+    const q: Question = { id: "q", type: "scale", label: "Agreement", min: 1, max: 5 };
+    const first = createQuestionSummaryAccumulator(q);
+    const second = createQuestionSummaryAccumulator(q);
+    for (const value of [1, 2, 5]) first.add(respondent(value));
+    for (const value of [2, 3, 5]) second.add(respondent(value));
+
+    const combined = createQuestionSummaryAccumulator(q);
+    combined.merge(first);
+    combined.merge(second);
+
+    expect(combined.snapshot().numericValues).toEqual([]);
+    expect(combined.finish()).toMatchObject({
+      distributionDenominator: 6,
+      scaleMedian: 2,
+      scaleMedianRange: { lower: 2, upper: 3 },
+      numeric: null,
+    });
+  });
+
   it("does not round a nonzero option share down to zero percent", () => {
     expect(formatPercentage((1 / 201) * 100)).toBe("0.5%");
     expect(formatPercentage((1 / 2001) * 100)).toBe("<0.1%");

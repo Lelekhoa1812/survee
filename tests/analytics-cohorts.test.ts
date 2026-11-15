@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ANALYTICS_COHORTS, analyticsCohortForStatuses } from "../src/lib/analytics/cohorts";
-import { summarizeQuestionCohorts, type CohortAnalyticsRespondent } from "../src/lib/analytics/summary";
+import { summarizeQuestionCohorts, summarizeSelectedQuestionCohort, type CohortAnalyticsRespondent } from "../src/lib/analytics/summary";
 import type { Question } from "../src/lib/format/schema";
+import type { ParticipantStatus } from "../src/lib/repo/types";
 
 const at = "2026-11-15T00:00:00.000Z";
 
@@ -48,6 +49,35 @@ describe("analytics status cohorts", () => {
     expect(result.summaries.submitted.choice.eligibleCount).toBe(1);
     for (const cohort of ANALYTICS_COHORTS) {
       expect(result.summaries[cohort.key].score.eligibleCount).toBe(cohort.statuses.length);
+    }
+  });
+
+  it("matches the exact all-cohort results while building only the requested MCP cohort", async () => {
+    const choice: Question = {
+      id: "choice",
+      type: "single",
+      label: "Choice",
+      options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }],
+    };
+    const number: Question = { id: "score", type: "number", label: "Score" };
+    const rows: CohortAnalyticsRespondent[] = [
+      { status: "invited", answers: { choice: { value: "yes", updatedAt: at }, score: { value: 10, updatedAt: at } } },
+      { status: "in_progress", answers: { choice: { value: "no", updatedAt: at }, score: { value: 20, updatedAt: at } } },
+      { status: "submitted", answers: { choice: { value: "yes", updatedAt: at }, score: { value: 30, updatedAt: at } } },
+      { status: "submitted", answers: { choice: { value: "no", updatedAt: at }, score: { value: 40, updatedAt: at } } },
+    ];
+
+    const complete = await summarizeQuestionCohorts([choice, number], stream(rows));
+    for (const cohort of ANALYTICS_COHORTS) {
+      const statuses: ParticipantStatus[] = [...cohort.statuses];
+      const selected = await summarizeSelectedQuestionCohort([choice, number], stream(rows), statuses);
+      expect(selected.combined).toEqual(complete.summaries[cohort.key]);
+      for (const status of statuses) expect(selected.statusSummaries[status]).toEqual(complete.summaries[status]);
+      expect(selected.statusCounts).toEqual({
+        invited: statuses.includes("invited") ? complete.statusCounts.invited : 0,
+        in_progress: statuses.includes("in_progress") ? complete.statusCounts.in_progress : 0,
+        submitted: statuses.includes("submitted") ? complete.statusCounts.submitted : 0,
+      });
     }
   });
 });

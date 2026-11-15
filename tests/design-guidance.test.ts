@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/12");
+    expect(guidance.policyVersion).toBe("kqa-design/13");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
@@ -83,6 +83,36 @@ describe("design guidance package", () => {
     expect(hostProfile.direction).toContain("restrained teal");
     expect(hostProfile.themeModes).toContain("prefers-color-scheme: dark");
     expect(hostProfile.existingConventions.join(" ")).toContain("No shared spacing scale");
+  });
+
+  it("keeps filled danger foreground and background contrast above WCAG AA in both host themes", () => {
+    const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+    const root = css.match(/:root\s*\{([^}]+)\}/)?.[1];
+    const dark = css.match(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*:root\s*\{([^}]+)\}/)?.[1];
+    expect(root).toBeTruthy();
+    expect(dark).toBeTruthy();
+
+    const token = (block: string, name: string) => {
+      const match = block.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`));
+      if (!match) throw new Error(`Could not find ${name} in theme block.`);
+      return match[1];
+    };
+    const luminance = (hex: string) => {
+      const channels = [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16) / 255)
+        .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const contrast = (foreground: string, background: string) => {
+      const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+      return (values[0] + 0.05) / (values[1] + 0.05);
+    };
+
+    for (const theme of [root!, dark!]) {
+      expect(contrast(token(theme, "--danger-ink"), token(theme, "--danger"))).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(css).toMatch(/\.btn\.danger\.solid\s*\{[^}]*color:\s*var\(--danger-ink\)/);
+    expect(css).toMatch(/\.toast\.err\s*\{[^}]*color:\s*var\(--danger-ink\)/);
+    expect(css).toMatch(/\.verdict\.fail \.dot\s*\{[^}]*color:\s*var\(--danger-ink\)/);
   });
 
   it("provides the respondent design kit's own scoped tokens, not host-only values", () => {

@@ -2,7 +2,7 @@ import type { Db } from "mongodb";
 import { AXION_TENANT_ID, axionLegacyTenantFallbackEnabled } from "./env";
 import type { TenantDoc } from "./repo/types";
 
-const OWNED = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes"] as const;
+const OWNED = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes", "analytics_runs"] as const;
 const OWNED_SET = new Set<string>(OWNED);
 const INSTANCE_WIDE = ["oauth_clients", "login_attempts", "revoked_sessions"] as const;
 
@@ -45,6 +45,11 @@ export async function auditTenantMigration(db: Db) {
       { $match: { parent: { $size: 0 } } },
     ]),
     participantsTenantMismatch: await aggregateCount(db, "participants", [
+      { $lookup: { from: "interviews", localField: "interviewId", foreignField: "_id", as: "parent" } },
+      { $unwind: "$parent" },
+      { $match: { $expr: { $ne: [effectiveTenant("$tenantId"), effectiveTenant("$parent.tenantId")] } } },
+    ]),
+    analyticsRunsTenantMismatch: await aggregateCount(db, "analytics_runs", [
       { $lookup: { from: "interviews", localField: "interviewId", foreignField: "_id", as: "parent" } },
       { $unwind: "$parent" },
       { $match: { $expr: { $ne: [effectiveTenant("$tenantId"), effectiveTenant("$parent.tenantId")] } } },
