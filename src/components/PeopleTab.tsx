@@ -43,49 +43,54 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         </div>
       ) : (
         <div className="card table-wrap">
-          <table className="t cards">
-            <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Progress</th><th>Last saved</th><th>Private link</th><th>Invite</th><th style={{ width: 1 }} /></tr></thead>
+          <table className="t cards people-list">
+            <caption className="sr">Respondent status, invitation delivery, and actions</caption>
+            <thead><tr><th>Person</th><th>Status and progress</th><th>Invitation and delivery</th><th><span className="sr">Actions</span></th></tr></thead>
             <tbody>
               {data.people.map((p) => {
                 const s = STATUS[p.status];
-                const link = origin ? `${origin}/${p.token}` : "";
                 const pct = p.total ? Math.round((p.answered / p.total) * 100) : 0;
+                const respondentLink = origin ? `${origin}/${p.token}` : "";
                 return (
                   <tr key={p.id}>
-                    <td className="c-main">
-                      <div style={{ fontWeight: 600 }}>{p.name}</div>
-                      {p.note && <div className="muted" style={{ fontSize: 13, maxWidth: 260 }}>{p.note}</div>}
-                    </td>
-                    <td className="c-wide" data-label="Email">{p.email ? p.email : <span className="muted">No email</span>}</td>
-                    <td className="c-status"><Badge kind={s.kind}>{s.label}</Badge></td>
-                    <td className="c-wide" data-label="Progress" style={{ minWidth: 150 }}>
-                      <div style={{ display: "grid", gap: 5 }}>
-                        <div className="bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
-                        <span className="muted" style={{ fontSize: 12.5 }}>{p.answered} of {p.total} answered{p.status !== "submitted" && p.requiredMissing ? ` · ${p.requiredMissing} required left` : ""}</span>
+                    <td className="c-main person-cell">
+                      <div className="person-name">{p.name}</div>
+                      <div className="person-contact">
+                        {p.email ? <span>{p.email}</span> : <span className="muted">No email</span>}
+                        {p.note && <span className="muted person-note">{p.note}</span>}
                       </div>
                     </td>
-                    <td className="c-wide muted nowrap" data-label="Last saved" title={fullTime(p.lastSavedAt)}>{p.lastSavedAt ? relTime(p.lastSavedAt) : "Not yet"}</td>
-                    <td className="c-wide" data-label="Private link">
-                      <div className="link-cell">
-                        <code title={link}>{link ? link.replace(/^https?:\/\//, "") : "…"}</code>
-                        <CopyButton className="btn sm icon" label="" done="" ariaLabel={`Copy ${p.name}'s link`} getText={() => `${window.location.origin}/${p.token}`} />
-                        <a className="btn sm icon" href={`/${p.token}`} target="_blank" rel="noreferrer" aria-label={`Open ${p.name}'s link`} title="Open as the respondent"><Icon name="external" size={15} /></a>
+                    <td className="person-state-cell" data-label="Interview progress">
+                      <div className="person-status-summary">
+                        <Badge kind={s.kind}>{s.label}</Badge>
+                        <span>{p.answered} of {p.total} answered</span>
                       </div>
+                      <div className="person-progress-bar"><div className="bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div><span>{pct}%</span></div>
+                      {p.status !== "submitted" && p.requiredMissing > 0 && <p className="person-required-left">{p.requiredMissing} required {p.requiredMissing === 1 ? "answer" : "answers"} left</p>}
+                      <p className="person-last-saved" title={p.lastSavedAt ? fullTime(p.lastSavedAt) : undefined}>{p.lastSavedAt ? `Last saved ${relTime(p.lastSavedAt)}` : "No answers saved yet"}</p>
                     </td>
-                    <td className="c-wide" data-label="Invite">
+                    <td className="c-wide person-invite-cell" data-label="Invitation and delivery">
                       <InviteActions person={p} interviewOpen={data.interview.status === "open"} publicOrigin={data.publicOrigin} refresh={refresh} />
                     </td>
-                    <td className="c-actions">
-                      <div className="row-actions">
+                    <td className="c-actions person-actions-cell">
+                      <details className="person-more-actions">
+                        <summary className="btn sm" aria-label={`More actions for ${p.name}`}>More actions <Icon className="person-more-chevron" name="chevron" size={14} /></summary>
+                        <div className="person-action-menu" role="group" aria-label={`Actions for ${p.name}`}>
+                          <CopyButton className="btn sm" label="Copy private link" done="Copied" ariaLabel={`Copy ${p.name}'s link`} getText={() => respondentLink || `${window.location.origin}/${p.token}`} />
+                          <a className="btn sm" href={`/${p.token}`} target="_blank" rel="noreferrer"><Icon name="external" size={14} /> Open as respondent</a>
                         {p.status === "submitted" ? (
-                          <button className="btn sm" disabled={working === p.id + "reopen"} onClick={() => act(p, "reopen")} title="Let them change their answers">
-                            {working === p.id + "reopen" ? <Spinner /> : <Icon name="lock" size={14} />} Reopen
+                          <button className="btn sm" type="button" disabled={working === p.id + "reopen"} onClick={() => act(p, "reopen")} title="Let them change their answers">
+                            {working === p.id + "reopen" ? <Spinner /> : <Icon name="lock" size={14} />} Reopen answers
                           </button>
-                        ) : <span />}
-                        <button className="btn sm icon ghost" aria-label={`Edit ${p.name}`} title="Edit name, email and note" onClick={() => setEditing(p)}><Icon name="edit" size={15} /></button>
-                        <button className="btn sm icon ghost" aria-label={`New link for ${p.name}`} title="Create a new link (the old one stops working)" disabled={working === p.id + "token"} onClick={() => act(p, "token")}><Icon name="refresh" size={15} /></button>
-                        {multi ? <button className="btn sm icon ghost" aria-label={`Remove ${p.name}`} title="Remove" onClick={() => setRemoving(p)}><Icon name="trash" size={15} /></button> : <span />}
-                      </div>
+                        ) : null}
+                          <button className="btn sm" type="button" onClick={() => setEditing(p)}><Icon name="edit" size={14} /> Edit person</button>
+                          <div className="person-action-item">
+                            <button className="btn sm" type="button" disabled={working === p.id + "token"} onClick={() => act(p, "token")}>{working === p.id + "token" ? <Spinner /> : <Icon name="refresh" size={14} />} Replace private link</button>
+                            <span className="hint">The old link stops working.</span>
+                          </div>
+                          {multi && <button className="btn sm danger" type="button" onClick={() => setRemoving(p)}><Icon name="trash" size={14} /> Remove person</button>}
+                        </div>
+                      </details>
                     </td>
                   </tr>
                 );

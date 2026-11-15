@@ -193,6 +193,27 @@ table.t tr:last-child td { border-bottom: 0; }
 table.t tbody tr:hover td { background: var(--surface-2); }
 table.t .name { font-weight: 600; letter-spacing: -.005em; }
 table.t .desc { color: var(--muted); font-size: 12.5px; }
+.people-list { min-width: 840px; }
+.people-list .person-cell { min-width: 190px; }
+.person-name { font-weight: 600; letter-spacing: -.005em; }
+.person-contact { display: grid; gap: 4px; margin-top: 4px; color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.person-note { max-width: 280px; line-height: 1.4; }
+.person-state-cell { min-width: 190px; }
+.person-status-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.person-progress-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.person-progress-bar .bar { flex: 1; }
+.person-required-left { margin-top: 5px; color: var(--warn); font-size: 12px; }
+.person-last-saved { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.person-invite-cell { min-width: 190px; }
+.person-actions-cell { width: 1px; }
+.person-more-actions > summary { width: max-content; cursor: pointer; list-style: none; }
+.person-more-actions > summary::-webkit-details-marker { display: none; }
+.person-more-chevron { transition: transform .15s; }
+.person-more-actions[open] > summary .person-more-chevron { transform: rotate(90deg); }
+.person-action-menu { display: grid; gap: 6px; min-width: 180px; padding-top: 8px; }
+.person-action-menu .btn { width: 100%; justify-content: flex-start; }
+.person-action-item { display: grid; gap: 2px; }
+.person-action-item .hint { padding-left: 8px; }
 .empty { text-align: center; padding: 56px 24px; display: grid; gap: 10px; justify-items: center; }
 .empty h3 { font-size: 17px; font-weight: 600; }
 .empty p { color: var(--muted); max-width: 46ch; }
@@ -654,6 +675,14 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
   table.t.cards td.c-actions { padding-top: 8px; border-top: 1px dashed var(--line); margin-top: 6px; }
   .row-actions { grid-template-columns: repeat(4, auto); justify-content: start; }
   .link-cell code { max-width: none; flex: 1; }
+  .people-list { min-width: 0; }
+  table.t.cards.people-list td.person-cell,
+  table.t.cards.people-list td.person-state-cell,
+  table.t.cards.people-list td.person-invite-cell,
+  table.t.cards.people-list td.person-actions-cell { grid-column: 1 / -1; }
+  table.t.cards.people-list td.person-state-cell { padding-top: 8px; }
+  .person-note { max-width: none; }
+  .person-action-menu { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
   .nav a { padding: 6px 9px; font-size: 13.5px; }
