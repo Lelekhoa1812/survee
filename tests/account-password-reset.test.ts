@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const store = vi.hoisted(() => ({ users: [] as any[], resets: [] as any[] }));
+const store = vi.hoisted(() => ({ users: [] as any[], resets: [] as any[], memberships: [] as any[], tenants: [] as any[] }));
 
 vi.mock("../src/lib/db", () => ({
   col: {
@@ -27,7 +27,9 @@ vi.mock("../src/lib/db", () => ({
       },
     }),
     passwordResets: async () => ({
-      findOne: async (query: Record<string, any>) => store.resets.find((reset) => reset.tokenHash === query.tokenHash && reset.expiresAt > query.expiresAt.$gt) ?? null,
+      findOne: async (query: Record<string, any>) => store.resets.find((reset) => reset.tokenHash === query.tokenHash
+        && (!query.userId || reset.userId.toHexString() === query.userId.toHexString())
+        && reset.expiresAt > query.expiresAt.$gt) ?? null,
       deleteMany: async (query: Record<string, any>) => {
         const before = store.resets.length;
         store.resets = store.resets.filter((reset) => reset.userId.toHexString() !== query.userId.toHexString());
@@ -37,21 +39,30 @@ vi.mock("../src/lib/db", () => ({
       deleteOne: async (query: Record<string, any>) => {
         const index = store.resets.findIndex((reset) => reset._id.toHexString() === query._id.toHexString()
           && (!query.tokenHash || reset.tokenHash === query.tokenHash)
+          && (!query.userId || reset.userId.toHexString() === query.userId.toHexString())
           && (!query.expiresAt || reset.expiresAt > query.expiresAt.$gt));
         if (index < 0) return { deletedCount: 0 };
         store.resets.splice(index, 1);
         return { deletedCount: 1 };
       },
     }),
+    memberships: async () => ({
+      findOne: async (query: Record<string, any>) => store.memberships.find((membership) => membership.userId.toHexString() === query.userId.toHexString()) ?? null,
+    }),
+    tenants: async () => ({
+      findOne: async (query: Record<string, any>) => store.tenants.find((tenant) => tenant._id === query._id && tenant.status === query.status) ?? null,
+    }),
   },
 }));
 
-import { changeAccountPassword, completePasswordReset, createPendingPasswordReset, hashPassword, verifyPassword } from "../src/lib/repo/accounts";
+import { authenticateAccount, changeAccountPassword, completePasswordReset, createPendingPasswordReset, hashPassword, verifyPassword } from "../src/lib/repo/accounts";
 
 describe("password reset", () => {
   beforeEach(() => {
     store.users.splice(0);
     store.resets.splice(0);
+    store.memberships.splice(0);
+    store.tenants.splice(0);
   });
 
   it("creates a hashed one-time request only for a verified account", async () => {
@@ -68,6 +79,23 @@ describe("password reset", () => {
     store.users.push({ _id: new ObjectId(), email: "admin@axiob.local", passwordHash: "legacy", legacyBootstrap: true });
 
     await expect(createPendingPasswordReset({ email: "admin@axiob.local", token: "unusable-reset" })).resolves.toBeNull();
+    expect(store.resets).toHaveLength(0);
+  });
+
+  it("accepts a temporary password once for two hours without changing the saved password", async () => {
+    const userId = new ObjectId();
+    const passwordHash = await hashPassword("saved account password long enough");
+    const token = "temporary-sign-in-password";
+    store.users.push({ _id: userId, email: "owner@example.com", passwordHash, emailVerifiedAt: new Date(), authVersion: 2 });
+    store.memberships.push({ _id: new ObjectId(), userId, tenantId: "tenant-1", role: "owner" });
+    store.tenants.push({ _id: "tenant-1", name: "Example", status: "active" });
+
+    const id = await createPendingPasswordReset({ email: "owner@example.com", token });
+    expect(id).toBeInstanceOf(ObjectId);
+    expect(store.resets[0].expiresAt.getTime() - store.resets[0].createdAt.getTime()).toBe(2 * 60 * 60 * 1000);
+    await expect(authenticateAccount("owner@example.com", token)).resolves.toMatchObject({ email: "owner@example.com", tenantName: "Example" });
+    await expect(authenticateAccount("owner@example.com", token)).resolves.toBeNull();
+    expect(store.users[0].passwordHash).toBe(passwordHash);
     expect(store.resets).toHaveLength(0);
   });
 

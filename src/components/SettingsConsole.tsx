@@ -448,6 +448,7 @@ function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; b
   const [value, setValue] = useState("");
   const [showValue, setShowValue] = useState(false);
   const [expires, setExpires] = useState(toLocalInput(initial?.expiresAt ?? null));
+  const [expiryMode, setExpiryMode] = useState<"never" | "scheduled">(initial?.expiresAt ? "scheduled" : "never");
   const [capabilities, setCapabilities] = useState<McpCapability[]>(initial?.capabilities ?? (initial ? [...MCP_CAPABILITIES] : [...DEFAULT_MCP_CAPABILITIES]));
   const [error, setError] = useState("");
 
@@ -463,10 +464,11 @@ function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; b
             const trimmed = name.trim();
             if (!trimmed) { setError("Give the key a name."); return; }
             if (capabilities.length === 0) { setError("Select at least one permission."); return; }
+            if (expiryMode === "scheduled" && !expires) { setError("Choose an expiry date, or select Never expires."); return; }
             if (value.trim() && value.trim().length < 32) { setError("A key value needs at least 32 characters, or leave it blank to generate one."); return; }
             if (/\s/.test(value)) { setError("A key value cannot contain spaces."); return; }
             setError("");
-            await onSubmit({ name: trimmed, note: note.trim(), value: value.trim(), expiresAt: expires ? new Date(expires).toISOString() : null, capabilities });
+            await onSubmit({ name: trimmed, note: note.trim(), value: value.trim(), expiresAt: expiryMode === "scheduled" ? new Date(expires).toISOString() : null, capabilities });
           }}>{busy ? <Spinner /> : null} {initial ? "Save" : "Create key"}</button>
         </>
       }
@@ -514,8 +516,12 @@ function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; b
         </fieldset>
         <label className="field">
           <span>Expiry</span>
-          <input className="input" type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} />
-          <span className="hint">Optional. After this moment the key stops working until you clear the expiry. Revoke is separate and can be undone.</span>
+          <select className="select" value={expiryMode} onChange={(event) => setExpiryMode(event.target.value as "never" | "scheduled")}>
+            <option value="never">Never expires</option>
+            <option value="scheduled">Set an expiry date</option>
+          </select>
+          {expiryMode === "scheduled" && <input className="input" type="datetime-local" value={expires} onChange={(event) => setExpires(event.target.value)} aria-label="Key expiry date and time" required />}
+          <span className="hint">{expiryMode === "scheduled" ? "The key stops working after this moment. Revoke is separate and can be undone." : "The key keeps working until you revoke it."}</span>
         </label>
         {error && <p className="field-error" role="alert">{error}</p>}
       </div>

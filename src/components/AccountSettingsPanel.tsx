@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api, Badge, Icon, Spinner, useToast } from "./ui";
+import { api, Badge, Icon, PasswordInput, Spinner, useToast } from "./ui";
 
 interface AccountSettings {
   tenantName: string;
@@ -91,7 +91,7 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
             </div>
             <div className="field">
               <label htmlFor="email-current-password">Current password</label>
-              <input id="email-current-password" className="input" type="password" autoComplete="current-password" value={emailPassword} onChange={(event) => setEmailPassword(event.target.value)} required />
+              <PasswordInput id="email-current-password" className="input" autoComplete="current-password" value={emailPassword} onChange={(event) => setEmailPassword(event.target.value)} required />
             </div>
             <button className="btn" disabled={emailBusy || !email || !emailPassword}>{emailBusy ? <Spinner /> : null} Send verification link</button>
             {emailMessage && <p className="callout ok" role="status">{emailMessage}</p>}
@@ -101,16 +101,16 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
           <h3 style={{ fontSize: 15 }}>Change password</h3>
           <div className="field">
             <label htmlFor="password-current">Current password</label>
-            <input id="password-current" className="input" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+            <PasswordInput id="password-current" className="input" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
           </div>
           <div className="field">
             <label htmlFor="password-new">New password</label>
-            <input id="password-new" className="input" type="password" autoComplete="new-password" minLength={12} maxLength={200} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required />
+            <PasswordInput id="password-new" className="input" autoComplete="new-password" minLength={12} maxLength={200} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required />
             <span className="hint">Use at least 12 characters.</span>
           </div>
           <div className="field">
             <label htmlFor="password-confirm">Confirm new password</label>
-            <input id="password-confirm" className="input" type="password" autoComplete="new-password" minLength={12} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
+            <PasswordInput id="password-confirm" className="input" autoComplete="new-password" minLength={12} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
           </div>
           {passwordError && <p className="field-error" role="alert">{passwordError}</p>}
           <button className="btn" disabled={passwordBusy || !password || newPassword.length < 12 || !confirmPassword}>{passwordBusy ? <Spinner /> : null} Update password</button>

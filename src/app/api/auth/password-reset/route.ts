@@ -7,7 +7,7 @@ import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { createPendingPasswordReset, removePendingPasswordReset } from "@/lib/repo/accounts";
 import { loginBlocked, recordLoginFailure } from "@/lib/repo";
 
-const GENERIC = "If a verified KQA account uses this address, check its inbox for a password reset link.";
+const GENERIC = "If a verified KQA account uses this address, check its inbox for a temporary sign-in password.";
 
 function clientIp(h: Headers): string {
   const platform = h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip");
@@ -51,15 +51,14 @@ export async function POST(req: Request) {
   }
   if (!pendingId) return generic();
 
-  const url = new URL("/reset-password", base.origin);
-  url.hash = new URLSearchParams({ token }).toString();
+  const loginUrl = new URL("/admin/login", base.origin);
   try {
     await sendSmtp({
       to: parsed.email,
-      subject: "Reset your KQA password",
+      subject: "Your temporary KQA sign-in password",
       messageId: newMessageId(smtp.user),
-      text: `Reset your KQA password: ${url.toString()}\n\nThis link expires in 30 minutes and can be used once. If you did not request a reset, you can ignore this message.`,
-      html: `<p>Use this link to reset your KQA password. It expires in 30 minutes and can be used once.</p><p><a href="${escapeHtml(url.toString())}">Reset password</a></p><p>If you did not request a reset, you can ignore this message.</p>`,
+      text: `Use this temporary password to sign in to KQA: ${token}\n\nIt expires in 2 hours and works once. Sign in at ${loginUrl.toString()}. If you did not request it, you can ignore this message.`,
+      html: `<p>Use this temporary password to sign in to KQA. It expires in 2 hours and works once:</p><p><code style="font-size:16px;word-break:break-all">${escapeHtml(token)}</code></p><p><a href="${escapeHtml(loginUrl.toString())}">Sign in to KQA</a></p><p>If you did not request it, you can ignore this message.</p>`,
     });
   } catch {
     await removePendingPasswordReset(pendingId).catch(() => {});

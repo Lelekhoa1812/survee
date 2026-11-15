@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { api, BrandMark, Spinner } from "./ui";
+import { api, BrandMark, PasswordInput, Spinner } from "./ui";
 
 export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
@@ -42,7 +42,7 @@ export function LoginForm({ next }: { next: string }) {
       </div>
       <div className="field">
         <label htmlFor="password">Password</label>
-        <input id="password" className={`input ${error ? "error" : ""}`} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <PasswordInput id="password" className={`input ${error ? "error" : ""}`} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {error && <span className="field-error" role="alert">{error}</span>}
       </div>
       <button className="btn primary lg block" disabled={busy || !email || !password}>

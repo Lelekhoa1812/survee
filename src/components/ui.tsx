@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
 
 // ------------------------------------------------------------------------------------------------ icons
 const PATHS: Record<string, ReactNode> = {
@@ -28,6 +28,8 @@ const PATHS: Record<string, ReactNode> = {
   shield: <path d="M12 3l8 3v5.5c0 4.5-3.2 8.2-8 9.5-4.8-1.3-8-5-8-9.5V6z" />,
   inbox: (<><path d="M3 13l2.5-8h13L21 13v5a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><path d="M3 13h5l1.5 2.5h5L16 13h5" /></>),
   clock: (<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
+  eye: (<><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6z" /><circle cx="12" cy="12" r="2.5" /></>),
+  eyeOff: (<><path d="M3 3l18 18" /><path d="M10.6 6.2A10.7 10.7 0 0112 6c6.1 0 9.5 6 9.5 6a14.7 14.7 0 01-3 3.6M6.2 6.2C3.8 7.8 2.5 12 2.5 12s3.4 6 9.5 6c1.1 0 2.1-.2 3-.5" /><path d="M9.9 9.9a3 3 0 004.2 4.2" /></>),
 };
 
 export function Icon({ name, size = 18, className }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {
@@ -64,6 +66,24 @@ export function BrandMark({ size = 28, wordmark = false }: { size?: number; word
 
 export function Spinner() {
   return <span className="spinner" aria-hidden="true" />;
+}
+
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="password-input">
+      <input {...props} type={visible ? "text" : "password"} />
+      <button
+        className="password-toggle"
+        type="button"
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+        onClick={() => setVisible((current) => !current)}
+      >
+        <Icon name={visible ? "eyeOff" : "eye"} size={17} />
+      </button>
+    </div>
+  );
 }
 
 // ------------------------------------------------------------------------------------------------ toasts

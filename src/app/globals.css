@@ -136,6 +136,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent); }
 .input.error { border-color: var(--danger); }
 .input.error:focus { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
+.password-input { position: relative; }
+.password-input > .input { padding-right: 44px; }
+.password-toggle { position: absolute; top: 50%; right: 7px; display: grid; place-items: center; width: 30px; height: 30px; transform: translateY(-50%); border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.password-toggle:hover { background: var(--surface-2); color: var(--ink); }
+.password-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .field-error { color: var(--danger); font-size: 13px; }
 .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
 .choice { position: relative; display: grid; gap: 4px; padding: 16px 16px 16px 48px; border: 1.5px solid var(--line-2); border-radius: 12px; background: var(--surface); cursor: pointer; transition: border-color .12s, background .12s, box-shadow .12s; }
