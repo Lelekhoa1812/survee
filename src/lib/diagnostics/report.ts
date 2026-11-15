@@ -30,9 +30,13 @@ export function toAgentMarkdown(r: Report): string {
   lines.push("");
   lines.push("## Instructions for the agent that wrote this file");
   lines.push("");
-  lines.push(
-    "You produced an HTML questionnaire for the KQA app. The app's checker could not accept it as written. Work through the findings below and return a corrected file.",
-  );
+  if (!r.ok) {
+    lines.push("You produced an HTML questionnaire for the KQA app. The checker found blocking errors. Work through the findings below and return a corrected file.");
+  } else if (r.counts.warning > 0) {
+    lines.push("This file passes the blocking checks, but has warnings to review before it is shared. Work through the findings below and return a corrected file if you make changes.");
+  } else {
+    lines.push("This file passed the static checker. Review the rendered page, mobile layout, keyboard interaction, and reduced-motion behavior before sharing it.");
+  }
   lines.push("");
   lines.push("1. Fix every ERROR. Fix every WARNING too unless you have a specific reason not to, and say so if you skip one.");
   lines.push("2. Return the COMPLETE corrected HTML file (from `<!doctype html>` to `</html>`), not a diff and not a snippet.");

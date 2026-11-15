@@ -260,8 +260,11 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .ans .note { margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; white-space: pre-wrap; }
 .ans.none .val { color: var(--muted); font-style: italic; }
 .tally { display: grid; gap: 6px; }
-.tally-row { display: grid; grid-template-columns: minmax(100px, 220px) 1fr 44px; gap: 10px; align-items: center; font-size: 13.5px; }
+.tally-row { display: grid; grid-template-columns: minmax(100px, 220px) 1fr minmax(78px, auto); gap: 10px; align-items: center; font-size: 13.5px; }
 .tally-row .bar { height: 8px; }
+.tally-value { white-space: nowrap; }
+.question-stats, .question-warning { font-size: 13.5px; color: var(--ink-2); }
+.question-warning { color: var(--warn); }
 .person-card { border-top: 1px solid var(--line); }
 .person-card:first-child { border-top: 0; }
 .person-card > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) 150px 130px 20px; gap: 16px; align-items: center; padding: 14px 20px; }
@@ -363,7 +366,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
   .brand small { display: none; }
   .page-head h1 { font-size: 22px; }
   .ans { grid-template-columns: 1fr; gap: 4px; }
-  .tally-row { grid-template-columns: 90px 1fr 36px; }
+  .tally-row { grid-template-columns: minmax(72px, 90px) 1fr 74px; gap: 7px; }
   .rs-bar-in { padding: 0 14px; gap: 10px; }
   .rs-progress { display: none; }
   .save-state { min-width: 0; }

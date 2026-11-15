@@ -4,7 +4,7 @@ This is how an agent operates a live interview: people, questionnaire files, ans
 
 `/_next/mcp` exists only while `next dev` is running. It reports compiler errors and routes. It cannot see interviews, and it is not present in production. Do not point an agent at it.
 
-Writing a questionnaire file is still [`AGENT_PLAYBOOK.md`](AGENT_PLAYBOOK.md). The public bundle at `/api/docs/bundle.md` is for that job. It is not a way to change live data.
+Writing a questionnaire file is still [`AGENT_PLAYBOOK.md`](AGENT_PLAYBOOK.md), with the sourced design rules in [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). The public bundle at `/api/docs/bundle.md` is for that job. It is not a way to change live data.
 
 ## Connect
 
@@ -49,6 +49,8 @@ Every tool uses the same bearer check. Arguments are checked against the publish
 
 | Tool | What it does |
 |---|---|
+| `get_design_guidance` | Return KQA's versioned design principles, review checklist, and external sources for a product surface |
+| `audit_questionnaire_design` | Run static questionnaire diagnostics and return the design review checklist; it does not render or certify the page |
 | `list_interviews` | Host's interviews, open or closed, with people counts |
 | `get_interview` | One interview and its question list. No HTML |
 | `get_survey_html` | The stored file for a version |
@@ -66,12 +68,17 @@ Every tool uses the same bearer check. Arguments are checked against the publish
 | `reopen_person` | Unlock a submitted person |
 | `regenerate_link` | New private link. The old one stops working. Nothing is emailed automatically |
 | `get_answers` | Answers for review, with the label a host would read. No score |
+| `analyze_answers` | Current-version descriptive summaries with respondent scope, denominators, missingness, and pagination; no raw text or score |
 | `get_status` | Open or closed, and not started / in progress / submitted |
 | `list_events` | Recent audit rows |
 | `export_interview` | `json`, `csv-wide`, `csv-long`, `md`, or `xlsx` (base64) |
 | `get_mail_status` | Stored invite result. Does not open the mailbox |
 | `send_invite` | Email one person's private link. One message per call |
 | `check_invite_delivery` | IMAP check of the message id KQA stored. `delivered`, `bounced`, or `unknown` |
+
+`get_design_guidance` is a deterministic instruction package; KQA does not include or call an LLM. `audit_questionnaire_design` runs the same static checker used by uploads and returns the checklist for rendered review. Static diagnostics cannot verify contrast, layout, keyboard interaction, motion, or assistive-technology behavior.
+
+`analyze_answers` uses the current immutable survey version. By default it includes invited, in-progress, and submitted people; set `submittedOnly` to true to restrict the cohort. Use `questionId` for one question or `offset` and `limit` to page through questions. Each summary distinguishes eligible, answered, missing, and valid values; option distributions expose their denominator. Scale questions report a distribution and median without a mean. Number summaries are descriptive. Text answers, names, notes, and private links are not returned. When older stored values no longer match the current version's choices or range, the summary reports how many were excluded.
 
 `send_invite` refuses, and does not write a failed mail row, when the person has no email, the interview is closed, or `KQA_PUBLIC_URL` is unset. The link in the message is always `KQA_PUBLIC_URL` plus the token. Pass `resend: true` to send again to the same address and the same link. Changing the email or rotating the link clears the current "sent" state and does not send on its own.
 

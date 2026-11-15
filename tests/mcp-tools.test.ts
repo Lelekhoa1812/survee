@@ -62,6 +62,15 @@ vi.mock("../src/lib/db", () => ({
 
 const personId = new ObjectId().toHexString();
 const interviewId = new ObjectId().toHexString();
+const anotherPersonId = new ObjectId().toHexString();
+const analyticsManifest = {
+  format: "kqa/1" as const,
+  title: "Investor interview",
+  questions: [
+    { id: "fit", type: "single" as const, label: "Strategic fit", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+    { id: "budget", type: "number" as const, label: "Budget" },
+  ],
+};
 
 vi.mock("../src/lib/repo", async () => {
   const actual = await vi.importActual<typeof import("../src/lib/repo")>("../src/lib/repo");
@@ -89,6 +98,11 @@ vi.mock("../src/lib/repo", async () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     })),
+    getVersion: vi.fn(async () => ({ version: 1, manifest: analyticsManifest })),
+    listParticipants: vi.fn(async () => [
+      { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" } } },
+      { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" } } },
+    ]),
   };
 });
 
@@ -117,6 +131,42 @@ describe("MCP tools", () => {
   it("documents every registered tool", () => {
     const md = readFileSync(new URL("../docs/MCP.md", import.meta.url), "utf8");
     for (const tool of listToolDefs()) expect(md).toContain(`\`${tool.name}\``);
+  });
+
+  it("returns sourced design guidance for the requested product surface", async () => {
+    const res = await call("get_design_guidance", { surface: "analytics" });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { policyVersion?: string; principles?: { id: string }[]; sources?: { name: string }[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/1");
+    expect(body.result.structuredContent.principles?.map((p) => p.id)).toContain("honest-analytics");
+    expect(body.result.structuredContent.principles?.map((p) => p.id)).not.toContain("theme-fit");
+    expect(body.result.structuredContent.sources?.map((source) => source.name)).toContain("WCAG 2.2 Quick Reference");
+  });
+
+  it("returns static design findings with a separate visual-review checklist", async () => {
+    const html = readFileSync(new URL("../docs/template/starter.kqa.html", import.meta.url), "utf8");
+    const res = await call("audit_questionnaire_design", { html, fileName: "starter.kqa.html" });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { ok?: boolean; diagnostics?: unknown[]; reviewChecklist?: string[]; limits?: string[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.ok).toBe(true);
+    expect(body.result.structuredContent.diagnostics).toBeDefined();
+    expect(body.result.structuredContent.reviewChecklist?.length).toBeGreaterThan(4);
+    expect(body.result.structuredContent.limits?.join(" ")).toContain("cannot verify rendered contrast");
+  });
+
+  it("returns scoped descriptive summaries without raw answers", async () => {
+    const res = await call("analyze_answers", { interviewId, submittedOnly: false });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { surveyVersion?: number; scope?: { respondentCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number; numeric: { mean: number } | null }[]; methodology?: string[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.surveyVersion).toBe(1);
+    expect(body.result.structuredContent.scope?.respondentCount).toBe(2);
+    const fit = body.result.structuredContent.questions?.find((question) => question.id === "fit");
+    expect(fit).toMatchObject({ answeredCount: 2, unmappedResponseCount: 1 });
+    const budget = body.result.structuredContent.questions?.find((question) => question.id === "budget");
+    expect(budget?.numeric).toMatchObject({ n: 2, mean: 3, median: 3 });
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
+    expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");
   });
 
   it("sends one invite through the mocked SMTP transport", async () => {

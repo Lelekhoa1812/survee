@@ -7,37 +7,32 @@ import type { InterviewData, PersonRow } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
 import { Badge, Icon } from "./ui";
 import { fullTime } from "@/lib/time";
+import { summarizeQuestion, type QuestionSummary } from "@/lib/analytics/summary";
 
 const STATUS: Record<PersonRow["status"], { label: string; kind: "" | "info" | "ok" }> = { invited: { label: "Not started", kind: "" }, in_progress: { label: "In progress", kind: "info" }, submitted: { label: "Submitted", kind: "ok" } };
 
-function Tally({ q, people }: { q: Question; people: PersonRow[] }) {
-  const counts = new Map<string, number>();
-  let answered = 0;
-  for (const p of people) {
-    const v = p.answers[q.id]?.value;
-    if (v === undefined || v === null) continue;
-    answered++;
-    for (const x of Array.isArray(v) ? v : [v]) counts.set(String(x), (counts.get(String(x)) ?? 0) + 1);
-  }
-  if (!answered) return null;
-  let rows: { key: string; label: string; n: number }[] = [];
-  if (q.options) rows = q.options.map((o) => ({ key: o.value, label: o.label, n: counts.get(o.value) ?? 0 }));
-  else if (q.type === "scale") {
-    const lo = q.min ?? 1, hi = q.max ?? 5;
-    for (let i = lo; i <= hi; i++) rows.push({ key: String(i), label: String(i), n: counts.get(String(i)) ?? 0 });
-  } else return null;
-  const max = Math.max(1, ...rows.map((r) => r.n));
+function Tally({ q, summary }: { q: Question; summary: QuestionSummary }) {
+  if (!summary.distribution.length || !summary.distributionDenominator) return null;
+  const max = Math.max(1, ...summary.distribution.map((r) => r.count));
   return (
-    <div className="tally" aria-label="Answer counts">
-      {rows.map((r) => (
-        <div key={r.key} className="tally-row">
+    <div className="tally" role="group" aria-label={`Distribution among ${summary.distributionDenominator} valid responses`}>
+      <p className="muted" style={{ fontSize: 12.5 }}>
+        Counts and percentages among {summary.distributionDenominator} valid answers
+        {q.type === "multi" ? "; each percentage is a share of respondents, so totals can exceed 100%." : "."}
+      </p>
+      {summary.distribution.map((r) => (
+        <div key={r.value} className="tally-row">
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.label}>{r.label}</span>
-          <div className="bar" aria-hidden="true"><i style={{ width: `${(r.n / max) * 100}%` }} /></div>
-          <span className="muted" style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.n}</span>
+          <div className="bar" aria-hidden="true"><i style={{ width: `${(r.count / max) * 100}%` }} /></div>
+          <span className="muted tally-value" style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.count} <span>({Math.round(r.percent)}%)</span></span>
         </div>
       ))}
     </div>
   );
+}
+
+function fmtNumber(value: number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
 }
 
 export function AnswersTab({ data }: { data: InterviewData }) {
@@ -46,7 +41,8 @@ export function AnswersTab({ data }: { data: InterviewData }) {
   const [viewing, setViewing] = useState<PersonRow | null>(null);
   const people = useMemo(() => data.people.filter((p) => (only === "submitted" ? p.status === "submitted" : true)), [data.people, only]);
   const { questions, sections } = data.manifest;
-  const anyAnswers = data.people.some((p) => p.answered > 0);
+  const anyAnswers = data.people.some((p) => p.answered > 0 || Object.values(p.answers).some((answer) => !!answer.note?.trim()));
+  const summaries = useMemo(() => new Map(questions.map((q) => [q.id, summarizeQuestion(q, people)])), [questions, people]);
 
   const groups = useMemo(() => {
     const out: { id: string; title: string; description?: string; qs: Question[] }[] = [];
@@ -87,18 +83,20 @@ export function AnswersTab({ data }: { data: InterviewData }) {
             <div><div className="section-title" style={{ marginBottom: 2 }}>{g.title}</div>{g.description && <p className="muted" style={{ fontSize: 13.5 }}>{g.description}</p>}</div>
             <div className="card">
               {g.qs.map((q) => {
+                const summary = summaries.get(q.id)!;
                 const answeredBy = people.filter((p) => isAnswered(q, p.answers));
                 const noteOnly = people.filter((p) => !isAnswered(q, p.answers) && p.answers[q.id]?.note);
                 const missing = people.length - answeredBy.length;
-                const nums = q.type === "number" ? answeredBy.map((p) => Number(p.answers[q.id]?.value)).filter((n) => Number.isFinite(n)) : [];
                 return (
                   <div key={q.id} className="q-card">
                     <div>
                       <h4>{q.label}</h4>
                       <div className="meta"><span className="code-chip">{q.id}</span><span>{q.type}</span>{q.required && <Badge kind="info" plain>Required</Badge>}<span>{answeredBy.length} of {people.length} answered</span></div>
                     </div>
-                    <Tally q={q} people={people} />
-                    {nums.length > 1 && <p className="muted" style={{ fontSize: 13.5 }}>Lowest {Math.min(...nums)} · highest {Math.max(...nums)} · average {(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)}</p>}
+                    <Tally q={q} summary={summary} />
+                    {summary.numeric && <p className="question-stats">Numeric summary for n={summary.numeric.n}: minimum {fmtNumber(summary.numeric.min)} · median {fmtNumber(summary.numeric.median)} · mean {fmtNumber(summary.numeric.mean)} · maximum {fmtNumber(summary.numeric.max)}. Descriptive only.</p>}
+                    {summary.scaleMedian !== null && <p className="question-stats">Median response: {fmtNumber(summary.scaleMedian)} · n={summary.distributionDenominator}. Scale responses are ordinal; no mean is calculated.</p>}
+                    {summary.unmappedResponseCount > 0 && <p className="question-warning">{summary.unmappedResponseCount} stored {summary.unmappedResponseCount === 1 ? "answer does" : "answers do"} not match this survey version's options or range and {summary.unmappedResponseCount === 1 ? "is" : "are"} excluded from the summary.</p>}
                     <div className="stack" style={{ gap: 8 }}>
                       {[...answeredBy, ...noteOnly].map((p) => {
                         const a = p.answers[q.id];

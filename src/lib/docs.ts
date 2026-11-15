@@ -4,6 +4,7 @@ import path from "node:path";
 export const DOCS = [
   { slug: "format", file: "FORMAT.md", title: "Format specification", blurb: "Every rule a questionnaire file must follow." },
   { slug: "agent-playbook", file: "AGENT_PLAYBOOK.md", title: "AI agent playbook", blurb: "Step-by-step instructions for an agent that writes the file." },
+  { slug: "design-system", file: "DESIGN_SYSTEM.md", title: "Design system", blurb: "Sourced visual, accessibility, interaction, and analytics guidance." },
   { slug: "diagnostics", file: "DIAGNOSTICS.md", title: "Checker codes", blurb: "What each error and warning means and how to fix it." },
 ] as const;
 

@@ -1,5 +1,7 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
+import { summarizeQuestion } from "../analytics/summary";
+import { DESIGN_REVIEW_CHECKLIST, getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
@@ -121,6 +123,35 @@ async function onePerson(personId: string) {
 }
 
 const TOOLS: ToolDef[] = [
+  {
+    name: "get_design_guidance",
+    description: "Return KQA's sourced, versioned design principles for questionnaires, the host console, or analytics. No LLM is built into KQA.",
+    inputSchema: obj({ surface: { type: "string", enum: ["all", "questionnaire", "host", "analytics"] } }),
+    async run(args) {
+      const surface = (asString(args.surface, 24) || "all") as DesignSurface;
+      return ok(getDesignGuidance(surface));
+    },
+  },
+  {
+    name: "audit_questionnaire_design",
+    description: "Run KQA's static questionnaire checker and return the design review checklist. This does not render the page or prove visual quality or WCAG conformance.",
+    inputSchema: obj({ html: str, fileName: str, interviewId: str }, ["html"]),
+    async run(args) {
+      if (typeof args.html !== "string") return err("html is required.");
+      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
+      let prepared = prepareSurvey(args.html, asString(args.fileName, 200));
+      const interviewId = asString(args.interviewId, 40);
+      if (interviewId) prepared = await withCompat(prepared, interviewId);
+      return ok({
+        ok: prepared.report.ok,
+        counts: prepared.report.counts,
+        diagnostics: prepared.report.diagnostics,
+        report: prepared.markdown,
+        reviewChecklist: DESIGN_REVIEW_CHECKLIST,
+        limits: ["Static inspection cannot verify rendered contrast, responsive layout, keyboard operation, motion behavior, or assistive-technology announcements."],
+      });
+    },
+  },
   {
     name: "list_interviews",
     description: "List the host's interviews with open/closed status and people counts.",
@@ -251,6 +282,66 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "analyze_answers",
+    description: "Compute descriptive current-version answer summaries with explicit respondent scope, denominators, missingness, and caveats. Returns no raw answer text and creates no score.",
+    inputSchema: obj({
+      interviewId: str,
+      questionId: str,
+      submittedOnly: bool,
+      offset: { type: "integer", minimum: 0 },
+      limit: { type: "integer", minimum: 1, maximum: 100 },
+    }, ["interviewId"]),
+    async run(args) {
+      const id = asString(args.interviewId, 40);
+      if (!id) return err("interviewId is required.");
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
+      const version = await getVersion(interview._id, interview.currentVersion);
+      if (!version) return err("Survey version not found.", "not_found");
+      let questions = version.manifest.questions;
+      const questionId = asString(args.questionId, 64);
+      if (questionId) {
+        const question = questions.find((item) => item.id === questionId);
+        if (!question) return err("Question not found in the current survey version.", "not_found");
+        questions = [question];
+      }
+      const submittedOnly = args.submittedOnly === true;
+      let respondents = await listParticipants(id);
+      if (submittedOnly) respondents = respondents.filter((person) => person.status === "submitted");
+      const offset = typeof args.offset === "number" ? args.offset : 0;
+      const limit = typeof args.limit === "number" ? args.limit : 25;
+      const page = questions.slice(offset, offset + limit);
+      const submittedCount = respondents.filter((person) => person.status === "submitted").length;
+      return ok({
+        interviewId: id,
+        surveyVersion: version.version,
+        asOf: new Date().toISOString(),
+        scope: {
+          statuses: submittedOnly ? ["submitted"] : ["invited", "in_progress", "submitted"],
+          respondentCount: respondents.length,
+          submittedCount,
+          submittedOnly,
+        },
+        questionCount: questions.length,
+        offset,
+        limit,
+        nextOffset: offset + page.length < questions.length ? offset + page.length : null,
+        questions: page.map((question) => ({
+          id: question.id,
+          type: question.type,
+          label: question.label,
+          ...summarizeQuestion(question, respondents),
+        })),
+        methodology: [
+          "Summaries use the current survey version and the respondent statuses shown in scope.",
+          "answeredCount and missingCount use respondents in scope; distribution percentages use valid answers that match the current options or scale.",
+          "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
+          "Number summaries are descriptive; scale questions show a distribution and median without a mean. Text is not interpreted, scored, or returned.",
+        ],
+      });
+    },
+  },
+  {
     name: "get_status",
     description: "Interview open/closed, version, and per-person progress.",
     inputSchema: obj({ interviewId: str }, ["interviewId"]),
@@ -314,7 +405,7 @@ const TOOLS: ToolDef[] = [
       const binary = typeof file.body !== "string";
       const body = typeof file.body === "string" ? file.body : file.body.toString("base64");
       return ok(
-        { filename: file.filename, contentType: file.contentType, encoding: binary ? "base64" : "utf8", body },
+        { ok: true, filename: file.filename, contentType: file.contentType, encoding: binary ? "base64" : "utf8", body },
         binary ? `Exported ${file.filename}. The file is base64 in structuredContent.` : body,
       );
     },
@@ -373,6 +464,7 @@ const TOOLS: ToolDef[] = [
         if (args.status !== "open" && args.status !== "closed") return err("Status must be open or closed.");
         patch.status = args.status;
       }
+      if (!Object.keys(patch).length) return err("Nothing to update.");
       const updated = await updateInterview(id, patch);
       return updated ? ok({ ok: true, interviewId: id }) : err("Interview not found.", "not_found");
     },

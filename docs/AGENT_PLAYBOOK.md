@@ -4,7 +4,7 @@ You are an AI agent asked to produce an HTML questionnaire for the KQA app. This
 
 ## The one-paragraph version
 
-Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) looks good on a phone. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
+Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
 
 This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
 
@@ -21,6 +21,8 @@ Before writing, make sure you know:
 | Brand or tone | Default to the standard KQA look and plain Australian English |
 
 Ask at most one round of questions. If you can proceed with a sensible default, do so and state the assumption in your reply.
+
+Use the `get_design_guidance` MCP tool when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). Treat accessibility requirements as testable constraints and visual taste as a reasoned design choice. For a live interview, preserve ids and inspect compatibility findings before changing a version.
 
 ## Step 2. Design the manifest first
 
