@@ -8,7 +8,7 @@ interface Client { clientId: string; name: string; redirectUris: string[]; creat
 interface Code { _id: { toHexString(): string }; hash: string; tenantId: string; userId: { toHexString(): string }; clientId: string; redirectUri: string; challenge: string; email: string; expiresAt: Date }
 interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; note?: string }
 type ExistenceCondition = { $exists: boolean };
-type DateCondition = Date | ExistenceCondition;
+type DateCondition = Date | ExistenceCondition | { $eq: Date; $gt: Date };
 
 const clients: Client[] = [];
 const codes: Code[] = [];
@@ -41,7 +41,10 @@ vi.mock("../src/lib/db", () => ({
           if (query.refreshHash && entry.refreshHash !== query.refreshHash) return false;
           if (query.revokedAt?.$exists === false && entry.revokedAt !== undefined) return false;
           if (query.expiresAt instanceof Date && entry.expiresAt?.getTime() !== query.expiresAt.getTime()) return false;
-          if (query.expiresAt && !(query.expiresAt instanceof Date) && query.expiresAt.$exists === false && entry.expiresAt !== undefined) return false;
+          if (query.expiresAt && !(query.expiresAt instanceof Date) && "$eq" in query.expiresAt) {
+            if (entry.expiresAt?.getTime() !== query.expiresAt.$eq.getTime() || entry.expiresAt.getTime() <= query.expiresAt.$gt.getTime()) return false;
+          }
+          if (query.expiresAt && !(query.expiresAt instanceof Date) && "$exists" in query.expiresAt && query.expiresAt.$exists === false && entry.expiresAt !== undefined) return false;
           return true;
         });
         if (!item || !update.$set) return { matchedCount: 0 };
@@ -52,7 +55,7 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
-import { allowedRedirect, authorizationServerMetadata, exchangeCode, issueCode, protectedResourceMetadata, registerClient, s256, wwwAuthenticate } from "../src/lib/mcp/oauth";
+import { allowedRedirect, authorizationServerMetadata, exchangeCode, issueCode, OAUTH_SCOPE, protectedResourceMetadata, registerClient, s256, tokenResponse, wwwAuthenticate } from "../src/lib/mcp/oauth";
 import { authenticateApiKey, rotateOAuthKey } from "../src/lib/repo/keys";
 
 describe("OAuth discovery and PKCE", () => {
@@ -70,6 +73,9 @@ describe("OAuth discovery and PKCE", () => {
     expect(resource.authorization_servers).toEqual([origin]);
     expect(server.issuer).toBe(origin);
     expect(server.code_challenge_methods_supported).toContain("S256");
+    expect(resource.scopes_supported).toEqual([OAUTH_SCOPE]);
+    expect(server.scopes_supported).toEqual([OAUTH_SCOPE]);
+    expect(tokenResponse("access", "refresh", 60).scope).toBe(OAUTH_SCOPE);
     expect(server.registration_endpoint).toBe("https://kqa.example/oauth/register");
     expect(server.token_endpoint_auth_methods_supported).toEqual(["none"]);
     expect(wwwAuthenticate(origin)).toContain("resource_metadata=\"https://kqa.example/.well-known/oauth-protected-resource/api/mcp\"");
@@ -140,5 +146,58 @@ describe("OAuth discovery and PKCE", () => {
     expect(await authenticateApiKey(exchanged.access)).toBe(false);
     if (successful[0]) expect(await authenticateApiKey(successful[0].access)).toBe(true);
     expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
+  });
+
+  it("preserves an owner-shortened expiry when rotating an OAuth credential", async () => {
+    const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "owner-shortened-expiry-verifier-value-123456";
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+    const shortenedExpiry = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    keys[0].expiresAt = shortenedExpiry;
+
+    const rotated = await rotateOAuthKey(exchanged.refresh);
+
+    expect(rotated).not.toBeNull();
+    expect(keys[0].expiresAt?.getTime()).toBe(shortenedExpiry.getTime());
+    expect(rotated?.expiresIn).toBeGreaterThanOrEqual(3 * 60 * 60 - 1);
+    expect(rotated?.expiresIn).toBeLessThanOrEqual(3 * 60 * 60);
+  });
+
+  it("returns the remaining lifetime when refreshing a near-expiry OAuth credential", async () => {
+    const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "near-expiry-refresh-verifier-value-12345";
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+    const nearExpiry = new Date(Date.now() + 5_000);
+    keys[0].expiresAt = nearExpiry;
+
+    const rotated = await rotateOAuthKey(exchanged.refresh);
+
+    expect(rotated).not.toBeNull();
+    expect(keys[0].expiresAt?.getTime()).toBe(nearExpiry.getTime());
+    expect(rotated?.expiresIn).toBeGreaterThanOrEqual(0);
+    expect(rotated?.expiresIn).toBeLessThanOrEqual(5);
+  });
+
+  it("preserves the original expiry for a normal unexpired OAuth credential", async () => {
+    const registered = await registerClient({ name: "ChatGPT", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "normal-expiry-refresh-verifier-value-12345";
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+    const originalExpiry = keys[0].expiresAt?.getTime();
+
+    const rotated = await rotateOAuthKey(exchanged.refresh);
+
+    expect(rotated).not.toBeNull();
+    expect(keys[0].expiresAt?.getTime()).toBe(originalExpiry);
+    expect(rotated?.expiresIn).toBeGreaterThanOrEqual(Math.floor(30 * 24 * 60 * 60) - 1);
+    expect(rotated?.expiresIn).toBeLessThanOrEqual(Math.floor(30 * 24 * 60 * 60));
   });
 });

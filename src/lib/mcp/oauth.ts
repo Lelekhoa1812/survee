@@ -139,7 +139,7 @@ export async function exchangeCode(input: { code: string; clientId: string; redi
     createdBy: doc.email,
     tenantId: doc.tenantId ?? "axion",
     oauthClientId: doc.clientId,
-    // OAuth consent currently requests the single broad `kqa` scope. Preserve that
+    // OAuth consent currently requests the single broad `host` scope. Preserve that
     // contract explicitly; an owner can narrow this credential later in Settings.
     capabilities: [...MCP_CAPABILITIES],
   });

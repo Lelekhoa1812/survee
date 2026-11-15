@@ -167,7 +167,7 @@ function QuestionAnalysis({ question, summary, display }: { question: Question; 
   );
 }
 
-function ComparisonQuestion({ question, summaries }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary> }) {
+export function ComparisonQuestion({ question, summaries }: { question: Question; summaries: Record<ParticipantStatus, QuestionSummary> }) {
   const distributionQuestion = question.type === "single" || question.type === "multi" || question.type === "select" || question.type === "scale";
   const numericQuestion = question.type === "number";
   const distributionRows = summaries.invited.distribution;
@@ -214,7 +214,8 @@ function ComparisonQuestion({ question, summaries }: { question: Question; summa
                     <th scope="row">{option.label}</th>
                     {COMPARE_STATUSES.map((status) => {
                       const value = summaries[status].distribution.find((item) => item.value === option.value);
-                      return <td key={status}>{value ? `${value.count} (${formatPercentage(value.percent)})` : "—"}</td>;
+                      const percent = summaries[status].distributionDenominator ? formatPercentage(value?.percent ?? 0) : "—";
+                      return <td key={status}>{value ? `${value.count} (${percent})` : "—"}</td>;
                     })}
                   </tr>
                 ))}
@@ -226,7 +227,7 @@ function ComparisonQuestion({ question, summaries }: { question: Question; summa
                 <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
               </tr>
             ))}
-            {!distributionQuestion && !numericQuestion && countRows.map((row, index) => (
+            {countRows.map((row, index) => (
               <tr className={index === 0 ? "analysis-total" : undefined} key={row.label}>
                 <th scope="row">{row.label}</th>{COMPARE_STATUSES.map((status) => <td key={status}>{row.value(summaries[status])}</td>)}
               </tr>

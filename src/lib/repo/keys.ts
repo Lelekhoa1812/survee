@@ -184,7 +184,9 @@ export async function rotateOAuthKey(refreshSecret: string): Promise<{ access: s
   const access = generateKeySecret();
   const refresh = generateKeySecret();
   const { prefix, suffix } = splitSecret(access);
-  const expiresAt = new Date(now.getTime() + OAUTH_TTL_MS);
+  // Preserve an owner-configured absolute expiry across refresh. Only legacy
+  // OAuth rows without an expiry receive the standard lifetime on rotation.
+  const expiresAt = doc.expiresAt ?? new Date(now.getTime() + OAUTH_TTL_MS);
   // Compare-and-swap the old refresh hash and the state checked above. Only
   // one concurrent request can replace this refresh token; revocation or an
   // expiry change racing with rotation also causes the claim to fail.
@@ -193,10 +195,10 @@ export async function rotateOAuthKey(refreshSecret: string): Promise<{ access: s
       _id: doc._id,
       refreshHash: previousRefreshHash,
       revokedAt: { $exists: false },
-      expiresAt: doc.expiresAt ?? { $exists: false },
+      expiresAt: doc.expiresAt ? { $eq: doc.expiresAt, $gt: now } : { $exists: false },
     },
     { $set: { hash: hashKey(access), refreshHash: hashKey(refresh), prefix, suffix, expiresAt } },
   );
   if (rotated.matchedCount !== 1) return null;
-  return { access, refresh, expiresIn: Math.floor(OAUTH_TTL_MS / 1000) };
+  return { access, refresh, expiresIn: Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000)) };
 }
