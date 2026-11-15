@@ -38,7 +38,9 @@ function acceptable(req: Request): boolean {
 }
 
 function protocolVersion(requested: unknown): string {
-  if (typeof requested === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requested)) return requested;
+  // KQA implements only this version. Echo it when requested; otherwise answer
+  // with a version the server supports, as required by MCP version negotiation.
+  if (requested === PROTOCOL) return requested;
   return PROTOCOL;
 }
 
