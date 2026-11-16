@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Workbook } from "exceljs";
 import type { Manifest } from "../src/lib/format/schema";
-import { csvLong, csvWide, toCsv } from "../src/lib/export/csv";
+import { csvLong, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
 import { exportFilename, longTable, slugify, wideTable } from "../src/lib/export/rows";
 import { jsonExport } from "../src/lib/export/json";
 import { escapeInline, markdownExport } from "../src/lib/export/markdown";
@@ -233,6 +233,14 @@ describe("CSV", () => {
     expect(lines[6]).toBe("-3");
     expect(lines[7]).toBe("4.5");
     expect(csv).not.toContain("'-3");
+  });
+
+  it("neutralises formula markers after leading controls or spaces, including full-width forms", () => {
+    expect(neutraliseCell(" =SUM(A1)")).toBe("' =SUM(A1)");
+    expect(neutraliseCell("\n=SUM(A1)")).toBe("'\n=SUM(A1)");
+    expect(neutraliseCell("\0@cmd")).toBe("'\0@cmd");
+    expect(neutraliseCell("＝1+1")).toBe("'＝1+1");
+    expect(neutraliseCell("  -3  ")).toBe("  -3  ");
   });
 
   it("writes the wide and long files with quoted notes", () => {

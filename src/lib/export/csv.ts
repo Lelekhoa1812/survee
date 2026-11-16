@@ -1,15 +1,15 @@
 import { exportFilename, longTable, wideTable, type Table } from "./rows";
 import type { ExportFile, ExportInput } from "./types";
 
-/** Cells starting with these characters can run as formulas in Excel and Sheets. */
-const FORMULA_START = /^[=+\-@\t\r]/;
+/** Spreadsheet programs may ignore leading whitespace before formula markers. */
+const FORMULA_START = /^[\s\u0000-\u001f]*[=+\-@\t\r\n＝＋－＠]/u;
 /** Plain numbers such as "-3" or "4.5" are data, not formulas, so they are left alone. */
 const PLAIN_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i;
 
 /** Prefix a leading apostrophe to any cell that could be read as a formula. */
 export function neutraliseCell(value: string): string {
   if (!FORMULA_START.test(value)) return value;
-  if (PLAIN_NUMBER.test(value)) return value;
+  if (PLAIN_NUMBER.test(value.trim())) return value;
   return `'${value}`;
 }
 

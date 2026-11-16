@@ -2,6 +2,7 @@ import type { Question } from "../format/schema";
 import type { ParticipantStatus } from "../repo/types";
 import type { QuestionSummary } from "./summary";
 import type { AnswerCrossTabAnalysis } from "./segments";
+import { neutraliseCell } from "../export/csv";
 
 export interface AnalyticsExportItem {
   question: Question;
@@ -33,9 +34,7 @@ const DISCLOSURE_RISK_NOTE = "Singleton signals cover counts of one only; no min
 
 function cell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
-  let text = String(value);
-  // Keep spreadsheet programs from interpreting survey-authored labels as formulas.
-  if (typeof value === "string" && /^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
+  const text = typeof value === "string" ? neutraliseCell(value) : String(value);
   return `"${text.replace(/"/g, '""')}"`;
 }
 

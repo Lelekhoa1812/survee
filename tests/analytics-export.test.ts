@@ -62,6 +62,21 @@ describe("analytics CSV export", () => {
     expect(csv).not.toContain("Private note");
   });
 
+  it("protects aggregate labels when spreadsheet formula markers follow whitespace", () => {
+    const choice = questionSchema.parse({
+      id: "choice",
+      type: "single",
+      label: "Choice",
+      options: [{ value: "danger", label: " \n＝1+1" }, { value: "safe", label: "Safe" }],
+    });
+    const summary = summarizeQuestion(choice, [{
+      answers: { choice: { value: "danger", updatedAt: "2026-11-15T00:00:00.000Z" } },
+    }]);
+    const csv = buildAnalyticsCsv([{ question: choice, summary }], "Everyone");
+
+    expect(csv).toContain("\"' \n＝1+1\"");
+  });
+
   it("keeps answered and valid counts separate for an unmapped legacy value", () => {
     const option = questionSchema.parse({ id: "choice", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] });
     const summary = summarizeQuestion(option, [
