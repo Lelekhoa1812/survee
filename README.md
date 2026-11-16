@@ -1,6 +1,6 @@
 # KQA
 
-Host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, and also a dropdown, a number, a scale, or a date. KQA does not score answers.
+Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, and also a dropdown, a number, a scale, or a date. KQA does not score answers.
 
 | Portal | Address | For |
 |---|---|---|
@@ -87,7 +87,7 @@ The respondent E2E, offline, concurrency, security and state-screenshot checks c
 
 ### Security model
 
-* Uploaded HTML is untrusted. It runs in an iframe with `sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"` (no same-origin) and a strict Content-Security-Policy that blocks network calls, framing and form posts. It can only talk to the app with `postMessage`, and the app accepts messages only from its own frame.
+* Uploaded HTML is untrusted. It runs in a sandboxed iframe with a strict Content-Security-Policy that blocks network calls, remote images, framing and form posts. Stored same-origin KQA image URLs are allowed so a questionnaire can show workspace images. The page can only talk to the app with `postMessage`, and the app accepts messages only from its own frame.
 * Respondent links carry a 144-bit random token. Tokens are the credential, so keep links private. The link in an invite email is that credential. A host can issue a new link for a person at any time; the mailed link then stops working and is not sent again on its own.
 * Each workspace has its own verified sign-in. Passwords use salted scrypt hashes; sessions are HMAC-signed, httpOnly and same-site, check persisted membership and credential version, and expire after 12 hours. Mutating calls check request origin; login, signup, email changes and password resets are throttled.
 * Agents use `POST /api/mcp` with `Authorization: Bearer`. The server accepts `KQA_MCP_TOKEN` for Axion or a tenant-scoped key from Settings. That credential is not the admin password and not the session cookie. A missing bearer is rejected before the database is touched. See [`docs/MCP.md`](docs/MCP.md). `/_next/mcp` is only the Next.js development diagnostics endpoint.

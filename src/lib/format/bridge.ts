@@ -408,16 +408,29 @@ export function injectBridge(html: string): string {
 }
 
 /** The Content-Security-Policy sent with every questionnaire frame. */
-export const FRAME_CSP = [
-  "default-src 'none'",
-  "script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
-  "style-src 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
-  "font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com data:",
-  "img-src data: blob:",
-  "media-src data: blob:",
-  "connect-src 'none'",
-  "form-action 'none'",
-  "base-uri 'none'",
-  "frame-ancestors 'self'",
-  "sandbox allow-scripts allow-forms",
-].join("; ");
+export function frameContentSecurityPolicy(assetOrigin?: string): string {
+  let assetSource = "";
+  if (assetOrigin) {
+    try {
+      const parsed = new URL(assetOrigin);
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") assetSource = `${parsed.origin}/api/assets/`;
+    } catch {
+      // An invalid origin never widens the frame policy.
+    }
+  }
+  return [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
+    "style-src 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+    "font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com data:",
+    `img-src ${assetSource ? `${assetSource} ` : ""}data: blob:`,
+    "media-src data: blob:",
+    "connect-src 'none'",
+    "form-action 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
+    "sandbox allow-scripts allow-forms",
+  ].join("; ");
+}
+
+export const FRAME_CSP = frameContentSecurityPolicy();

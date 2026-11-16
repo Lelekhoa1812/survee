@@ -101,17 +101,31 @@ function tenantSlug(name: string): string {
   return `${slugBase(name)}-${randomBytes(3).toString("hex")}`;
 }
 
-export async function createPendingSignup(input: { email: string; password: string; tenantName: string; token: string }): Promise<{ ok: true; id: ObjectId } | { ok: false; error: string }> {
+export async function createPendingSignup(input: { email: string; password: string; tenantName: string; token: string }): Promise<{ ok: true; id: ObjectId } | { ok: false; reason: "account_exists" | "signup_pending" }> {
   const email = normalizeEmail(input.email);
-  if (email === AXION_OWNER_EMAIL) return { ok: false, error: "This address is reserved for the existing Axion owner." };
   // Hash before checking for an existing account so the public signup path does
   // not return immediately for addresses that are already registered.
   const passwordHash = await hashPassword(input.password);
+  if (email === AXION_OWNER_EMAIL) return { ok: false, reason: "account_exists" };
   const users = await col.users();
-  if (await users.findOne({ email }, { projection: { _id: 1 } })) return { ok: false, error: "An account already uses this address." };
+  if (await users.findOne({ email }, { projection: { _id: 1 } })) return { ok: false, reason: "account_exists" };
+
+  const signups = await col.signups();
+  const now = new Date();
+  // Mongo's TTL monitor is asynchronous. Remove an older claim explicitly so
+  // an expired or consumed row cannot hold the unique email slot indefinitely.
+  await signups.deleteMany({
+    email,
+    $or: [{ expiresAt: { $lte: now } }, { consumedAt: { $exists: true } }],
+  });
+  const activeSignup = await signups.findOne(
+    { email, expiresAt: { $gt: now }, consumedAt: { $exists: false } },
+    { projection: { _id: 1 } },
+  );
+  if (activeSignup) return { ok: false, reason: "signup_pending" };
+
   const id = new ObjectId();
   const tenantId = new ObjectId().toHexString();
-  const now = new Date();
   const pending: PendingSignupDoc = {
     _id: id,
     userId: new ObjectId(),
@@ -124,7 +138,21 @@ export async function createPendingSignup(input: { email: string; password: stri
     createdAt: now,
     expiresAt: new Date(now.getTime() + SIGNUP_TTL_MS),
   };
-  await (await col.signups()).insertOne(pending);
+  try {
+    await signups.insertOne(pending);
+  } catch (error) {
+    // A second request can pass the read above before either inserts. The
+    // unique email index makes the insert the atomic claim; only translate a
+    // duplicate key into a pending result if the winning claim is present.
+    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+      const winner = await signups.findOne(
+        { email, expiresAt: { $gt: new Date() }, consumedAt: { $exists: false } },
+        { projection: { _id: 1 } },
+      );
+      if (winner) return { ok: false, reason: "signup_pending" };
+    }
+    throw error;
+  }
   return { ok: true, id };
 }
 

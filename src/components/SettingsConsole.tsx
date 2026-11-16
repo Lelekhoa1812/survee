@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
 import { AccountSettingsPanel } from "./AccountSettingsPanel";
+import { ImageAssetsPanel } from "./ImageAssetsPanel";
 import { DEFAULT_MCP_CAPABILITIES, describeCapabilities, MCP_CAPABILITIES, MCP_CAPABILITY_INFO, type McpCapability } from "@/lib/mcp/capabilities";
 
 interface KeyRow {
@@ -159,6 +160,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
       <nav className="settings-section-nav" aria-label="Settings sections">
         {account && <a href="#workspace-account">Workspace account</a>}
         <a href="#agent-connection">Agent connection</a>
+        <a href="#image-assets">Workspace images</a>
         {canManageKeys && <a href="#api-keys">API keys</a>}
         {mayManageLegacy && <a href="#legacy-data">Axion legacy data</a>}
       </nav>
@@ -218,6 +220,8 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
           </div>
         </section>
       </div>
+
+      <ImageAssetsPanel />
 
       {revealed && (
         <section className="card" style={{ marginBottom: 16, borderColor: "var(--accent)" }}>

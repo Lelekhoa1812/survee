@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkHtml, maskJs } from "../src/lib/diagnostics/static";
+import { frameContentSecurityPolicy } from "../src/lib/format/bridge";
 import type { Report } from "../src/lib/diagnostics/types";
 
 // Cases found by adversarial QA of the checker. Each one pins a behaviour so it cannot quietly regress.
@@ -155,8 +156,23 @@ describe("images and frame policy", () => {
     const r = checkHtml(swap(STARTER, "<h1>Starter questionnaire</h1>", '<h1>Starter questionnaire</h1><img src="data:image/png;base64,//8AAA==" alt="Dot">'));
     expect(codes(r)).not.toContain("KQA417");
   });
+  it("accepts a stored KQA image asset URL", () => {
+    const r = checkHtml(swap(STARTER, "<h1>Starter questionnaire</h1>", `<h1>Starter questionnaire</h1><img src="/api/assets/${"a".repeat(43)}" alt="Logo">`));
+    expect(codes(r)).not.toContain("KQA418");
+    expect(codes(r)).not.toContain("KQA417");
+  });
+  it("rejects a relative image file that is not stored in KQA", () => {
+    const r = checkHtml(swap(STARTER, "<h1>Starter questionnaire</h1>", '<h1>Starter questionnaire</h1><img src="./logo.png" alt="Logo">'));
+    expect(codes(r)).toContain("KQA418");
+  });
   it("warns about a remote CSS background image", () => {
     const r = checkHtml(swap(STARTER, "</style>", ".hero { background: url(https://example.com/bg.jpg); }\n</style>"));
     expect(codes(r)).toContain("KQA417");
+  });
+  it("allows only the KQA asset path for stored image assets in the frame CSP", () => {
+    const csp = frameContentSecurityPolicy("https://kqa.example/path");
+    expect(csp).toContain("img-src https://kqa.example/api/assets/ data: blob:");
+    expect(csp).not.toContain("img-src 'self'");
+    expect(frameContentSecurityPolicy("javascript:alert(1)")).toContain("img-src data: blob:");
   });
 });

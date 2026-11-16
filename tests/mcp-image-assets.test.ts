@@ -1,0 +1,67 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  addImageAsset: vi.fn(),
+  deleteImageAsset: vi.fn(),
+  listImageAssets: vi.fn(),
+  renameImageAsset: vi.fn(),
+  inspectImage: vi.fn(),
+  noteMcp: vi.fn(async () => {}),
+}));
+
+vi.mock("../src/lib/repo/assets", () => ({
+  addImageAsset: mocks.addImageAsset,
+  deleteImageAsset: mocks.deleteImageAsset,
+  listImageAssets: mocks.listImageAssets,
+  renameImageAsset: mocks.renameImageAsset,
+  inspectImage: mocks.inspectImage,
+}));
+vi.mock("../src/lib/repo", () => ({ noteMcp: mocks.noteMcp }));
+
+import { dispatchTool, listToolDefs } from "../src/lib/mcp/tools";
+import type { McpCapability } from "../src/lib/mcp/capabilities";
+
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const asset = {
+  id: "0123456789abcdef01234567", name: "Logo", fileName: "logo.png", mimeType: "image/png", bytes: png.length,
+  sha256: "a".repeat(64), url: `/api/assets/${"z".repeat(43)}`, createdAt: "2026-11-16T00:00:00.000Z", updatedAt: "2026-11-16T00:00:00.000Z",
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.inspectImage.mockReturnValue({ ok: true, mimeType: "image/png" });
+  mocks.addImageAsset.mockImplementation(async (input: { name: string }) => ({ ...asset, name: input.name }));
+  mocks.listImageAssets.mockResolvedValue({ assets: [asset], nextCursor: null });
+  mocks.renameImageAsset.mockResolvedValue(asset);
+  mocks.deleteImageAsset.mockResolvedValue({ ok: true });
+});
+
+describe("MCP image asset tools", () => {
+  it("exposes image tools only to keys with image management access", () => {
+    const assetTools = ["list_image_assets", "upload_image_asset", "update_image_asset", "delete_image_asset"];
+    expect(listToolDefs(["assets:manage"] as McpCapability[]).map((tool) => tool.name)).toEqual(expect.arrayContaining(assetTools));
+    expect(listToolDefs(["interviews:read"] as McpCapability[]).map((tool) => tool.name)).not.toEqual(expect.arrayContaining(assetTools));
+  });
+
+  it("accepts base64 image bytes and returns a directly usable questionnaire snippet", async () => {
+    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", name: "Logo & mark", dataBase64: `data:image/png;base64,${png.toString("base64")}` });
+    expect(result.isError).toBe(false);
+    expect(mocks.addImageAsset).toHaveBeenCalledWith(expect.objectContaining({ fileName: "logo.png", name: "Logo & mark", data: png }));
+    expect(result.structuredContent).toMatchObject({ asset: { ...asset, name: "Logo & mark" }, htmlExample: `<img src="${asset.url}" alt="Logo &amp; mark">` });
+  });
+
+  it("rejects malformed image data before writing an asset", async () => {
+    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: "%%%" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ error: "dataBase64 must be valid base64 image data within the 2 MB size limit." });
+    expect(mocks.addImageAsset).not.toHaveBeenCalled();
+  });
+
+  it("pages library reads and requires exact-name delete confirmation", async () => {
+    await expect(dispatchTool("list_image_assets", { limit: 1 })).resolves.toMatchObject({ structuredContent: { assets: [asset], nextCursor: null } });
+    mocks.deleteImageAsset.mockResolvedValueOnce({ ok: false, reason: "in_use" });
+    const result = await dispatchTool("delete_image_asset", { assetId: asset.id, confirmName: asset.name });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: "asset_in_use" });
+  });
+});

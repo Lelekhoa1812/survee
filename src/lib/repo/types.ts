@@ -1,4 +1,4 @@
-import type { ObjectId } from "mongodb";
+import type { Binary, ObjectId } from "mongodb";
 import type { AnswerMap, Manifest, Question } from "../format/schema";
 import type { McpCapability } from "../mcp/capabilities";
 
@@ -56,6 +56,21 @@ export interface PendingSignupDoc {
   createdAt: Date;
   expiresAt: Date;
   consumedAt?: Date;
+}
+
+/** collection: image_assets. Every asset belongs to one workspace; publicId is a random read capability embedded in questionnaire HTML. */
+export interface ImageAssetDoc {
+  _id: ObjectId;
+  tenantId: string;
+  publicId: string;
+  name: string;
+  fileName: string;
+  mimeType: string;
+  bytes: number;
+  sha256: string;
+  data: Buffer | Binary;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /** collection: pending_email_changes. A verification link is one use and expires after 30 minutes. */

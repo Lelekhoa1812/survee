@@ -53,7 +53,7 @@ The page runs in an iframe with `sandbox="allow-scripts allow-forms"` and a stri
 
 * **Scripts** run, from inline `<script>` or from `cdnjs.cloudflare.com`, `cdn.jsdelivr.net` or `unpkg.com` only.
 * **Styles** may be inline, or `fonts.googleapis.com` / `cdnjs.cloudflare.com` stylesheets. **Fonts** load from `fonts.gstatic.com`.
-* **Images** must be embedded in the file: `data:` URIs or inline `<svg>`. Remote images do not load (KQA417). Inline SVG is the best choice for logos and icons.
+* **Images** can be embedded as `data:` URIs or inline `<svg>`, or saved in the workspace image library. Upload images in Settings or with the MCP image tools, then use the returned `/api/assets/<id>` URL in `<img src>` or CSS `url()`. Remote image hosts do not load (KQA417); relative files such as `./logo.png` are not included with the questionnaire (KQA418). Inline SVG is a good choice for small logos and icons.
 * **No network calls.** `fetch`, `XMLHttpRequest`, WebSocket and form posts are blocked (`connect-src 'none'`, `form-action 'none'`). All data goes through `KQA`.
 * **No browser storage.** `localStorage`, `sessionStorage`, cookies and IndexedDB are unavailable because the frame has an opaque origin. Do not use them. Use `KQA.set` / `KQA.get`.
 * **No modal dialogs.** `alert`, `confirm`, `prompt` do not work in a sandboxed frame. Build inline UI.

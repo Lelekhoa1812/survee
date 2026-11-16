@@ -1,6 +1,6 @@
 import { MongoClient, type ClientSession, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc } from "./repo/types";
+import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -43,6 +43,59 @@ export async function withMongoTransaction<T>(work: (session: ClientSession) => 
   }
 }
 
+async function ensurePendingSignupEmailIndex(d: Db): Promise<void> {
+  const signups = d.collection("pending_signups");
+  const hasUniqueEmailIndex = async (): Promise<boolean> => {
+    const indexes = await signups.listIndexes().toArray().catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === 26) return [];
+      throw error;
+    });
+    return indexes.some((index) => {
+      const keys = Object.entries(index.key ?? {});
+      return index.unique === true && keys.length === 1 && keys[0][0] === "email" && keys[0][1] === 1;
+    });
+  };
+
+  if (await hasUniqueEmailIndex()) return;
+  // Deployments before this index could contain several pending rows for one
+  // address. Keep the newest active claim deterministically, then enforce one
+  // canonical email slot. Repeat on duplicate-key races with another cold start.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const now = new Date();
+    await signups.deleteMany({ $or: [{ expiresAt: { $lte: now } }, { consumedAt: { $exists: true } }] });
+    const rows = await signups.find({}, { projection: { _id: 1, email: 1, createdAt: 1 } }).sort({ createdAt: -1, _id: -1 }).toArray();
+    const seen = new Set<string>();
+    const duplicateIds: typeof rows[number]["_id"][] = [];
+    const updates: { updateOne: { filter: { _id: typeof rows[number]["_id"] }; update: { $set: { email: string } } } }[] = [];
+    for (const row of rows) {
+      const normalized = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
+      if (!normalized || seen.has(normalized)) {
+        duplicateIds.push(row._id);
+        continue;
+      }
+      seen.add(normalized);
+      if (row.email !== normalized) updates.push({ updateOne: { filter: { _id: row._id }, update: { $set: { email: normalized } } } });
+    }
+    if (duplicateIds.length) await signups.deleteMany({ _id: { $in: duplicateIds } });
+    if (updates.length) {
+      try {
+        await signups.bulkWrite(updates, { ordered: false });
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === 11000) continue;
+        throw error;
+      }
+    }
+    try {
+      await signups.createIndex({ email: 1 }, { unique: true, name: "signup_email_unique" });
+      return;
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+      if (await hasUniqueEmailIndex()) return;
+    }
+  }
+  throw new Error("Could not migrate pending signup email claims to a unique index.");
+}
+
 async function ensureIndexes(d: Db) {
   const reviewDrafts = d.collection("questionnaire_review_drafts");
   try {
@@ -54,6 +107,7 @@ async function ensureIndexes(d: Db) {
   // Existing releases stored at most one active candidate per interview. Assign it
   // to the first slot before enforcing the expanded slot index.
   await reviewDrafts.updateMany({ slot: { $exists: false } }, { $set: { slot: 0 } });
+  await ensurePendingSignupEmailIndex(d);
   await Promise.all([
     d.collection("tenants").createIndex({ slug: 1 }, { unique: true, name: "tenant_slug_unique" }),
     d.collection("users").createIndex({ email: 1 }, { unique: true, name: "user_email_unique" }),
@@ -68,6 +122,8 @@ async function ensureIndexes(d: Db) {
     d.collection("pending_password_resets").createIndex({ tokenHash: 1 }, { unique: true, name: "password_reset_token_unique" }),
     d.collection("pending_password_resets").createIndex({ userId: 1 }, { unique: true, name: "password_reset_by_user" }),
     d.collection("pending_password_resets").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "password_reset_expiry" }),
+    d.collection("image_assets").createIndex({ publicId: 1 }, { unique: true, name: "image_asset_public_id_unique" }),
+    d.collection("image_assets").createIndex({ tenantId: 1, _id: -1 }, { name: "image_assets_by_tenant" }),
     d.collection("participants").createIndex({ token: 1 }, { unique: true, name: "token_unique" }),
     d.collection("interviews").createIndex({ tenantId: 1, updatedAt: -1 }, { name: "tenant_recent" }),
     d.collection("participants").createIndex({ tenantId: 1, interviewId: 1, createdAt: 1 }, { name: "tenant_people" }),
@@ -107,6 +163,7 @@ export const col = {
   users: async (): Promise<Collection<UserDoc>> => (await db()).collection<UserDoc>("users"),
   memberships: async (): Promise<Collection<MembershipDoc>> => (await db()).collection<MembershipDoc>("memberships"),
   signups: async (): Promise<Collection<PendingSignupDoc>> => (await db()).collection<PendingSignupDoc>("pending_signups"),
+  imageAssets: async (): Promise<Collection<ImageAssetDoc>> => (await db()).collection<ImageAssetDoc>("image_assets"),
   emailChanges: async (): Promise<Collection<PendingEmailChangeDoc>> => (await db()).collection<PendingEmailChangeDoc>("pending_email_changes"),
   passwordResets: async (): Promise<Collection<PendingPasswordResetDoc>> => (await db()).collection<PendingPasswordResetDoc>("pending_password_resets"),
   interviews: async (): Promise<Collection<InterviewDoc>> => (await db()).collection<InterviewDoc>("interviews"),

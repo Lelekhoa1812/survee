@@ -132,7 +132,7 @@ Walk this list. It catches roughly nine problems in ten.
 - [ ] No `checked`, `selected`, `disabled`, `readonly` on bound controls. No pre-filled value on text, number or date inputs and no text inside a textarea (radio and checkbox controls still need their `value` attribute: that is the option value).
 - [ ] Every control has a label. Every radio or checkbox group is in a `<fieldset>` with a `<legend>`.
 - [ ] No `localStorage`, `sessionStorage`, `fetch`, `XMLHttpRequest`, `alert`, `confirm`, `prompt`, `<iframe>`, `<form action>`, `<input type="file">`, `location.href =`, `window.open`, `window.print`.
-- [ ] External scripts and styles only from `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `fonts.googleapis.com`, `fonts.gstatic.com`. Prefer none. Images are embedded (`data:` URI or inline SVG), never remote.
+- [ ] External scripts and styles only from `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `fonts.googleapis.com`, `fonts.gstatic.com`. Prefer none. Images may be embedded (`data:` URI or inline SVG) or use a stored workspace image URL copied from Settings/MCP (`/api/assets/<id>`); remote images and un-stored relative file paths do not load.
 - [ ] No clipboard, `window.open` or print buttons: they do nothing in the frame.
 - [ ] `<html lang="en-AU">`, `<title>`, viewport meta present.
 - [ ] Looks right at 360 to 390 px wide and in dark mode. Any custom control repaints on `ready`, `change` and `lock`.

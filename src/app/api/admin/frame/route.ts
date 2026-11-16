@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const v = Number(u.searchParams.get("version") ?? interview.currentVersion);
   const version = await getVersion(interview._id, Number.isInteger(v) ? v : interview.currentVersion);
   if (!version) return framePlaceholder("That survey version does not exist.");
-  return frameResponse(version.html);
+  return frameResponse(version.html, new URL(req.url).origin);
 }
 
 /** Preview or probe a file that has not been stored yet. The page posts it from a hidden form into the frame. */
@@ -24,5 +24,5 @@ export async function POST(req: Request) {
   const html = form?.get("html");
   if (typeof html !== "string" || !html.trim()) return framePlaceholder("No file was sent.", 400);
   if (html.length > LIMITS.maxFileBytes + 1024) return framePlaceholder("That file is too large.", 413);
-  return frameResponse(html);
+  return frameResponse(html, new URL(req.url).origin);
 }

@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 78 codes. Severity is **error**, **warning** or **note**.
+There are 79 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -577,9 +577,9 @@ File uploads are not supported in questionnaires.
 
 Severity: **warning**
 
-The frame's Content-Security-Policy only allows images that are part of the file (data: URIs and inline SVG). A remote image shows as broken for every respondent, and a questionnaire must stay a single self-contained file.
+The frame blocks remote images. Use a stored KQA asset URL or embed the image as a data: URI or inline SVG.
 
-**How to fix:** Embed the image as a data: URI, or draw it as inline <svg>. For logos and icons, inline SVG is the smallest and sharpest option.
+**How to fix:** Upload the image in Settings and use its /api/assets/ URL, or embed it as a data: URI or inline <svg>.
 
 Wrong:
 
@@ -590,8 +590,16 @@ Wrong:
 Right:
 
 ```html
-<img src="data:image/svg+xml;utf8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 8 8%27%3E%3Ccircle cx=%274%27 cy=%274%27 r=%273%27/%3E%3C/svg%3E" alt="Logo">
+<img src="/api/assets/REPLACE_WITH_ASSET_ID" alt="Logo">
 ```
+
+### KQA418: Image file is not stored in KQA
+
+Severity: **error**
+
+A relative image path points at a file that is not part of the saved questionnaire or KQA image library, so it will not load for respondents.
+
+**How to fix:** Upload the image in Settings and use its /api/assets/ URL, or embed the image as a data: URI or inline SVG.
 
 ## Quality notes
 

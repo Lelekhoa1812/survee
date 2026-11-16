@@ -363,7 +363,8 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
       for (const a of ["src", "srcset", "poster", "href", "xlink:href"]) {
         const v = attr(el, a);
         if (v && /(^|\s)http:\/\//i.test(v)) add(ctx, "KQA411", `<${tag}> loads ${v.trim().split(/\s+/)[0]} over http.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
-        else if (v && /(^|\s)(https:)?\/\//i.test(v) && a !== "href" && a !== "xlink:href") add(ctx, "KQA417", `<${tag} ${a}="${v.trim().split(/\s+/)[0].slice(0, 80)}"> loads from the network. Only images embedded in the file (data: URIs or inline <svg>) load inside the frame.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
+        else if (v && /(^|\s)(https:)?\/\//i.test(v) && a !== "href" && a !== "xlink:href") add(ctx, "KQA417", `<${tag} ${a}="${v.trim().split(/\s+/)[0].slice(0, 80)}"> loads from the network. Use an embedded image or a stored KQA asset URL.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
+        else if (tag === "img" && a === "src" && v && !/^(?:data:image\/|blob:)/i.test(v) && !/^\/api\/assets\/[A-Za-z0-9_-]{43}$/.test(v.trim())) add(ctx, "KQA418", `<img src="${v.slice(0, 100)}"> points at a file that is not stored in KQA.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
       }
     }
     if (tag === "script") {
@@ -403,7 +404,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
       for (const m of css.matchAll(/url\(\s*['"]?(https?:\/\/[^'")\s]+\.(?:png|jpe?g|gif|webp|avif|svg|ico)(?:\?[^'")\s]*)?)/gi)) {
         let nl = 0;
         for (let q = 0; q < (m.index ?? 0); q++) if (css.charCodeAt(q) === 10) nl++;
-        add(ctx, "KQA417", `CSS loads an image from ${m[1].slice(0, 80)}. Only images embedded in the file (data: URIs) load inside the frame.`, undefined, { line: startLine + nl });
+        add(ctx, "KQA417", `CSS loads an image from ${m[1].slice(0, 80)}. Use a data: URI or a stored KQA asset URL.`, undefined, { line: startLine + nl });
       }
       for (const m of css.matchAll(/@font-face\s*{[^}]*?src\s*:[^;}]*url\(\s*['"]?(https?:[^'")\s]+)/gi)) {
         const h = hostOf(m[1]);

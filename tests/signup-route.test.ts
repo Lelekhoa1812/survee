@@ -81,7 +81,7 @@ describe("signup validation fields", () => {
   });
 
   it("keeps existing-address signup responses generic and sends account recovery steps to that inbox", async () => {
-    vi.mocked(createPendingSignup).mockResolvedValue({ ok: false, error: "An account already uses this address." });
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: false, reason: "account_exists" });
 
     const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
 
@@ -96,6 +96,20 @@ describe("signup validation fields", () => {
       text: expect.stringContaining("reset your password"),
     }));
     expect(sendSmtp).not.toHaveBeenCalledWith(expect.objectContaining({ subject: "Verify your KQA account" }));
+    expect(removePendingSignup).not.toHaveBeenCalled();
+  });
+
+  it("keeps an active signup claim generic without sending duplicate mail", async () => {
+    vi.mocked(createPendingSignup).mockResolvedValue({ ok: false, reason: "signup_pending" });
+
+    const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      message: "If this address is eligible for a KQA workspace, check its inbox for next steps.",
+    });
+    expect(sendSmtp).not.toHaveBeenCalled();
     expect(removePendingSignup).not.toHaveBeenCalled();
   });
 

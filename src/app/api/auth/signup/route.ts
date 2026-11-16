@@ -56,6 +56,7 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "Signup is temporarily unavailable. Try again later.");
   }
+  if (!pending.ok && pending.reason === "signup_pending") return generic();
   const email = pending.ok
     ? (() => {
         const verifyUrl = new URL("/verify", base.origin);

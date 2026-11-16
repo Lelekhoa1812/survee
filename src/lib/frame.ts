@@ -1,12 +1,12 @@
-import { FRAME_CSP, injectBridge } from "./format/bridge";
+import { frameContentSecurityPolicy, injectBridge } from "./format/bridge";
 
 /** A questionnaire document, with the bridge injected and every browser-side restriction applied. */
-export function frameResponse(html: string): Response {
+export function frameResponse(html: string, assetOrigin?: string): Response {
   return new Response(injectBridge(html), {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": FRAME_CSP,
+      "Content-Security-Policy": frameContentSecurityPolicy(assetOrigin),
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Cache-Control": "no-store",

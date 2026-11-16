@@ -57,6 +57,8 @@ import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
 import { patchQuestionnaireBlocks, type QuestionnaireBlockOperation } from "./questionnaire-block-patch";
 import { patchRequiredQuestions, type RequiredQuestionChange } from "./questionnaire-required-patch";
+import { addImageAsset, deleteImageAsset, listImageAssets, renameImageAsset, inspectImage } from "../repo/assets";
+import { MAX_IMAGE_BASE64_CHARS } from "../image-assets";
 
 export interface ToolResult {
   content: { type: "text"; text: string }[];
@@ -127,6 +129,19 @@ function asString(value: unknown, max = 500): string | undefined {
 }
 function oid(id: string): ObjectId | null {
   return /^[0-9a-f]{24}$/i.test(id) ? new ObjectId(id) : null;
+}
+
+function decodeImageData(value: string): Buffer | null {
+  const dataUri = /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/_=-]+)$/i.exec(value);
+  const encoded = dataUri ? dataUri[1] : value;
+  if (encoded.length > MAX_IMAGE_BASE64_CHARS || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(encoded)) return null;
+  const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+  const data = Buffer.from(normalized, "base64");
+  return data.toString("base64").replace(/=+$/, "") === normalized ? data : null;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
 type AnalyticsPageRow = { id: string; [key: string]: unknown };
@@ -340,6 +355,60 @@ const TOOLS: ToolDef[] = [
     async run() {
       const interviews = await listInterviews();
       return ok({ interviews });
+    },
+  },
+  {
+    name: "list_image_assets",
+    description: "List a page of workspace images available to questionnaires. Paste an asset URL into img src or CSS url(); asset count is not capped.",
+    inputSchema: obj({ cursor: str, limit: { type: "integer", minimum: 1, maximum: 100 } }),
+    async run(args) {
+      if (args.cursor !== undefined && (typeof args.cursor !== "string" || !/^[0-9a-f]{24}$/i.test(args.cursor))) return err("cursor must be a valid image page cursor.");
+      const limit = args.limit === undefined ? 30 : args.limit;
+      if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > 100) return err("limit must be an integer from 1 to 100.");
+      return ok(await listImageAssets({ cursor: args.cursor as string | undefined, limit }));
+    },
+  },
+  {
+    name: "upload_image_asset",
+    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB. The returned URL can be used in questionnaire HTML as <img src> or in CSS url().",
+    inputSchema: obj({ name: str, fileName: str, dataBase64: { type: "string", minLength: 1, maxLength: MAX_IMAGE_BASE64_CHARS + 64 } }, ["fileName", "dataBase64"]),
+    async run(args) {
+      if (typeof args.fileName !== "string" || !args.fileName.trim()) return err("fileName is required.");
+      if (typeof args.dataBase64 !== "string") return err("dataBase64 is required.");
+      const data = decodeImageData(args.dataBase64);
+      if (!data) return err("dataBase64 must be valid base64 image data within the 2 MB size limit.");
+      const checked = inspectImage(data);
+      if (!checked.ok) return err(checked.error, "invalid_image");
+      const asset = await addImageAsset({ name: asString(args.name, 120), fileName: asString(args.fileName, 160) || "image", data });
+      const alt = escapeHtml(asset.name);
+      return ok({ asset, htmlExample: `<img src="${asset.url}" alt="${alt}">` });
+    },
+  },
+  {
+    name: "update_image_asset",
+    description: "Rename a workspace image. Image bytes stay immutable so saved questionnaire versions keep rendering; upload a new image and publish a URL change to replace its contents.",
+    inputSchema: obj({ assetId: str, name: str }, ["assetId", "name"]),
+    async run(args) {
+      const id = asString(args.assetId, 40);
+      const name = asString(args.name, 120);
+      if (!id || !name) return err("assetId and name are required.");
+      const asset = await renameImageAsset(id, name);
+      return asset ? ok({ asset }) : err("Image not found.", "not_found");
+    },
+  },
+  {
+    name: "delete_image_asset",
+    description: "Permanently delete an unused workspace image. Pass confirmName exactly as returned by the image library. Deletion is blocked while a saved questionnaire or active preview references it.",
+    inputSchema: obj({ assetId: str, confirmName: str }, ["assetId", "confirmName"]),
+    async run(args) {
+      const id = asString(args.assetId, 40);
+      const confirmName = asString(args.confirmName, 120);
+      if (!id || !confirmName) return err("assetId and confirmName are required.");
+      const result = await deleteImageAsset(id, confirmName);
+      if (result.ok) return ok({ ok: true, assetId: id });
+      if (result.reason === "in_use") return err("This image is used by a saved questionnaire or active preview. Remove it there before deleting the image.", "asset_in_use");
+      if (result.reason === "confirmation_mismatch") return err("confirmName must exactly match the image name.", "confirmation_mismatch");
+      return err("Image not found.", "not_found");
     },
   },
   {
@@ -1579,12 +1648,12 @@ const TOOLS: ToolDef[] = [
 export function listToolDefs(capabilities?: readonly McpCapability[]) {
   const readOnlyTools = new Set([
     "get_analytics_guidance", "get_design_guidance", "extract_design_profile", "audit_questionnaire_design", "list_interviews", "get_interview",
-    "get_survey_html", "list_versions", "check_questionnaire", "list_people", "get_person", "get_answers",
+    "get_survey_html", "list_versions", "check_questionnaire", "list_image_assets", "list_people", "get_person", "get_answers",
     "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_version_patch", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
   ]);
   return TOOLS.filter(({ name }) => canCallMcpTool(name, capabilities)).map(({ name, description, inputSchema }) => {
     const readOnly = readOnlyTools.has(name);
-    const destructive = ["delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_block_patch", "apply_questionnaire_required_patch", "upload_survey_version"].includes(name);
+    const destructive = ["delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_block_patch", "apply_questionnaire_required_patch", "upload_survey_version", "delete_image_asset"].includes(name);
     const external = name === "send_invite" || name === "check_invite_delivery";
     return {
       name,
