@@ -430,6 +430,48 @@ describe("MCP tools", () => {
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
   });
 
+  it("returns a bounded aggregate cross-tab through MCP without raw answers", async () => {
+    const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    const res = await call("analyze_answers", { interviewId, segmentBy: "fit", crossTabWith: "confidence", limit: 1 });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: {
+      rowBy: { id: string }; columnBy: { id: string }; scope: { participantCount: number; statuses: string[] };
+      rows: { key: string; label: string }[]; columns: { key: string; label: string }[];
+      cells: { rowKey: string; columnKey: string; participantCount: number; rowDenominator: number; rowPercent: number | null; disclosureRisk: { singletonSegment: boolean } }[];
+      overlapping: boolean; methodology: string[];
+    } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent).toMatchObject({
+      rowBy: { id: "fit" }, columnBy: { id: "confidence" },
+      scope: { participantCount: 2, statuses: ["invited", "in_progress", "submitted"] },
+      overlapping: false,
+    });
+    const yes = body.result.structuredContent.rows.find((row) => row.key === "answer:yes")!;
+    const high = body.result.structuredContent.columns.find((column) => column.key === "answer:high")!;
+    expect(body.result.structuredContent.cells.find((cell) => cell.rowKey === yes.key && cell.columnKey === high.key)).toMatchObject({ participantCount: 1, rowDenominator: 1, rowPercent: 100, disclosureRisk: { singletonSegment: true } });
+    expect(body.result.structuredContent.methodology.join(" ")).toContain("No minimum group threshold is applied");
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls.at(-1)?.[1]).toEqual(["fit", "confidence"]);
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
+  });
+
+  it("validates MCP cross-tab dimensions and complete matrix limits before a scan", async () => {
+    const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    const sameQuestion = await call("analyze_answers", { interviewId, segmentBy: "fit", crossTabWith: "fit" });
+    const sameBody = await sameQuestion.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(sameBody.result.isError).toBe(true);
+    expect(sameBody.result.structuredContent.error).toContain("two different questions");
+    const outcomeConflict = await call("analyze_answers", { interviewId, segmentBy: "fit", crossTabWith: "confidence", questionId: "budget" });
+    const outcomeBody = await outcomeConflict.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(outcomeBody.result.isError).toBe(true);
+    expect(outcomeBody.result.structuredContent.error).toContain("without questionId");
+    const offset = await call("analyze_answers", { interviewId, segmentBy: "fit", crossTabWith: "confidence", offset: 1 });
+    const offsetBody = await offset.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
+    expect(offsetBody.result.isError).toBe(true);
+    expect(offsetBody.result.structuredContent.error).toContain("offset 0");
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore);
+  });
+
   it("summarizes selected outcomes together across answer segments in one scan", async () => {
     const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
     const res = await call("analyze_answers", { interviewId, segmentBy: "fit", questionIds: ["budget", "confidence"], compareStatuses: true });

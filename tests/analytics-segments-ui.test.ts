@@ -110,6 +110,55 @@ function segmentResponse(url: URL) {
   };
 }
 
+function crossTabResponse(url: URL) {
+  const rowQuestion = questions.find((question) => question.id === url.searchParams.get("segmentBy"))!;
+  const columnQuestion = questions.find((question) => question.id === url.searchParams.get("crossTabWith"))!;
+  const statuses = (url.searchParams.get("statuses") ?? "").split(",") as ParticipantStatus[];
+  const rowValues = (rowQuestion.options ?? []).map((option) => ({ key: `answer:${option.value}`, kind: "answer", value: option.value, label: option.label }));
+  const columnValues = (columnQuestion.options ?? []).map((option) => ({ key: `answer:${option.value}`, kind: "answer", value: option.value, label: option.label }));
+  const counts = (dimension: Question, value: string) => rows.filter((row) => statuses.includes(row.status) && row.answers[dimension.id]?.value === value);
+  const rowGroups = rowValues.map((item) => ({
+    ...item,
+    participantCount: counts(rowQuestion, item.value!).length,
+    statusCounts: Object.fromEntries((["invited", "in_progress", "submitted"] as ParticipantStatus[]).map((status) => [status, counts(rowQuestion, item.value!).filter((row) => row.status === status).length])),
+  }));
+  const columnGroups = columnValues.map((item) => ({
+    ...item,
+    participantCount: counts(columnQuestion, item.value!).length,
+    statusCounts: Object.fromEntries((["invited", "in_progress", "submitted"] as ParticipantStatus[]).map((status) => [status, counts(columnQuestion, item.value!).filter((row) => row.status === status).length])),
+  }));
+  const cells = rowGroups.flatMap((row) => columnGroups.map((column) => {
+    const members = rows.filter((person) => statuses.includes(person.status)
+      && person.answers[rowQuestion.id]?.value === row.value
+      && person.answers[columnQuestion.id]?.value === column.value);
+    const statusCounts = Object.fromEntries((["invited", "in_progress", "submitted"] as ParticipantStatus[]).map((status) => [status, members.filter((person) => person.status === status).length]));
+    return {
+      rowKey: row.key,
+      columnKey: column.key,
+      participantCount: members.length,
+      rowDenominator: row.participantCount,
+      rowPercent: row.participantCount ? members.length / row.participantCount * 100 : null,
+      statusCounts,
+      disclosureRisk: { singletonSegment: members.length === 1, singletonStatusGroups: [] },
+    };
+  }));
+  const statusCounts = { invited: 1, in_progress: 1, submitted: 1 };
+  return {
+    ok: true,
+    interviewId: "interview-1",
+    surveyVersion: responseSurveyVersion,
+    asOf: "2026-11-15T00:01:00.000Z",
+    rowBy: { id: rowQuestion.id, type: rowQuestion.type, label: rowQuestion.label },
+    columnBy: { id: columnQuestion.id, type: columnQuestion.type, label: columnQuestion.label },
+    scope: { statuses, participantCount: statuses.length, statusCounts },
+    rows: rowGroups,
+    columns: columnGroups,
+    cells,
+    overlapping: rowQuestion.type === "multi" || columnQuestion.type === "multi",
+    methodology: [],
+  };
+}
+
 let host: HTMLDivElement;
 let root: Root;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -119,7 +168,7 @@ let deferredRequest: { url: URL; resolve: (response: Response) => void } | null 
 let responseSurveyVersion = 1;
 
 function responseFor(url: URL) {
-  return new Response(JSON.stringify(segmentResponse(url)), {
+  return new Response(JSON.stringify(url.searchParams.has("crossTabWith") ? crossTabResponse(url) : segmentResponse(url)), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -188,6 +237,27 @@ async function resolveDeferredRequest() {
 }
 
 describe("answer-segment analytics UI", () => {
+  it("renders and exports a two-question count matrix", async () => {
+    await act(async () => root.render(createElement(AnalyticsTab, { data })));
+    await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Cross-tab answers")!);
+
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("crossTabWith=department");
+    expect(host.querySelector(".analysis-cross-tab-table")?.textContent).toContain("Region ↓ / Department →");
+    expect(host.querySelector(".analysis-cross-tab-table")?.textContent).toContain("Operations");
+    expect(host.querySelector(".analysis-cross-tab-table")?.textContent).toContain("1 (50%)");
+    expect(host.querySelector(".analysis-cross-tab-table")?.textContent).toContain("1 person");
+
+    await change(host.querySelector<HTMLSelectElement>("#analysis-cross-tab-column")!, "satisfaction");
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("crossTabWith=satisfaction");
+    expect(host.querySelector(".analysis-cross-tab-table")?.textContent).toContain("Satisfaction");
+
+    await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Copy CSV")!);
+    expect(copied).toHaveLength(1);
+    expect(copied[0]).toContain('"row_question","row_answer","column_question","column_answer"');
+    expect(copied[0]).toContain('"Region","North","Satisfaction","Agree"');
+    expect(copied[0]).toContain("No minimum group threshold or anonymity guarantee");
+  });
+
   it("updates loaded dimension and outcome results, compares statuses, and copies the refreshed CSV", async () => {
     await act(async () => root.render(createElement(AnalyticsTab, { data })));
     expect(host.querySelector(".analysis-disclosure-flag")?.textContent).toContain("South count=1");

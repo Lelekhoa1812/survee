@@ -1,6 +1,7 @@
 import type { Question } from "../format/schema";
 import type { ParticipantStatus } from "../repo/types";
 import type { QuestionSummary } from "./summary";
+import type { AnswerCrossTabAnalysis } from "./segments";
 
 export interface AnalyticsExportItem {
   question: Question;
@@ -15,6 +16,8 @@ export interface AnalyticsExportMetadata {
   interviewId?: string;
   surveyVersion?: number;
   asOf?: string;
+  rowQuestionLabel?: string;
+  columnQuestionLabel?: string;
 }
 
 const HEADERS = [
@@ -85,6 +88,35 @@ export function buildAnalyticsCsv(items: AnalyticsExportItem[], cohort: string, 
         null, null, null, null, null, null, null, ...risk, null, null,
       ]));
     }
+  }
+  return `${rows.join("\r\n")}\r\n`;
+}
+
+/** Export every count-only cross-tab cell, including zeros and its row denominator. */
+export function buildAnswerCrossTabCsv(
+  result: Pick<AnswerCrossTabAnalysis, "rows" | "columns" | "cells" | "overlapping">,
+  metadata: AnalyticsExportMetadata = {},
+): string {
+  const rows = [row([
+    "row_question", "row_answer", "column_question", "column_answer", "interview_id", "survey_version", "as_of",
+    "count", "row_denominator", "row_percent", "invited_count", "in_progress_count", "submitted_count",
+    "singleton_cell", "singleton_status_groups", "overlapping_dimensions", "methodology_note",
+  ])];
+  const rowByKey = new Map(result.rows.map((item) => [item.key, item]));
+  const columnByKey = new Map(result.columns.map((item) => [item.key, item]));
+  const note = "No minimum group threshold or anonymity guarantee; checkbox dimensions overlap.";
+  for (const item of result.cells) {
+    const rowValue = rowByKey.get(item.rowKey);
+    const columnValue = columnByKey.get(item.columnKey);
+    if (!rowValue || !columnValue) continue;
+    rows.push(row([
+      metadata.rowQuestionLabel ?? "", rowValue.label, metadata.columnQuestionLabel ?? "", columnValue.label,
+      metadata.interviewId, metadata.surveyVersion, metadata.asOf,
+      item.participantCount, item.rowDenominator, item.rowPercent,
+      item.statusCounts.invited, item.statusCounts.in_progress, item.statusCounts.submitted,
+      item.disclosureRisk.singletonSegment ? "true" : "false", item.disclosureRisk.singletonStatusGroups.join("|"),
+      result.overlapping ? "true" : "false", note,
+    ]));
   }
   return `${rows.join("\r\n")}\r\n`;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSegmentByAnswer, summarizeAnswerSegments } from "../src/lib/analytics/segments";
+import { canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "../src/lib/analytics/segments";
 import type { CohortAnalyticsRespondent } from "../src/lib/analytics/summary";
 import type { Question } from "../src/lib/format/schema";
 
@@ -28,6 +28,64 @@ function respondent(status: CohortAnalyticsRespondent["status"], answers: Cohort
 }
 
 describe("answer-segment analytics", () => {
+  it("returns count-only two-way cells with row denominators, overlap, singleton signals, and zero cells", async () => {
+    const region: Question = { id: "region", type: "single", label: "Region", options: [{ value: "north", label: "North" }, { value: "south", label: "South" }] };
+    const rows = [
+      respondent("submitted", { region: { value: "north", updatedAt: at }, topics: { value: ["alpha", "beta"], updatedAt: at } }),
+      respondent("in_progress", { region: { value: "south", updatedAt: at }, topics: { value: ["beta"], updatedAt: at } }),
+      respondent("invited", { region: { note: "private note", updatedAt: at }, topics: { note: "private note", updatedAt: at } }),
+      respondent("submitted", { region: { value: "retired", updatedAt: at }, topics: { value: ["gamma"], updatedAt: at } }),
+    ];
+    let scans = 0;
+    async function* participants() {
+      for (const row of rows) { scans += 1; yield row; }
+    }
+
+    const result = await summarizeAnswerCrossTab(region, topics, participants());
+    const north = result.rows.find((row) => row.value === "north")!;
+    const beta = result.columns.find((column) => column.value === "beta")!;
+    const northBeta = result.cells.find((cell) => cell.rowKey === north.key && cell.columnKey === beta.key)!;
+    const northGamma = result.cells.find((cell) => cell.rowKey === north.key && cell.columnKey === "answer:gamma")!;
+    const noAnswer = result.cells.find((cell) => cell.rowKey === "special:no_answer" && cell.columnKey === "special:no_answer")!;
+    const unmapped = result.cells.find((cell) => cell.rowKey === "special:unmapped" && cell.columnKey === "answer:gamma")!;
+
+    expect(scans).toBe(rows.length);
+    expect(canCrossTabByAnswer(region, topics)).toBe(true);
+    expect(result).toMatchObject({ participantCount: 4, statusCounts: { invited: 1, in_progress: 1, submitted: 2 }, overlapping: true });
+    expect(north).toMatchObject({ participantCount: 1, statusCounts: { submitted: 1 } });
+    expect(beta).toMatchObject({ participantCount: 2, statusCounts: { in_progress: 1, submitted: 1 } });
+    expect(northBeta).toMatchObject({ participantCount: 1, rowDenominator: 1, rowPercent: 100, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] } });
+    expect(northGamma).toMatchObject({ participantCount: 0, rowDenominator: 1, rowPercent: 0 });
+    expect(noAnswer).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["invited"] } });
+    expect(unmapped).toMatchObject({ participantCount: 1, statusCounts: { submitted: 1 } });
+    expect(JSON.stringify(result)).not.toContain("private note");
+    expect(JSON.stringify(result)).not.toContain("retired");
+  });
+
+  it("keeps every zero cell when no participants match", async () => {
+    const region: Question = { id: "region", type: "single", label: "Region", options: [{ value: "north", label: "North" }, { value: "south", label: "South" }] };
+    const result = await summarizeAnswerCrossTab(region, outcome, (async function* () {})());
+
+    expect(result.participantCount).toBe(0);
+    expect(result.rows).toHaveLength(2);
+    expect(result.columns).toHaveLength(2);
+    expect(result.cells).toHaveLength(4);
+    expect(result.cells.every((cell) => cell.participantCount === 0 && cell.rowPercent === null)).toBe(true);
+    expect(result.cells.some((cell) => cell.disclosureRisk.singletonSegment)).toBe(false);
+  });
+
+  it("rejects oversized matrices before scanning participants", async () => {
+    const manyOptions = Array.from({ length: 20 }, (_, index) => ({ value: `v${index}`, label: `Value ${index}` }));
+    const broad: Question = { id: "broad", type: "multi", label: "Broad", options: manyOptions };
+    let scans = 0;
+    async function* participants() { scans += 1; yield respondent("submitted", {}); }
+
+    expect(canCrossTabByAnswer(broad, broad)).toBe(false);
+    await expect(summarizeAnswerCrossTab(broad, broad, participants())).rejects.toThrow("Choose two different questions");
+    await expect(summarizeAnswerCrossTab(broad, { ...broad, id: "other" }, participants())).rejects.toThrow("at most 20 groups per question");
+    expect(scans).toBe(0);
+  });
+
   it("keeps checkbox overlap visible and reports no-answer, unmapped, singleton, and zero-count groups", async () => {
     const rows = [
       respondent("submitted", { topics: { value: ["alpha", "beta"], updatedAt: at }, outcome: { value: "yes", updatedAt: at } }),

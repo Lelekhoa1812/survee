@@ -351,6 +351,14 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .analysis-result-count { font-size: 13px; }
 .analysis-question-list { overflow: hidden; }
 .analysis-segment-list { overflow: hidden; }
+.analysis-cross-tab-wrap { max-width: 100%; margin: 12px 20px 0; }
+.analysis-cross-tab-table { min-width: 720px; }
+.analysis-cross-tab-table th, .analysis-cross-tab-table td { min-width: 112px; vertical-align: top; font-variant-numeric: tabular-nums; }
+.analysis-cross-tab-table th:first-child { min-width: 150px; }
+.analysis-cross-tab-table td { white-space: nowrap; }
+.analysis-cross-tab-table th small, .analysis-cross-tab-table td small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; white-space: normal; }
+.analysis-cross-tab-table td .analysis-disclosure-flag { color: var(--warn); font-weight: 600; }
+.analysis-cross-tab-note { margin: 10px 20px 0; }
 .analysis-segment-result-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
 .analysis-segment-result-head h2 { font-size: 16px; font-weight: 600; }
 .analysis-segment-result-head p { margin-top: 3px; font-size: 12.5px; }

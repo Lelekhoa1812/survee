@@ -6,7 +6,11 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/14");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/15");
+    const analysis = getAnalyticsGuidance();
+    expect(analysis.principles.find((principle) => principle.id === "explore-answer-segments")?.guidance).toContain("crossTabWith");
+    expect(analysis.productConstraints.join(" ")).toContain("400 cells");
+    expect(analysis.productConstraints.join(" ")).toContain("No minimum group threshold applies");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);

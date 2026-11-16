@@ -1,7 +1,7 @@
 import { displayValue, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
-import { answerSegmentationError, canSegmentByAnswer, summarizeAnswerSegments } from "../analytics/segments";
+import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "../analytics/segments";
 import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
@@ -533,13 +533,14 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer in one shared scan. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; the completed aggregate pages remain stable for up to one hour. The initial scan is live, not a database snapshot. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer. Set crossTabWith with segmentBy to produce a bounded two-question count matrix with row denominators and checkbox overlap notes. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; completed aggregate pages remain stable for up to one hour. Initial scans are live, not database snapshots. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       runId: str,
       questionId: str,
       questionIds: { type: "array", minItems: 1, maxItems: 20, uniqueItems: true, items: str },
       segmentBy: str,
+      crossTabWith: str,
       submittedOnly: bool,
       statuses: { type: "array", items: { type: "string", enum: ["invited", "in_progress", "submitted"] } },
       compareStatuses: bool,
@@ -552,7 +553,7 @@ const TOOLS: ToolDef[] = [
       if (args.runId !== undefined) {
         const runId = asString(args.runId, 40);
         if (!runId || !oid(runId)) return err("runId must be an analysisRunId returned by analyze_answers.");
-        if (["questionId", "questionIds", "segmentBy", "submittedOnly", "statuses", "compareStatuses"].some((key) => args[key] !== undefined)) {
+        if (["questionId", "questionIds", "segmentBy", "crossTabWith", "submittedOnly", "statuses", "compareStatuses"].some((key) => args[key] !== undefined)) {
           return err("When continuing an analysis run, pass only interviewId, runId, offset, and limit.");
         }
         const offset = typeof args.offset === "number" ? args.offset : 0;
@@ -578,9 +579,16 @@ const TOOLS: ToolDef[] = [
       const questionId = asString(args.questionId, 64);
       const requestedQuestionIds = args.questionIds;
       const segmentById = asString(args.segmentBy, 64);
+      const crossTabWithId = asString(args.crossTabWith, 64);
       const segmentQuestion = segmentById ? questions.find((item) => item.id === segmentById) : undefined;
       if (segmentById && !segmentQuestion) return err("Segmentation question not found in the current survey version.", "not_found");
       if (segmentById && !canSegmentByAnswer(segmentQuestion)) return err(answerSegmentationError(segmentQuestion));
+      if (args.crossTabWith !== undefined && !crossTabWithId) return err("crossTabWith must be a question ID.");
+      if (crossTabWithId && !segmentById) return err("crossTabWith requires segmentBy to select the row question.");
+      if (crossTabWithId && (questionId || requestedQuestionIds !== undefined)) return err("Use a two-question cross-tab without questionId or questionIds outcome summaries.");
+      const crossTabQuestion = crossTabWithId ? questions.find((item) => item.id === crossTabWithId) : undefined;
+      if (crossTabWithId && !crossTabQuestion) return err("Cross-tab column question not found in the current survey version.", "not_found");
+      if (crossTabWithId && !canCrossTabByAnswer(segmentQuestion, crossTabQuestion)) return err(answerCrossTabError(segmentQuestion, crossTabQuestion));
       if (requestedQuestionIds !== undefined) {
         if (!segmentById) return err("questionIds can only be used with segmentBy.");
         if (questionId) return err("Use either questionId or questionIds, not both.");
@@ -598,7 +606,7 @@ const TOOLS: ToolDef[] = [
         const question = questions.find((item) => item.id === questionId);
         if (!question) return err("Question not found in the current survey version.", "not_found");
         questions = [question];
-      } else if (segmentById && requestedQuestionIds === undefined) {
+      } else if (segmentById && requestedQuestionIds === undefined && !crossTabWithId) {
         questions = questions.filter((item) => item.id !== segmentById);
       }
       const allStatuses = ["invited", "in_progress", "submitted"] as const;
@@ -614,6 +622,9 @@ const TOOLS: ToolDef[] = [
       if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
         return err("offset must be a non-negative integer and limit must be an integer from 1 to 100.");
       }
+      if (crossTabWithId && offset !== 0) {
+        return err("A cross-tab returns its complete bounded matrix; use offset 0.");
+      }
       if (requestedQuestionIds !== undefined && (offset !== 0 || limit < questions.length)) {
         return err("questionIds returns every selected outcome in one scan; use offset 0 and a limit at least as large as the selected list.");
       }
@@ -623,6 +634,32 @@ const TOOLS: ToolDef[] = [
       const cohort = analyticsCohortForStatuses(statuses);
       if (!cohort) return err("statuses must contain at least one status.");
       const compareRequested = args.compareStatuses === true;
+      if (segmentQuestion && crossTabWithId && crossTabQuestion) {
+        const crossTab = await summarizeAnswerCrossTab(
+          segmentQuestion,
+          crossTabQuestion,
+          iterateAnalyticsParticipants(id, [segmentQuestion.id, crossTabQuestion.id], { statuses }),
+          statuses,
+        );
+        return ok({
+          interviewId: id,
+          surveyVersion: version.version,
+          asOf: crossTab.asOf,
+          rowBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
+          columnBy: { id: crossTabQuestion.id, type: crossTabQuestion.type, label: crossTabQuestion.label },
+          scope: { statuses, participantCount: crossTab.participantCount, statusCounts: crossTab.statusCounts },
+          rows: crossTab.rows,
+          columns: crossTab.columns,
+          cells: crossTab.cells,
+          overlapping: crossTab.overlapping,
+          methodology: [
+            "This bounded cross-tab uses two closed categorical questions in the current survey version and only the participant statuses shown in scope. It is computed from one projected live scan; changes during the scan are not isolated by a database snapshot.",
+            "Each cell counts distinct people for that answer pair. Row percentages use the row's participant count as denominator. If either question is a checkbox, people can appear in multiple rows or columns and counts and percentages can overlap or sum above 100%.",
+            "No stored answer includes blank and note-only responses; it does not mean the person was eligible to see a routed question. Invalid stored values appear as Unmapped answer.",
+            "No minimum group threshold is applied. Every valid answer pair, including zero-count cells, is returned; observed no-answer and unmapped groups are also included. disclosureRisk.singletonSegment flags cells with one person and singletonStatusGroups lists one-person status counts. These signals do not assess attribute combinations or guarantee anonymity.",
+          ],
+        });
+      }
       if (segmentQuestion && canSegmentByAnswer(segmentQuestion)) {
         const segmented = await summarizeAnswerSegments(
           segmentQuestion,

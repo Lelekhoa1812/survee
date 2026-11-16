@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { QuestionSummary } from "@/lib/analytics/summary";
-import type { AnswerSegmentGroup } from "@/lib/analytics/segments";
+import { canCrossTabByAnswer, MAX_CROSSTAB_CELLS, MAX_CROSSTAB_DIMENSION_GROUPS, type AnswerCrossTabCell, type AnswerCrossTabValue, type AnswerSegmentGroup } from "@/lib/analytics/segments";
 import { describeNumericQuantiles, formatPercentage, numericQuantileMethodLabel } from "@/lib/analytics/format";
-import { buildAnalyticsCsv } from "@/lib/analytics/export";
+import { buildAnalyticsCsv, buildAnswerCrossTabCsv } from "@/lib/analytics/export";
 import { ANALYTICS_COHORTS, analyticsCohortForStatuses, type AnalyticsCohortKey } from "@/lib/analytics/cohorts";
 import type { Question, QuestionType } from "@/lib/format/schema";
 import type { ParticipantStatus } from "@/lib/repo/types";
@@ -415,6 +415,62 @@ interface SegmentAnalysisResponse {
   methodology: string[];
 }
 
+interface CrossTabAnalysisResponse {
+  interviewId: string;
+  surveyVersion: number;
+  asOf: string;
+  rowBy: { id: string; type: QuestionType; label: string };
+  columnBy: { id: string; type: QuestionType; label: string };
+  scope: { statuses: ParticipantStatus[]; participantCount: number; statusCounts: Record<ParticipantStatus, number> };
+  rows: AnswerCrossTabValue[];
+  columns: AnswerCrossTabValue[];
+  cells: AnswerCrossTabCell[];
+  overlapping: boolean;
+  methodology: string[];
+}
+
+function CrossTabResults({ result, compareStatuses }: { result: CrossTabAnalysisResponse; compareStatuses: boolean }) {
+  const cellByKey = new Map(result.cells.map((cell) => [JSON.stringify([cell.rowKey, cell.columnKey]), cell]));
+  return (
+    <section className="card analysis-segment-list" aria-label={`Cross-tab of ${result.rowBy.label} by ${result.columnBy.label}`}>
+      <header className="analysis-segment-result-head">
+        <div>
+          <h2>{result.rowBy.label} × {result.columnBy.label}</h2>
+          <p className="muted">{result.scope.participantCount} people in selected statuses · one shared scan · row percentages</p>
+        </div>
+      </header>
+      <p className="analysis-disclosure-note">Small groups and combinations of answers can make people identifiable. KQA keeps every cell visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
+      {result.overlapping && <p className="analysis-text-note analysis-cross-tab-note">At least one question uses checkboxes. A person can appear in multiple rows or columns, so counts and percentages can overlap or sum above 100%.</p>}
+      <div className="table-wrap analysis-cross-tab-wrap">
+        <table className="t analysis-cross-tab-table">
+          <caption className="sr">Counts and row percentages for {result.rowBy.label} by {result.columnBy.label}; selected cohort size {result.scope.participantCount}.</caption>
+          <thead><tr>
+            <th scope="col">{result.rowBy.label} ↓ / {result.columnBy.label} →</th>
+            {result.columns.map((column) => <th scope="col" key={column.key}>{column.label}<small>{column.participantCount} in column</small></th>)}
+          </tr></thead>
+          <tbody>{result.rows.map((row) => <tr key={row.key}>
+            <th scope="row">{row.label}<small>{row.participantCount} in row</small></th>
+            {result.columns.map((column) => {
+              const cell = cellByKey.get(JSON.stringify([row.key, column.key]));
+              if (!cell) return <td key={column.key}>—</td>;
+              const percent = cell.rowPercent === null ? "—" : formatPercentage(cell.rowPercent);
+              const statusDetail = compareStatuses
+                ? `Invited ${cell.statusCounts.invited}; in progress ${cell.statusCounts.in_progress}; submitted ${cell.statusCounts.submitted}. `
+                : "";
+              return <td key={column.key} aria-label={`${cell.participantCount} of ${cell.rowDenominator} people in row, ${percent}. ${statusDetail}${cell.disclosureRisk.singletonSegment ? "Singleton cell: one person." : ""}`}>
+                <span>{cell.participantCount} <span className="muted">({percent})</span></span>
+                {compareStatuses && <small>Inv {cell.statusCounts.invited} · Prog {cell.statusCounts.in_progress} · Sub {cell.statusCounts.submitted}</small>}
+                {cell.disclosureRisk.singletonSegment && <small className="analysis-disclosure-flag">1 person</small>}
+              </td>;
+            })}
+          </tr>)}</tbody>
+        </table>
+      </div>
+      <p className="analysis-freshness" role="status">Cross-tab completed {fullTime(result.asOf)} for n={result.scope.participantCount}. Each row percentage uses that row&apos;s participant count as the denominator.</p>
+    </section>
+  );
+}
+
 function SegmentResults({ questions, result, compareStatuses, display }: { questions: Question[]; result: SegmentAnalysisResponse; compareStatuses: boolean; display: Display }) {
   return (
     <section className="card analysis-segment-list" aria-label={`Results grouped by ${result.segmentBy.label}`}>
@@ -464,11 +520,16 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const [compareStatuses, setCompareStatuses] = useState(false);
   const [display, setDisplay] = useState<Display>("chart");
   const [segmentMode, setSegmentMode] = useState(false);
+  const [crossTabMode, setCrossTabMode] = useState(false);
   const [segmentById, setSegmentById] = useState("");
   const [segmentOutcomeIds, setSegmentOutcomeIds] = useState<string[]>([]);
   const [segmentResult, setSegmentResult] = useState<SegmentAnalysisResponse | null>(null);
   const [segmentLoading, setSegmentLoading] = useState(false);
   const [segmentError, setSegmentError] = useState("");
+  const [crossTabColumnId, setCrossTabColumnId] = useState("");
+  const [crossTabResult, setCrossTabResult] = useState<CrossTabAnalysisResponse | null>(null);
+  const [crossTabLoading, setCrossTabLoading] = useState(false);
+  const [crossTabError, setCrossTabError] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<QuestionType | "all">("all");
   const cohort = ANALYTICS_COHORTS.find((item) => item.key === cohortKey) ?? ANALYTICS_COHORTS[0];
@@ -485,6 +546,9 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   }, [data.manifest.questions, search, typeFilter]);
   const segmentQuestions = useMemo(() => data.manifest.questions.filter((question) => SEGMENTABLE_TYPES.has(question.type)), [data.manifest.questions]);
   const segmentQuestion = segmentQuestions.find((question) => question.id === segmentById) ?? segmentQuestions[0];
+  const crossTabColumnQuestions = segmentQuestions.filter((question) => canCrossTabByAnswer(segmentQuestion, question));
+  const crossTabColumnQuestion = crossTabColumnQuestions.find((question) => question.id === crossTabColumnId) ?? crossTabColumnQuestions[0];
+  const canMakeCrossTab = segmentQuestions.some((rowQuestion) => segmentQuestions.some((columnQuestion) => canCrossTabByAnswer(rowQuestion, columnQuestion)));
   const outcomeQuestions = questions.filter((question) => question.id !== segmentQuestion?.id);
   const visibleOutcomeIds = new Set(outcomeQuestions.map((question) => question.id));
   const chosenOutcomeIds = segmentOutcomeIds.filter((id) => visibleOutcomeIds.has(id));
@@ -505,6 +569,17 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     && segmentResult.scope.statuses.length === selectedStatuses.length
     && segmentResult.scope.statuses.every((status, index) => status === selectedStatuses[index])
     ? segmentResult
+    : null;
+  const currentCrossTabResult = crossTabResult
+    && crossTabResult.interviewId === data.interview.id
+    && crossTabResult.surveyVersion === data.interview.currentVersion
+    && segmentQuestion
+    && crossTabColumnQuestion
+    && crossTabResult.rowBy.id === segmentQuestion.id
+    && crossTabResult.columnBy.id === crossTabColumnQuestion.id
+    && crossTabResult.scope.statuses.length === selectedStatuses.length
+    && crossTabResult.scope.statuses.every((status, index) => status === selectedStatuses[index])
+    ? crossTabResult
     : null;
   const segmentResultsPending = segmentMode && !segmentError && selectedOutcomeQuestions.length > 0 && !currentSegmentResult;
   const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
@@ -536,8 +611,20 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     surveyVersion: data.interview.currentVersion,
     asOf: segmentMode ? currentSegmentResult?.asOf : data.analysis?.asOf,
   }), [activeExportItems, cohortLabel, data.interview.id, data.interview.currentVersion, data.analysis?.asOf, segmentMode, currentSegmentResult?.asOf]);
+  const crossTabCsv = currentCrossTabResult ? buildAnswerCrossTabCsv(currentCrossTabResult, {
+    interviewId: data.interview.id,
+    surveyVersion: data.interview.currentVersion,
+    asOf: currentCrossTabResult.asOf,
+    rowQuestionLabel: currentCrossTabResult.rowBy.label,
+    columnQuestionLabel: currentCrossTabResult.columnBy.label,
+  }) : "";
+  const activeCsv = crossTabMode ? crossTabCsv : csv;
+  const exportReady = crossTabMode ? !!currentCrossTabResult : segmentMode ? !!currentSegmentResult : !!questions.length;
   const submitted = cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : 0;
   const inProgress = cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : 0;
+  const selectedParticipantCount = compareStatuses
+    ? statusCounts.invited + statusCounts.in_progress + statusCounts.submitted
+    : cohortCount;
 
   function toggleStatus(status: ParticipantStatus, checked: boolean) {
     const next = checked ? [...cohort.statuses, status] : cohort.statuses.filter((item) => item !== status);
@@ -557,7 +644,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   }
 
   function downloadCsv() {
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob([activeCsv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = makeDownloadName(data.interview.name);
@@ -603,6 +690,47 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     })();
     return () => controller.abort();
   }, [segmentMode, segmentQuestion?.id, selectedOutcomeIdsParam, data.interview.id, data.interview.currentVersion, selectedStatusesParam, compareStatuses]);
+
+  useEffect(() => {
+    if (!crossTabMode || !segmentQuestion || !crossTabColumnQuestion) {
+      setCrossTabResult(null);
+      setCrossTabError("");
+      setCrossTabLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const query = new URLSearchParams({
+      surveyVersion: String(data.interview.currentVersion),
+      segmentBy: segmentQuestion.id,
+      crossTabWith: crossTabColumnQuestion.id,
+      statuses: selectedStatusesParam,
+    });
+    setCrossTabResult(null);
+    setCrossTabError("");
+    setCrossTabLoading(true);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/admin/interviews/${encodeURIComponent(data.interview.id)}/analysis?${query}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = await response.json().catch(() => null) as (CrossTabAnalysisResponse & { ok?: boolean; error?: string }) | null;
+        if (!response.ok || !body?.ok) throw new Error(body?.error || "Could not load the cross-tab. Try again.");
+        if (body.interviewId !== data.interview.id || body.surveyVersion !== data.interview.currentVersion
+          || body.rowBy.id !== segmentQuestion.id || body.columnBy.id !== crossTabColumnQuestion.id) {
+          throw new Error("The survey changed while analysis loaded. Reload the interview before viewing or exporting these results.");
+        }
+        setCrossTabResult(body);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setCrossTabError(error instanceof Error ? error.message : "Could not load the cross-tab.");
+      } finally {
+        if (!controller.signal.aborted) setCrossTabLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [crossTabMode, segmentQuestion?.id, crossTabColumnQuestion?.id, data.interview.id, data.interview.currentVersion, selectedStatusesParam]);
 
   const groups = useMemo(() => {
     const sections = data.manifest.sections ?? [];
@@ -657,8 +785,9 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         </div>
         <div className="analysis-control-footer">
           <div className="seg" role="group" aria-label="Analysis view">
-            <button type="button" aria-pressed={!segmentMode} onClick={() => setSegmentMode(false)}>Question summaries</button>
-            <button type="button" aria-pressed={segmentMode} disabled={!segmentQuestions.length} onClick={() => setSegmentMode(true)}>Break down by answer</button>
+            <button type="button" aria-pressed={!segmentMode && !crossTabMode} onClick={() => { setSegmentMode(false); setCrossTabMode(false); }}>Question summaries</button>
+            <button type="button" aria-pressed={segmentMode} disabled={!segmentQuestions.length} onClick={() => { setCrossTabMode(false); setSegmentMode(true); }}>Break down by answer</button>
+            <button type="button" aria-pressed={crossTabMode} disabled={!canMakeCrossTab} onClick={() => { setSegmentMode(false); setCrossTabMode(true); }}>Cross-tab answers</button>
           </div>
           <div className="seg" role="group" aria-label="Cohort view">
             <button type="button" aria-pressed={!compareStatuses} onClick={() => setCompareStatuses(false)}>One cohort</button>
@@ -683,8 +812,8 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
             <button type="button" aria-pressed={display === "table"} onClick={() => setDisplay("table")}>Table</button>
           </div>
           <div className="row wrap analysis-export-actions">
-            <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => csv} disabled={segmentMode ? !currentSegmentResult : !questions.length} />
-            <button type="button" className="btn sm" onClick={downloadCsv} disabled={segmentMode ? !currentSegmentResult : !questions.length}><Icon name="download" size={14} /> Download CSV</button>
+            <CopyButton className="btn sm" label="Copy CSV" done="Copied" getText={() => activeCsv} disabled={!exportReady} />
+            <button type="button" className="btn sm" onClick={downloadCsv} disabled={!exportReady}><Icon name="download" size={14} /> Download CSV</button>
           </div>
         </div>
         {segmentMode && <div className="analysis-segment-controls">
@@ -696,6 +825,8 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
               setSegmentOutcomeIds((current) => current.filter((id) => id !== nextSegmentId));
               setSegmentResult(null);
               setSegmentError("");
+              setCrossTabResult(null);
+              setCrossTabError("");
             }}>
               {segmentQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
             </select>
@@ -722,11 +853,38 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
             </div>
           </fieldset>
         </div>}
+        {crossTabMode && <div className="analysis-segment-controls">
+          <div className="field">
+            <label htmlFor="analysis-cross-tab-row">Row question</label>
+            <select id="analysis-cross-tab-row" className="select" value={segmentQuestion?.id ?? ""} onChange={(event) => {
+              setSegmentById(event.target.value);
+              setSegmentResult(null);
+              setCrossTabResult(null);
+              setSegmentError("");
+              setCrossTabError("");
+            }}>
+              {segmentQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="analysis-cross-tab-column">Column question</label>
+            <select id="analysis-cross-tab-column" className="select" value={crossTabColumnQuestion?.id ?? ""} onChange={(event) => {
+              setCrossTabColumnId(event.target.value);
+              setCrossTabResult(null);
+              setCrossTabError("");
+            }}>
+              {crossTabColumnQuestions.map((question) => <option key={question.id} value={question.id}>{question.label}</option>)}
+            </select>
+            <span className="hint">Each question is limited to {MAX_CROSSTAB_DIMENSION_GROUPS} groups and the matrix to {MAX_CROSSTAB_CELLS} cells.</span>
+          </div>
+        </div>}
       </section>
 
       <p className="muted analysis-result-count" aria-live="polite">{segmentMode
         ? segmentLoading || segmentResultsPending ? "Calculating answer groups…" : `${currentSegmentResult?.segments.length ?? 0} answer groups · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`
-        : `Showing ${questions.length} of ${data.manifest.questions.length} questions · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`}</p>
+        : crossTabMode
+          ? crossTabLoading ? "Calculating cross-tab…" : `${currentCrossTabResult?.cells.length ?? 0} cells · ${selectedParticipantCount} ${selectedParticipantCount === 1 ? "person" : "people"} in this cohort`
+          : `Showing ${questions.length} of ${data.manifest.questions.length} questions · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`}</p>
       {segmentMode ? <>
         {!segmentQuestions.length && <div className="card empty"><h3>No categorical questions to segment by</h3><p>Add a single-choice, dropdown, checkbox, or scale question to define answer groups.</p></div>}
         {!selectedOutcomeQuestions.length && segmentQuestions.length > 0 && <div className="card empty"><h3>No outcome questions match</h3><p>Change the search or question type filter, or choose a different segmentation question.</p></div>}
@@ -737,6 +895,12 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           <p className="analysis-freshness" role="status">Segment analysis completed {fullTime(currentSegmentResult.asOf)} for n={currentSegmentResult.scope.participantCount}. All selected outcome summaries share one live scan.</p>
           <SegmentResults questions={selectedOutcomeQuestions} result={currentSegmentResult} compareStatuses={compareStatuses} display={display} />
         </>}
+      </> : crossTabMode ? <>
+        {!canMakeCrossTab && <div className="card empty"><h3>No compatible question pair</h3><p>Choose two different single-choice, dropdown, checkbox, or bounded scale questions with at most {MAX_CROSSTAB_DIMENSION_GROUPS} groups each and no more than {MAX_CROSSTAB_CELLS} cells.</p></div>}
+        {canMakeCrossTab && !crossTabColumnQuestions.length && <div className="card empty"><h3>No compatible column for this row</h3><p>Choose another row question with a smaller answer set.</p></div>}
+        {(crossTabLoading || (!crossTabError && !currentCrossTabResult && crossTabColumnQuestions.length > 0)) && <p className="card analysis-segment-message" role="status">Calculating cross-tab…</p>}
+        {crossTabError && <p className="card analysis-segment-message question-warning" role="alert">{crossTabError}</p>}
+        {currentCrossTabResult && <CrossTabResults result={currentCrossTabResult} compareStatuses={compareStatuses} />}
       </> : groups.length ? groups.map((group) => (
         <section key={group.id} className="stack" style={{ gap: 10 }}>
           <h2 className="section-title">{group.title}</h2>

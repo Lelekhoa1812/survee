@@ -107,6 +107,39 @@ describe("interview answer-segmentation route", () => {
     expect(body.methodology.join(" ")).toContain("All selected outcome summaries");
   });
 
+  it("returns an aggregate two-question cross-tab in one projected scan", async () => {
+    const response = await GET(request("segmentBy=fit&crossTabWith=confidence"), { params: Promise.resolve({ id: "interview" }) });
+    const body = await response.json() as {
+      ok: boolean; rowBy: { id: string }; columnBy: { id: string };
+      scope: { participantCount: number; statusCounts: Record<string, number> };
+      rows: { key: string; label: string; participantCount: number }[];
+      columns: { key: string; label: string; participantCount: number }[];
+      cells: { rowKey: string; columnKey: string; participantCount: number; rowDenominator: number; rowPercent: number | null; disclosureRisk: { singletonSegment: boolean } }[];
+      overlapping: boolean; methodology: string[];
+    };
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, rowBy: { id: "fit" }, columnBy: { id: "confidence" }, scope: { participantCount: 3, statusCounts: { invited: 1, in_progress: 1, submitted: 1 } }, overlapping: false });
+    const yes = body.rows.find((row) => row.key === "answer:yes")!;
+    const high = body.columns.find((column) => column.key === "answer:high")!;
+    expect(body.cells.find((cell) => cell.rowKey === yes.key && cell.columnKey === high.key)).toMatchObject({ participantCount: 1, rowDenominator: 1, rowPercent: 100, disclosureRisk: { singletonSegment: true } });
+    expect(body.cells.find((cell) => cell.rowKey === "answer:no" && cell.columnKey === high.key)).toMatchObject({ participantCount: 0, rowDenominator: 0, rowPercent: null });
+    expect(state.iterate).toHaveBeenCalledOnce();
+    expect(state.iterate).toHaveBeenCalledWith("interview", ["fit", "confidence"], { statuses: ["invited", "in_progress", "submitted"] });
+    expect(body.methodology.join(" ")).toContain("No minimum group threshold is applied");
+    expect(JSON.stringify(body)).not.toContain("private note");
+    expect(JSON.stringify(body)).not.toContain("retired");
+  });
+
+  it("rejects invalid, duplicate, and unsupported cross-tab dimensions before scanning", async () => {
+    const duplicate = await GET(request("segmentBy=fit&crossTabWith=fit"), { params: Promise.resolve({ id: "interview" }) });
+    expect(duplicate.status).toBe(400);
+    const unsupported = await GET(request("segmentBy=budget&crossTabWith=fit"), { params: Promise.resolve({ id: "interview" }) });
+    expect(unsupported.status).toBe(400);
+    const duplicateParameter = await GET(request("segmentBy=fit&crossTabWith=confidence&crossTabWith=budget"), { params: Promise.resolve({ id: "interview" }) });
+    expect(duplicateParameter.status).toBe(400);
+    expect(state.iterate).not.toHaveBeenCalled();
+  });
+
   it("rejects free-form numeric dimensions and self-outcomes before scanning participants", async () => {
     const invalidDimension = await GET(request("segmentBy=budget&questionId=fit"), { params: Promise.resolve({ id: "interview" }) });
     expect(invalidDimension.status).toBe(400);

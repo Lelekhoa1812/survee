@@ -33,6 +33,36 @@ export interface AnswerSegmentAnalysis {
   segments: AnswerSegmentGroup[];
 }
 
+export interface AnswerCrossTabValue {
+  key: string;
+  kind: AnswerSegmentKind;
+  value?: string;
+  label: string;
+  participantCount: number;
+  statusCounts: Record<ParticipantStatus, number>;
+}
+
+export interface AnswerCrossTabCell {
+  rowKey: string;
+  columnKey: string;
+  participantCount: number;
+  rowDenominator: number;
+  rowPercent: number | null;
+  statusCounts: Record<ParticipantStatus, number>;
+  disclosureRisk: AnswerSegmentDisclosureRisk;
+}
+
+export interface AnswerCrossTabAnalysis {
+  asOf: string;
+  statuses: ParticipantStatus[];
+  participantCount: number;
+  statusCounts: Record<ParticipantStatus, number>;
+  rows: AnswerCrossTabValue[];
+  columns: AnswerCrossTabValue[];
+  cells: AnswerCrossTabCell[];
+  overlapping: boolean;
+}
+
 interface SegmentDefinition {
   key: string;
   kind: AnswerSegmentKind;
@@ -48,6 +78,9 @@ interface MutableSegment extends SegmentDefinition {
 }
 
 const MAX_SCALE_SEGMENT_VALUES = LIMITS.scaleSpanMax + 1;
+/** Bounds the matrix and per-person work, including the no-answer and unmapped groups. */
+export const MAX_CROSSTAB_CELLS = 400;
+export const MAX_CROSSTAB_DIMENSION_GROUPS = 20;
 
 function hasBoundedScaleSegments(question: Question): boolean {
   const bounds = scaleBounds(question);
@@ -82,6 +115,112 @@ function answerSegments(question: Question, respondent: CohortAnalyticsResponden
     return Array.isArray(validation.value) ? validation.value.map((value) => `answer:${value}`) : ["special:unmapped"];
   }
   return [`answer:${String(validation.value)}`];
+}
+
+function crosstabCellKey(rowKey: string, columnKey: string): string {
+  return JSON.stringify([rowKey, columnKey]);
+}
+
+/**
+ * Count every answer pair in a two-question cross-tab. Checkbox dimensions deliberately overlap;
+ * each person contributes once per distinct answer pair. No raw or free-form answer is emitted.
+ */
+export async function summarizeAnswerCrossTab(
+  rowQuestion: Question,
+  columnQuestion: Question,
+  respondents: AsyncIterable<CohortAnalyticsRespondent>,
+  statuses: ParticipantStatus[] = [...ANALYTICS_STATUSES],
+): Promise<AnswerCrossTabAnalysis> {
+  if (rowQuestion.id === columnQuestion.id) throw new Error("Choose two different questions for a cross-tab.");
+  if (!canSegmentByAnswer(rowQuestion)) throw new Error(answerSegmentationError(rowQuestion));
+  if (!canSegmentByAnswer(columnQuestion)) throw new Error(answerSegmentationError(columnQuestion));
+  if (!canCrossTabByAnswer(rowQuestion, columnQuestion)) {
+    throw new Error(answerCrossTabError(rowQuestion, columnQuestion));
+  }
+
+  const rowGroups = definitions(rowQuestion).map((definition) => ({
+    ...definition, participantCount: 0, statusCounts: { invited: 0, in_progress: 0, submitted: 0 },
+  }));
+  const columnGroups = definitions(columnQuestion).map((definition) => ({
+    ...definition, participantCount: 0, statusCounts: { invited: 0, in_progress: 0, submitted: 0 },
+  }));
+  const rowByKey = new Map(rowGroups.map((group) => [group.key, group]));
+  const columnByKey = new Map(columnGroups.map((group) => [group.key, group]));
+  const counts = new Map<string, { participantCount: number; statusCounts: Record<ParticipantStatus, number> }>();
+  const statusCounts: Record<ParticipantStatus, number> = { invited: 0, in_progress: 0, submitted: 0 };
+
+  for await (const respondent of respondents) {
+    statusCounts[respondent.status] += 1;
+    const rowKeys = [...new Set(answerSegments(rowQuestion, respondent))];
+    const columnKeys = [...new Set(answerSegments(columnQuestion, respondent))];
+    for (const key of rowKeys) {
+      const group = rowByKey.get(key);
+      if (!group) continue;
+      group.participantCount += 1;
+      group.statusCounts[respondent.status] += 1;
+    }
+    for (const key of columnKeys) {
+      const group = columnByKey.get(key);
+      if (!group) continue;
+      group.participantCount += 1;
+      group.statusCounts[respondent.status] += 1;
+    }
+    for (const rowKey of rowKeys) for (const columnKey of columnKeys) {
+      const key = crosstabCellKey(rowKey, columnKey);
+      const cell = counts.get(key) ?? { participantCount: 0, statusCounts: { invited: 0, in_progress: 0, submitted: 0 } };
+      cell.participantCount += 1;
+      cell.statusCounts[respondent.status] += 1;
+      counts.set(key, cell);
+    }
+  }
+
+  const rows = rowGroups.filter((group) => group.kind === "answer" || group.participantCount > 0);
+  const columns = columnGroups.filter((group) => group.kind === "answer" || group.participantCount > 0);
+  const cells = rows.flatMap((row) => columns.map((column): AnswerCrossTabCell => {
+    const count = counts.get(crosstabCellKey(row.key, column.key));
+    const participantCount = count?.participantCount ?? 0;
+    const rowDenominator = row.participantCount;
+    return {
+      rowKey: row.key,
+      columnKey: column.key,
+      participantCount,
+      rowDenominator,
+      rowPercent: rowDenominator ? participantCount / rowDenominator * 100 : null,
+      statusCounts: count?.statusCounts ?? { invited: 0, in_progress: 0, submitted: 0 },
+      disclosureRisk: {
+        singletonSegment: participantCount === 1,
+        singletonStatusGroups: statuses.filter((status) => count?.statusCounts[status] === 1),
+      },
+    };
+  }));
+
+  return {
+    asOf: new Date().toISOString(),
+    statuses: [...statuses],
+    participantCount: statuses.reduce((count, status) => count + statusCounts[status], 0),
+    statusCounts,
+    rows,
+    columns,
+    cells,
+    overlapping: rowQuestion.type === "multi" || columnQuestion.type === "multi",
+  };
+}
+
+export function canCrossTabByAnswer(rowQuestion: Question | undefined, columnQuestion: Question | undefined): boolean {
+  if (!rowQuestion || !columnQuestion || rowQuestion.id === columnQuestion.id
+    || !canSegmentByAnswer(rowQuestion) || !canSegmentByAnswer(columnQuestion)) return false;
+  const rowGroups = definitions(rowQuestion).length;
+  const columnGroups = definitions(columnQuestion).length;
+  return rowGroups <= MAX_CROSSTAB_DIMENSION_GROUPS
+    && columnGroups <= MAX_CROSSTAB_DIMENSION_GROUPS
+    && rowGroups * columnGroups <= MAX_CROSSTAB_CELLS;
+}
+
+export function answerCrossTabError(rowQuestion: Question | undefined, columnQuestion: Question | undefined): string {
+  if (rowQuestion?.id === columnQuestion?.id && rowQuestion) return "Choose two different questions for a cross-tab.";
+  if (!canSegmentByAnswer(rowQuestion)) return answerSegmentationError(rowQuestion);
+  if (!canSegmentByAnswer(columnQuestion)) return answerSegmentationError(columnQuestion);
+  return `Cross-tabs support at most ${MAX_CROSSTAB_DIMENSION_GROUPS} groups per question and ${MAX_CROSSTAB_CELLS} answer cells, including no-answer and unmapped groups. Choose questions with fewer answer options.`;
 }
 
 function accumulators(questions: Question[]): Map<string, QuestionSummaryAccumulator> {
