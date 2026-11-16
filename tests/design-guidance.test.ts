@@ -5,10 +5,18 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/13");
+    expect(guidance.policyVersion).toBe("kqa-design/14");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
+    expect(guidance.designPlan.output.reviewEvidenceMatrix.required).toBe(true);
+    expect(guidance.designPlan.output.reviewEvidenceMatrix.columns.map((column) => column.name)).toEqual([
+      "surfaceRoute", "stateTheme", "viewportInputMethod", "criterion", "methodTool", "observedResult", "evidenceReference", "limitationUntestedReason",
+    ]);
+    expect(guidance.designPlan.output.reviewEvidenceMatrix.starterSamples.join(" ")).toContain("Reflow at 320 CSS px");
+    expect(guidance.designPlan.output.reviewEvidenceMatrix.instructions.join(" ")).toContain("Do not omit untested samples");
+    expect(guidance.designPlan.output.reviewEvidenceMatrix.instructions.join(" ")).toContain("respondent names, answers, private links");
+    expect(guidance.reviewChecklist.join(" ")).toContain("one QA evidence row per selected sample");
     expect(guidance.designPlan.guardrails.join(" ")).toContain("WCAG 2.2 AA");
     expect(guidance.designPlan.guardrails.join(" ")).toContain("subjective taste heuristics");
     expect(guidance.designPlan.steps.join(" ")).toContain("could fit almost any unrelated product");
@@ -17,6 +25,7 @@ describe("design guidance package", () => {
     expect(guidance.designPlan.steps.join(" ")).toContain("call extract_design_profile");
     expect(guidance.designPlan.steps.join(" ")).toContain("Never fetch an arbitrary stylesheet URL");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("representative sample");
+    expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("one QA evidence row");
     expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
     expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("realistic, neutral tasks");
     expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("label usability as untested");

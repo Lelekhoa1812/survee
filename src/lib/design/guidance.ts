@@ -25,6 +25,7 @@ const ACCESSIBILITY_EVALUATION_METHOD = {
     "Explore the product's essential functionality and identify representative views, states, and complete task paths, including important branches and errors.",
     "Select and record a representative sample; include different content types, interaction patterns, and process branches rather than relying on a single screenshot.",
     "Evaluate each selected sample against the chosen WCAG criteria using appropriate automated and manual checks. Run npm run a11y:audit at desktop and 320 CSS px for public routes. For the host console and respondent flow, use --authenticated with a disposable local account, optional interview/respondent fixture ids, and --report to save a privacy-minimized JSON record; manually inspect interactive states and record each method's evidence and limits.",
+    "For every selected sample, create one QA evidence row with its route, state/theme, viewport and input method, criterion, method/tool, observed result, evidence reference, and limitations. Mark checks that were not run as untested instead of omitting them; never include respondent personal data in evidence references.",
     "Report the scope, sample, methods, findings, and unresolved gaps. Do not claim full-product conformance from a static scan, checklist, or unrepresentative sample.",
   ],
 } as const;
@@ -59,6 +60,7 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire", "host", "analytics"], text: "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality." },
   { surfaces: ["host"], text: "Run npm run a11y:audit on representative public routes at desktop and 320 CSS px. Use --authenticated with a disposable local account to include protected host flows, and --report to retain a commit-scoped JSON summary; include interview and respondent fixtures when available. Review every violation and incomplete result, then perform manual keyboard, focus, content, and assistive-technology checks." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "For a conformance evaluation, define the scope, explore essential task paths, select and record representative views, states, and branches, evaluate each against the target criteria, and report findings and remaining gaps." },
+  { surfaces: ["questionnaire", "host", "analytics"], text: "Keep one QA evidence row per selected sample with route, state/theme, viewport/input method, criterion, method/tool, observed result, evidence reference, and limitations; mark unrun checks as untested and omit respondent personal data." },
 ];
 
 export const DESIGN_REVIEW_CHECKLIST = REVIEW_CHECKLIST_ITEMS.map(({ text }) => text);
@@ -95,17 +97,44 @@ const DESIGN_PLAN = {
     "Use motion only when it clarifies a user action or state change; preserve the same meaning with prefers-reduced-motion enabled.",
     "For a new or materially changed flow, plan task-based usability sessions with representative users. Define realistic tasks and success criteria, then observe completion, hesitation, errors, recovery, and misunderstandings. If sessions are not feasible, identify usability as untested.",
     "Build, then critique against the brief and review checklist. Inspect rendered narrow and wide layouts, keyboard operation, focus, contrast, and relevant non-happy-path states. When sessions are run, report the represented users, tasks, success criteria, observations, and limits; do not imply a session occurred when it did not.",
-    "For a WCAG conformance evaluation, follow the accessibility evaluation methodology below: define scope, explore essential functionality, select representative views and states, evaluate the sample against the target criteria, and document the findings and limits.",
+    "For a WCAG conformance evaluation, follow the accessibility evaluation methodology below: define scope, explore essential functionality, select representative views and states, evaluate the sample against the target criteria, and document the findings and limits in the QA evidence matrix.",
   ],
   accessibilityEvaluationMethodology: ACCESSIBILITY_EVALUATION_METHOD,
   taskBasedUsabilityMethodology: TASK_BASED_USABILITY_METHOD,
   output: {
     fields: ["briefSummary", "visualDirection", "tokenMapping", "designProfileProposalAndReview", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
-    evidenceRule: "State concrete checks and their results. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality. Mark user research as untested unless sessions with relevant participants were actually observed.",
+    reviewEvidenceMatrix: {
+      required: true,
+      columns: [
+        { name: "surfaceRoute", required: true, description: "Product surface and route or questionnaire step reviewed." },
+        { name: "stateTheme", required: true, description: "Interaction state and theme, such as validation error in dark mode." },
+        { name: "viewportInputMethod", required: true, description: "Viewport size plus input method, such as 320 CSS px with keyboard." },
+        { name: "criterion", required: true, description: "Specific WCAG criterion or product review question." },
+        { name: "methodTool", required: true, description: "Manual procedure, automated tool, assistive technology, or research method." },
+        { name: "observedResult", required: true, description: "Observed outcome, or an explicit statement that the check was not run." },
+        { name: "evidenceReference", required: true, description: "Test/report artifact, screenshot reference, or commit-scoped record; use none when untested." },
+        { name: "limitationUntestedReason", required: true, description: "Known limitation or reason the check was not run." },
+      ],
+      starterSamples: [
+        "Questionnaire validation error at a required field",
+        "Host or analytics loading and success states",
+        "Keyboard focus and overlay or dialog behavior",
+        "Reduced-motion preference enabled",
+        "Dark theme with representative controls and text",
+        "Reflow at 320 CSS px with long content",
+      ],
+      instructions: [
+        "Create one row for every selected sample and criterion; include applicable starter samples or explain why they are out of scope.",
+        "Distinguish the method performed from its observed result. An automated pass is evidence only for the checks that tool covers.",
+        "Do not omit untested samples: set the result to untested, cite no evidence, and explain why.",
+        "Use artifact references without respondent names, answers, private links, credentials, or other personal data.",
+      ],
+    },
+    evidenceRule: "State concrete checks and their results in the required reviewEvidenceMatrix. A proposed plan, static check, or screenshot alone does not prove full WCAG conformance, usability, or visual quality. Mark user research as untested unless sessions with relevant participants were actually observed.",
   },
   guardrails: [
     "WCAG 2.2 AA is the accessibility target; subjective taste heuristics never override it or the user's explicit direction.",
-    "Do not claim full-product WCAG conformance based only on a static scan, checklist, screenshot, or unrepresentative sample; record the evaluated scope, sample, criteria, findings, and unresolved gaps.",
+    "Do not claim full-product WCAG conformance based only on a static scan, checklist, screenshot, or unrepresentative sample; record the evaluated scope, sample, criteria, findings, and unresolved gaps in the QA evidence matrix.",
     "Do not add motion, gradients, cards, display type, or decorative labels merely because a design heuristic suggests them; use only when justified by this brief and task.",
     "Treat common dashboard and landing-page treatments as choices to justify, not a default kit. Let the user's supplied direction override any subjective anti-pattern heuristic.",
     "Do not invent brand facts or claim user research occurred when it did not.",
@@ -175,7 +204,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/13",
+    policyVersion: "kqa-design/14",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
