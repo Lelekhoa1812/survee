@@ -17,7 +17,8 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [deleting, setDeleting] = useState<ImageAssetSummary | null>(null);
   const [confirmName, setConfirmName] = useState("");
@@ -40,34 +41,44 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
   useEffect(() => { void load(); }, [cursor]);
 
   async function upload() {
-    if (!file || busy) return;
-    if (file.size > MAX_IMAGE_BYTES) {
-      toast(`Each image must be ${MAX_IMAGE_BYTES / 1024 / 1024} MB or smaller.`, "err");
-      return;
-    }
-    const form = new FormData();
-    form.set("file", file);
-    form.set("name", name.trim() || file.name);
+    if (!files.length || busy) return;
+    const tooLarge = files.filter((file) => file.size > MAX_IMAGE_BYTES);
+    const uploadable = files.filter((file) => file.size <= MAX_IMAGE_BYTES);
+    const failed = [...tooLarge];
+    const errors = tooLarge.map((file) => `${file.name} exceeds the ${MAX_IMAGE_BYTES / 1024 / 1024} MB per-image limit.`);
+    let saved = 0;
     setBusy(true);
-    try {
-      const response = await fetch("/api/admin/assets", { method: "POST", body: form, credentials: "same-origin" });
-      const data = await response.json().catch(() => ({})) as { asset?: ImageAssetSummary; error?: string };
-      if (!response.ok || !data.asset) {
-        toast(data.error || "The image could not be saved.", "err");
-        return;
+    setUploadProgress(uploadable.length ? { done: 0, total: uploadable.length } : null);
+    for (let index = 0; index < uploadable.length; index += 1) {
+      const file = uploadable[index];
+      setUploadProgress({ done: index + 1, total: uploadable.length });
+      const form = new FormData();
+      form.set("file", file);
+      form.set("name", uploadable.length === 1 ? name.trim() || file.name : file.name);
+      try {
+        const response = await fetch("/api/admin/assets", { method: "POST", body: form, credentials: "same-origin" });
+        const data = await response.json().catch(() => ({})) as { asset?: ImageAssetSummary; error?: string };
+        if (!response.ok || !data.asset) {
+          failed.push(file);
+          errors.push(`${file.name}: ${data.error || "The image could not be saved."}`);
+          continue;
+        }
+        saved += 1;
+      } catch {
+        failed.push(file);
+        errors.push(`${file.name}: Could not reach the server. Check your connection and try again.`);
       }
-      setName("");
-      setFile(null);
-      setFileInputKey((current) => current + 1);
-      const wasFirstPage = cursor === null;
-      setCursors([null]);
-      toast("Image saved to the workspace library.");
-      if (wasFirstPage) await load();
-    } catch {
-      toast("Could not reach the server. Check your connection and try again.", "err");
-    } finally {
-      setBusy(false);
     }
+    setName("");
+    setFiles(failed);
+    setFileInputKey((current) => current + 1);
+    setUploadProgress(null);
+    setBusy(false);
+    const wasFirstPage = cursor === null;
+    setCursors([null]);
+    if (saved > 0) toast(`${saved} image${saved === 1 ? "" : "s"} saved to the workspace library.`);
+    if (errors.length > 0) toast(`${errors.slice(0, 2).join(" ")}${errors.length > 2 ? ` And ${errors.length - 2} more failed.` : ""} Failed files remain selected for retry.`, "err");
+    if (wasFirstPage && saved > 0) await load();
   }
 
   async function rename(asset: ImageAssetSummary, value: string) {
@@ -106,7 +117,7 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
           <Icon name="upload" size={16} />
           <div>
             <h2>Workspace images</h2>
-            <div className="sub">Store images once and reuse their URL in any questionnaire. There is no image-count limit.</div>
+            <div className="sub">Store images once and reuse their URL in any questionnaire. Select multiple files to upload them in sequence; there is no image-count limit.</div>
           </div>
         </div>
         <div className="card-pad stack">
@@ -114,16 +125,16 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
           {!canManage && <p className="hint" style={{ margin: 0 }}>Member access is view-only. Ask a workspace owner or admin to add, rename, or remove images.</p>}
           {canManage && <div className="row wrap" style={{ alignItems: "end" }}>
             <label className="field" style={{ flex: "1 1 180px", margin: 0 }}>
-              <span>Image name</span>
-              <input className="input" value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Use file name if blank" />
+              <span>Image name {files.length > 1 ? "(single image only)" : ""}</span>
+              <input className="input" value={name} maxLength={120} disabled={files.length > 1} onChange={(event) => setName(event.target.value)} placeholder="Use file name if blank" />
             </label>
             <label className="field" style={{ flex: "2 1 260px", margin: 0 }}>
-              <span>Image file</span>
-              <input key={fileInputKey} className="input" type="file" accept={IMAGE_ASSET_ACCEPT} onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+              <span>Image files</span>
+              <input key={fileInputKey} className="input" type="file" accept={IMAGE_ASSET_ACCEPT} multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
             </label>
-            <button className="btn primary" type="button" disabled={!file || busy} onClick={() => void upload()}>{busy ? <Spinner /> : <Icon name="upload" size={15} />} Save image</button>
+            <button className="btn primary" type="button" disabled={!files.length || busy} onClick={() => void upload()}>{busy ? <Spinner /> : <Icon name="upload" size={15} />} {busy ? `Saving ${uploadProgress?.done ?? 0} of ${uploadProgress?.total ?? files.length}…` : files.length > 1 ? `Save ${files.length} images` : "Save image"}</button>
           </div>}
-          {file && <div className="hint" role="status">Selected {file.name} · {(file.size / 1024).toFixed(0)} KB</div>}
+          {files.length > 0 && <div className="hint" role="status">Selected {files.length === 1 ? `${files[0].name} · ${(files[0].size / 1024).toFixed(0)} KB` : `${files.length} images. They will save one at a time; each image is limited to ${MAX_IMAGE_BYTES / 1024 / 1024} MB.`}</div>}
           <div className="row wrap" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>Saved images</h3>
             <button className="btn sm" type="button" disabled={loading} onClick={() => void load()}>Refresh</button>
