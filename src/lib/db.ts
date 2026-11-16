@@ -1,6 +1,6 @@
 import { MongoClient, type ClientSession, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc } from "./repo/types";
+import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -66,6 +66,9 @@ async function ensureIndexes(d: Db) {
     d.collection("analytics_runs").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "analytics_runs_ttl" }),
     d.collection("analytics_runs").createIndex({ tenantId: 1, slot: 1 }, { unique: true, name: "analytics_runs_tenant_slot" }),
     d.collection("analytics_runs").createIndex({ tenantId: 1, interviewId: 1, createdAt: -1 }, { name: "analytics_runs_interview" }),
+    d.collection("questionnaire_review_drafts").createIndex({ tenantId: 1, interviewId: 1 }, { unique: true, name: "questionnaire_review_by_interview" }),
+    d.collection("questionnaire_review_drafts").createIndex({ reviewIdHash: 1 }, { unique: true, name: "questionnaire_review_id_unique" }),
+    d.collection("questionnaire_review_drafts").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "questionnaire_review_ttl" }),
     d.collection("mail_messages").createIndex({ tenantId: 1, interviewId: 1, sentAt: -1 }, { name: "tenant_mail" }),
     d.collection("api_keys").createIndex({ tenantId: 1, createdAt: -1 }, { name: "tenant_keys" }),
     d.collection("participants").createIndex({ interviewId: 1, createdAt: 1 }, { name: "by_interview" }),
@@ -101,6 +104,7 @@ export const col = {
   participants: async (): Promise<Collection<ParticipantDoc>> => (await db()).collection<ParticipantDoc>("participants"),
   events: async (): Promise<Collection<EventDoc>> => (await db()).collection<EventDoc>("events"),
   analyticsRuns: async (): Promise<Collection<AnalyticsRunDoc>> => (await db()).collection<AnalyticsRunDoc>("analytics_runs"),
+  questionnaireReviewDrafts: async (): Promise<Collection<QuestionnaireReviewDraftDoc>> => (await db()).collection<QuestionnaireReviewDraftDoc>("questionnaire_review_drafts"),
   logins: async (): Promise<Collection<LoginAttemptDoc>> => (await db()).collection<LoginAttemptDoc>("login_attempts"),
   rateLimits: async (): Promise<Collection<RateLimitBucketDoc>> => (await db()).collection<RateLimitBucketDoc>("rate_limits"),
   revoked: async (): Promise<Collection<RevokedSessionDoc>> => (await db()).collection<RevokedSessionDoc>("revoked_sessions"),

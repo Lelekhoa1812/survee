@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 process.env.SESSION_SECRET = "block-patch-test-secret-0123456789";
+process.env.KQA_PUBLIC_URL = "https://kqa.example";
 
 const fixture = readFileSync(new URL("../docs/template/starter.kqa.html", import.meta.url), "utf8");
 const state = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const state = vi.hoisted(() => ({
   currentVersion: 2,
   compatibilityImpact: false,
   publish: vi.fn(async () => ({ version: 3 })),
+  saveReview: vi.fn(async (input: { expiresAt: Date }) => ({ reviewId: "r".repeat(32), expiresAt: input.expiresAt.toISOString() })),
 }));
 
 vi.mock("../src/lib/repo", async () => {
@@ -30,6 +32,7 @@ vi.mock("../src/lib/repo", async () => {
       manifest: checkFixture(fixture).manifest!,
     }) : null),
     publishVersionIfCurrent: state.publish,
+    saveQuestionnaireReviewDraft: state.saveReview,
   };
 });
 
@@ -62,6 +65,8 @@ beforeEach(() => {
   state.compatibilityImpact = false;
   state.publish.mockClear();
   state.publish.mockResolvedValue({ version: 3 });
+  state.saveReview.mockClear();
+  state.saveReview.mockImplementation(async (input) => ({ reviewId: "r".repeat(32), expiresAt: input.expiresAt.toISOString() }));
 });
 
 describe("MCP questionnaire block patch", () => {
@@ -72,8 +77,17 @@ describe("MCP questionnaire block patch", () => {
       ok: true, currentVersion: 2, baseHash, staticValid: true,
       candidateHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       previewToken: expect.any(String),
+      review: { available: true, url: `https://kqa.example/admin/previews/${"r".repeat(32)}`, expiresAt: expect.any(String) },
       operationChanges: [{ op: "add", questionId: "new-q", section: "writing" }],
     });
+    expect(state.saveReview).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: "axion",
+      interviewId,
+      expectedVersion: 2,
+      candidateHash: preview.structuredContent.candidateHash,
+      html: expect.stringContaining('data-kqa="new-q"'),
+      questions: expect.arrayContaining([expect.objectContaining({ id: "new-q", label: "New prompt" })]),
+    }));
     expect(state.publish).not.toHaveBeenCalled();
 
     const applied = await call("apply_questionnaire_block_patch", {
@@ -167,6 +181,15 @@ describe("MCP questionnaire block patch", () => {
     const acknowledged = await call("apply_questionnaire_block_patch", { ...args, acknowledgeCompatibilityImpact: true });
     expect(acknowledged.isError).toBeFalsy();
     expect(state.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a signed preview usable when optional browser-review storage is unavailable", async () => {
+    state.saveReview.mockRejectedValueOnce(new Error("storage unavailable"));
+    const preview = await call("preview_questionnaire_block_patch", { interviewId, operations: [operation] });
+    expect(preview.isError).toBeFalsy();
+    expect(preview.structuredContent.previewToken).toEqual(expect.any(String));
+    expect(preview.structuredContent.review).toEqual({ available: false });
+    expect(state.publish).not.toHaveBeenCalled();
   });
 
   it("rejects cross-tenant and stale previews", async () => {

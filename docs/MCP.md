@@ -82,11 +82,11 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `update_interview` | Rename, notes, open, or close |
 | `delete_interview` | Atomically delete the interview, versions, people, answers, events, analytics runs, and invite history. `confirmName` must match |
 | `upload_survey_version` | Legacy upload for compatible changes; answer-impact findings return a signed preview and require acknowledgement |
-| `preview_questionnaire_version_patch` | Check a complete candidate HTML file against the current version and saved answers; returns a short-lived token and stores nothing |
+| `preview_questionnaire_version_patch` | Check a complete candidate HTML file against the current version and saved answers; returns a short-lived token and browser review link |
 | `apply_questionnaire_version_patch` | Publish a previewed complete HTML file with a signed preview token, version/hash checks, and compatibility acknowledgement |
-| `preview_questionnaire_block_patch` | Preview up to 500 add/update/delete/move operations for marked ordinary questions; preserves unrelated HTML bytes and stores nothing |
+| `preview_questionnaire_block_patch` | Preview up to 500 add/update/delete/move operations for marked ordinary questions; preserves unrelated HTML bytes and returns a browser review link |
 | `apply_questionnaire_block_patch` | Publish the reviewed question block operations with a signed preview token and compatibility acknowledgement |
-| `preview_questionnaire_required_patch` | Preview 1–500 required/optional changes by question ID; edits only manifest booleans and stores nothing |
+| `preview_questionnaire_required_patch` | Preview 1–500 required/optional changes by question ID; edits only manifest booleans and returns a browser review link |
 | `apply_questionnaire_required_patch` | Publish the reviewed required/optional changes with a signed preview token and compatibility acknowledgement |
 | `list_people` | People, optional email, status, progress, mail state, private link |
 | `get_person` | One person |
@@ -103,6 +103,8 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `get_mail_status` | Stored invite result. Does not open the mailbox |
 | `send_invite` | Email one person's private link. One message per call |
 | `check_invite_delivery` | IMAP check of the message id KQA stored. `delivered`, `bounced`, or `unknown` |
+
+When a valid questionnaire preview returns `review.available: true` and `review.url`, open it in a browser already signed in to the same KQA tenant to inspect the exact candidate in the normal sandboxed questionnaire frame. The link expires with the signed preview after 10 minutes; a newer preview for that interview replaces it. The browser session is required because an MCP bearer does not grant web access. The page is read-only; use the matching apply tool to publish. KQA stores only one temporary candidate per tenant and interview, and automatically deletes it after expiry. If `review.available` is false, continue with the structured preview report and signed apply workflow.
 
 `get_design_guidance` is a deterministic instruction package; KQA does not include or call an LLM. Its review checklist is scoped to the requested surface, while `surface: "all"` returns the full checklist. The structured plan distinguishes task-based usability sessions with representative users, cognitive pretesting of question wording, and WCAG evaluation. It asks agents to report user profiles, realistic tasks, success criteria, observed findings, and limitations, or to state that usability was not tested. These research steps require human or agent judgment and are not static checker findings. `audit_questionnaire_design` runs the same static checker used by uploads and returns a questionnaire-specific checklist for rendered review. Static diagnostics cannot observe task completion or verify question quality, contrast, layout, keyboard interaction, motion, or assistive-technology behavior.
 

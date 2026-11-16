@@ -1,5 +1,5 @@
 import type { ObjectId } from "mongodb";
-import type { AnswerMap, Manifest } from "../format/schema";
+import type { AnswerMap, Manifest, Question } from "../format/schema";
 import type { McpCapability } from "../mcp/capabilities";
 
 export type InterviewMode = "single" | "multi";
@@ -165,6 +165,22 @@ export interface AnalyticsRunDoc {
   expiresAt: Date;
   /** Completed aggregate output only; never raw participant records or free-text answers. */
   result: Record<string, unknown>;
+}
+
+/** collection: questionnaire_review_drafts. Candidate HTML exists only for the signed preview window. */
+export interface QuestionnaireReviewDraftDoc {
+  _id: ObjectId;
+  tenantId: string;
+  interviewId: ObjectId;
+  /** SHA-256 of a high-entropy review id. The id itself is returned only once to the MCP caller. */
+  reviewIdHash: string;
+  expectedVersion: number;
+  candidateHash: string;
+  fileName?: string;
+  html: string;
+  questions: Question[];
+  createdAt: Date;
+  expiresAt: Date;
 }
 
 /**

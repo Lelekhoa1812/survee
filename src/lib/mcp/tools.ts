@@ -31,6 +31,7 @@ import {
   recentEvents,
   regenerateToken,
   reopenParticipant,
+  saveQuestionnaireReviewDraft,
   updateInterview,
   updateParticipant,
 } from "../repo";
@@ -50,6 +51,7 @@ import {
   type QuestionnairePreviewFailure,
 } from "../questionnaire-preview";
 import { currentPrincipal } from "../tenant-context";
+import { publicBaseUrl } from "../env";
 import { summarizeQuestionChanges, summarizeSectionChanges } from "../survey-changes";
 import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
@@ -180,6 +182,37 @@ function questionList(manifest: Manifest) {
 
 function createPatchPreviewToken(bindings: Omit<QuestionnairePreviewBindings, "tenantId">) {
   return createQuestionnairePreviewToken(currentPrincipal()?.tenantId, bindings);
+}
+
+async function createQuestionnaireReviewLink(input: {
+  interviewId: string;
+  expectedVersion: number;
+  candidateHash: string;
+  fileName?: string;
+  html: string;
+  questions: NonNullable<Manifest["questions"]>;
+  previewExpiresAt: string;
+}) {
+  const tenantId = currentPrincipal()?.tenantId;
+  if (!tenantId) return { available: false as const };
+  try {
+    const stored = await saveQuestionnaireReviewDraft({
+      tenantId,
+      interviewId: input.interviewId,
+      expectedVersion: input.expectedVersion,
+      candidateHash: input.candidateHash,
+      fileName: input.fileName,
+      html: input.html,
+      questions: input.questions,
+      expiresAt: new Date(input.previewExpiresAt),
+    });
+    const path = `/admin/previews/${stored.reviewId}`;
+    const base = publicBaseUrl();
+    return { available: true as const, url: base.ok ? new URL(path, base.origin).toString() : path, expiresAt: stored.expiresAt };
+  } catch {
+    // Keep the signed MCP preview usable if optional browser-review storage is unavailable.
+    return { available: false as const };
+  }
 }
 
 const verifyPatchPreviewToken = verifyQuestionnairePreviewToken;
@@ -821,7 +854,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_version_patch",
-    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not store or publish anything.",
+    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not publish anything. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview.",
     inputSchema: obj({ interviewId: str, html: str, fileName: str }, ["interviewId", "html"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -851,6 +884,17 @@ const TOOLS: ToolDef[] = [
       if (prepared.survey && prepared.report.ok && !previewToken) {
         return err("Secure preview signing is not configured for this request.", "preview_unavailable");
       }
+      const review = prepared.survey && prepared.report.ok && previewToken
+        ? await createQuestionnaireReviewLink({
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          candidateHash: sha256(candidateHtml),
+          fileName,
+          html: candidateHtml,
+          questions: prepared.report.manifest?.questions ?? [],
+          previewExpiresAt: previewToken.previewExpiresAt,
+        })
+        : null;
       const questionChanges = prepared.report.manifest
         ? summarizeQuestionChanges(current.manifest.questions, prepared.report.manifest.questions)
         : null;
@@ -869,6 +913,7 @@ const TOOLS: ToolDef[] = [
         compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
         compatibilityHash,
         ...(previewToken ?? {}),
+        ...(prepared.survey && prepared.report.ok ? { review: review ?? { available: false } } : {}),
         report: prepared.markdown,
         changes: prepared.report.manifest ? {
           questionCountBefore: current.manifest.questions.length,
@@ -917,7 +962,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_required_patch",
-    description: "Preview a batch of required/optional changes by stable question ID. The server changes only the manifest booleans and preserves every other HTML byte; nothing is stored or published.",
+    description: "Preview a batch of required/optional changes by stable question ID. The server changes only the manifest booleans and preserves every other HTML byte; it does not publish. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview.",
     inputSchema: obj({ interviewId: str, changes: requiredChanges }, ["interviewId", "changes"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -947,6 +992,17 @@ const TOOLS: ToolDef[] = [
       if (prepared.survey && prepared.report.ok && !previewToken) {
         return err("Secure preview signing is not configured for this request.", "preview_unavailable");
       }
+      const review = prepared.survey && prepared.report.ok && previewToken
+        ? await createQuestionnaireReviewLink({
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          candidateHash,
+          fileName: current.fileName,
+          html: candidateHtml,
+          questions: prepared.report.manifest?.questions ?? [],
+          previewExpiresAt: previewToken.previewExpiresAt,
+        })
+        : null;
       const questionsAfter = prepared.report.manifest ? questionList(prepared.report.manifest) : null;
       return ok({
         ok: !!prepared.survey && prepared.report.ok,
@@ -960,6 +1016,7 @@ const TOOLS: ToolDef[] = [
         compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
         compatibilityHash,
         ...(previewToken ?? {}),
+        ...(prepared.survey && prepared.report.ok ? { review: review ?? { available: false } } : {}),
         report: prepared.markdown,
         changes: patched.changes.map((change) => ({
           questionId: change.questionId,
@@ -1097,7 +1154,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_block_patch",
-    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed.`,
+    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview.`,
     inputSchema: obj({ interviewId: str, operations: questionnaireBlockOperations }, ["interviewId", "operations"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1127,6 +1184,17 @@ const TOOLS: ToolDef[] = [
       if (prepared.survey && prepared.report.ok && !previewToken) {
         return err("Secure preview signing is not configured for this request.", "preview_unavailable");
       }
+      const review = prepared.survey && prepared.report.ok && previewToken
+        ? await createQuestionnaireReviewLink({
+          interviewId: id,
+          expectedVersion: interview.currentVersion,
+          candidateHash,
+          fileName: current.fileName,
+          html: candidateHtml,
+          questions: prepared.report.manifest?.questions ?? [],
+          previewExpiresAt: previewToken.previewExpiresAt,
+        })
+        : null;
       const questionsAfter = prepared.report.manifest ? questionList(prepared.report.manifest) : null;
       const questionChanges = prepared.report.manifest
         ? summarizeQuestionChanges(current.manifest.questions, prepared.report.manifest.questions)
@@ -1143,6 +1211,7 @@ const TOOLS: ToolDef[] = [
         compatibilityImpact: hasCompatibilityImpact(prepared.report.diagnostics),
         compatibilityHash,
         ...(previewToken ?? {}),
+        ...(prepared.survey && prepared.report.ok ? { review: review ?? { available: false } } : {}),
         report: prepared.markdown,
         operationChanges: patched.changes,
         questionsBefore: questionList(current.manifest),
