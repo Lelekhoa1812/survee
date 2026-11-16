@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 function safeNext(next?: string): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return "/admin";
-  if (next.startsWith("/admin") || next.startsWith("/oauth/authorize?")) return next;
+  if (next.startsWith("/admin") || next.startsWith("/oauth/authorize?") || /^\/join\?token=[A-Za-z0-9_-]{43}$/.test(next)) return next;
   return "/admin";
 }
 

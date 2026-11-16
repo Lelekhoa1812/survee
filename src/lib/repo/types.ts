@@ -30,17 +30,34 @@ export interface UserDoc {
   legacyBootstrap?: boolean;
   /** Bumped on password reset/change to expire previously issued sessions. */
   authVersion?: number;
+  /** Preferred tenant for the next sign-in; membership is still checked independently. */
+  lastTenantId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/** collection: memberships. Current product accounts have one default tenant; roles are explicit for future team access. */
+/** collection: memberships. One user can belong to several workspaces, with a role in each. */
 export interface MembershipDoc {
   _id: ObjectId;
   tenantId: string;
   userId: ObjectId;
   role: TenantRole;
   createdAt: Date;
+}
+
+/** collection: workspace_invitations. The single pending invite per tenant/email stores only a token hash. */
+export interface WorkspaceInvitationDoc {
+  _id: ObjectId;
+  tenantId: string;
+  email: string;
+  role: "admin" | "member";
+  invitedBy: ObjectId;
+  tokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+  acceptedAt?: Date;
+  acceptedByUserId?: ObjectId;
+  revokedAt?: Date;
 }
 
 /** collection: pending_signups. Passwords are already scrypt-hashed; the one-time token is stored as a SHA-256 hash. */

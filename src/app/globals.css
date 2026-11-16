@@ -65,6 +65,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand small { font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: .02em; }
 .nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
 .topbar .right { flex-shrink: 0; }
+.workspace-switch-label { width: 190px; }
+.topbar .workspace-switch { height: 36px; padding: 0 9px; font-size: 13px; }
 .nav a { padding: 7px 12px; border-radius: 8px; color: var(--ink-2); font-weight: 500; font-size: 14px; white-space: nowrap; }
 .nav a:hover { background: var(--surface-3); color: var(--ink); }
 .nav a[aria-current="page"] { background: var(--surface-3); color: var(--ink); }
@@ -646,6 +648,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
   .topbar-in { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "brand account" "nav nav"; height: auto; min-height: 58px; padding: 8px 12px 0; gap: 2px 8px; }
   .topbar .brand { grid-area: brand; }
   .topbar .right { grid-area: account; justify-self: end; }
+  .workspace-switch-label { width: 145px; }
   .topbar .nav { grid-area: nav; width: 100%; justify-content: space-between; flex: none; padding-bottom: 4px; }
   .brand small { display: none; }
   .nav a { padding: 7px 7px; font-size: 13px; }

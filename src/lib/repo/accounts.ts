@@ -73,11 +73,16 @@ export async function authenticateAccount(emailInput: string, password: string):
   }
   const passwordMatches = await verifyPassword(password, user.passwordHash);
   if (!passwordMatches) return null;
-  const membership = await (await col.memberships()).findOne({ userId: user._id });
-  if (!membership) return null;
-  const tenant = await (await col.tenants()).findOne({ _id: membership.tenantId, status: "active" });
-  if (!tenant) return null;
-  return accountPrincipal(user, membership, tenant);
+  const memberships = await (await col.memberships()).find({ userId: user._id }).sort({ createdAt: 1 }).toArray();
+  const preferred = user.lastTenantId ? memberships.find((item) => item.tenantId === user.lastTenantId) : undefined;
+  const ordered = preferred ? [preferred, ...memberships.filter((item) => item._id.toHexString() !== preferred._id.toHexString())] : memberships;
+  const tenants = await (await col.tenants()).find({ _id: { $in: ordered.map((item) => item.tenantId) }, status: "active" }).toArray();
+  const tenantById = new Map(tenants.map((tenant) => [tenant._id, tenant]));
+  for (const membership of ordered) {
+    const tenant = tenantById.get(membership.tenantId);
+    if (tenant) return accountPrincipal(user, membership, tenant);
+  }
+  return null;
 }
 
 /** Resolve a signed session against persisted membership state so removed users lose access immediately. */
@@ -175,6 +180,7 @@ export async function completeSignup(token: string): Promise<{ ok: true; princip
         email: pending.email,
         passwordHash: pending.passwordHash,
         emailVerifiedAt: new Date(),
+        lastTenantId: pending.tenantId,
         createdAt: pending.createdAt,
         updatedAt: new Date(),
       };
@@ -221,6 +227,8 @@ export async function completeSignup(token: string): Promise<{ ok: true; princip
       if (!membership) throw error;
     }
   }
+  await users.updateOne({ _id: user._id }, { $set: { lastTenantId: pending.tenantId } });
+  user.lastTenantId = pending.tenantId;
   // Claim the verification only after the idempotent account graph exists. If
   // two requests race, only one may activate a session; a failed request can
   // still retry safely before this compare-and-set succeeds.
@@ -280,6 +288,7 @@ export async function bootstrapLegacyAxionOwner(emailInput: string, password: st
       email: AXION_OWNER_EMAIL,
       passwordHash: await hashPassword(password),
       legacyBootstrap: true,
+      lastTenantId: AXION_TENANT_ID,
       createdAt: now,
       updatedAt: now,
     };
@@ -303,6 +312,8 @@ export async function bootstrapLegacyAxionOwner(emailInput: string, password: st
     if (!existingMembership) throw error;
     axionMembership = existingMembership;
   }
+  await users.updateOne({ _id: user._id }, { $set: { lastTenantId: AXION_TENANT_ID } });
+  user.lastTenantId = AXION_TENANT_ID;
   return accountPrincipal(user, axionMembership, axion);
 }
 

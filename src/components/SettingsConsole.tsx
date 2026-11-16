@@ -5,6 +5,7 @@ import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
 import { AccountSettingsPanel } from "./AccountSettingsPanel";
 import { ImageAssetsPanel } from "./ImageAssetsPanel";
+import { WorkspaceMembersPanel } from "./WorkspaceMembersPanel";
 import { DEFAULT_MCP_CAPABILITIES, describeCapabilities, MCP_CAPABILITIES, MCP_CAPABILITY_INFO, type McpCapability } from "@/lib/mcp/capabilities";
 
 interface KeyRow {
@@ -159,6 +160,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
 
       <nav className="settings-section-nav" aria-label="Settings sections">
         {account && <a href="#workspace-account">Workspace account</a>}
+        {canManageKeys && <a href="#workspace-members">Members</a>}
         <a href="#agent-connection">Agent connection</a>
         <a href="#image-assets">Workspace images</a>
         {canManageKeys && <a href="#api-keys">API keys</a>}
@@ -166,6 +168,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
       </nav>
 
       {account && <div id="workspace-account" className="settings-anchor"><AccountSettingsPanel account={account} /></div>}
+      {canManageKeys && <WorkspaceMembersPanel />}
 
       <div id="agent-connection" className="settings-grid settings-anchor">
         <section className="card">

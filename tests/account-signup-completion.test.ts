@@ -41,6 +41,12 @@ vi.mock("../src/lib/db", () => ({
         store.users.push(user);
         return { insertedId: user._id };
       },
+      updateOne: async (query: Record<string, any>, update: Record<string, any>) => {
+        const user = store.users.find((item) => item._id.toHexString() === query._id.toHexString());
+        if (!user) return { matchedCount: 0, modifiedCount: 0 };
+        Object.assign(user, update.$set);
+        return { matchedCount: 1, modifiedCount: 1 };
+      },
     }),
     tenants: async () => ({
       findOne: async (query: Record<string, any>) => store.tenants.find((tenant) => tenant._id === query._id) ?? null,

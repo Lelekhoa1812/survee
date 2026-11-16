@@ -1,6 +1,6 @@
 import { MongoClient, type ClientSession, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc } from "./repo/types";
+import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc, WorkspaceInvitationDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -113,6 +113,9 @@ async function ensureIndexes(d: Db) {
     d.collection("users").createIndex({ email: 1 }, { unique: true, name: "user_email_unique" }),
     d.collection("memberships").createIndex({ tenantId: 1, userId: 1 }, { unique: true, name: "tenant_user_unique" }),
     d.collection("memberships").createIndex({ userId: 1 }, { name: "memberships_by_user" }),
+    d.collection("workspace_invitations").createIndex({ tenantId: 1, email: 1 }, { unique: true, name: "workspace_invite_by_email" }),
+    d.collection("workspace_invitations").createIndex({ tokenHash: 1 }, { unique: true, name: "workspace_invite_token_unique" }),
+    d.collection("workspace_invitations").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "workspace_invite_expiry" }),
     d.collection("pending_signups").createIndex({ tokenHash: 1 }, { unique: true, name: "signup_token_unique" }),
     d.collection("pending_signups").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "signup_expiry" }),
     d.collection("pending_signups").createIndex({ email: 1, createdAt: -1 }, { name: "signups_by_email" }),
@@ -162,6 +165,7 @@ export const col = {
   tenants: async (): Promise<Collection<TenantDoc>> => (await db()).collection<TenantDoc>("tenants"),
   users: async (): Promise<Collection<UserDoc>> => (await db()).collection<UserDoc>("users"),
   memberships: async (): Promise<Collection<MembershipDoc>> => (await db()).collection<MembershipDoc>("memberships"),
+  workspaceInvitations: async (): Promise<Collection<WorkspaceInvitationDoc>> => (await db()).collection<WorkspaceInvitationDoc>("workspace_invitations"),
   signups: async (): Promise<Collection<PendingSignupDoc>> => (await db()).collection<PendingSignupDoc>("pending_signups"),
   imageAssets: async (): Promise<Collection<ImageAssetDoc>> => (await db()).collection<ImageAssetDoc>("image_assets"),
   emailChanges: async (): Promise<Collection<PendingEmailChangeDoc>> => (await db()).collection<PendingEmailChangeDoc>("pending_email_changes"),

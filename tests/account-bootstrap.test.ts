@@ -20,6 +20,12 @@ vi.mock("../src/lib/db", () => ({
         store.users.push(user);
         return { insertedId: user._id };
       },
+      updateOne: async (query: Record<string, any>, update: Record<string, any>) => {
+        const user = store.users.find((item) => item._id.toHexString() === query._id.toHexString());
+        if (!user) return { matchedCount: 0, modifiedCount: 0 };
+        Object.assign(user, update.$set);
+        return { matchedCount: 1, modifiedCount: 1 };
+      },
       deleteOne: async (query: Record<string, any>) => {
         if (store.failUserDelete) throw new Error("user rollback failed");
         const index = store.users.findIndex((user) => user._id.toHexString() === query._id.toHexString());
@@ -30,6 +36,7 @@ vi.mock("../src/lib/db", () => ({
     }),
     tenants: async () => ({
       findOne: async (query: Record<string, any>) => store.tenants.find((tenant) => tenant._id === query._id && (!query.status || tenant.status === query.status)) ?? null,
+      find: (query: Record<string, any>) => ({ toArray: async () => store.tenants.filter((tenant) => query._id.$in.includes(tenant._id) && tenant.status === query.status) }),
       updateOne: async (query: Record<string, any>, update: Record<string, any>, options: Record<string, any>) => {
         if (!store.tenants.some((tenant) => tenant._id === query._id) && options.upsert) store.tenants.push(update.$setOnInsert);
         return { matchedCount: 1 };
@@ -50,6 +57,10 @@ vi.mock("../src/lib/db", () => ({
         && (!query.tenantId || membership.tenantId === query.tenantId)
         && (!query.role || membership.role === query.role),
       ) ?? null,
+      find: (query: Record<string, any>) => ({
+        sort() { return this; },
+        toArray: async () => store.memberships.filter((membership) => membership.userId.toHexString() === query.userId.toHexString()),
+      }),
     }),
   },
 }));

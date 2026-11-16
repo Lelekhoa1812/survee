@@ -11,8 +11,19 @@ vi.mock("next/navigation", () => ({
 
 describe("admin navigation accessibility", () => {
   it("offers a skip link before the repeated navigation", () => {
-    const html = renderToStaticMarkup(createElement(AdminNav, { email: "host@example.test" }));
+    const html = renderToStaticMarkup(createElement(AdminNav, { email: "host@example.test", tenantId: "tenant-a", workspaces: [] }));
 
     expect(html).toMatch(/^<a class="skip-link" href="#main-content">Skip to main content<\/a><header/);
+  });
+
+  it("labels the workspace switcher and includes every membership", () => {
+    const html = renderToStaticMarkup(createElement(AdminNav, {
+      email: "host@example.test",
+      tenantId: "tenant-a",
+      workspaces: [{ tenantId: "tenant-a", name: "Axion", role: "owner" }, { tenantId: "tenant-b", name: "Research", role: "member" }],
+    }));
+    expect(html).toContain('aria-label="Switch workspace"');
+    expect(html).toContain("Axion · owner");
+    expect(html).toContain("Research · member");
   });
 });
