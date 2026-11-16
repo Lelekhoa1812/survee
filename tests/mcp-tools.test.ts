@@ -319,7 +319,11 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
     expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
     expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });
-    expect(listToolDefs(["interviews:read"]).find(({ name }) => name === "extract_design_profile")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
+    const definition = listToolDefs(["interviews:read"]).find(({ name }) => name === "extract_design_profile");
+    expect(definition?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
+    expect(definition?.description).toContain("bounded Design Tokens Format Module 2025.10 subset");
+    expect(definition?.description).toContain("resolver-file modes");
+    expect(definition?.description).toContain("external references");
     expect(noteMcp).toHaveBeenCalledWith("extract_design_profile", true, undefined);
     expect(JSON.stringify(vi.mocked(noteMcp).mock.calls)).not.toContain(source);
   });

@@ -262,7 +262,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "extract_design_profile",
-    description: "Extract user-supplied CSS custom properties or token JSON into KQA semantic-role proposals. Returns provenance, ambiguity, candidate contrast checks, and a reviewable overlay; never fetches URLs, executes CSS, stores input, or applies changes.",
+    description: "Extract user-supplied CSS custom properties, legacy token JSON, or a bounded Design Tokens Format Module 2025.10 subset into KQA semantic-role proposals. Reports unsupported $extends inheritance, resolver-file modes, external references, and ambiguous mappings; returns provenance, candidate contrast checks, and a reviewable overlay. Never fetches URLs, executes CSS, stores input, or applies changes.",
     inputSchema: obj({
       source: { type: "string", minLength: 1, maxLength: 32768 },
       format: { type: "string", enum: ["css", "json"] },
