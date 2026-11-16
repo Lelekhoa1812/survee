@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const maxBodyBytes = MAX_IMAGE_BYTES + 64 * 1024;
   const contentLength = Number(req.headers.get("content-length") ?? "0");

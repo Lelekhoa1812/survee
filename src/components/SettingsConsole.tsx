@@ -224,7 +224,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
         </section>
       </div>
 
-      <ImageAssetsPanel />
+      <ImageAssetsPanel canManage={canManageKeys} />
 
       {revealed && (
         <section className="card" style={{ marginBottom: 16, borderColor: "var(--accent)" }}>

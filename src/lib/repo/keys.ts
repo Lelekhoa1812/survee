@@ -1,11 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { ObjectId } from "mongodb";
+import { ObjectId, type ObjectId as ObjectIdType } from "mongodb";
 import { col } from "../db";
 import { mcpToken } from "../env";
 import type { ApiKeyDoc, ApiKeyView } from "./types";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
-import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities, type McpCapability } from "../mcp/capabilities";
+import { DEFAULT_MCP_CAPABILITIES, effectiveMcpCapabilitiesForRole, parseMcpCapabilities, type McpCapability } from "../mcp/capabilities";
 import { isTenantActive } from "./tenants";
 
 const MIN_SECRET = 32;
@@ -70,7 +70,7 @@ export async function listApiKeys(): Promise<ApiKeyView[]> {
   return docs.map(toKeyView);
 }
 
-export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; tenantId?: string; oauthClientId?: string; refreshSecret?: string; capabilities?: McpCapability[] }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
+export async function createApiKey(input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; tenantId?: string; oauthClientId?: string; oauthUserId?: ObjectIdType; refreshSecret?: string; capabilities?: McpCapability[] }): Promise<{ ok: true; key: ApiKeyView; secret: string } | { ok: false; error: string }> {
   const problem = validateKeySecret(input.secret);
   if (problem) return { ok: false, error: problem };
   const capabilities = input.capabilities ?? [...DEFAULT_MCP_CAPABILITIES];
@@ -91,6 +91,7 @@ export async function createApiKey(input: { name: string; note?: string; secret:
     capabilities,
     expiresAt: input.expiresAt ?? undefined,
     ...(input.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
+    ...(input.oauthUserId ? { oauthUserId: input.oauthUserId } : {}),
     ...(input.refreshSecret ? { refreshHash: hashKey(input.refreshSecret) } : {}),
   };
   try {
@@ -166,13 +167,31 @@ export async function authenticateApiKeyAccess(secret: string): Promise<{ tenant
   if (doc.expiresAt && doc.expiresAt.getTime() <= Date.now()) return null;
   const tenantId = doc.tenantId ?? AXION_TENANT_ID;
   if (!await isTenantActive(tenantId)) return null;
+  const oauthRole = doc.oauthClientId ? await oauthWorkspaceRole(doc, tenantId) : null;
+  if (doc.oauthClientId && !oauthRole) return null;
   const stale = !doc.lastUsedAt || Date.now() - doc.lastUsedAt.getTime() > 60_000;
   if (stale) void c.updateOne({ _id: doc._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
   const name = typeof doc.name === "string" ? doc.name.split(secret).join("[redacted]") : "Unnamed API key";
   const auditActor = { kind: doc.oauthClientId ? "oauth" as const : "api_key" as const, id: doc._id.toHexString(), name };
-  if (doc.capabilities === undefined) return { tenantId, auditActor };
-  const capabilities = parseMcpCapabilities(doc.capabilities) ?? [];
-  return { tenantId, auditActor, capabilities };
+  const granted = doc.capabilities === undefined ? undefined : parseMcpCapabilities(doc.capabilities) ?? [];
+  if (oauthRole) {
+    const capabilities = effectiveMcpCapabilitiesForRole(oauthRole, granted);
+    return { tenantId, auditActor, ...(capabilities === undefined ? {} : { capabilities }) };
+  }
+  return granted === undefined ? { tenantId, auditActor } : { tenantId, auditActor, capabilities: granted };
+}
+
+/** OAuth credentials stay within the consent-giving account's current workspace role. */
+async function oauthWorkspaceRole(doc: ApiKeyDoc, tenantId: string): Promise<"owner" | "admin" | "member" | null> {
+  let userId = doc.oauthUserId;
+  if (!userId) {
+    // Older OAuth keys predate oauthUserId. Resolve them once per request from the recorded email; fail closed if unavailable.
+    const user = await (await col.users()).findOne({ email: doc.createdBy });
+    userId = user?._id;
+  }
+  if (!userId) return null;
+  const membership = await (await col.memberships()).findOne({ tenantId, userId });
+  return membership?.role === "owner" || membership?.role === "admin" || membership?.role === "member" ? membership.role : null;
 }
 
 const OAUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -186,7 +205,9 @@ export async function rotateOAuthKey(refreshSecret: string): Promise<{ access: s
   if (!doc || doc.revokedAt) return null;
   const now = new Date();
   if (doc.expiresAt && doc.expiresAt.getTime() <= now.getTime()) return null;
-  if (!await isTenantActive(doc.tenantId ?? AXION_TENANT_ID)) return null;
+  const tenantId = doc.tenantId ?? AXION_TENANT_ID;
+  if (!await isTenantActive(tenantId)) return null;
+  if (doc.oauthClientId && !await oauthWorkspaceRole(doc, tenantId)) return null;
   const access = generateKeySecret();
   const refresh = generateKeySecret();
   const { prefix, suffix } = splitSecret(access);

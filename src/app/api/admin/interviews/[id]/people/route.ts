@@ -5,7 +5,7 @@ import { addParticipants, getInterview } from "@/lib/repo";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
   const interview = await getInterview(id);

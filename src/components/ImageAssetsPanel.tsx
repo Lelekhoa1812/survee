@@ -9,7 +9,7 @@ interface Page {
   nextCursor?: string | null;
 }
 
-export function ImageAssetsPanel() {
+export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) {
   const toast = useToast();
   const [assets, setAssets] = useState<ImageAssetSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -111,7 +111,8 @@ export function ImageAssetsPanel() {
         </div>
         <div className="card-pad stack">
           <p className="hint" style={{ margin: 0 }}>PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG are supported. Each image can be up to {MAX_IMAGE_BYTES / 1024 / 1024} MB. Image URLs can be opened by anyone who has the URL so respondents can load them. Upload a replacement as a new image to keep saved questionnaire versions reproducible.</p>
-          <div className="row wrap" style={{ alignItems: "end" }}>
+          {!canManage && <p className="hint" style={{ margin: 0 }}>Member access is view-only. Ask a workspace owner or admin to add, rename, or remove images.</p>}
+          {canManage && <div className="row wrap" style={{ alignItems: "end" }}>
             <label className="field" style={{ flex: "1 1 180px", margin: 0 }}>
               <span>Image name</span>
               <input className="input" value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Use file name if blank" />
@@ -121,7 +122,7 @@ export function ImageAssetsPanel() {
               <input key={fileInputKey} className="input" type="file" accept={IMAGE_ASSET_ACCEPT} onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
             </label>
             <button className="btn primary" type="button" disabled={!file || busy} onClick={() => void upload()}>{busy ? <Spinner /> : <Icon name="upload" size={15} />} Save image</button>
-          </div>
+          </div>}
           {file && <div className="hint" role="status">Selected {file.name} · {(file.size / 1024).toFixed(0)} KB</div>}
           <div className="row wrap" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>Saved images</h3>
@@ -131,11 +132,11 @@ export function ImageAssetsPanel() {
             <div className="card empty" style={{ border: 0, boxShadow: "none" }}>
               <div className="ico"><Icon name="upload" size={20} /></div>
               <h3>{cursor ? "No more images" : "No workspace images yet"}</h3>
-              <p>Save an image above, then copy its URL or HTML snippet into your questionnaire.</p>
+              <p>{canManage ? "Save an image above, then copy its URL or HTML snippet into your questionnaire." : "Workspace images will appear here when an owner or admin adds them."}</p>
             </div>
           ) : (
             <div className="stack">
-              {assets.map((asset) => <AssetRow key={asset.id} asset={asset} onRename={rename} onDelete={() => { setDeleting(asset); setConfirmName(""); }} />)}
+              {assets.map((asset) => <AssetRow key={asset.id} asset={asset} canManage={canManage} onRename={rename} onDelete={() => { setDeleting(asset); setConfirmName(""); }} />)}
             </div>
           )}
           <div className="row" style={{ justifyContent: "space-between" }}>
@@ -144,7 +145,7 @@ export function ImageAssetsPanel() {
           </div>
         </div>
       </section>
-      {deleting && <Modal
+      {canManage && deleting && <Modal
         title={`Delete “${deleting.name}”?`}
         onClose={() => { if (!busy) { setDeleting(null); setConfirmName(""); } }}
         actions={<>
@@ -161,7 +162,7 @@ export function ImageAssetsPanel() {
   );
 }
 
-function AssetRow({ asset, onRename, onDelete }: { asset: ImageAssetSummary; onRename: (asset: ImageAssetSummary, name: string) => Promise<void>; onDelete: () => void }) {
+function AssetRow({ asset, canManage, onRename, onDelete }: { asset: ImageAssetSummary; canManage: boolean; onRename: (asset: ImageAssetSummary, name: string) => Promise<void>; onDelete: () => void }) {
   const [name, setName] = useState(asset.name);
   const alt = asset.name.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
   const snippet = `<img src="${asset.url}" alt="${alt}">`;
@@ -170,11 +171,11 @@ function AssetRow({ asset, onRename, onDelete }: { asset: ImageAssetSummary; onR
       {/* The image is an intentional same-origin preview of this workspace asset. */}
       <img src={asset.url} alt={`Preview of ${asset.name}`} style={{ width: "100%", height: 100, objectFit: "contain", background: "var(--surface-2)", borderRadius: 8 }} />
       <div className="stack" style={{ minWidth: 0, gap: 8 }}>
-        <div className="row wrap" style={{ alignItems: "end" }}>
+        {canManage ? <div className="row wrap" style={{ alignItems: "end" }}>
           <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Image name</span><input className="input" value={name} maxLength={120} onChange={(event) => setName(event.target.value)} /></label>
           <button className="btn sm" type="button" disabled={!name.trim() || name === asset.name} onClick={() => void onRename(asset, name)}>Save name</button>
           <button className="btn sm danger" type="button" onClick={onDelete}>Delete</button>
-        </div>
+        </div> : <strong>{asset.name}</strong>}
         <div className="hint" style={{ overflowWrap: "anywhere" }}>{asset.fileName} · {asset.mimeType} · {(asset.bytes / 1024).toFixed(0)} KB</div>
         <div className="row wrap">
           <code className="key-secret" style={{ flex: "1 1 220px", minWidth: 0, overflowWrap: "anywhere" }}>{asset.url}</code>

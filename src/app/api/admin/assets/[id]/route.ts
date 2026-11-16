@@ -4,7 +4,7 @@ import { deleteImageAsset, renameImageAsset } from "@/lib/repo/assets";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
   const body = await readJson<{ name?: unknown }>(req, 8 * 1024);
@@ -16,7 +16,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
   const body = await readJson<{ confirmName?: unknown }>(req, 8 * 1024);

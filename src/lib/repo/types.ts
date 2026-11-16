@@ -295,6 +295,8 @@ export interface ApiKeyDoc {
   capabilities?: McpCapability[];
   /** Set when ChatGPT or another OAuth client created this key. */
   oauthClientId?: string;
+  /** User who consented to an OAuth connection; used to enforce current workspace role. */
+  oauthUserId?: ObjectId;
   refreshHash?: string;
 }
 

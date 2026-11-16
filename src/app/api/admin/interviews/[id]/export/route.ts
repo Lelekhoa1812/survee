@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin();
+  const denied = await guardAdmin({ roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
   const format = new URL(req.url).searchParams.get("format") as ExportFormat | null;

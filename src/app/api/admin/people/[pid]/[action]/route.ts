@@ -9,7 +9,7 @@ export const maxDuration = 30;
 
 /** POST reopen, token, invite, or delivery for one person. Invite sends a single message. */
 export async function POST(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid, action } = await params;
   if (action === "reopen") {

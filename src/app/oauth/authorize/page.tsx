@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/ui";
 import { adminSession } from "@/lib/http";
-import { DEFAULT_MCP_CAPABILITIES, MCP_CAPABILITIES, MCP_CAPABILITY_INFO, parseMcpCapabilities } from "@/lib/mcp/capabilities";
+import { allowedMcpCapabilitiesForRole, canGrantMcpCapabilitiesForRole, DEFAULT_MCP_CAPABILITIES, MCP_CAPABILITY_INFO, parseMcpCapabilities } from "@/lib/mcp/capabilities";
 import { authorizeError, findClient, issueCode, requestOrigin } from "@/lib/mcp/oauth";
 
 export const metadata = { title: "Connect an app" };
@@ -47,6 +47,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
     if (state) back.set("state", state);
     redirect(`/admin/login?next=${encodeURIComponent(`/oauth/authorize?${back}`)}`);
   }
+  const availableCapabilities = allowedMcpCapabilitiesForRole(session.role);
 
   return (
     <main className="center-page">
@@ -65,7 +66,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
           <input type="hidden" name="code_challenge" value={challenge} />
           <fieldset className="stack" style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 12 }}>
             <legend>Permissions</legend>
-            {MCP_CAPABILITIES.map((capability, index) => {
+            {availableCapabilities.map((capability, index) => {
               const info = MCP_CAPABILITY_INFO[capability];
               return (
                 <label key={capability} style={{ display: "grid", gridTemplateColumns: "20px 1fr", alignItems: "start", gap: 8 }}>
@@ -105,7 +106,7 @@ async function decide(formData: FormData) {
   if (String(formData.get("decision")) !== "allow" || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
     redirect(authorizeError(redirectUri, origin, "access_denied", state));
   }
-  if (!capabilities) redirect(authorizeError(redirectUri, origin, "invalid_scope", state));
+  if (!capabilities || !canGrantMcpCapabilitiesForRole(session.role, capabilities)) redirect(authorizeError(redirectUri, origin, "invalid_scope", state));
   const code = await issueCode({ clientId, redirectUri, challenge, email: session.email, tenantId: session.tenantId, userId: session.userId, capabilities });
   const url = new URL(redirectUri);
   url.searchParams.set("code", code);

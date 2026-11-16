@@ -6,7 +6,7 @@ process.env.KQA_MCP_TOKEN = "t".repeat(43);
 
 interface Client { clientId: string; name: string; redirectUris: string[]; createdAt: Date }
 interface Code { _id: { toHexString(): string }; hash: string; tenantId: string; userId: { toHexString(): string }; clientId: string; redirectUri: string; challenge: string; email: string; capabilities?: string[]; expiresAt: Date }
-interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; note?: string; capabilities?: string[] }
+interface Key { _id: { toHexString(): string }; hash: string; refreshHash?: string; name: string; revokedAt?: Date; expiresAt?: Date; prefix: string; suffix: string; createdAt: Date; createdBy: string; oauthClientId?: string; oauthUserId?: { toHexString(): string }; note?: string; capabilities?: string[] }
 type ExistenceCondition = { $exists: boolean };
 type DateCondition = Date | ExistenceCondition | { $eq: Date; $gt: Date };
 
@@ -14,6 +14,8 @@ const clients: Client[] = [];
 const codes: Code[] = [];
 const keys: Key[] = [];
 let axionActive = true;
+let memberActive = true;
+let membershipRole: "owner" | "admin" | "member" = "owner";
 
 vi.mock("../src/lib/db", () => ({
   col: {
@@ -56,6 +58,15 @@ vi.mock("../src/lib/db", () => ({
         return { matchedCount: 1 };
       },
     }),
+    users: async () => ({
+      findOne: async (query: { email?: string }) => query.email === "admin@axiob.local" ? { _id: { toHexString: () => "000000000000000000000001" } } : null,
+    }),
+    memberships: async () => ({
+      findOne: async (query: { tenantId: string; userId?: { toHexString(): string } }) => {
+        const id = query.userId?.toHexString();
+        return memberActive && query.tenantId === "axion" && id === "000000000000000000000001" ? { role: membershipRole } : null;
+      },
+    }),
   },
 }));
 
@@ -74,6 +85,8 @@ describe("OAuth discovery and PKCE", () => {
     codes.splice(0);
     keys.splice(0);
     axionActive = true;
+    memberActive = true;
+    membershipRole = "owner";
   });
 
   it("publishes the documents ChatGPT looks up", () => {
@@ -146,6 +159,7 @@ describe("OAuth discovery and PKCE", () => {
     const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
     expect(keys[0].capabilities).toEqual(capabilities);
+    expect(keys[0].oauthUserId?.toHexString()).toBe("000000000000000000000001");
     const access = await authenticateApiKeyAccess(exchanged.access);
     expect(access).toEqual({ tenantId: "axion", auditActor: { kind: "oauth", id: keys[0]._id.toHexString(), name: "Analytics client" }, capabilities });
     const names = listToolDefs(access?.capabilities).map(({ name }) => name);
@@ -160,6 +174,40 @@ describe("OAuth discovery and PKCE", () => {
     expect(rotated).not.toBeNull();
     expect(keys[0].capabilities).toEqual(capabilities);
     expect(await authenticateApiKeyAccess(rotated!.access)).toEqual({ tenantId: "axion", auditActor: { kind: "oauth", id: keys[0]._id.toHexString(), name: "Analytics client" }, capabilities });
+  });
+
+  it("reduces an existing OAuth connection to read-only tools when its user becomes a member", async () => {
+    const registered = await registerClient({ name: "Member role change", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "member-role-change-verifier-value-123456";
+    const capabilities: McpCapability[] = ["interviews:read", "analytics:read", "assets:read", "respondents:read", "respondents:manage", "interviews:delete"];
+    const code = await issueCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001", capabilities });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+
+    membershipRole = "member";
+    const access = await authenticateApiKeyAccess(exchanged.access);
+
+    expect(access?.capabilities).toEqual(["interviews:read", "analytics:read", "assets:read"]);
+    const names = listToolDefs(access?.capabilities).map(({ name }) => name);
+    expect(names).toContain("list_interviews");
+    expect(names).toContain("analyze_answers");
+    expect(names).not.toContain("get_answers");
+    expect(names).not.toContain("delete_interview");
+    expect(await rotateOAuthKey(exchanged.refresh)).not.toBeNull();
+  });
+
+  it("disables an OAuth connection after its user leaves the workspace", async () => {
+    const registered = await registerClient({ name: "Removed member", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "removed-member-oauth-verifier-value-123456";
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+    const exchanged = await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier });
+    if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
+
+    memberActive = false;
+    expect(await authenticateApiKeyAccess(exchanged.access)).toBeNull();
+    expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
   });
 
   it("rejects OAuth access and refresh when the tenant is suspended", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCallMcpTool, DEFAULT_MCP_CAPABILITIES, MCP_CAPABILITIES, MCP_TOOL_CAPABILITIES, parseMcpCapabilities } from "../src/lib/mcp/capabilities";
+import { allowedMcpCapabilitiesForRole, canCallMcpTool, canGrantMcpCapabilitiesForRole, DEFAULT_MCP_CAPABILITIES, effectiveMcpCapabilitiesForRole, MCP_CAPABILITIES, MCP_TOOL_CAPABILITIES, parseMcpCapabilities } from "../src/lib/mcp/capabilities";
 
 describe("MCP credential capabilities", () => {
   it("rejects empty, duplicate, and unknown permissions", () => {
@@ -26,5 +26,15 @@ describe("MCP credential capabilities", () => {
   it("treats missing capabilities as the explicit legacy full-access compatibility case", () => {
     expect(canCallMcpTool("delete_interview")).toBe(true);
     expect(canCallMcpTool("tool_added_without_a_capability")).toBe(false);
+  });
+
+  it("limits OAuth grants and existing effective permissions for workspace members", () => {
+    const allowed = allowedMcpCapabilitiesForRole("member");
+    expect(allowed).toEqual(["interviews:read", "analytics:read", "assets:read"]);
+    expect(canGrantMcpCapabilitiesForRole("member", ["analytics:read", "assets:read"])).toBe(true);
+    expect(canGrantMcpCapabilitiesForRole("member", ["analytics:read", "respondents:read"])).toBe(false);
+    expect(effectiveMcpCapabilitiesForRole("member", ["interviews:read", "respondents:read", "interviews:delete"])).toEqual(["interviews:read"]);
+    expect(effectiveMcpCapabilitiesForRole("member", undefined)).toEqual(DEFAULT_MCP_CAPABILITIES);
+    expect(effectiveMcpCapabilitiesForRole("admin", undefined)).toBeUndefined();
   });
 });

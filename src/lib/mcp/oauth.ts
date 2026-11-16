@@ -146,6 +146,7 @@ export async function exchangeCode(input: { code: string; clientId: string; redi
     createdBy: doc.email,
     tenantId: doc.tenantId ?? "axion",
     oauthClientId: doc.clientId,
+    oauthUserId: doc.userId,
     // Keep the protocol-level `host` scope stable; tool permissions come from KQA consent.
     capabilities,
   });

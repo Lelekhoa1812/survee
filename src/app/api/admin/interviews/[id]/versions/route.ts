@@ -50,6 +50,10 @@ export async function POST(req: Request, { params }: Ctx) {
   if (action !== "preview" && action !== "apply") {
     return fail(400, "Choose preview or apply. Publishing requires a reviewed preview.");
   }
+  if (action === "apply") {
+    const adminDenied = await guardAdmin({ roles: ["owner", "admin"] });
+    if (adminDenied) return adminDenied;
+  }
   const fileName = str(body.data.fileName, 200);
 
   try {

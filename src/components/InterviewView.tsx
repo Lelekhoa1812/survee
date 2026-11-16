@@ -32,7 +32,7 @@ function mcpActorLabel(meta?: Record<string, unknown>): string | null {
   return type ? `${type} “${value.name}” (${value.id.slice(-6)})` : null;
 }
 
-export function InterviewView({ data, initialTab, analysisOnly }: { data: InterviewData; initialTab: string; analysisOnly: boolean }) {
+export function InterviewView({ data, initialTab, analysisOnly, canManage = true }: { data: InterviewData; initialTab: string; analysisOnly: boolean; canManage?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const origin = useOrigin();
@@ -75,7 +75,9 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
     else toast(res.data.error ?? "Could not change the status.", "err");
   }
 
-  const tabs: [Tab, string, number?][] = [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? people.length : undefined], ["answers", "Answers", submitted + inProgress || undefined], ["analysis", "Analysis"], ["survey", "Survey"], ["export", "Export"]];
+  const tabs: [Tab, string, number?][] = canManage
+    ? [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? people.length : undefined], ["answers", "Answers", submitted + inProgress || undefined], ["analysis", "Analysis"], ["survey", "Survey"], ["export", "Export"]]
+    : [["overview", "Overview"], ["analysis", "Analysis"], ["survey", "Survey"]];
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: Tab) {
     const currentIndex = tabs.findIndex(([key]) => key === current);
@@ -104,14 +106,15 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
           </div>
           <h1>{interview.name}</h1>
           {interview.description && <p>{interview.description}</p>}
+          {!canManage && <p className="muted">Member access: interview setup and aggregate analysis only. Ask an owner or admin to manage respondents or change this interview.</p>}
         </div>
-        <div className="right row wrap">
+        {canManage && <div className="right row wrap">
           <button className="btn sm" onClick={() => setRenaming(true)}><Icon name="edit" size={15} /> Edit details</button>
           <button className="btn sm" onClick={toggleStatus} disabled={busy}>
             {busy ? <Spinner /> : <Icon name={interview.status === "open" ? "lock" : "refresh"} size={15} />}
             {interview.status === "open" ? "Close interview" : "Reopen interview"}
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="tabs" role="tablist" aria-label="Interview sections">
@@ -138,13 +141,13 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
       {tab === "overview" && (
         <div className="stack-lg">
           <div className="stats">
-            <div className="stat"><b>{people.length}</b><span>{people.length === 1 ? "Person" : "People"}</span></div>
-            <div className="stat"><b>{invited}</b><span>Not started</span></div>
-            <div className="stat"><b>{inProgress}</b><span>In progress</span></div>
-            <div className="stat"><b>{submitted}</b><span>Submitted</span></div>
+            <div className="stat"><b>{data.counts.people}</b><span>{data.counts.people === 1 ? "Person" : "People"}</span></div>
+            <div className="stat"><b>{data.counts.invited}</b><span>Not started</span></div>
+            <div className="stat"><b>{data.counts.inProgress}</b><span>In progress</span></div>
+            <div className="stat"><b>{data.counts.submitted}</b><span>Submitted</span></div>
           </div>
 
-          {interview.mode === "single" && people[0] && (
+          {canManage && interview.mode === "single" && people[0] && (
             <section className="card">
               <div className="card-head"><h2>Respondent link</h2><span className="sub right">{people[0].status === "submitted" ? "Submitted" : people[0].status === "in_progress" ? "In progress" : "Not started"}</span></div>
               <div className="card-pad stack">
@@ -161,11 +164,11 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
             </section>
           )}
 
-          {interview.mode === "multi" && people.length === 0 && (
+          {canManage && interview.mode === "multi" && people.length === 0 && (
             <div className="callout"><Icon name="info" /><div><b>Add the people who will answer.</b> Each person gets their own private link. <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => select("people")}>Add people</button></div></div>
           )}
 
-          <section className="card">
+          {canManage && <section className="card">
             <div className="card-head"><h2>Recent activity</h2></div>
             {events.length === 0 ? (
               <div className="card-pad muted">Nothing yet. Activity appears here when someone saves an answer or you email a link.</div>
@@ -179,23 +182,23 @@ export function InterviewView({ data, initialTab, analysisOnly }: { data: Interv
                 ))}
               </div>
             )}
-          </section>
+          </section>}
 
-          <section className="card" style={{ borderColor: "var(--danger-line)" }}>
+          {canManage && <section className="card" style={{ borderColor: "var(--danger-line)" }}>
             <div className="card-head"><h2>Delete this interview</h2></div>
             <div className="card-pad row wrap">
               <p className="muted" style={{ flex: 1, minWidth: 240 }}>Removes the interview, every survey version, the people, their answers, and the invite history. Export first if you need a copy. This cannot be undone.</p>
               <button className="btn danger" onClick={() => setDeleting(true)}><Icon name="trash" size={15} /> Delete interview</button>
             </div>
-          </section>
+          </section>}
         </div>
       )}
 
       {tab === "people" && <PeopleTab data={data} origin={origin} refresh={refresh} />}
       {tab === "answers" && <AnswersTab data={data} />}
       {tab === "analysis" && <AnalyticsTab data={data} />}
-      {tab === "survey" && <SurveyTab data={data} refresh={refresh} />}
-      {tab === "export" && <ExportTab data={data} />}
+      {tab === "survey" && <SurveyTab data={data} refresh={refresh} canManage={canManage} />}
+      {canManage && tab === "export" && <ExportTab data={data} />}
       </div>
 
       {renaming && <EditDetails data={data} onClose={() => setRenaming(false)} onSaved={() => { setRenaming(false); refresh(); }} />}

@@ -38,12 +38,15 @@ Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is a tena
 | `respondents:manage` | `add_people`, `update_person`, `remove_person`, `reopen_person`, `regenerate_link` |
 | `interviews:manage` | `create_interview`, `update_interview` |
 | `questionnaires:manage` | `apply_questionnaire_version_patch`, `apply_questionnaire_block_patch`, `apply_questionnaire_required_patch`, `upload_survey_version` |
-| `assets:manage` | `list_image_assets`, `upload_image_asset`, `update_image_asset`, `delete_image_asset` |
+| `assets:read` | `list_image_assets` |
+| `assets:manage` | `upload_image_asset`, `update_image_asset`, `delete_image_asset` |
 | `email:send` | `send_invite` |
 | `email:check` | `check_invite_delivery` |
 | `interviews:delete` | `delete_interview` |
 
-The `respondents:read` permission includes direct identifiers, private links, individual answers, and full interview exports; grant it only to agents that need respondent-level review. `interviews:delete` permanently removes an interview and related records. Existing named keys created before permissions were introduced retain full access until an owner edits them. Settings labels those credentials **Full access (legacy)** so owners can review and narrow them. OAuth connections keep the standard `host` scope for protocol compatibility, then ask for KQA tool permissions on the consent screen. Consent defaults to `interviews:read` and `analytics:read`; the selected permissions are stored on the resulting key and persist when it refreshes. An owner can change or revoke that key in Settings. The Axion deployment token remains full access and is rotated through the deployment host.
+Workspace members can read interview setup, aggregate analysis, and the image library. They do not receive respondent-level tools or tools that make saved changes. The host API applies the same boundary, and OAuth connections are limited to the consenting user's current workspace role; removing that membership disables the connection. Owners and admins can manage respondents, publish, invite, and delete. The Axion deployment token remains the explicitly configured full-access service principal.
+
+The `respondents:read` permission includes direct identifiers, private links, individual answers, and full interview exports; grant it only to agents that need respondent-level review. `interviews:delete` permanently removes an interview and related records. Existing named keys created before permissions were introduced retain full access until an owner edits them. Settings labels those credentials **Full access (legacy)** so owners can review and narrow them. OAuth connections keep the standard `host` scope for protocol compatibility, then ask for KQA tool permissions on the consent screen. Consent defaults to `interviews:read` and `analytics:read`; the selected permissions are stored on the resulting key and persist when it refreshes. An owner can change or revoke that key in Settings.
 
 Neither credential is the admin password, the session cookie, or a respondent link. Send it only in the Authorization header. A token in the query string is rejected. A missing bearer, the admin cookie, or a query-string token is HTTP 401 and does not touch the database. A wrong server token is compared before tenant data is loaded. Any other bearer gets one API-key hash lookup and, when found, an active-tenant check. A failed lookup is the same HTTP 401.
 

@@ -6,6 +6,7 @@ export const MCP_CAPABILITIES = [
   "respondents:manage",
   "interviews:manage",
   "questionnaires:manage",
+  "assets:read",
   "assets:manage",
   "email:send",
   "email:check",
@@ -21,7 +22,8 @@ export const MCP_CAPABILITY_INFO: Record<McpCapability, { label: string; descrip
   "respondents:manage": { label: "Manage respondents", description: "Add, edit, remove, reopen respondents, or regenerate private links." },
   "interviews:manage": { label: "Manage interviews", description: "Create, rename, open, or close interviews." },
   "questionnaires:manage": { label: "Publish questionnaires", description: "Upload or publish a new questionnaire version, including question block and requiredness changes." },
-  "assets:manage": { label: "Manage images", description: "List, upload, rename, and delete workspace images used by questionnaires." },
+  "assets:read": { label: "Read workspace images", description: "List image assets and copy their public URLs for questionnaire HTML." },
+  "assets:manage": { label: "Manage images", description: "Upload, rename, and delete workspace images used by questionnaires." },
   "email:send": { label: "Send invitations", description: "Send a private-link invitation email to one respondent." },
   "email:check": { label: "Check invitation delivery", description: "Check the stored invitation message ID and update its delivery status." },
   "interviews:delete": { label: "Delete interviews", description: "Permanently delete an interview and its associated records." },
@@ -29,6 +31,29 @@ export const MCP_CAPABILITY_INFO: Record<McpCapability, { label: string; descrip
 
 /** New named API keys start with the least-privilege read workflow. */
 export const DEFAULT_MCP_CAPABILITIES: readonly McpCapability[] = ["interviews:read", "analytics:read"];
+
+/** Workspace members may connect MCP clients for read-only interview and aggregate workflows. */
+export const MEMBER_MCP_CAPABILITIES: readonly McpCapability[] = ["interviews:read", "analytics:read", "assets:read"];
+
+export function allowedMcpCapabilitiesForRole(role: "owner" | "admin" | "member"): readonly McpCapability[] {
+  return role === "member" ? MEMBER_MCP_CAPABILITIES : MCP_CAPABILITIES;
+}
+
+export function canGrantMcpCapabilitiesForRole(role: "owner" | "admin" | "member", requested: readonly McpCapability[]): boolean {
+  const allowed = new Set(allowedMcpCapabilitiesForRole(role));
+  return requested.every((capability) => allowed.has(capability));
+}
+
+/** Intersect a stored OAuth grant with the current workspace role. Undefined remains full only for admins. */
+export function effectiveMcpCapabilitiesForRole(
+  role: "owner" | "admin" | "member",
+  granted: readonly McpCapability[] | undefined,
+): McpCapability[] | undefined {
+  if (role !== "member") return granted === undefined ? undefined : [...granted];
+  const current = new Set(allowedMcpCapabilitiesForRole(role));
+  const source = granted ?? DEFAULT_MCP_CAPABILITIES;
+  return source.filter((capability) => current.has(capability));
+}
 
 /** Missing tool entries fail closed. Add a capability whenever a new tool is registered. */
 export const MCP_TOOL_CAPABILITIES = {
@@ -59,7 +84,7 @@ export const MCP_TOOL_CAPABILITIES = {
   apply_questionnaire_block_patch: "questionnaires:manage",
   apply_questionnaire_required_patch: "questionnaires:manage",
   upload_survey_version: "questionnaires:manage",
-  list_image_assets: "assets:manage",
+  list_image_assets: "assets:read",
   upload_image_asset: "assets:manage",
   update_image_asset: "assets:manage",
   delete_image_asset: "assets:manage",

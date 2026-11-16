@@ -37,9 +37,12 @@ beforeEach(() => {
 });
 
 describe("MCP image asset tools", () => {
-  it("exposes image tools only to keys with image management access", () => {
+  it("separates image library reads from image mutations", () => {
     const assetTools = ["list_image_assets", "upload_image_asset", "update_image_asset", "delete_image_asset"];
-    expect(listToolDefs(["assets:manage"] as McpCapability[]).map((tool) => tool.name)).toEqual(expect.arrayContaining(assetTools));
+    expect(listToolDefs(["assets:read"] as McpCapability[]).map((tool) => tool.name)).toContain("list_image_assets");
+    expect(listToolDefs(["assets:read"] as McpCapability[]).map((tool) => tool.name)).not.toEqual(expect.arrayContaining(assetTools.slice(1)));
+    expect(listToolDefs(["assets:manage"] as McpCapability[]).map((tool) => tool.name)).toEqual(expect.arrayContaining(assetTools.slice(1)));
+    expect(listToolDefs(["assets:read", "assets:manage"] as McpCapability[]).map((tool) => tool.name)).toEqual(expect.arrayContaining(assetTools));
     expect(listToolDefs(["interviews:read"] as McpCapability[]).map((tool) => tool.name)).not.toEqual(expect.arrayContaining(assetTools));
   });
 

@@ -2,11 +2,14 @@ import Link from "next/link";
 import { Badge, Icon } from "@/components/ui";
 import { listInterviews } from "@/lib/repo";
 import { relTime } from "@/lib/time";
+import { adminSession } from "@/lib/http";
 
 export const metadata = { title: "Interviews" };
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
+  const session = await adminSession();
+  const canManage = session?.role === "owner" || session?.role === "admin";
   const interviews = await listInterviews();
   const totals = interviews.reduce((a, i) => ({ people: a.people + i.counts.people, submitted: a.submitted + i.counts.submitted, active: a.active + (i.status === "open" ? 1 : 0) }), { people: 0, submitted: 0, active: 0 });
 
@@ -17,9 +20,9 @@ export default async function Dashboard() {
           <h1>Interviews</h1>
           <p>{interviews.length === 0
             ? "Turn a questionnaire file into a hosted interview. KQA saves answers as people respond and gives you one place to review and export them."
-            : "Each interview is one questionnaire. Email each person their private link, or copy it, and review what they answer."}</p>
+            : canManage ? "Each interview is one questionnaire. Email each person their private link, or copy it, and review what they answer." : "Review interview setup and aggregate response analysis for your workspace."}</p>
         </div>
-        {interviews.length > 0 && <Link href="/admin/new" className="btn primary right"><Icon name="plus" size={16} /> New interview</Link>}
+        {canManage && interviews.length > 0 && <Link href="/admin/new" className="btn primary right"><Icon name="plus" size={16} /> New interview</Link>}
       </div>
 
       {interviews.length > 0 && (
@@ -31,7 +34,13 @@ export default async function Dashboard() {
         </div>
       )}
 
-      {interviews.length === 0 ? (
+      {interviews.length === 0 && !canManage ? (
+        <section className="card empty">
+          <div className="ico"><Icon name="info" size={24} /></div>
+          <h2>No interviews yet</h2>
+          <p>Ask a workspace owner or admin to create the first interview. Once it is ready, you can review its setup and aggregate analysis here.</p>
+        </section>
+      ) : interviews.length === 0 ? (
         <section className="card first-run" aria-labelledby="first-run-title">
           <div className="first-run-intro">
             <div className="eyebrow">Your first interview</div>

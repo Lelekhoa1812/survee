@@ -50,6 +50,8 @@ export interface EventRow {
 
 export interface InterviewData {
   interview: { id: string; name: string; description?: string; mode: "single" | "multi"; status: "open" | "closed"; currentVersion: number; createdAt: string };
+  /** Aggregate-only counts; available to workspace members without exposing respondent records. */
+  counts: { people: number; invited: number; inProgress: number; submitted: number };
   people: PersonRow[];
   versions: VersionRow[];
   events: EventRow[];

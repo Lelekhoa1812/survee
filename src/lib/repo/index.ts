@@ -55,6 +55,23 @@ export async function listInterviews(): Promise<InterviewSummary[]> {
   });
 }
 
+/** Aggregate respondent status counts for one interview without loading respondent records. */
+export async function getInterviewParticipantCounts(interviewId: string): Promise<{ people: number; invited: number; inProgress: number; submitted: number }> {
+  const oid = toOid(interviewId);
+  const tenantId = await currentTenantId();
+  if (!oid || !tenantId) return { people: 0, invited: 0, inProgress: 0, submitted: 0 };
+  const rows = await (await col.participants()).aggregate<{ _id: ParticipantStatus; count: number }>([
+    { $match: tenantFilter(tenantId, { interviewId: oid }) },
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]).toArray();
+  const counts = {
+    invited: rows.find((row) => row._id === "invited")?.count ?? 0,
+    inProgress: rows.find((row) => row._id === "in_progress")?.count ?? 0,
+    submitted: rows.find((row) => row._id === "submitted")?.count ?? 0,
+  };
+  return { ...counts, people: counts.invited + counts.inProgress + counts.submitted };
+}
+
 export async function getInterview(id: string, tenantOverride?: string): Promise<InterviewDoc | null> {
   const oid = toOid(id);
   if (!oid) return null;

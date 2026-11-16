@@ -19,6 +19,7 @@ describe("analytics distribution chart", () => {
     const summaries = Object.fromEntries(ANALYTICS_COHORTS.map((cohort) => [cohort.key, { choice: summary }])) as unknown as NonNullable<InterviewData["analysis"]>["summaries"];
     const data = {
       interview: { id: "interview-1", name: "Research interview", mode: "multi", status: "open", currentVersion: 1, createdAt: "2026-01-01T00:00:00.000Z" },
+      counts: { people: 0, invited: 0, inProgress: 0, submitted: 0 },
       people: [],
       versions: [],
       events: [],

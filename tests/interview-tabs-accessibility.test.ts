@@ -42,6 +42,7 @@ afterEach(() => {
 
 const data = {
   interview: { id: "interview-1", name: "Research interview", mode: "multi", status: "open", currentVersion: 1, createdAt: "2026-01-01T00:00:00.000Z" },
+  counts: { people: 0, invited: 0, inProgress: 0, submitted: 0 },
   people: [],
   versions: [],
   events: [],
@@ -49,8 +50,8 @@ const data = {
   publicOrigin: null,
 } as unknown as InterviewData;
 
-function renderInterview(initialTab = "overview", analysisOnly = false) {
-  act(() => root.render(createElement(InterviewView, { key: initialTab, data, initialTab, analysisOnly })));
+function renderInterview(initialTab = "overview", analysisOnly = false, canManage = true) {
+  act(() => root.render(createElement(InterviewView, { key: initialTab, data, initialTab, analysisOnly, canManage })));
 }
 
 function tab(name: string) {
@@ -101,5 +102,16 @@ describe("interview section tabs", () => {
     renderInterview("analysis", true);
     expect(document.activeElement).toBe(tab("Analysis"));
     expect(window.sessionStorage.getItem("kqa:interview:interview-1:tab-focus")).toBeNull();
+  });
+
+  it("limits members to interview overview, aggregate analysis, and read-only survey", () => {
+    renderInterview("overview", false, false);
+
+    expect([...host.querySelectorAll("[role=tab]")].map((button) => button.textContent?.trim())).toEqual(["Overview", "Analysis", "Survey"]);
+    expect(host.textContent).not.toContain("Edit details");
+    expect(host.textContent).not.toContain("Close interview");
+    expect(host.textContent).not.toContain("Delete this interview");
+    expect(host.textContent).not.toContain("Add people");
+    expect(host.textContent).toContain("Member access: interview setup and aggregate analysis only.");
   });
 });

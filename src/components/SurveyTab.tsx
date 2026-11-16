@@ -36,7 +36,7 @@ interface CandidatePreview {
   };
 }
 
-export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () => void }) {
+export function SurveyTab({ data, refresh, canManage = true }: { data: InterviewData; refresh: () => void; canManage?: boolean }) {
   const toast = useToast();
   const [width, setWidth] = useState<0 | 390>(0);
   const [replacing, setReplacing] = useState(false);
@@ -149,7 +149,7 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
           <h2>Current file</h2>
           <Badge kind="ok">Version {data.interview.currentVersion}</Badge>
           <span className="right" />
-          {!replacing && <button type="button" className="btn sm" onClick={() => setReplacing(true)}><Icon name="upload" size={15} /> Upload a new version</button>}
+          {canManage && !replacing && <button type="button" className="btn sm" onClick={() => setReplacing(true)}><Icon name="upload" size={15} /> Upload a new version</button>}
         </div>
         <div className="card-pad row wrap" style={{ gap: 28 }}>
           <div><div className="muted" style={{ fontSize: 12.5 }}>File</div><div style={{ fontWeight: 600 }}>{current?.fileName ?? data.manifest.title}</div></div>
@@ -159,7 +159,7 @@ export function SurveyTab({ data, refresh }: { data: InterviewData; refresh: () 
         </div>
       </section>
 
-      {replacing && (
+      {canManage && replacing && (
         <section className="card" aria-busy={busy}>
           <div className="card-head"><h2>Review a new version</h2><span className="right" /><button type="button" className="btn ghost sm" disabled={busy} onClick={cancelReplacement}>Cancel</button></div>
           <div className="card-pad stack">

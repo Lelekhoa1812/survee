@@ -1,4 +1,4 @@
-import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { adminSession, fail, guardAdmin, json, readJson, str } from "@/lib/http";
 import { deleteInterview, getInterview, listParticipants, listVersions, recentEvents, updateInterview } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -6,15 +6,22 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(_req: Request, { params }: Ctx) {
   const denied = await guardAdmin();
   if (denied) return denied;
+  const session = await adminSession();
+  if (!session) return fail(401, "Sign in to continue.");
   const { id } = await params;
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
-  const [people, versions, events] = await Promise.all([listParticipants(id), listVersions(interview._id), recentEvents(id)]);
+  const canManage = session.role === "owner" || session.role === "admin";
+  const [people, versions, events] = await Promise.all([
+    canManage ? listParticipants(id) : Promise.resolve([]),
+    listVersions(interview._id),
+    canManage ? recentEvents(id) : Promise.resolve([]),
+  ]);
   return json({ ok: true, interview: { ...interview, _id: id }, people, versions, events });
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
   const body = await readJson<{ name?: unknown; description?: unknown; status?: unknown }>(req, 16 * 1024);
@@ -35,7 +42,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
   const body = await readJson<{ confirmName?: unknown }>(req, 4096);

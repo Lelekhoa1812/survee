@@ -9,7 +9,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const body = await readJson<{ name?: unknown; description?: unknown; mode?: unknown; html?: unknown; fileName?: unknown }>(req);
   if (!body.ok) return body.res;

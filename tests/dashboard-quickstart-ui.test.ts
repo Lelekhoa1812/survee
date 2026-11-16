@@ -6,6 +6,7 @@ import { listInterviews } from "@/lib/repo";
 
 vi.mock("next/link", () => ({ default: "a" }));
 vi.mock("@/lib/repo", () => ({ listInterviews: vi.fn() }));
+vi.mock("@/lib/http", () => ({ adminSession: async () => ({ role: "admin" }) }));
 
 describe("empty dashboard quickstart", () => {
   beforeEach(() => vi.mocked(listInterviews).mockReset());

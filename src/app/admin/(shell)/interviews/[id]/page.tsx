@@ -5,8 +5,9 @@ import { publicBaseUrl } from "@/lib/env";
 import { progress } from "@/lib/format/answers";
 import { summarizeQuestionCohorts } from "@/lib/analytics/summary";
 import { currentMail } from "@/lib/mail/state";
-import { getInterview, getVersion, iterateAnalyticsParticipants, listParticipants, listVersions, recentEvents } from "@/lib/repo";
+import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listParticipants, listVersions, recentEvents } from "@/lib/repo";
 import { listMailByInterview, mailRecord } from "@/lib/repo/mail";
+import { adminSession } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +20,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function InterviewPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
   const { tab } = await searchParams;
+  const session = await adminSession();
+  if (!session) notFound();
+  const canManage = session.role === "owner" || session.role === "admin";
   const interview = await getInterview(id);
   if (!interview) notFound();
   const analysisOnly = tab === "analysis";
-  const [current, people, versions, events, mailRows] = await Promise.all([
+  const [current, counts, people, versions, events, mailRows] = await Promise.all([
     getVersion(interview._id, interview.currentVersion),
-    analysisOnly ? Promise.resolve([]) : listParticipants(id),
+    getInterviewParticipantCounts(id),
+    !canManage || analysisOnly ? Promise.resolve([]) : listParticipants(id),
     analysisOnly ? Promise.resolve([]) : listVersions(interview._id),
-    analysisOnly ? Promise.resolve([]) : recentEvents(id, 25),
-    analysisOnly ? Promise.resolve([]) : listMailByInterview(interview._id),
+    !canManage || analysisOnly ? Promise.resolve([]) : recentEvents(id, 25),
+    !canManage || analysisOnly ? Promise.resolve([]) : listMailByInterview(interview._id),
   ]);
   if (!current) notFound();
   let analysis: InterviewData["analysis"];
@@ -45,6 +50,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
 
   const data: InterviewData = {
     interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, currentVersion: interview.currentVersion, createdAt: interview.createdAt.toISOString() },
+    counts,
     manifest: current.manifest,
     publicOrigin: base.ok ? base.origin : null,
     ...(analysis ? { analysis } : {}),
@@ -61,6 +67,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     versions: versions.map((v) => ({ version: v.version, fileName: v.fileName, bytes: v.bytes, createdAt: v.createdAt.toISOString(), check: { errors: v.check.errors, warnings: v.check.warnings, info: v.check.info }, questions: v.manifest.questions.length })),
     events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? names.get(e.participantId) : undefined, meta: e.meta })),
   };
-  const initial = ["overview", "people", "answers", "analysis", "survey", "export"].includes(tab ?? "") ? (tab as string) : "overview";
-  return <InterviewView key={initial} data={data} initialTab={initial} analysisOnly={analysisOnly} />;
+  const allowedTabs = canManage ? ["overview", "people", "answers", "analysis", "survey", "export"] : ["overview", "analysis", "survey"];
+  const initial = allowedTabs.includes(tab ?? "") ? (tab as string) : "overview";
+  return <InterviewView key={initial} data={data} initialTab={initial} analysisOnly={initial === "analysis"} canManage={canManage} />;
 }

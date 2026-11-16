@@ -100,6 +100,15 @@ afterEach(() => {
 });
 
 describe("host questionnaire version preview", () => {
+  it("keeps the survey visible to members without exposing publishing controls", async () => {
+    await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {}, canManage: false })));
+
+    expect(host.textContent).toContain("Current live preview");
+    expect(host.textContent).toContain("Version history");
+    expect(host.textContent).not.toContain("Upload a new version");
+    expect(host.textContent).not.toContain("Make this version live");
+  });
+
   it("shows exact option, help, numeric-bound, section-edit, and section-order changes before publish", async () => {
     await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {} })));
     await click("Upload a new version");

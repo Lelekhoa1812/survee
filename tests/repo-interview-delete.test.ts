@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: { transaction: true },
   deletedCount: 1,
+  aggregateRows: [] as { _id: "invited" | "in_progress" | "submitted"; count: number }[],
+  aggregatePipelines: [] as unknown[][],
   calls: [] as { collection: string; filter: Record<string, unknown>; options: Record<string, unknown> }[],
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work(mocks.session)),
 }));
@@ -18,14 +20,20 @@ vi.mock("../src/lib/db", () => ({
       },
     }),
     versions: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "versions", filter, options }); } }),
-    participants: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); } }),
+    participants: async () => ({
+      deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); },
+      aggregate: (pipeline: unknown[]) => {
+        mocks.aggregatePipelines.push(pipeline);
+        return { toArray: async () => mocks.aggregateRows };
+      },
+    }),
     events: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events", filter, options }); } }),
     analyticsRuns: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "analyticsRuns", filter, options }); } }),
     mail: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mail", filter, options }); } }),
   },
 }));
 
-import { deleteInterview } from "../src/lib/repo";
+import { deleteInterview, getInterviewParticipantCounts } from "../src/lib/repo";
 import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
 
 const interviewId = new ObjectId().toHexString();
@@ -35,6 +43,8 @@ const asAxion = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: "
 beforeEach(() => {
   mocks.deletedCount = 1;
   mocks.calls.length = 0;
+  mocks.aggregateRows = [];
+  mocks.aggregatePipelines.length = 0;
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => work(session));
 });
 
@@ -57,5 +67,21 @@ describe("deleteInterview", () => {
 
     expect(deleted).toBe(false);
     expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviews"]);
+  });
+});
+
+describe("aggregate interview participant counts", () => {
+  it("counts statuses in Mongo without loading respondent documents", async () => {
+    mocks.aggregateRows = [
+      { _id: "invited", count: 2 },
+      { _id: "in_progress", count: 1 },
+      { _id: "submitted", count: 4 },
+    ];
+
+    const counts = await asAxion(() => getInterviewParticipantCounts(interviewId));
+
+    expect(counts).toEqual({ people: 7, invited: 2, inProgress: 1, submitted: 4 });
+    expect(mocks.aggregatePipelines[0][0]).toEqual({ $match: tenantFilter("axion", { interviewId: new ObjectId(interviewId) }) });
+    expect(mocks.aggregatePipelines[0][1]).toEqual({ $group: { _id: "$status", count: { $sum: 1 } } });
   });
 });

@@ -5,7 +5,7 @@ import { deleteParticipant, updateParticipant } from "@/lib/repo";
 type Ctx = { params: Promise<{ pid: string }> };
 
 export async function PATCH(req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid } = await params;
   const body = await readJson<{ name?: unknown; note?: unknown; email?: unknown }>(req, 16 * 1024);
@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {
-  const denied = await guardAdmin({ mutating: true });
+  const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid } = await params;
   return (await deleteParticipant(pid)) ? json({ ok: true }) : fail(404, "Person not found.");

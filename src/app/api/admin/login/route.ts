@@ -22,11 +22,9 @@ export async function POST(req: Request) {
   const password = typeof body.data.password === "string" ? body.data.password.slice(0, 200) : "";
 
   const ipKey = `ip:${clientIp(await headers())}`;
-  const ALL = "all";
   try {
-    // Two limits: a tight one per address, and a wide backstop for the whole app. The wide one is deliberately high so a
-    // stranger cannot lock the host out by failing 40 times, yet it still bounds a guessing run that rotates addresses.
-    if ((await loginBlocked(ipKey, 8)) || (await loginBlocked(ALL, 200))) return fail(429, "Too many attempts. Wait a few minutes and try again.");
+    // A source-specific limit contains repeated guesses without letting failures from unrelated users lock out every account.
+    if (await loginBlocked(ipKey, 8)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
   } catch (e) {
     console.error("login throttle unavailable", (e as Error).message);
     return fail(503, GENERIC_UNAVAILABLE); // fail closed: with no way to count attempts, do not accept guesses
@@ -35,7 +33,7 @@ export async function POST(req: Request) {
   let principal = await authenticateAccount(email, password);
   if (!principal) principal = await bootstrapLegacyAxionOwner(email, password);
   if (!principal) {
-    await Promise.all([recordLoginFailure(ipKey), recordLoginFailure(ALL)]).catch(() => {});
+    await recordLoginFailure(ipKey).catch(() => {});
     return fail(401, "That email and password do not match.");
   }
   const session = createSession(principal);
