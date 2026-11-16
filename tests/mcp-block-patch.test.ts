@@ -13,7 +13,10 @@ const state = vi.hoisted(() => ({
   currentVersion: 2,
   compatibilityImpact: false,
   publish: vi.fn(async () => ({ version: 3 })),
-  saveReview: vi.fn(async (input: { expiresAt: Date }) => ({ reviewId: "r".repeat(32), expiresAt: input.expiresAt.toISOString() })),
+  saveReview: vi.fn(async (input: { expiresAt: Date }): Promise<
+    | { available: true; reviewId: string; expiresAt: string }
+    | { available: false; reason: "review_quota_reached" }
+  > => ({ available: true, reviewId: "r".repeat(32), expiresAt: input.expiresAt.toISOString() })),
 }));
 
 vi.mock("../src/lib/repo", async () => {
@@ -66,7 +69,7 @@ beforeEach(() => {
   state.publish.mockClear();
   state.publish.mockResolvedValue({ version: 3 });
   state.saveReview.mockClear();
-  state.saveReview.mockImplementation(async (input) => ({ reviewId: "r".repeat(32), expiresAt: input.expiresAt.toISOString() }));
+  state.saveReview.mockImplementation(async (input) => ({ available: true as const, reviewId: "r".repeat(32), expiresAt: input.expiresAt.toISOString() }));
 });
 
 describe("MCP questionnaire block patch", () => {
@@ -98,6 +101,18 @@ describe("MCP questionnaire block patch", () => {
     expect(applied.isError).toBeFalsy();
     expect(applied.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2 });
     expect(state.publish).toHaveBeenCalledWith(interviewId, 2, baseHash, expect.objectContaining({ html: expect.stringContaining('data-kqa="new-q"') }));
+  });
+
+  it("reports review quota exhaustion without invalidating the signed MCP preview", async () => {
+    state.saveReview.mockResolvedValue({ available: false, reason: "review_quota_reached" });
+    const preview = await call("preview_questionnaire_block_patch", { interviewId, operations: [operation] });
+
+    expect(preview.isError).toBeFalsy();
+    expect(preview.structuredContent).toMatchObject({
+      ok: true,
+      previewToken: expect.any(String),
+      review: { available: false, reason: "review_quota_reached" },
+    });
   });
 
   it("returns complete definitions for added and removed questions in the preview", async () => {
@@ -188,7 +203,7 @@ describe("MCP questionnaire block patch", () => {
     const preview = await call("preview_questionnaire_block_patch", { interviewId, operations: [operation] });
     expect(preview.isError).toBeFalsy();
     expect(preview.structuredContent.previewToken).toEqual(expect.any(String));
-    expect(preview.structuredContent.review).toEqual({ available: false });
+    expect(preview.structuredContent.review).toEqual({ available: false, reason: "storage_unavailable" });
     expect(state.publish).not.toHaveBeenCalled();
   });
 

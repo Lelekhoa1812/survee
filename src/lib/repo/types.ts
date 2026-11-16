@@ -167,11 +167,13 @@ export interface AnalyticsRunDoc {
   result: Record<string, unknown>;
 }
 
-/** collection: questionnaire_review_drafts. Candidate HTML exists only for the signed preview window. */
+/** collection: questionnaire_review_drafts. Candidate HTML is accessible only during the signed window; TTL cleanup is asynchronous. */
 export interface QuestionnaireReviewDraftDoc {
   _id: ObjectId;
   tenantId: string;
   interviewId: ObjectId;
+  /** Fixed slot bounds the number of active candidates per tenant/interview. */
+  slot: number;
   /** SHA-256 of a high-entropy review id. The id itself is returned only once to the MCP caller. */
   reviewIdHash: string;
   expectedVersion: number;

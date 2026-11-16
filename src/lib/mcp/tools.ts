@@ -206,12 +206,13 @@ async function createQuestionnaireReviewLink(input: {
       questions: input.questions,
       expiresAt: new Date(input.previewExpiresAt),
     });
+    if (!stored.available) return { available: false as const, reason: stored.reason };
     const path = `/admin/previews/${stored.reviewId}`;
     const base = publicBaseUrl();
     return { available: true as const, url: base.ok ? new URL(path, base.origin).toString() : path, expiresAt: stored.expiresAt };
   } catch {
     // Keep the signed MCP preview usable if optional browser-review storage is unavailable.
-    return { available: false as const };
+    return { available: false as const, reason: "storage_unavailable" as const };
   }
 }
 
@@ -854,7 +855,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_version_patch",
-    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not publish anything. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview.",
+    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not publish anything. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.",
     inputSchema: obj({ interviewId: str, html: str, fileName: str }, ["interviewId", "html"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -962,7 +963,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_required_patch",
-    description: "Preview a batch of required/optional changes by stable question ID. The server changes only the manifest booleans and preserves every other HTML byte; it does not publish. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview.",
+    description: "Preview a batch of required/optional changes by stable question ID. The server changes only the manifest booleans and preserves every other HTML byte; it does not publish. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.",
     inputSchema: obj({ interviewId: str, changes: requiredChanges }, ["interviewId", "changes"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1154,7 +1155,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_block_patch",
-    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview.`,
+    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.`,
     inputSchema: obj({ interviewId: str, operations: questionnaireBlockOperations }, ["interviewId", "operations"]),
     async run(args) {
       const id = asString(args.interviewId, 40);

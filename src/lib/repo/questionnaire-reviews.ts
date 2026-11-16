@@ -5,6 +5,8 @@ import { LIMITS } from "../format/schema";
 import { col } from "../db";
 import type { QuestionnaireReviewDraftDoc } from "./types";
 
+export const QUESTIONNAIRE_REVIEW_DRAFT_SLOTS = 5;
+
 export interface SaveQuestionnaireReviewDraftInput {
   tenantId: string;
   interviewId: string;
@@ -26,8 +28,11 @@ export interface QuestionnaireReviewDraftView {
   expiresAt: Date;
 }
 
-/** Store one replaceable candidate per tenant/interview, bounded by its preview token expiry. */
-export async function saveQuestionnaireReviewDraft(input: SaveQuestionnaireReviewDraftInput): Promise<{ reviewId: string; expiresAt: string }> {
+/** Store one candidate in an available, bounded tenant/interview slot until its preview expires. */
+export async function saveQuestionnaireReviewDraft(input: SaveQuestionnaireReviewDraftInput): Promise<
+  | { available: true; reviewId: string; expiresAt: string }
+  | { available: false; reason: "review_quota_reached" }
+> {
   const interviewId = /^[0-9a-f]{24}$/i.test(input.interviewId) ? new ObjectId(input.interviewId) : null;
   const now = new Date();
   if (!input.tenantId || !interviewId) throw new Error("A tenant and valid interview are required.");
@@ -45,6 +50,7 @@ export async function saveQuestionnaireReviewDraft(input: SaveQuestionnaireRevie
   const draft: Omit<QuestionnaireReviewDraftDoc, "_id"> = {
     tenantId: input.tenantId,
     interviewId,
+    slot: 0,
     reviewIdHash,
     expectedVersion: input.expectedVersion,
     candidateHash: input.candidateHash,
@@ -55,16 +61,24 @@ export async function saveQuestionnaireReviewDraft(input: SaveQuestionnaireRevie
     expiresAt: input.expiresAt,
   };
   const drafts = await col.questionnaireReviewDrafts();
-  const query = { tenantId: input.tenantId, interviewId };
-  const update = { $set: draft, $setOnInsert: { _id: new ObjectId() } };
-  try {
-    await drafts.updateOne(query, update, { upsert: true });
-  } catch (error) {
-    // Concurrent first previews can race on the unique tenant/interview index; update the winner's row.
-    if ((error as { code?: number }).code !== 11000) throw error;
-    await drafts.updateOne(query, update);
+  for (let slot = 0; slot < QUESTIONNAIRE_REVIEW_DRAFT_SLOTS; slot += 1) {
+    const row = { ...draft, slot };
+    const reclaimed = await drafts.updateOne(
+      { tenantId: input.tenantId, interviewId, slot, expiresAt: { $lte: now } },
+      { $set: row },
+    );
+    if (reclaimed.matchedCount > 0) {
+      return { available: true, reviewId, expiresAt: input.expiresAt.toISOString() };
+    }
+    try {
+      await drafts.insertOne({ _id: new ObjectId(), ...row });
+      return { available: true, reviewId, expiresAt: input.expiresAt.toISOString() };
+    } catch (error) {
+      // A concurrent save may have claimed this slot after the expired-row check.
+      if ((error as { code?: number }).code !== 11000) throw error;
+    }
   }
-  return { reviewId, expiresAt: input.expiresAt.toISOString() };
+  return { available: false, reason: "review_quota_reached" };
 }
 
 /** Read only an unexpired draft belonging to the caller's signed-in tenant. */

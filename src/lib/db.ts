@@ -44,6 +44,16 @@ export async function withMongoTransaction<T>(work: (session: ClientSession) => 
 }
 
 async function ensureIndexes(d: Db) {
+  const reviewDrafts = d.collection("questionnaire_review_drafts");
+  try {
+    await reviewDrafts.dropIndex("questionnaire_review_by_interview");
+  } catch (error) {
+    const code = (error as { code?: number }).code;
+    if (code !== 26 && code !== 27) throw error;
+  }
+  // Existing releases stored at most one active candidate per interview. Assign it
+  // to the first slot before enforcing the expanded slot index.
+  await reviewDrafts.updateMany({ slot: { $exists: false } }, { $set: { slot: 0 } });
   await Promise.all([
     d.collection("tenants").createIndex({ slug: 1 }, { unique: true, name: "tenant_slug_unique" }),
     d.collection("users").createIndex({ email: 1 }, { unique: true, name: "user_email_unique" }),
@@ -66,7 +76,7 @@ async function ensureIndexes(d: Db) {
     d.collection("analytics_runs").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "analytics_runs_ttl" }),
     d.collection("analytics_runs").createIndex({ tenantId: 1, slot: 1 }, { unique: true, name: "analytics_runs_tenant_slot" }),
     d.collection("analytics_runs").createIndex({ tenantId: 1, interviewId: 1, createdAt: -1 }, { name: "analytics_runs_interview" }),
-    d.collection("questionnaire_review_drafts").createIndex({ tenantId: 1, interviewId: 1 }, { unique: true, name: "questionnaire_review_by_interview" }),
+    reviewDrafts.createIndex({ tenantId: 1, interviewId: 1, slot: 1 }, { unique: true, name: "questionnaire_review_interview_slot" }),
     d.collection("questionnaire_review_drafts").createIndex({ reviewIdHash: 1 }, { unique: true, name: "questionnaire_review_id_unique" }),
     d.collection("questionnaire_review_drafts").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "questionnaire_review_ttl" }),
     d.collection("mail_messages").createIndex({ tenantId: 1, interviewId: 1, sentAt: -1 }, { name: "tenant_mail" }),
