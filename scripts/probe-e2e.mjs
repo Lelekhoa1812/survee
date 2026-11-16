@@ -8,7 +8,7 @@ import puppeteer from "puppeteer-core";
 const base = process.argv[2] || "http://localhost:3100";
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const local = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(new URL(base).hostname);
-const email = process.env.ADMIN_EMAIL || (local ? "admin@axiob.local" : "");
+const email = process.env.ADMIN_EMAIL || (local ? "admin@axion.local" : "");
 const password = process.env.ADMIN_PASSWORD || (local ? "12345678" : "");
 const starter = readFileSync(path.join(import.meta.dirname, "..", "docs", "template", "starter.kqa.html"), "utf8");
 const dir = mkdtempSync(path.join(tmpdir(), "kqa-probe-"));

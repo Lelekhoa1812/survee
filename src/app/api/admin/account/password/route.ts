@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!body.ok) return body.res;
   const currentPassword = typeof body.data.currentPassword === "string" ? body.data.currentPassword : "";
   const newPassword = typeof body.data.newPassword === "string" ? body.data.newPassword : "";
-  if (newPassword.length < 12 || newPassword.length > 200) return fail(400, "Use a password between 12 and 200 characters.");
+  if (newPassword.length < 8 || newPassword.length > 200) return fail(400, "Use a password between 8 and 200 characters.");
   try {
     const authVersion = await changeAccountPassword(session.userId, currentPassword, newPassword);
     if (authVersion === null) return fail(401, "The current password is incorrect.");

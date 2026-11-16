@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const tenantName = str(body.data.tenantName, 100) ?? "";
   if (!tenantName) return fail(400, "Enter a workspace name.", { field: "tenantName" });
   if (!parsed.ok || !parsed.email) return fail(400, "Enter a valid email address.", { field: "email" });
-  if (password.length < 12 || password.length > 200) return fail(400, "Use a password between 12 and 200 characters.", { field: "password" });
+  if (password.length < 8 || password.length > 200) return fail(400, "Use a password between 8 and 200 characters.", { field: "password" });
   if (/\.(local|test|example|invalid)$/i.test(parsed.email.split("@")[1] ?? "")) {
     return fail(400, "Use an email address that can receive the verification message.", { field: "email" });
   }

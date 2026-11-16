@@ -180,7 +180,7 @@ export type CreateInvitedAccountResult = { ok: true; userId: string; tenantId: s
 
 export async function createInvitedAccount(token: string, password: string): Promise<CreateInvitedAccountResult> {
   const tokenHash = invitationHash(token);
-  if (!tokenHash || password.length < 12 || password.length > 200) return { ok: false, reason: "invalid" };
+  if (!tokenHash || password.length < 8 || password.length > 200) return { ok: false, reason: "invalid" };
   const invitation = await (await col.workspaceInvitations()).findOne({
     tokenHash, expiresAt: { $gt: new Date() }, acceptedAt: { $exists: false }, revokedAt: { $exists: false },
   });

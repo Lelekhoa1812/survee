@@ -5,7 +5,7 @@ const allowDevDefaults = !isProd && !process.env.VERCEL;
 
 /** The migrated legacy workspace and the only tenant bound to KQA_MCP_TOKEN. */
 export const AXION_TENANT_ID = "axion";
-export const AXION_OWNER_EMAIL = "admin@axiob.local";
+export const AXION_OWNER_EMAIL = "admin@axion.local";
 
 /**
  * Keep Axion's legacy-record compatibility path until its reviewed backfill is complete.

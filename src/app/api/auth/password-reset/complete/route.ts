@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const token = str(body.data.token, 128);
   const password = typeof body.data.password === "string" ? body.data.password : "";
   if (!token) return fail(400, "That password reset link is invalid or has expired.");
-  if (password.length < 12 || password.length > 200) return fail(400, "Use a password between 12 and 200 characters.");
+  if (password.length < 8 || password.length > 200) return fail(400, "Use a password between 8 and 200 characters.");
   try {
     const ipKey = `password-reset-complete-ip:${clientIp(await headers())}`;
     if (!(await consumeRateLimit(ipKey, 15))) return fail(429, "Too many attempts. Wait a few minutes and try again.");

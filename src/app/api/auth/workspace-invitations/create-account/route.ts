@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   if (!body.ok) return body.res;
   const token = str(body.data.token, 128);
   const password = typeof body.data.password === "string" ? body.data.password : "";
-  if (!token || password.length < 12 || password.length > 200) return fail(400, "Use a password between 12 and 200 characters.");
+  if (!token || password.length < 8 || password.length > 200) return fail(400, "Use a password between 8 and 200 characters.");
   const h = await headers();
   const ipKey = `invite-signup-ip:${clientIp(h)}`;
   const tokenKey = `invite-signup-token:${createHash("sha256").update(token).digest("hex")}`;

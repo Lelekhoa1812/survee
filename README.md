@@ -44,7 +44,7 @@ cp .env.example .env     # then fill in MONGODB_URI
 npm run dev              # http://localhost:3000
 ```
 
-In development the legacy Axion owner login falls back to `admin@axiob.local` / `12345678`. New accounts sign up with a workspace name, a deliverable email address and a password; email verification is required before sign-in. In production, the legacy owner bootstraps once with the configured credentials, then can change the `.local` email to a verified address in Settings.
+In development the legacy Axion owner login falls back to `admin@axion.local` / `12345678`. New accounts sign up with a workspace name, a deliverable email address and a password; email verification is required before sign-in. In production, the legacy owner bootstraps once with the configured credentials, then can change the `.local` email to a verified address in Settings.
 
 | Variable | Purpose |
 |---|---|

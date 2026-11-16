@@ -5,7 +5,7 @@ import puppeteer from "puppeteer-core";
 const [base = "http://localhost:3100", out = ".", id, scheme = "light", shotSet = "all"] = process.argv.slice(2);
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const local = ["localhost", "127.0.0.1", "::1"].includes(new URL(base).hostname);
-const email = process.env.ADMIN_EMAIL || (local ? "admin@axiob.local" : "");
+const email = process.env.ADMIN_EMAIL || (local ? "admin@axion.local" : "");
 const password = process.env.ADMIN_PASSWORD || (local ? "12345678" : "");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 if (!(scheme === "light" || scheme === "dark")) throw new Error("scheme must be light or dark");

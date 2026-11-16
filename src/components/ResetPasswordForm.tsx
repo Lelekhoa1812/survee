@@ -52,15 +52,15 @@ export function ResetPasswordForm() {
         <>
           <div className="field">
             <label htmlFor="reset-new-password">New password</label>
-            <input id="reset-new-password" className="input" type="password" autoComplete="new-password" minLength={12} maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} required />
-            <span className="hint">Use at least 12 characters.</span>
+            <input id="reset-new-password" className="input" type="password" autoComplete="new-password" minLength={8} maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} required />
+            <span className="hint">Use at least 8 characters.</span>
           </div>
           <div className="field">
             <label htmlFor="reset-confirm-password">Confirm new password</label>
-            <input id="reset-confirm-password" className="input" type="password" autoComplete="new-password" minLength={12} maxLength={200} value={confirm} onChange={(event) => setConfirm(event.target.value)} required />
+            <input id="reset-confirm-password" className="input" type="password" autoComplete="new-password" minLength={8} maxLength={200} value={confirm} onChange={(event) => setConfirm(event.target.value)} required />
           </div>
           {error && <p className="field-error" role="alert">{error}</p>}
-          <button className="btn primary lg block" disabled={busy || password.length < 12 || !confirm}>{busy ? <Spinner /> : null} Update password</button>
+          <button className="btn primary lg block" disabled={busy || password.length < 8 || !confirm}>{busy ? <Spinner /> : null} Update password</button>
         </>
       )}
     </form>

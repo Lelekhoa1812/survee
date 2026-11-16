@@ -69,8 +69,8 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
     event.preventDefault();
     if (passwordBusy) return;
     setPasswordError("");
-    if (newPassword.length < 12 || newPassword.length > 200) {
-      setPasswordError("Use a password between 12 and 200 characters.");
+    if (newPassword.length < 8 || newPassword.length > 200) {
+      setPasswordError("Use a password between 8 and 200 characters.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -137,15 +137,15 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
           </div>
           <div className="field">
             <label htmlFor="password-new">New password</label>
-            <PasswordInput id="password-new" className="input" autoComplete="new-password" minLength={12} maxLength={200} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required />
-            <span className="hint">Use at least 12 characters.</span>
+            <PasswordInput id="password-new" className="input" autoComplete="new-password" minLength={8} maxLength={200} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required />
+            <span className="hint">Use at least 8 characters.</span>
           </div>
           <div className="field">
             <label htmlFor="password-confirm">Confirm new password</label>
-            <PasswordInput id="password-confirm" className="input" autoComplete="new-password" minLength={12} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
+            <PasswordInput id="password-confirm" className="input" autoComplete="new-password" minLength={8} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
           </div>
           {passwordError && <p className="field-error" role="alert">{passwordError}</p>}
-          <button className="btn" disabled={passwordBusy || !password || newPassword.length < 12 || !confirmPassword}>{passwordBusy ? <Spinner /> : null} Update password</button>
+          <button className="btn" disabled={passwordBusy || !password || newPassword.length < 8 || !confirmPassword}>{passwordBusy ? <Spinner /> : null} Update password</button>
         </form>
       </div>
     </section>

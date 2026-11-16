@@ -53,15 +53,15 @@ describe("signup validation fields", () => {
   });
 
   it("identifies invalid password length as a password field error", async () => {
-    const response = await post({ tenantName: "Research", email: "person@example.com", password: "short" });
+    const response = await post({ tenantName: "Research", email: "person@example.com", password: "1234567" });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ field: "password", error: "Use a password between 12 and 200 characters." });
+    await expect(response.json()).resolves.toMatchObject({ field: "password", error: "Use a password between 8 and 200 characters." });
   });
 
   it("starts workspace signup without an invitation and sends a generic verification response", async () => {
     vi.mocked(createPendingSignup).mockResolvedValue({ ok: true, id: new ObjectId() });
 
-    const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
+    const response = await post({ tenantName: "Research", email: "person@example.com", password: "12345678" });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -71,7 +71,7 @@ describe("signup validation fields", () => {
     expect(createPendingSignup).toHaveBeenCalledWith({
       tenantName: "Research",
       email: "person@example.com",
-      password: "a sufficiently long password",
+      password: "12345678",
       token: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
     });
     expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({

@@ -85,25 +85,33 @@ describe("legacy Axion owner bootstrap", () => {
 
   it("maps the configured legacy login to the confirmed Axion owner identity", async () => {
     const bootstrapped = await bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password");
-    expect(bootstrapped).toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "admin@axiob.local", role: "owner", legacyBootstrap: true });
+    expect(bootstrapped).toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "admin@axion.local", role: "owner", legacyBootstrap: true });
     expect(store.users).toHaveLength(1);
     expect(store.tenants).toHaveLength(1);
     expect(store.memberships).toHaveLength(1);
-    expect(store.users[0].email).toBe("admin@axiob.local");
+    expect(store.users[0].email).toBe("admin@axion.local");
     expect(await verifyPassword("a legacy host password", store.users[0].passwordHash)).toBe(true);
     expect(store.memberships[0].userId.toHexString()).toBe(store.users[0]._id.toHexString());
-    expect(await (await col.users()).findOne({ email: "admin@axiob.local" })).not.toBeNull();
+    expect(await (await col.users()).findOne({ email: "admin@axion.local" })).not.toBeNull();
     expect(await (await col.memberships()).findOne({ userId: store.users[0]._id, tenantId: "axion" })).not.toBeNull();
     expect(await (await col.tenants()).findOne({ _id: "axion", status: "active" })).not.toBeNull();
     expect(store.users[0].legacyBootstrap).toBe(true);
     expect(await verifyPassword("a legacy host password", store.users[0].passwordHash)).toBe(true);
-    await expect(authenticateAccount("admin@axiob.local", "a legacy host password")).resolves.toMatchObject({ tenantId: "axion", email: "admin@axiob.local" });
-    await expect(authenticateAccount("admin@axion.local", "a legacy host password")).resolves.toBeNull();
+    await expect(authenticateAccount("admin@axion.local", "a legacy host password")).resolves.toMatchObject({ tenantId: "axion", email: "admin@axion.local" });
+  });
+
+  it("migrates the misspelled legacy owner only after checking its current password", async () => {
+    await bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password");
+    store.users[0].email = "admin@axiob.local";
+    await expect(authenticateAccount("admin@axion.local", "wrong password")).resolves.toBeNull();
+    expect(store.users[0].email).toBe("admin@axiob.local");
+    await expect(authenticateAccount("admin@axion.local", "a legacy host password")).resolves.toMatchObject({ email: "admin@axion.local" });
+    expect(store.users[0].email).toBe("admin@axion.local");
   });
 
   it("requires the configured legacy password and does not create an account for other identities", async () => {
     await expect(bootstrapLegacyAxionOwner("unrelated@example.com", "a legacy host password")).resolves.toBeNull();
-    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "wrong password")).resolves.toBeNull();
+    await expect(bootstrapLegacyAxionOwner("admin@axion.local", "wrong password")).resolves.toBeNull();
     expect(store.users).toHaveLength(0);
     expect(store.memberships).toHaveLength(0);
     expect(store.tenants).toHaveLength(0);
@@ -112,36 +120,37 @@ describe("legacy Axion owner bootstrap", () => {
   it("repairs a partial owner bootstrap after membership insertion fails", async () => {
     store.failMembershipInsert = true;
     store.failUserDelete = true;
-    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password")).rejects.toThrow("membership write failed");
+    await expect(bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password")).rejects.toThrow("membership write failed");
     expect(store.users).toHaveLength(1);
     expect(store.tenants).toHaveLength(1);
     expect(store.memberships).toHaveLength(0);
 
     store.failMembershipInsert = false;
     store.failUserDelete = false;
-    const retried = await bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password");
-    expect(retried).toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "admin@axiob.local", role: "owner" });
+    const retried = await bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password");
+    expect(retried).toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "admin@axion.local", role: "owner" });
     expect(store.users).toHaveLength(1);
     expect(store.tenants).toHaveLength(1);
     expect(store.memberships).toHaveLength(1);
   });
 
   it("does not use the legacy credential to repair an owner account with a changed password", async () => {
-    await bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password");
+    await bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password");
     store.memberships.splice(0);
     store.users[0].passwordHash = await hashPassword("a changed password for Axion");
 
-    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password")).resolves.toBeNull();
+    await expect(bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password")).resolves.toBeNull();
     expect(store.memberships).toHaveLength(0);
   });
 
   it("does not recreate the reserved legacy identity after its owner changes email", async () => {
-    await bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password");
+    await bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password");
     store.users[0].email = "owner@axion.example";
     delete store.users[0].legacyBootstrap;
     store.users[0].emailVerifiedAt = new Date();
 
-    await expect(bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password")).resolves.toBeNull();
+    await expect(bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password")).resolves.toBeNull();
+    await expect(authenticateAccount("admin@axion.local", "a legacy host password")).resolves.toBeNull();
     expect(store.users).toHaveLength(1);
     expect(store.memberships).toHaveLength(1);
   });
@@ -157,8 +166,8 @@ describe("legacy Axion owner bootstrap", () => {
     };
 
     const results = await Promise.all([
-      bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password"),
-      bootstrapLegacyAxionOwner("admin@axiob.local", "a legacy host password"),
+      bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password"),
+      bootstrapLegacyAxionOwner("admin@axion.local", "a legacy host password"),
     ]);
 
     expect(results.every(Boolean)).toBe(true);

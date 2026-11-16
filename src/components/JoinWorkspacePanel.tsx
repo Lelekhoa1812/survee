@@ -38,8 +38,8 @@ export function JoinWorkspacePanel({ token, tenantName, email, role, expiresAt, 
   async function createAccount(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
-    if (password.length < 12 || password.length > 200) {
-      setError("Use a password between 12 and 200 characters.");
+    if (password.length < 8 || password.length > 200) {
+      setError("Use a password between 8 and 200 characters.");
       return;
     }
     if (password !== confirmPassword) {
@@ -92,9 +92,9 @@ export function JoinWorkspacePanel({ token, tenantName, email, role, expiresAt, 
         <form className="stack" onSubmit={createAccount}>
           <div className="callout">This invitation link verifies access to {email}. Choose a password to create your KQA account and join {tenantName}.</div>
           <div className="field"><label htmlFor="join-email">Invited email</label><input id="join-email" className="input" value={email} readOnly /></div>
-          <div className="field"><label htmlFor="join-password">Password</label><PasswordInput id="join-password" className="input" autoComplete="new-password" minLength={12} maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} required /><span className="hint">Use at least 12 characters.</span></div>
-          <div className="field"><label htmlFor="join-confirm">Confirm password</label><PasswordInput id="join-confirm" className="input" autoComplete="new-password" minLength={12} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></div>
-          <button className="btn primary lg block" disabled={busy || password.length < 12 || !confirmPassword}>{busy ? <Spinner /> : null} Create account and join</button>
+          <div className="field"><label htmlFor="join-password">Password</label><PasswordInput id="join-password" className="input" autoComplete="new-password" minLength={8} maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} required /><span className="hint">Use at least 8 characters.</span></div>
+          <div className="field"><label htmlFor="join-confirm">Confirm password</label><PasswordInput id="join-confirm" className="input" autoComplete="new-password" minLength={8} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></div>
+          <button className="btn primary lg block" disabled={busy || password.length < 8 || !confirmPassword}>{busy ? <Spinner /> : null} Create account and join</button>
           <p className="muted" style={{ textAlign: "center", fontSize: 13.5 }}>Already have an account? <Link href={`/admin/login?next=${encodeURIComponent(next)}`} style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Sign in</Link></p>
         </form>
       )}

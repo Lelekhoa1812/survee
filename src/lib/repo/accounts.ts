@@ -5,6 +5,8 @@ import { derivePasswordKey, PASSWORD_HASH_BYTES, PASSWORD_HASH_COST } from "../p
 import { col } from "../db";
 import type { MembershipDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, TenantDoc, TenantRole, UserDoc } from "./types";
 
+const PREVIOUS_AXION_OWNER_EMAIL = "admin@axiob.local";
+
 const DUMMY_PASSWORD_SALT = "kqa-account-lookup-dummy-salt";
 const SIGNUP_TTL_MS = 30 * 60 * 1000;
 const EMAIL_CHANGE_TTL_MS = 30 * 60 * 1000;
@@ -64,7 +66,12 @@ function accountPrincipal(user: UserDoc, membership: MembershipDoc, tenant: Tena
 
 export async function authenticateAccount(emailInput: string, password: string): Promise<AccountPrincipal | null> {
   const email = normalizeEmail(emailInput);
-  const user = await (await col.users()).findOne({ email });
+  const users = await col.users();
+  let user = await users.findOne({ email });
+  if (!user && email === AXION_OWNER_EMAIL) {
+    const legacyOwner = await users.findOne({ email: PREVIOUS_AXION_OWNER_EMAIL });
+    if (legacyOwner?.legacyBootstrap) user = legacyOwner;
+  }
   if (!user || !(user.emailVerifiedAt || user.legacyBootstrap)) {
     // Match the password-hash work for missing and unverified accounts so a
     // generic sign-in error does not reveal account existence by response time.
@@ -73,6 +80,21 @@ export async function authenticateAccount(emailInput: string, password: string):
   }
   const passwordMatches = await verifyPassword(password, user.passwordHash);
   if (!passwordMatches) return null;
+  if (email === AXION_OWNER_EMAIL && user.email === PREVIOUS_AXION_OWNER_EMAIL && user.legacyBootstrap) {
+    // Migrate only the legacy account after verifying its current password. A
+    // concurrent email change or an existing target account must win instead.
+    try {
+      const updated = await users.updateOne(
+        { _id: user._id, email: PREVIOUS_AXION_OWNER_EMAIL, passwordHash: user.passwordHash, legacyBootstrap: true },
+        { $set: { email: AXION_OWNER_EMAIL, updatedAt: new Date() } },
+      );
+      if (!updated.matchedCount) return null;
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === 11000) return null;
+      throw error;
+    }
+    user.email = AXION_OWNER_EMAIL;
+  }
   const memberships = await (await col.memberships()).find({ userId: user._id }).sort({ createdAt: 1 }).toArray();
   const preferred = user.lastTenantId ? memberships.find((item) => item.tenantId === user.lastTenantId) : undefined;
   const ordered = preferred ? [preferred, ...memberships.filter((item) => item._id.toHexString() !== preferred._id.toHexString())] : memberships;
@@ -330,7 +352,7 @@ export async function updateTenantName(tenantId: string, nameInput: string): Pro
 
 export async function changeAccountPassword(userId: string, currentPassword: string, nextPassword: string): Promise<number | null> {
   if (!/^[0-9a-f]{24}$/i.test(userId)) return null;
-  if (nextPassword.length < 12 || nextPassword.length > 200) return null;
+  if (nextPassword.length < 8 || nextPassword.length > 200) return null;
   const users = await col.users();
   const user = await users.findOne({ _id: new ObjectId(userId) });
   if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) return null;
@@ -381,7 +403,7 @@ export async function removePendingPasswordReset(id: ObjectId): Promise<void> {
 export type CompletePasswordResetResult = { ok: true; email: string } | { ok: false };
 
 export async function completePasswordReset(token: string, nextPassword: string): Promise<CompletePasswordResetResult> {
-  if (nextPassword.length < 12 || nextPassword.length > 200) return { ok: false };
+  if (nextPassword.length < 8 || nextPassword.length > 200) return { ok: false };
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const resets = await col.passwordResets();
   const pending = await resets.findOne({ tokenHash, expiresAt: { $gt: new Date() } });

@@ -4,7 +4,7 @@ import { assertSafeMutatingTestTarget, isLocalTestTarget } from "./lib/mutating-
 
 const args = process.argv.slice(2);
 const positional = args.filter((a) => !a.startsWith("--"));
-const [base = "http://localhost:3100", email = isLocalTestTarget(base) ? "admin@axiob.local" : "", password = isLocalTestTarget(base) ? "12345678" : ""] = positional;
+const [base = "http://localhost:3100", email = isLocalTestTarget(base) ? "admin@axion.local" : "", password = isLocalTestTarget(base) ? "12345678" : ""] = positional;
 assertSafeMutatingTestTarget(base, "security check");
 const withThrottle = args.includes("--throttle");
 if (withThrottle && !isLocalTestTarget(base)) throw new Error("The throttling check locks sign-in for up to 15 minutes and is local-only.");
