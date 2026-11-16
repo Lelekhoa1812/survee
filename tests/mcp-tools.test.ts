@@ -382,7 +382,8 @@ describe("MCP tools", () => {
     expect(fit?.disclosureRisk).toMatchObject({ singletonUnmappedResponseCount: true, singletonDistributionDenominator: true, singletonDistributionValues: ["yes"] });
     const budget = body.result.structuredContent.questions?.find((question) => question.id === "budget");
     expect(budget?.numeric).toMatchObject({ n: 2, mean: 3, median: 3, q1: 2.5, q3: 3.5 });
-    expect(body.result.structuredContent.methodology?.join(" ")).toContain("type-7 sample quantiles");
+    expect(body.result.structuredContent.methodology?.join(" ")).toContain("exact Hyndman-Fan type-7 quantiles through n=256");
+    expect(body.result.structuredContent.methodology?.join(" ")).toContain("no bound applies after bin collapse");
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
     expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");

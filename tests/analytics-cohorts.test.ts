@@ -4,6 +4,8 @@ import { summarizeQuestionCohorts, summarizeSelectedQuestionCohort, type CohortA
 import type { Question } from "../src/lib/format/schema";
 import type { ParticipantStatus } from "../src/lib/repo/types";
 
+const exactQuantiles = { method: "hyndman_fan_type_7", approximate: false, relativeValueAccuracy: null, binLimitPerSign: null, binsCollapsed: false, mappingRangeExceeded: false, errorGuarantee: "exact" } as const;
+
 const at = "2026-11-15T00:00:00.000Z";
 
 async function* stream(rows: CohortAnalyticsRespondent[]) {
@@ -43,8 +45,8 @@ describe("analytics status cohorts", () => {
     ]);
     expect(result.summaries.everyone.choice.distribution[0].percent).toBeCloseTo(200 / 3);
     expect(result.summaries.everyone.choice.distribution[1].percent).toBeCloseTo(100 / 3);
-    expect(result.summaries["invited,submitted"].score.numeric).toEqual({ n: 2, min: 10, q1: 15, median: 20, q3: 25, max: 30, mean: 20 });
-    expect(result.summaries.invited.score.numeric).toEqual({ n: 1, min: 10, q1: 10, median: 10, q3: 10, max: 10, mean: 10 });
+    expect(result.summaries["invited,submitted"].score.numeric).toEqual({ n: 2, min: 10, q1: 15, median: 20, q3: 25, max: 30, mean: 20, quantiles: exactQuantiles });
+    expect(result.summaries.invited.score.numeric).toEqual({ n: 1, min: 10, q1: 10, median: 10, q3: 10, max: 10, mean: 10, quantiles: exactQuantiles });
     expect(result.summaries.invited.score.eligibleCount).toBe(1);
     expect(result.summaries.submitted.choice.eligibleCount).toBe(1);
     for (const cohort of ANALYTICS_COHORTS) {

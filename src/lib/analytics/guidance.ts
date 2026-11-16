@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/13" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/14" as const;
 
 const PRINCIPLES = [
   {
@@ -33,7 +33,7 @@ const PRINCIPLES = [
     id: "match-measure-to-statistic",
     title: "Respect the question's measurement type",
     guidance:
-      "For single-choice and dropdown questions, show category counts or valid-response shares. For ordered scales, prefer the full distribution and optionally report the observed middle category when n is odd or both central observed categories when n is even; never average category codes or report a mean, and do not assume equal spacing between labels. QuestionSummary.scaleMedian retains the lower central category for compatibility; scaleMedianRange gives the exact central category or pair. For number questions, describe n, range, Q1, median, Q3, and mean; Q1 and Q3 use type-7 sample quantiles with linear interpolation. Note skew or extreme values only when supported by these summaries. Dates and free text are not summarized by the current aggregate tool; use the relevant review or export workflow only when the task requires it.",
+      "For single-choice and dropdown questions, show category counts or valid-response shares. For ordered scales, prefer the full distribution and optionally report the observed middle category when n is odd or both central observed categories when n is even; never average category codes or report a mean, and do not assume equal spacing between labels. QuestionSummary.scaleMedian retains the lower central category for compatibility; scaleMedianRange gives the exact central category or pair. For number questions, describe n, range, Q1, median, Q3, and mean. Number quantiles are exact Hyndman-Fan type 7 through n=256; larger summaries use mergeable, bounded DDSketch estimates and return the method, 2% relative-value accuracy setting, bin limit, collapse flag, mapped-range flag, and error-guarantee status in numeric.quantiles. Relative-value error is not rank error. If binsCollapsed or mappingRangeExceeded is true, no relative error bound applies. Minimum, maximum, and mean use all valid numeric answers. Never imply quantile uncertainty is zero for DDSketch results. Dates and free text are not summarized by the current aggregate tool; use the relevant review or export workflow only when the task requires it.",
   },
   {
     id: "explain-multiselect",
@@ -118,6 +118,11 @@ const SOURCES = [
     supports: "Hyndman-Fan type-7 sample quantiles with linear interpolation, the default method in R.",
   },
   {
+    name: "DataDog, DDSketch",
+    url: "https://github.com/DataDog/sketches-js",
+    supports: "Mergeable relative-value-error quantiles; KQA uses a collapsing store and reports when that invalidates the relative error guarantee.",
+  },
+  {
     name: "Office for National Statistics, Choosing a chart type",
     url: "https://service-manual.ons.gov.uk/data-visualisation/chart-types/choosing-a-chart-type",
     supports: "Matching chart forms to the message and data structure.",
@@ -159,7 +164,7 @@ export function getAnalyticsGuidance() {
       "All selected outcomes in one segmented analysis share the same status scope, participant scan, and asOf. Segment disclosureRisk metadata flags singleton segments and, for status comparisons, singleton status groups. Question-level disclosureRisk metadata accompanies each ordinary, status, and segmented summary. Neither metadata shape assesses combinations of attributes or guarantees anonymity.",
       "Answered values that do not fit the current version remain counted as answered and are reported as unmapped; they are excluded from valid distributions and numeric summaries.",
       "Multi-select percentages use valid responding people as the denominator, and percentages can sum above 100%.",
-      "Scale questions provide a distribution and the observed middle category or central pair, not an average of ordinal codes. QuestionSummary.scaleMedianRange contains the exact central observed category or pair; scaleMedian is its lower value retained for compatibility. No mean is calculated for scales. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum; quartiles use Hyndman-Fan type 7.",
+      "Scale questions provide a distribution and the observed middle category or central pair, not an average of ordinal codes. QuestionSummary.scaleMedianRange contains the exact central observed category or pair; scaleMedian is its lower value retained for compatibility. No mean is calculated for scales. Number summaries respect current question bounds and provide n, minimum, Q1, median, Q3, mean, and maximum. numeric.quantiles reports exact Hyndman-Fan type 7 through n=256, or approximate DDSketch quartiles after that; it states relative-value accuracy, bin limit, whether bins collapsed, whether values exceeded the mapped range, and whether the relative error guarantee applies. This memory threshold changes only quantile precision, never which cohort counts or numeric summaries are returned.",
       "Date and text answers have no aggregate summary in analyze_answers. For a requested distribution, use only an available aggregate or ask before inspecting individual answers with get_answers.",
       "For paginated analyze_answers results, reuse analysisRunId as runId with interviewId and offset/limit. Completed aggregate pages share one asOf and remain available for up to one hour; the initial participant scan is live and is not isolated by a database snapshot. Runs are tenant-bound and contain aggregate output only. If an analysisRunId is not returned, the result was not paginated and no run needs to be continued.",
       "When compareStatuses is true, status groups on one page share a participant scan and asOf; this live read does not use a frozen database snapshot.",

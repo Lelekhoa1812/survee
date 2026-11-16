@@ -1,5 +1,6 @@
 import { isAnswered, validateAnswer } from "../format/answers";
 import { LIMITS, scaleBounds, type AnswerMap, type Question } from "../format/schema";
+import { LogCollapsingHighestDenseDDSketch } from "@datadog/sketches-js";
 import { ANALYTICS_COHORTS, ANALYTICS_STATUSES, type AnalyticsCohortKey } from "./cohorts";
 import type { ParticipantStatus } from "../repo/types";
 
@@ -22,6 +23,16 @@ export interface DescriptiveStats {
   max: number;
   mean: number;
   median: number;
+  /** Quantile method and any approximation limits; absent values are never suppressed. */
+  quantiles: {
+    method: "hyndman_fan_type_7" | "datadog_ddsketch";
+    approximate: boolean;
+    relativeValueAccuracy: number | null;
+    binLimitPerSign: number | null;
+    binsCollapsed: boolean;
+    mappingRangeExceeded: boolean;
+    errorGuarantee: "exact" | "relative_value_error" | "not_guaranteed";
+  };
 }
 
 export interface QuestionSummaryDisclosureRisk {
@@ -72,8 +83,15 @@ export interface QuestionSummaryAccumulatorSnapshot {
   distributionUnmappedResponseCount: number;
   numericUnmappedResponseCount: number;
   distributionCounts: { value: string; count: number }[];
-  /** Exact numeric observations for number questions; scales use bounded category counts. */
+  /** Exact numeric observations only while the exact sample limit is not exceeded. */
   numericValues: number[];
+  numericSketch?: { method: "datadog_ddsketch"; relativeValueAccuracy: number; binLimitPerSign: number; binsCollapsed: boolean; mappingRangeExceeded: boolean };
+  numericCount: number;
+  numericMean: number;
+  numericMin: number | null;
+  numericMax: number | null;
+  numericSketchCollapsed: boolean;
+  numericSketchRangeExceeded: boolean;
 }
 
 export interface QuestionSummaryAccumulator {
@@ -92,10 +110,22 @@ interface QuestionSummaryAccumulatorMergeState {
   numericUnmappedResponseCount: number;
   distributionCounts: readonly { value: string; count: number }[];
   numericValues: number[];
+  numericSketch?: LogCollapsingHighestDenseDDSketch;
+  numericCount: number;
+  numericMean: number;
+  numericMin: number | null;
+  numericMax: number | null;
+  numericSketchCollapsed: boolean;
+  numericSketchRangeExceeded: boolean;
   clear(): void;
 }
 
 const accumulatorMergeStates = new WeakMap<QuestionSummaryAccumulator, () => QuestionSummaryAccumulatorMergeState>();
+
+/** Exact Type-7 quantiles are retained for ordinary/small cohorts; larger cohorts use bounded memory. */
+export const EXACT_NUMERIC_QUANTILE_LIMIT = 256;
+export const NUMERIC_SKETCH_RELATIVE_ACCURACY = 0.02;
+export const NUMERIC_SKETCH_BIN_LIMIT_PER_SIGN = 512;
 
 export interface CohortAnalyticsRespondent extends AnalyticsRespondent {
   status: ParticipantStatus;
@@ -185,6 +215,74 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   let distributionUnmappedResponseCount = 0;
   let numericUnmappedResponseCount = 0;
   let numericValues: number[] = [];
+  let numericSketch: LogCollapsingHighestDenseDDSketch | undefined;
+  let numericCount = 0;
+  let numericMean = 0;
+  let numericMin: number | null = null;
+  let numericMax: number | null = null;
+  let numericSketchCollapsed = false;
+  let numericSketchRangeExceeded = false;
+
+  function newNumericSketch() {
+    return new LogCollapsingHighestDenseDDSketch({
+      relativeAccuracy: NUMERIC_SKETCH_RELATIVE_ACCURACY,
+      binLimit: NUMERIC_SKETCH_BIN_LIMIT_PER_SIGN,
+    });
+  }
+
+  function hasCollapsedBins(sketch: LogCollapsingHighestDenseDDSketch) {
+    return Boolean((sketch.store as { isCollapsed?: boolean }).isCollapsed)
+      || Boolean((sketch.negativeStore as { isCollapsed?: boolean }).isCollapsed);
+  }
+
+  function mergeNumericSketches(target: LogCollapsingHighestDenseDDSketch, source: LogCollapsingHighestDenseDDSketch) {
+    if (!source.count) return;
+    if (!target.count) {
+      target.store.copy(source.store);
+      target.negativeStore.copy(source.negativeStore);
+    } else {
+      // @datadog/sketches-js 2.1.1's BaseDDSketch.merge omits negativeStore; merge both bounded stores here.
+      target.store.merge(source.store);
+      target.negativeStore.merge(source.negativeStore);
+    }
+    target.zeroCount += source.zeroCount;
+    target.count += source.count;
+    target.sum += source.sum;
+    target.min = Math.min(target.min, source.min);
+    target.max = Math.max(target.max, source.max);
+  }
+
+  function isOutsideSketchMapping(sketch: LogCollapsingHighestDenseDDSketch, value: number) {
+    const magnitude = Math.abs(value);
+    const mapping = sketch.mapping as { minPossible: number; maxPossible: number };
+    return magnitude !== 0 && (magnitude <= mapping.minPossible || magnitude >= mapping.maxPossible);
+  }
+
+  function promoteNumericValues() {
+    if (numericSketch) return;
+    numericSketch = newNumericSketch();
+    for (const value of numericValues) {
+      numericSketch.accept(value);
+      numericSketchRangeExceeded ||= isOutsideSketchMapping(numericSketch, value);
+    }
+    numericValues = [];
+    numericSketchCollapsed ||= hasCollapsedBins(numericSketch);
+  }
+
+  function addNumericValue(value: number) {
+    if (!numericSketch && numericValues.length < EXACT_NUMERIC_QUANTILE_LIMIT) {
+      numericValues.push(value);
+    } else {
+      promoteNumericValues();
+      numericSketch!.accept(value);
+      numericSketchCollapsed ||= hasCollapsedBins(numericSketch!);
+      numericSketchRangeExceeded ||= isOutsideSketchMapping(numericSketch!, value);
+    }
+    numericCount += 1;
+    numericMean = numericMean * ((numericCount - 1) / numericCount) + value / numericCount;
+    numericMin = numericMin === null ? value : Math.min(numericMin, value);
+    numericMax = numericMax === null ? value : Math.max(numericMax, value);
+  }
 
   function add(respondent: AnalyticsRespondent) {
     cohortCount += 1;
@@ -211,29 +309,49 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       const result = validateAnswer(q, answer?.value);
       const value = result.ok && typeof result.value === "number" ? result.value : null;
       if (value === null) numericUnmappedResponseCount += 1;
-      else if (q.type === "number") numericValues.push(value);
+      else if (q.type === "number") addNumericValue(value);
     }
   }
 
   function finish(): QuestionSummary {
-    numericValues.sort((a, b) => a - b);
     let numeric: DescriptiveStats | null = null;
     let scaleMedian: number | null = null;
     let scaleMedianRange: QuestionSummary["scaleMedianRange"] = null;
-    if (q.type === "number" && numericValues.length) {
-      // Divide each value before adding so a sum of otherwise valid finite values cannot overflow.
-      const mean = numericValues.reduce((average, value, index) => {
-        const count = index + 1;
-        return average * ((count - 1) / count) + value / count;
-      }, 0);
+    if (q.type === "number" && numericCount) {
+      const sortedValues = numericSketch ? null : [...numericValues].sort((a, b) => a - b);
+      const approximate = numericSketch !== undefined;
+      const quantile = (probability: number) => approximate
+        ? Math.min(numericMax!, Math.max(numericMin!, numericSketch!.getValueAtQuantile(probability)))
+        : quantileType7(sortedValues!, probability);
+      const binsCollapsed = numericSketchCollapsed || (numericSketch ? hasCollapsedBins(numericSketch) : false);
+      const mappingRangeExceeded = numericSketchRangeExceeded;
       numeric = {
-        n: numericValues.length,
-        min: numericValues[0],
-        q1: quantileType7(numericValues, 0.25),
-        q3: quantileType7(numericValues, 0.75),
-        max: numericValues[numericValues.length - 1],
-        mean,
-        median: median(numericValues),
+        n: numericCount,
+        min: numericMin!,
+        q1: quantile(0.25),
+        q3: quantile(0.75),
+        max: numericMax!,
+        mean: numericMean,
+        median: approximate ? quantile(0.5) : median(sortedValues!),
+        quantiles: approximate
+          ? {
+            method: "datadog_ddsketch",
+            approximate: true,
+            relativeValueAccuracy: NUMERIC_SKETCH_RELATIVE_ACCURACY,
+            binLimitPerSign: NUMERIC_SKETCH_BIN_LIMIT_PER_SIGN,
+            binsCollapsed,
+            mappingRangeExceeded,
+            errorGuarantee: binsCollapsed || mappingRangeExceeded ? "not_guaranteed" : "relative_value_error",
+          }
+          : {
+            method: "hyndman_fan_type_7",
+            approximate: false,
+            relativeValueAccuracy: null,
+            binLimitPerSign: null,
+            binsCollapsed: false,
+            mappingRangeExceeded: false,
+            errorGuarantee: "exact",
+          },
       };
     }
     if (q.type === "scale" && distributionDenominator) {
@@ -289,14 +407,31 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       numericUnmappedResponseCount,
       distributionCounts: distributionRows.map(({ value, count }) => ({ value, count })),
       numericValues: [...numericValues],
+      ...(numericSketch ? {
+        numericSketch: {
+          method: "datadog_ddsketch" as const,
+          relativeValueAccuracy: NUMERIC_SKETCH_RELATIVE_ACCURACY,
+          binLimitPerSign: NUMERIC_SKETCH_BIN_LIMIT_PER_SIGN,
+          binsCollapsed: numericSketchCollapsed || hasCollapsedBins(numericSketch),
+          mappingRangeExceeded: numericSketchRangeExceeded,
+        },
+      } : {}),
+      numericCount,
+      numericMean,
+      numericMin,
+      numericMax,
+      numericSketchCollapsed: numericSketchCollapsed || (numericSketch ? hasCollapsedBins(numericSketch) : false),
+      numericSketchRangeExceeded,
     };
   }
 
   function merge(other: QuestionSummaryAccumulator, options: { consumeSource?: boolean } = {}) {
-    // Keep the public snapshot independent, but avoid allocating a second full numeric list when
-    // merging accumulators created here. Exact quantiles still require retaining each value.
-    const sourceState = accumulatorMergeStates.get(other);
-    const source = sourceState?.() ?? other.snapshot();
+    // Prefer private state to avoid copying sketches or exact values during internal cohort merges.
+    const sourceState = accumulatorMergeStates.get(other)?.();
+    const source = sourceState ?? other.snapshot();
+    if (!sourceState && source.numericSketch) {
+      throw new Error("Cannot merge a numeric sketch snapshot without its mergeable accumulator state.");
+    }
     cohortCount += source.cohortCount;
     answeredCount += source.answeredCount;
     noteOnlyCount += source.noteOnlyCount;
@@ -307,11 +442,45 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       const target = byValue.get(row.value);
       if (target) target.count += row.count;
     }
-    for (const value of source.numericValues) numericValues.push(value);
+    const sourceNumericCount = source.numericCount ?? source.numericValues.length;
+    if (sourceNumericCount) {
+      if (numericCount + sourceNumericCount > EXACT_NUMERIC_QUANTILE_LIMIT) promoteNumericValues();
+      if (!numericSketch && !source.numericSketch) {
+        numericValues.push(...source.numericValues);
+      } else {
+        promoteNumericValues();
+        if (sourceNumericCount) {
+          const sourceSketch = sourceState?.numericSketch ?? null;
+          if (sourceSketch) mergeNumericSketches(numericSketch!, sourceSketch);
+          else for (const value of source.numericValues) numericSketch!.accept(value);
+          numericSketchCollapsed ||= source.numericSketchCollapsed ?? false;
+          numericSketchRangeExceeded ||= source.numericSketchRangeExceeded ?? false;
+          if (!sourceSketch) {
+            for (const value of source.numericValues) {
+              numericSketchRangeExceeded ||= isOutsideSketchMapping(numericSketch!, value);
+            }
+          }
+          numericSketchCollapsed ||= hasCollapsedBins(numericSketch!);
+        }
+      }
+      if (numericCount === 0) {
+        numericMean = source.numericMean ?? source.numericValues.reduce((sum, value) => sum + value / sourceNumericCount, 0);
+        numericMin = source.numericMin ?? Math.min(...source.numericValues);
+        numericMax = source.numericMax ?? Math.max(...source.numericValues);
+        numericCount = sourceNumericCount;
+      } else {
+        const combinedCount = numericCount + sourceNumericCount;
+        const sourceMean = source.numericMean ?? source.numericValues.reduce((sum, value) => sum + value / sourceNumericCount, 0);
+        numericMean = numericMean * (numericCount / combinedCount) + sourceMean * (sourceNumericCount / combinedCount);
+        numericMin = Math.min(numericMin!, source.numericMin ?? Math.min(...source.numericValues));
+        numericMax = Math.max(numericMax!, source.numericMax ?? Math.max(...source.numericValues));
+        numericCount = combinedCount;
+      }
+    }
     // Some one-shot merges (segmented status summaries) have already materialized the source
     // summary and will never use that accumulator again. Clear its full state after merging so
     // its exact observations can be collected without leaving a partially valid accumulator.
-    if (options.consumeSource && sourceState) sourceState().clear();
+    if (options.consumeSource && sourceState) sourceState.clear();
   }
 
   function clear() {
@@ -323,6 +492,13 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     numericUnmappedResponseCount = 0;
     for (const row of distributionRows) row.count = 0;
     numericValues = [];
+    numericSketch = undefined;
+    numericCount = 0;
+    numericMean = 0;
+    numericMin = null;
+    numericMax = null;
+    numericSketchCollapsed = false;
+    numericSketchRangeExceeded = false;
   }
 
   const accumulator = { add, merge, finish, snapshot };
@@ -335,6 +511,13 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
     numericUnmappedResponseCount,
     distributionCounts: distributionRows,
     numericValues,
+    numericSketch,
+    numericCount,
+    numericMean,
+    numericMin,
+    numericMax,
+    numericSketchCollapsed: numericSketchCollapsed || (numericSketch ? hasCollapsedBins(numericSketch) : false),
+    numericSketchRangeExceeded,
     clear,
   }));
   return accumulator;
@@ -403,7 +586,9 @@ export async function summarizeSelectedQuestionCohort(
   for (const status of selectedStatuses) {
     const accumulators = byStatus.get(status)!;
     statusSummaries[status] = Object.fromEntries([...accumulators].map(([id, accumulator]) => [id, accumulator.finish()]));
-    for (const [id, accumulator] of accumulators) combinedAccumulators.get(id)?.merge(accumulator);
+    for (const [id, accumulator] of accumulators) {
+      combinedAccumulators.get(id)?.merge(accumulator, { consumeSource: true });
+    }
   }
   const combined = Object.fromEntries([...combinedAccumulators].map(([id, accumulator]) => [id, accumulator.finish()]));
 

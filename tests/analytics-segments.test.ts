@@ -3,6 +3,8 @@ import { canSegmentByAnswer, summarizeAnswerSegments } from "../src/lib/analytic
 import type { CohortAnalyticsRespondent } from "../src/lib/analytics/summary";
 import type { Question } from "../src/lib/format/schema";
 
+const exactQuantiles = { method: "hyndman_fan_type_7", approximate: false, relativeValueAccuracy: null, binLimitPerSign: null, binsCollapsed: false, mappingRangeExceeded: false, errorGuarantee: "exact" } as const;
+
 const topics: Question = {
   id: "topics",
   type: "multi",
@@ -115,8 +117,8 @@ describe("answer-segment analytics", () => {
     })(), undefined, true);
 
     const alpha = result.segments.find((group) => group.value === "alpha");
-    expect(alpha?.summaries.amount.numeric).toEqual({ n: 4, min: 1, q1: 1.75, median: 2.5, q3: 3.25, max: 4, mean: 2.5 });
-    expect(alpha?.statusSummaries?.invited?.amount.numeric).toEqual({ n: 1, min: 1, q1: 1, median: 1, q3: 1, max: 1, mean: 1 });
-    expect(alpha?.statusSummaries?.submitted?.amount.numeric).toEqual({ n: 3, min: 2, q1: 2.5, median: 3, q3: 3.5, max: 4, mean: 3 });
+    expect(alpha?.summaries.amount.numeric).toEqual({ n: 4, min: 1, q1: 1.75, median: 2.5, q3: 3.25, max: 4, mean: 2.5, quantiles: exactQuantiles });
+    expect(alpha?.statusSummaries?.invited?.amount.numeric).toEqual({ n: 1, min: 1, q1: 1, median: 1, q3: 1, max: 1, mean: 1, quantiles: exactQuantiles });
+    expect(alpha?.statusSummaries?.submitted?.amount.numeric).toEqual({ n: 3, min: 2, q1: 2.5, median: 3, q3: 3.5, max: 4, mean: 3, quantiles: exactQuantiles });
   });
 });

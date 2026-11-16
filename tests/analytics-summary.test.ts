@@ -3,6 +3,16 @@ import { createQuestionSummaryAccumulator, summarizeQuestion, type AnalyticsResp
 import { formatPercentage } from "../src/lib/analytics/format";
 import type { Question } from "../src/lib/format/schema";
 
+const exactQuantiles = {
+  method: "hyndman_fan_type_7",
+  approximate: false,
+  relativeValueAccuracy: null,
+  binLimitPerSign: null,
+  binsCollapsed: false,
+  mappingRangeExceeded: false,
+  errorGuarantee: "exact",
+} as const;
+
 const at = "2026-11-15T00:00:00.000Z";
 const respondent = (value?: string | number | string[], note?: string): AnalyticsRespondent => ({
   answers: value === undefined && note === undefined ? {} : { q: { ...(value === undefined ? {} : { value }), ...(note === undefined ? {} : { note }), updatedAt: at } },
@@ -36,7 +46,7 @@ describe("descriptive question summaries", () => {
       },
     });
     const numberSummary = summarizeQuestion(number, [respondent(7)]);
-    expect(numberSummary.numeric).toEqual({ n: 1, min: 7, q1: 7, median: 7, q3: 7, max: 7, mean: 7 });
+    expect(numberSummary.numeric).toEqual({ n: 1, min: 7, q1: 7, median: 7, q3: 7, max: 7, mean: 7, quantiles: exactQuantiles });
     expect(numberSummary.disclosureRisk.singletonNumericSummary).toBe(true);
   });
 
@@ -66,7 +76,7 @@ describe("descriptive question summaries", () => {
   it("reports number summaries while retaining non-numeric legacy values as unmapped", () => {
     const q: Question = { id: "q", type: "number", label: "Budget" };
     const summary = summarizeQuestion(q, [respondent(1), respondent(2), respondent(3), respondent("unknown"), respondent()]);
-    expect(summary.numeric).toEqual({ n: 3, min: 1, q1: 1.5, median: 2, q3: 2.5, max: 3, mean: 2 });
+    expect(summary.numeric).toEqual({ n: 3, min: 1, q1: 1.5, median: 2, q3: 2.5, max: 3, mean: 2, quantiles: exactQuantiles });
     expect(summary.unmappedResponseCount).toBe(1);
     expect(summary.answeredCount).toBe(4);
   });
@@ -74,7 +84,7 @@ describe("descriptive question summaries", () => {
   it("excludes out-of-range number values from descriptive statistics", () => {
     const q: Question = { id: "q", type: "number", label: "Budget", min: 0, max: 10 };
     const summary = summarizeQuestion(q, [respondent(2), respondent(99), respondent("bad")]);
-    expect(summary.numeric).toEqual({ n: 1, min: 2, q1: 2, median: 2, q3: 2, max: 2, mean: 2 });
+    expect(summary.numeric).toEqual({ n: 1, min: 2, q1: 2, median: 2, q3: 2, max: 2, mean: 2, quantiles: exactQuantiles });
     expect(summary).toMatchObject({ answeredCount: 3, unmappedResponseCount: 2 });
   });
 
@@ -93,6 +103,109 @@ describe("descriptive question summaries", () => {
     expect(summary.numeric).toMatchObject({ q1: 1.75, median: 2.5, q3: 3.25 });
   });
 
+  it("switches large numeric cohorts to bounded DDSketch quantiles and drops exact observations", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const accumulator = createQuestionSummaryAccumulator(q);
+    for (let value = 0; value <= 256; value += 1) accumulator.add(respondent(value));
+
+    const snapshot = accumulator.snapshot();
+    const summary = accumulator.finish().numeric!;
+
+    expect(snapshot.numericValues).toEqual([]);
+    expect(snapshot.numericSketch).toEqual({ method: "datadog_ddsketch", relativeValueAccuracy: 0.02, binLimitPerSign: 512, binsCollapsed: false, mappingRangeExceeded: false });
+    expect(summary).toMatchObject({
+      n: 257,
+      min: 0,
+      max: 256,
+      quantiles: {
+        method: "datadog_ddsketch",
+        approximate: true,
+        relativeValueAccuracy: 0.02,
+        binLimitPerSign: 512,
+        binsCollapsed: false,
+        mappingRangeExceeded: false,
+        errorGuarantee: "relative_value_error",
+      },
+    });
+    expect(summary.mean).toBeCloseTo(128, 10);
+    expect(Math.abs(summary.q1 - 64) / 64).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(summary.median - 128) / 128).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(summary.q3 - 192) / 192).toBeLessThanOrEqual(0.02);
+  });
+
+  it("merges bounded quantile sketches and preserves exact extrema and mean", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const combined = createQuestionSummaryAccumulator(q);
+    const source = createQuestionSummaryAccumulator(q);
+    for (let value = -128; value <= 128; value += 1) {
+      (value < 0 ? combined : source).add(respondent(value));
+    }
+
+    combined.merge(source);
+    const snapshot = combined.snapshot();
+    const summary = combined.finish().numeric!;
+
+    expect(snapshot.numericValues).toEqual([]);
+    expect(summary).toMatchObject({
+      n: 257,
+      min: -128,
+      max: 128,
+      quantiles: { method: "datadog_ddsketch", approximate: true, binsCollapsed: false },
+    });
+    expect(summary.mean).toBeCloseTo(0, 10);
+  });
+
+  it("merges negative bins from two already-promoted sketches", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const target = createQuestionSummaryAccumulator(q);
+    const source = createQuestionSummaryAccumulator(q);
+    for (let value = -257; value <= -1; value += 1) target.add(respondent(value));
+    for (let value = -514; value <= -258; value += 1) source.add(respondent(value));
+
+    target.merge(source);
+    const summary = target.finish().numeric!;
+
+    expect(summary).toMatchObject({
+      n: 514,
+      min: -514,
+      max: -1,
+      quantiles: { method: "datadog_ddsketch", approximate: true, binsCollapsed: false, mappingRangeExceeded: false, errorGuarantee: "relative_value_error" },
+    });
+    expect(summary.median).toBeLessThan(-250);
+    expect(summary.median).toBeGreaterThan(-270);
+  });
+
+  it("keeps approximate quartiles finite at floating-point extremes", () => {
+    const q: Question = { id: "q", type: "number", label: "Large value" };
+    const summary = summarizeQuestion(q, Array.from({ length: 257 }, () => respondent(Number.MAX_VALUE))).numeric!;
+
+    expect(summary).toMatchObject({
+      n: 257,
+      min: Number.MAX_VALUE,
+      max: Number.MAX_VALUE,
+      q1: Number.MAX_VALUE,
+      median: Number.MAX_VALUE,
+      q3: Number.MAX_VALUE,
+      quantiles: { approximate: true, binsCollapsed: false, mappingRangeExceeded: true, errorGuarantee: "not_guaranteed" },
+    });
+    expect(Number.isFinite(summary.median)).toBe(true);
+    expect(summary.mean / Number.MAX_VALUE).toBeCloseTo(1, 14);
+  });
+
+  it("marks collapsed DDSketch bins when extreme ranges remove the relative-error guarantee", () => {
+    const q: Question = { id: "q", type: "number", label: "Score" };
+    const respondents = Array.from({ length: 255 }, (_, value) => respondent(value));
+    respondents.push(respondent(1e-300), respondent(1e300));
+    const summary = summarizeQuestion(q, respondents).numeric!;
+
+    expect(summary).toMatchObject({
+      n: 257,
+      min: 0,
+      max: 1e300,
+      quantiles: { approximate: true, binsCollapsed: true, mappingRangeExceeded: false, errorGuarantee: "not_guaranteed" },
+    });
+  });
+
   it("merges exact numeric values without exposing mutable snapshots to the merge", () => {
     const q: Question = { id: "q", type: "number", label: "Score" };
     const combined = createQuestionSummaryAccumulator(q);
@@ -105,8 +218,8 @@ describe("descriptive question summaries", () => {
     snapshot.numericValues.push(1000);
     combined.merge(source);
 
-    expect(combined.finish().numeric).toEqual({ n: 3, min: 1, q1: 2, median: 3, q3: 5.5, max: 8, mean: 4 });
-    expect(source.finish().numeric).toEqual({ n: 2, min: 3, q1: 4.25, median: 5.5, q3: 6.75, max: 8, mean: 5.5 });
+    expect(combined.finish().numeric).toEqual({ n: 3, min: 1, q1: 2, median: 3, q3: 5.5, max: 8, mean: 4, quantiles: exactQuantiles });
+    expect(source.finish().numeric).toEqual({ n: 2, min: 3, q1: 4.25, median: 5.5, q3: 6.75, max: 8, mean: 5.5, quantiles: exactQuantiles });
   });
 
   it("can consume an accumulator after a one-shot merge without retaining source observations", () => {
@@ -117,7 +230,7 @@ describe("descriptive question summaries", () => {
 
     combined.merge(source, { consumeSource: true });
 
-    expect(combined.finish().numeric).toEqual({ n: 3, min: 1, q1: 2, median: 3, q3: 5.5, max: 8, mean: 4 });
+    expect(combined.finish().numeric).toEqual({ n: 3, min: 1, q1: 2, median: 3, q3: 5.5, max: 8, mean: 4, quantiles: exactQuantiles });
     expect(source.snapshot()).toMatchObject({ cohortCount: 0, answeredCount: 0, distributionDenominator: 0, numericValues: [] });
   });
 

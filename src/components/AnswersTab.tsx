@@ -8,7 +8,7 @@ import { PreviewFrame } from "./PreviewFrame";
 import { Badge, Icon, Modal } from "./ui";
 import { fullTime } from "@/lib/time";
 import { summarizeQuestion, type QuestionSummary } from "@/lib/analytics/summary";
-import { formatPercentage } from "@/lib/analytics/format";
+import { describeNumericQuantiles, formatPercentage } from "@/lib/analytics/format";
 
 const STATUS: Record<PersonRow["status"], { label: string; kind: "" | "info" | "ok" }> = { invited: { label: "Not started", kind: "" }, in_progress: { label: "In progress", kind: "info" }, submitted: { label: "Submitted", kind: "ok" } };
 
@@ -102,7 +102,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                       <div className="meta"><span className="code-chip">{q.id}</span><span>{q.type}</span>{q.required && <Badge kind="info" plain>Required</Badge>}<span>{answeredBy.length} of {people.length} answered</span></div>
                     </div>
                     <Tally q={q} summary={summary} />
-                    {summary.numeric && <p className="question-stats">Numeric summary for n={summary.numeric.n}: minimum {fmtNumber(summary.numeric.min)} · median {fmtNumber(summary.numeric.median)} · mean {fmtNumber(summary.numeric.mean)} · maximum {fmtNumber(summary.numeric.max)}. Descriptive only.</p>}
+                    {summary.numeric && <p className="question-stats">Numeric summary for n={summary.numeric.n}: minimum {fmtNumber(summary.numeric.min)} · median {fmtNumber(summary.numeric.median)} · mean {fmtNumber(summary.numeric.mean)} · maximum {fmtNumber(summary.numeric.max)}. Descriptive only. {describeNumericQuantiles(summary.numeric)}</p>}
                     {summary.scaleMedianRange !== null && <p className="question-stats">{summary.scaleMedianRange.lower === summary.scaleMedianRange.upper ? "Median category" : "Median categories"}: {fmtScaleMedianRange(summary.scaleMedianRange)} · valid n={summary.distributionDenominator}. These are observed ordinal categories; codes are not averaged and no mean is calculated.</p>}
                     {summary.unmappedResponseCount > 0 && <p className="question-warning">{summary.unmappedResponseCount} stored {summary.unmappedResponseCount === 1 ? "answer does" : "answers do"} not match this survey version's options or range and {summary.unmappedResponseCount === 1 ? "is" : "are"} excluded from the summary.</p>}
                     <div className="stack" style={{ gap: 8 }}>

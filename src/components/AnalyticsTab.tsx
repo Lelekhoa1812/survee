@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { QuestionSummary } from "@/lib/analytics/summary";
 import type { AnswerSegmentGroup } from "@/lib/analytics/segments";
-import { formatPercentage } from "@/lib/analytics/format";
+import { describeNumericQuantiles, formatPercentage, numericQuantileMethodLabel } from "@/lib/analytics/format";
 import { buildAnalyticsCsv } from "@/lib/analytics/export";
 import { ANALYTICS_COHORTS, analyticsCohortForStatuses, type AnalyticsCohortKey } from "@/lib/analytics/cohorts";
 import type { Question, QuestionType } from "@/lib/format/schema";
@@ -134,9 +134,10 @@ function NumericSummary({ summary, display }: { summary: QuestionSummary; displa
       <div className="table-wrap analysis-table-wrap">
         <table className="t">
           <caption className="sr">Descriptive statistics for numeric answers</caption>
-          <thead><tr><th scope="col">Valid n</th><th scope="col">Minimum</th><th scope="col">Q1</th><th scope="col">Median</th><th scope="col">Q3</th><th scope="col">Mean</th><th scope="col">Maximum</th></tr></thead>
-          <tbody><tr><td>{stats.n}</td><td>{formatNumber(stats.min)}</td><td>{formatNumber(stats.q1)}</td><td>{formatNumber(stats.median)}</td><td>{formatNumber(stats.q3)}</td><td>{formatNumber(stats.mean)}</td><td>{formatNumber(stats.max)}</td></tr></tbody>
+          <thead><tr><th scope="col">Valid n</th><th scope="col">Minimum</th><th scope="col">Q1</th><th scope="col">Median</th><th scope="col">Q3</th><th scope="col">Mean</th><th scope="col">Maximum</th><th scope="col">Quartile method</th></tr></thead>
+          <tbody><tr><td>{stats.n}</td><td>{formatNumber(stats.min)}</td><td>{formatNumber(stats.q1)}</td><td>{formatNumber(stats.median)}</td><td>{formatNumber(stats.q3)}</td><td>{formatNumber(stats.mean)}</td><td>{formatNumber(stats.max)}</td><td>{numericQuantileMethodLabel(stats)}</td></tr></tbody>
         </table>
+        <p className="analysis-text-note">{describeNumericQuantiles(stats)}</p>
       </div>
     );
   }
@@ -150,7 +151,7 @@ function NumericSummary({ summary, display }: { summary: QuestionSummary; displa
           <div
             className="analysis-boxplot"
             role="img"
-            aria-label={`Number response range and quartiles: minimum ${formatNumber(stats.min)}, first quartile ${formatNumber(stats.q1)}, median ${formatNumber(stats.median)}, third quartile ${formatNumber(stats.q3)}, maximum ${formatNumber(stats.max)}; valid n ${stats.n}.`}
+            aria-label={`Number response range and quartiles: minimum ${formatNumber(stats.min)}, first quartile ${formatNumber(stats.q1)}, median ${formatNumber(stats.median)}, third quartile ${formatNumber(stats.q3)}, maximum ${formatNumber(stats.max)}; valid n ${stats.n}; quartiles ${numericQuantileMethodLabel(stats)}.`}
           >
             <div className="analysis-boxplot-track" aria-hidden="true" />
             {span === 0 ? (
@@ -172,7 +173,7 @@ function NumericSummary({ summary, display }: { summary: QuestionSummary; displa
         <div><dt>Q3</dt><dd>{formatNumber(stats.q3)}</dd></div>
         <div><dt>Mean</dt><dd>{formatNumber(stats.mean)}</dd></div>
       </dl>
-      <p className="analysis-text-note">Box spans Q1 to Q3; line marks the median. Whiskers show the minimum and maximum, not outlier fences.</p>
+      <p className="analysis-text-note">Box spans Q1 to Q3; line marks the median. Whiskers show the minimum and maximum, not outlier fences. {describeNumericQuantiles(stats)}</p>
     </div>
   );
 }
@@ -276,7 +277,7 @@ function ComparisonNumericChart({ summaries }: { summaries: Record<ParticipantSt
   const position = (value: number) => span === 0 ? 50 : ((value - minimum) / span) * 100;
   return (
     <div className="analysis-compare-numeric">
-      <p className="analysis-text-note">Each status uses the same linear scale. The box spans Q1–Q3; the marker is the median and the line shows minimum–maximum.</p>
+      <p className="analysis-text-note">Each status uses the same linear scale. The box spans Q1–Q3; the marker is the median and the line shows minimum–maximum. Quartiles may be approximate; each row's method and error limit are included in its accessible label and data table.</p>
       <div className="analysis-compare-range-list" role="list" aria-label="Numeric ranges by status">
         {COMPARE_STATUSES.map((status) => {
           const summary = summaries[status];
@@ -288,7 +289,7 @@ function ComparisonNumericChart({ summaries }: { summaries: Record<ParticipantSt
                 <span>valid n={stats?.n ?? 0}</span>
               </div>
               {stats ? <>
-                <div className={`analysis-compare-range analysis-status-${status}`} role="img" aria-label={`${STATUS_LABELS[status]} numeric range: minimum ${formatNumber(stats.min)}, first quartile ${formatNumber(stats.q1)}, median ${formatNumber(stats.median)}, third quartile ${formatNumber(stats.q3)}, maximum ${formatNumber(stats.max)}; valid n=${stats.n}`}>
+                <div className={`analysis-compare-range analysis-status-${status}`} role="img" aria-label={`${STATUS_LABELS[status]} numeric range: minimum ${formatNumber(stats.min)}, first quartile ${formatNumber(stats.q1)}, median ${formatNumber(stats.median)}, third quartile ${formatNumber(stats.q3)}, maximum ${formatNumber(stats.max)}; valid n=${stats.n}; quartiles ${numericQuantileMethodLabel(stats)}`}>
                   <span className="analysis-compare-whisker" aria-hidden="true" style={{ left: `${position(stats.min)}%`, width: `${position(stats.max) - position(stats.min)}%` }} />
                   <span className="analysis-compare-box" aria-hidden="true" style={{ left: `${position(stats.q1)}%`, width: `${position(stats.q3) - position(stats.q1)}%` }} />
                   <span className="analysis-compare-median" aria-hidden="true" style={{ left: `${position(stats.median)}%` }} />
@@ -316,6 +317,7 @@ function ComparisonTable({ question, summaries }: { question: Question; summarie
     { label: "Q3", value: (summary) => summary.numeric ? formatNumber(summary.numeric.q3) : "—" },
     { label: "Mean", value: (summary) => summary.numeric ? formatNumber(summary.numeric.mean) : "—" },
     { label: "Maximum", value: (summary) => summary.numeric ? formatNumber(summary.numeric.max) : "—" },
+    { label: "Quartile method", value: (summary) => summary.numeric ? numericQuantileMethodLabel(summary.numeric) : "—" },
   ];
   const countRows: { label: string; value: (summary: QuestionSummary) => number }[] = [
     { label: "Answered", value: (summary) => summary.answeredCount },

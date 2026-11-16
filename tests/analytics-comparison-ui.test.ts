@@ -84,12 +84,28 @@ describe("status comparison", () => {
 
     const html = renderToStaticMarkup(createElement(ComparisonQuestion, { question, summaries, display: "chart" }));
 
-    expect(html).toContain('aria-label="Invited · not started numeric range: minimum 0, first quartile 2.5, median 5, third quartile 7.5, maximum 10; valid n=2"');
+    expect(html).toContain('aria-label="Invited · not started numeric range: minimum 0, first quartile 2.5, median 5, third quartile 7.5, maximum 10; valid n=2; quartiles Hyndman–Fan type 7 (exact)"');
     expect(html).toContain("Min 0");
     expect(html).toContain("Max 100");
     expect(html).toContain("No valid numeric responses.");
     expect(html).toContain("Mean");
     expect(html).toContain("Show data table");
+  });
+
+  it("labels approximate and collapsed quartile summaries in the comparison table", () => {
+    const question: Question = { id: "budget", type: "number", label: "Budget" };
+    const answer = (value: number) => ({ answers: { budget: { value, updatedAt: at } } });
+    const summaries = {
+      invited: summarizeQuestion(question, Array.from({ length: 257 }, (_, value) => answer(value))),
+      in_progress: summarizeQuestion(question, [answer(1e-300), answer(1e300), ...Array.from({ length: 255 }, (_, value) => answer(value))]),
+      submitted: summarizeQuestion(question, [answer(7)]),
+    } satisfies Record<ParticipantStatus, ReturnType<typeof summarizeQuestion>>;
+
+    const html = renderToStaticMarkup(createElement(ComparisonQuestion, { question, summaries, display: "table" }));
+
+    expect(html).toContain("DDSketch (up to 2% relative-value error)");
+    expect(html).toContain("DDSketch (collapsed bins; no error bound)");
+    expect(html).toContain("Hyndman–Fan type 7 (exact)");
   });
 
   it("shows the central observed scale categories instead of an averaged code", () => {

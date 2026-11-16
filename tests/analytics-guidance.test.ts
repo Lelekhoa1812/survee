@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/13");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/14");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -42,7 +42,10 @@ describe("versioned analytics guidance", () => {
       "keyboard-operable",
       "histogram",
       "box plot",
-      "type-7 sample quantiles",
+      "type 7",
+      "ddsketch",
+      "relative-value error is not rank error",
+      "binscollapsed",
       "privacy",
       "ambiguity",
     ]) {

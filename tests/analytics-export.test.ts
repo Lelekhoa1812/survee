@@ -115,6 +115,25 @@ describe("analytics CSV export", () => {
     expect(csv.split("\r\n")[1]).toContain('"1","1.75","2.5","3.25","2.5","4"');
   });
 
+  it("exports the bounded quantile method and its error-guarantee status", () => {
+    const number = questionSchema.parse({ id: "score", type: "number", label: "Score" });
+    const summary = summarizeQuestion(number, Array.from({ length: 257 }, (_, value) => ({
+      answers: { score: { value, updatedAt: "2026-11-15T00:00:00.000Z" } },
+    })));
+    const [headerLine, dataLine] = buildAnalyticsCsv([{ question: number, summary }], "Everyone").trimEnd().split("\r\n");
+    const header = parseCsvLine(headerLine);
+    const data = parseCsvLine(dataLine);
+    const value = (name: string) => data[header.indexOf(name)];
+
+    expect(value("quantile_method")).toBe("datadog_ddsketch");
+    expect(value("quantile_approximate")).toBe("true");
+    expect(value("quantile_relative_value_accuracy")).toBe("0.02");
+    expect(value("quantile_bin_limit_per_sign")).toBe("512");
+    expect(value("quantile_bins_collapsed")).toBe("false");
+    expect(value("quantile_mapping_range_exceeded")).toBe("false");
+    expect(value("quantile_error_guarantee")).toBe("relative_value_error");
+  });
+
   it("exports the exact central category pair for even ordinal scale responses", () => {
     const scale = questionSchema.parse({ id: "agreement", type: "scale", label: "Agreement", min: 1, max: 5 });
     const summary = summarizeQuestion(scale, [
