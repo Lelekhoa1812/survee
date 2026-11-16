@@ -119,6 +119,7 @@ interface DtcgTokenRecord {
 }
 
 const DTCG_FORMAT_URL = "https://www.w3.org/community/reports/design-tokens/CG-FINAL-format-20251028/";
+const DTCG_COLOR_URL = "https://www.designtokens.org/TR/2025.10/color/";
 const DTCG_METADATA_KEYS = new Set(["$schema", "$type", "$description", "$extensions", "$deprecated"]);
 
 function detectDtcg(value: unknown, depth = 0, budget = { visited: 0 }): boolean {
@@ -155,7 +156,10 @@ function normalizedDtcgValue(value: unknown, type?: string): string | null {
     return `${value.value}${value.unit}`;
   }
   if (isRecord(value) && type === "color") {
-    if (typeof value.hex === "string") return value.hex;
+    // The DTCG hex member is only a fallback color; it does not erase alpha.
+    // Keep non-opaque (or malformed-alpha) colors intact so they remain manual
+    // review values and cannot enter opaque contrast estimates or CSS overlays.
+    if (typeof value.hex === "string" && (value.alpha === undefined || value.alpha === 1)) return value.hex;
     if (value.colorSpace === "srgb" && Array.isArray(value.components) && value.components.length === 3
       && value.components.every((component) => typeof component === "number" && Number.isFinite(component) && component >= 0 && component <= 1)
       && (value.alpha === undefined || value.alpha === 1)) {
@@ -644,8 +648,14 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
         name: "Design Tokens Format Module 2025.10 (bounded subset)",
         source: DTCG_FORMAT_URL,
         status: "W3C Design Tokens Community Group specification; not a W3C Standard.",
+        colorModule: {
+          name: "Design Tokens Color Module 2025.10",
+          source: DTCG_COLOR_URL,
+          status: "W3C Design Tokens Community Group specification; not a W3C Standard.",
+          alphaHandling: "A hex fallback does not override alpha. Colors with alpha other than 1 remain manual-review values and are excluded from opaque CSS overlays and inferred contrast checks.",
+        },
         supported: ["Nested groups and group $root tokens", "$value", "Inherited $type", "Color, dimension, and font-family normalization", "Curly-brace aliases", "Inline JSON Pointer references", "Top-level light/dark scope groups"],
-        limitations: ["Group $extends inheritance and resolver-file permutations are not resolved.", "External file or URL references are not fetched.", "Only inline token data is inspected; profile output remains proposal-only."],
+        limitations: ["Group $extends inheritance and resolver-file permutations are not resolved.", "External file or URL references are not fetched.", "Translucent colors need manual review and are excluded from opaque overlays and contrast checks.", "Only inline token data is inspected; profile output remains proposal-only."],
       },
     } : {}),
     sourceSha256: sourceHash,

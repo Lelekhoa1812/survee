@@ -9,7 +9,7 @@ function profile(source: string, format: "css" | "json" = "css") {
     profileVersion: string;
     policyVersion: string;
     sourceSha256: string;
-    tokenFormat?: { name: string; status: string; supported: string[]; limitations: string[] };
+    tokenFormat?: { name: string; status: string; supported: string[]; limitations: string[]; colorModule?: { name: string; source: string; alphaHandling: string } };
     extractedTokens: { name: string; value: string; scope: string; sourceContext: string; line: number | null; sourceType?: string }[];
     proposedMappings: { role: string; sourceToken: string; sourceType?: string; targetToken: string; scope: string; confidence: string; valueCheck: string }[];
     ambiguousMappings: { role: string; scope: string; sourceTokens: string[] }[];
@@ -109,6 +109,10 @@ describe("user-supplied design profile extraction", () => {
     expect(result.tokenFormat).toMatchObject({
       name: "Design Tokens Format Module 2025.10 (bounded subset)",
       status: "W3C Design Tokens Community Group specification; not a W3C Standard.",
+      colorModule: {
+        name: "Design Tokens Color Module 2025.10",
+        source: "https://www.designtokens.org/TR/2025.10/color/",
+      },
     });
     expect(result.extractedTokens).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "colors.canvas", value: "#ffffff", sourceType: "color" }),
@@ -119,6 +123,34 @@ describe("user-supplied design profile extraction", () => {
     expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "shape.radius", confidence: "high", sourceType: "dimension" }));
     expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "type.body", confidence: "high", sourceType: "fontFamily" }));
     expect(result.integrationProposal.status).toBe("proposal_only");
+  });
+
+  it("preserves DTCG alpha semantics when a translucent color has a hex fallback", () => {
+    const translucent = profile(JSON.stringify({
+      $schema: "https://www.designtokens.org/schemas/2025.10/format.json",
+      colors: {
+        $type: "color",
+        canvas: { $value: { colorSpace: "srgb", components: [0, 0, 0], alpha: 0.5, hex: "#000000" } },
+        text: { $value: "#ffffff" },
+      },
+    }), "json");
+
+    expect(translucent.extractedTokens.find((token) => token.name === "colors.canvas")?.value).toContain('"alpha":0.5');
+    expect(translucent.proposedMappings).toContainEqual(expect.objectContaining({
+      role: "color.canvas", sourceToken: "colors.canvas", confidence: "review", valueCheck: "manual_review",
+    }));
+    expect(translucent.contrastChecks).toContainEqual(expect.objectContaining({ scope: "default", status: "not_evaluated" }));
+    expect(translucent.integrationProposal.cssOverlay).not.toContain("--bg:");
+    expect(translucent.tokenFormat?.limitations.join(" ")).toContain("Translucent colors need manual review");
+
+    const opaque = profile(JSON.stringify({
+      $schema: "https://www.designtokens.org/schemas/2025.10/format.json",
+      colors: { $type: "color", canvas: { $value: { colorSpace: "srgb", components: [1, 1, 1], alpha: 1, hex: "#ffffff" } } },
+    }), "json");
+    expect(opaque.proposedMappings).toContainEqual(expect.objectContaining({
+      role: "color.canvas", confidence: "high", valueCheck: "recognized", value: "#ffffff",
+    }));
+    expect(opaque.integrationProposal.cssOverlay).toContain("--bg: #ffffff;");
   });
 
   it("resolves explicit $root token paths and inline JSON Pointer references", () => {
