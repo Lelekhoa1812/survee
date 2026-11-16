@@ -24,7 +24,7 @@ const ACCESSIBILITY_EVALUATION_METHOD = {
     "Define the product, routes, themes, technologies, user groups, and conformance target in scope.",
     "Explore the product's essential functionality and identify representative views, states, and complete task paths, including important branches and errors.",
     "Select and record a representative sample; include different content types, interaction patterns, and process branches rather than relying on a single screenshot.",
-    "Evaluate each selected sample against the chosen WCAG criteria using appropriate automated and manual checks. Run npm run a11y:audit at desktop and 320 CSS px for public routes. For the host console and respondent flow, use --authenticated with a disposable local account, optional interview/respondent fixture ids, and --report to save a privacy-minimized JSON record; manually inspect interactive states and record each method's evidence and limits.",
+    "Evaluate each selected sample against the chosen WCAG criteria using appropriate automated and manual checks. Run npm run a11y:audit at desktop, 320, 360, and 390 CSS px for public routes. For the host console and respondent flow, use --authenticated with a disposable local account, optional interview/respondent fixture ids, and --report to save a privacy-minimized JSON record; manually inspect interactive states and record each method's evidence and limits.",
     "For every selected sample, create one QA evidence row with its route, state/theme, viewport and input method, criterion, method/tool, observed result, evidence reference, and limitations. Mark checks that were not run as untested instead of omitting them; never include respondent personal data in evidence references.",
     "Report the scope, sample, methods, findings, and unresolved gaps. Do not claim full-product conformance from a static scan, checklist, or unrepresentative sample.",
   ],
@@ -122,6 +122,7 @@ const DESIGN_PLAN = {
         "Reduced-motion preference enabled",
         "Dark theme with representative controls and text",
         "Reflow at 320 CSS px with long content",
+        "Questionnaire layout at 360 and 390 CSS px",
       ],
       instructions: [
         "Create one row for every selected sample and criterion; include applicable starter samples or explain why they are out of scope.",
@@ -204,7 +205,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/14",
+    policyVersion: "kqa-design/15",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

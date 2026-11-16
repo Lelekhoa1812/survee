@@ -7,6 +7,7 @@ const store = vi.hoisted(() => ({
   tenants: [] as any[],
   memberships: [] as any[],
   invitations: [] as any[],
+  events: [] as any[],
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -24,6 +25,7 @@ vi.mock("../src/lib/db", () => ({
     tenants: async () => ({
       findOne: async (filter: any) => store.tenants.find((item) => matches(item, filter)) ?? null,
       find: (filter: any) => cursor(store.tenants.filter((item) => matches(item, filter))),
+      updateOne: async (filter: any, update: any) => updateOne(store.tenants, filter, update),
     }),
     memberships: async () => ({
       findOne: async (filter: any) => store.memberships.find((item) => matches(item, filter)) ?? null,
@@ -32,6 +34,12 @@ vi.mock("../src/lib/db", () => ({
         if (store.memberships.some((item) => item.tenantId === doc.tenantId && same(item.userId, doc.userId))) throw Object.assign(new Error("duplicate"), { code: 11000 });
         store.memberships.push(doc);
         return { insertedId: doc._id };
+      },
+      deleteOne: async (filter: any) => {
+        const index = store.memberships.findIndex((item) => matches(item, filter));
+        if (index < 0) return { deletedCount: 0 };
+        store.memberships.splice(index, 1);
+        return { deletedCount: 1 };
       },
     }),
     workspaceInvitations: async () => ({
@@ -49,6 +57,7 @@ vi.mock("../src/lib/db", () => ({
         return { matchedCount: 1, modifiedCount: 1 };
       },
     }),
+    events: async () => ({ insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; } }),
   },
   withMongoTransaction: async (work: (session: object) => Promise<unknown>) => work({}),
 }));
@@ -82,6 +91,7 @@ function updateOne(rows: any[], filter: any, update: any) {
   const doc = rows.find((item) => matches(item, filter));
   if (!doc) return { matchedCount: 0, modifiedCount: 0 };
   Object.assign(doc, update.$set ?? {});
+  for (const [key, value] of Object.entries(update.$inc ?? {})) doc[key] = (doc[key] ?? 0) + Number(value);
   for (const key of Object.keys(update.$unset ?? {})) delete doc[key];
   return { matchedCount: 1, modifiedCount: 1 };
 }
@@ -114,6 +124,7 @@ import {
   listAccountWorkspaces,
   listWorkspaceAccess,
   rememberWorkspace,
+  removeWorkspaceMember,
   revokeWorkspaceInvitation,
   revokeWorkspaceInvitationByToken,
 } from "../src/lib/repo/workspaces";
@@ -135,6 +146,7 @@ beforeEach(() => {
   store.tenants.splice(0);
   store.memberships.splice(0);
   store.invitations.splice(0);
+  store.events.splice(0);
   addTenant("axion", "Axion");
   addTenant("workspace-b", "Workspace B");
   addTenant("workspace-suspended", "Suspended", "suspended");
@@ -180,8 +192,65 @@ describe("workspace membership and invitations", () => {
     expect(store.invitations[0].tokenHash).toBe(createHash("sha256").update(second.token).digest("hex"));
     await expect(getWorkspaceInvitation(first.token)).resolves.toBeNull();
     const access = await listWorkspaceAccess("axion");
-    expect(access.members).toEqual([{ userId: ownerId.toHexString(), email: "owner@example.test", role: "owner", createdAt: expect.any(String) }]);
+    expect(access).toMatchObject({
+      ownerCount: 1,
+      members: [{ userId: ownerId.toHexString(), email: "owner@example.test", role: "owner", createdAt: expect.any(String) }],
+    });
     expect(access.invitations).toMatchObject([{ email: "new.person@example.test", role: "admin" }]);
+  });
+
+  it("removes one tenant membership, preserves other workspaces, and writes a minimal audit event", async () => {
+    addMembership("axion", inviteeId, "member");
+    addMembership("workspace-b", inviteeId, "admin");
+
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: true, role: "member" });
+    expect(store.memberships.some((item) => item.tenantId === "axion" && item.userId.equals(inviteeId))).toBe(false);
+    expect(store.memberships.some((item) => item.tenantId === "workspace-b" && item.userId.equals(inviteeId))).toBe(true);
+    expect(store.events).toMatchObject([{ tenantId: "axion", type: "workspace_member_removed", meta: {
+      actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), role: "member",
+    } }]);
+    expect(JSON.stringify(store.events)).not.toContain("member@example.test");
+  });
+
+  it("lets admins remove other admins but not owners, and blocks members from managing access", async () => {
+    const adminId = inviteeId;
+    const secondAdminId = new ObjectId("000000000000000000000003");
+    const memberId = new ObjectId("000000000000000000000004");
+    store.users.push(
+      { _id: secondAdminId, email: "second-admin@example.test", emailVerifiedAt: new Date() },
+      { _id: memberId, email: "member@example.test", emailVerifiedAt: new Date() },
+    );
+    addMembership("axion", adminId, "admin");
+    addMembership("axion", secondAdminId, "admin");
+    addMembership("axion", memberId, "member");
+
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: memberId.toHexString(), targetUserId: secondAdminId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "forbidden" });
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: adminId.toHexString(), targetUserId: ownerId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "forbidden" });
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: adminId.toHexString(), targetUserId: secondAdminId.toHexString() }))
+      .resolves.toEqual({ ok: true, role: "admin" });
+  });
+
+  it("protects the last owner and treats cross-tenant member ids as not found", async () => {
+    addMembership("workspace-b", inviteeId, "admin");
+
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: ownerId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "last_owner" });
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "not_found" });
+    expect(store.memberships.some((item) => item.tenantId === "axion" && item.userId.equals(ownerId))).toBe(true);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it("allows an owner to remove a co-owner without deleting the last owner", async () => {
+    addMembership("axion", inviteeId, "owner");
+
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: true, role: "owner" });
+    expect(store.tenants[0].membershipEpoch).toBe(1);
+    expect(store.memberships.filter((item) => item.tenantId === "axion" && item.role === "owner")).toHaveLength(1);
   });
 
   it("blocks non-admin inviters, duplicate members, revoked links, and cross-tenant revoke attempts", async () => {

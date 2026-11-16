@@ -33,6 +33,7 @@ interface TenantAudit {
 }
 
 interface AccountSettings {
+  userId: string;
   tenantName: string;
   email: string;
   role: string;
@@ -168,7 +169,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
       </nav>
 
       {account && <div id="workspace-account" className="settings-anchor"><AccountSettingsPanel account={account} /></div>}
-      {canManageKeys && <WorkspaceMembersPanel />}
+      {canManageKeys && account && <WorkspaceMembersPanel role={account.role} userId={account.userId} />}
 
       <div id="agent-connection" className="settings-grid settings-anchor">
         <section className="card">

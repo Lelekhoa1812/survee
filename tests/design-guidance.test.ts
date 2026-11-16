@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/14");
+    expect(guidance.policyVersion).toBe("kqa-design/15");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
@@ -14,6 +14,8 @@ describe("design guidance package", () => {
       "surfaceRoute", "stateTheme", "viewportInputMethod", "criterion", "methodTool", "observedResult", "evidenceReference", "limitationUntestedReason",
     ]);
     expect(guidance.designPlan.output.reviewEvidenceMatrix.starterSamples.join(" ")).toContain("Reflow at 320 CSS px");
+    expect(guidance.designPlan.output.reviewEvidenceMatrix.starterSamples.join(" ")).toContain("360 and 390 CSS px");
+    expect(guidance.designPlan.accessibilityEvaluationMethodology.steps.join(" ")).toContain("360, and 390 CSS px");
     expect(guidance.designPlan.output.reviewEvidenceMatrix.instructions.join(" ")).toContain("Do not omit untested samples");
     expect(guidance.designPlan.output.reviewEvidenceMatrix.instructions.join(" ")).toContain("respondent names, answers, private links");
     expect(guidance.reviewChecklist.join(" ")).toContain("one QA evidence row per selected sample");

@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, Icon, Spinner, useToast } from "./ui";
+import { api, Icon, Modal, Spinner, useToast } from "./ui";
 
 interface WorkspaceMember { userId: string; email: string; role: string; createdAt: string }
 interface PendingInvitation { id: string; email: string; role: "admin" | "member"; expiresAt: string }
-interface AccessList { members?: WorkspaceMember[]; invitations?: PendingInvitation[] }
+interface AccessList { members?: WorkspaceMember[]; invitations?: PendingInvitation[]; ownerCount?: number }
 
-export function WorkspaceMembersPanel() {
+export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: string; userId: string }) {
   const toast = useToast();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [ownerCount, setOwnerCount] = useState(0);
+  const [removing, setRemoving] = useState<WorkspaceMember | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member">("member");
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,7 @@ export function WorkspaceMembersPanel() {
     setError("");
     setMembers(result.data.members ?? []);
     setInvitations(result.data.invitations ?? []);
+    setOwnerCount(result.data.ownerCount ?? (result.data.members ?? []).filter((member) => member.role === "owner").length);
   }
 
   useEffect(() => { void load(); }, []);
@@ -61,6 +64,24 @@ export function WorkspaceMembersPanel() {
     await load();
   }
 
+  async function remove(member: WorkspaceMember) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const result = await api(`/api/admin/workspace-members/${encodeURIComponent(member.userId)}`, { method: "DELETE" });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.data.error ?? "Workspace access could not be removed.");
+      setRemoving(null);
+      return;
+    }
+    setRemoving(null);
+    toast(`${member.email} no longer has access to this workspace.`);
+    await load();
+  }
+
+  const canManageOwners = workspaceRole === "owner";
+
   return (
     <section id="workspace-members" className="card settings-anchor" style={{ marginBottom: 16 }}>
       <div className="card-head"><Icon name="users" size={16} /><div><h2>Workspace members</h2><div className="sub">Invite people to share this workspace. One KQA account can belong to several workspaces.</div></div></div>
@@ -75,7 +96,18 @@ export function WorkspaceMembersPanel() {
         {loading ? <p className="muted" role="status"><Spinner /> Loading workspace access…</p> : (
           <div className="settings-grid" style={{ margin: 0 }}>
             <section className="stack" aria-labelledby="workspace-active-members"><h3 id="workspace-active-members">Members ({members.length})</h3>
-              {members.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{members.map((member) => <li key={member.userId} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{member.email}</span><span className="muted">{member.role}</span></li>)}</ul> : <p className="muted">No members are listed.</p>}
+              {members.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{members.map((member) => {
+                const canRemove = member.userId !== userId && (member.role !== "owner" || (canManageOwners && ownerCount > 1));
+                return <li key={member.userId} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}>
+                  <span>{member.email}{member.userId === userId && <small className="muted"> · You</small>}</span>
+                  <span className="row wrap" style={{ justifyContent: "flex-end" }}><span className="muted">{member.role}</span>{canRemove
+                    ? <button className="btn sm danger" type="button" disabled={busy} onClick={() => setRemoving(member)}>Remove access</button>
+                    : member.role === "owner" && ownerCount <= 1
+                      ? <small className="muted">Last owner</small>
+                      : null}</span>
+                </li>;
+              })}</ul> : <p className="muted">No members are listed.</p>}
+              <p className="hint">Removing someone revokes access to this workspace and linked OAuth connections. Their KQA account and membership in other workspaces remain.</p>
             </section>
             <section className="stack" aria-labelledby="workspace-pending-invites"><h3 id="workspace-pending-invites">Pending invitations ({invitations.length})</h3>
               {invitations.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{invitations.map((invitation) => <li key={invitation.id} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{invitation.email}<small className="muted" style={{ display: "block" }}>{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</small></span><button className="btn sm" type="button" disabled={busy} onClick={() => void revoke(invitation)}>Revoke</button></li>)}</ul> : <p className="muted">No pending invitations.</p>}
@@ -83,6 +115,17 @@ export function WorkspaceMembersPanel() {
           </div>
         )}
       </div>
+      {removing && <Modal
+        title={`Remove ${removing.email} from this workspace?`}
+        onClose={() => { if (!busy) setRemoving(null); }}
+        actions={<>
+          <button className="btn ghost" type="button" disabled={busy} onClick={() => setRemoving(null)}>Cancel</button>
+          <button className="btn danger solid" type="button" disabled={busy} onClick={() => void remove(removing)}>{busy ? <Spinner /> : null} Remove access</button>
+        </>}
+      >
+        <p>This ends their access to this workspace, including OAuth connections linked to their membership. Their KQA account and access to other workspaces will remain.</p>
+        {removing.role === "owner" && <p className="callout warn">The workspace must keep at least one owner. Only an owner can remove another owner.</p>}
+      </Modal>}
     </section>
   );
 }

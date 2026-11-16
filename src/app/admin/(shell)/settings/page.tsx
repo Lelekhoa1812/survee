@@ -33,6 +33,7 @@ export default async function SettingsPage() {
   }
   const origin = publicBaseUrl();
   const account = session ? {
+    userId: session.userId,
     tenantName: session.tenantName,
     email: session.email,
     role: session.role,

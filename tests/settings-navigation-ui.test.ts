@@ -21,6 +21,7 @@ function renderSettings(mayManageLegacy: boolean) {
     tenantAuditError: false,
     mayManageLegacy,
     account: {
+      userId: "000000000000000000000001",
       tenantName: "Axion",
       email: "admin@axiob.local",
       role,

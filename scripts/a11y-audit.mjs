@@ -163,6 +163,8 @@ if (args.authenticated) {
 const viewports = [
   { name: "desktop", width: 1280, height: 900 },
   { name: "reflow", width: 320, height: 880 },
+  { name: "mobile", width: 360, height: 880 },
+  { name: "mobile-large", width: 390, height: 880 },
 ];
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const chrome = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";

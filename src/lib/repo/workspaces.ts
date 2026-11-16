@@ -107,8 +107,9 @@ export async function revokeWorkspaceInvitation(tenantId: string, invitationId: 
 export async function listWorkspaceAccess(tenantId: string): Promise<{
   members: { userId: string; email: string; role: TenantRole; createdAt: string }[];
   invitations: { id: string; email: string; role: "admin" | "member"; expiresAt: string }[];
+  ownerCount: number;
 }> {
-  if (!tenantId) return { members: [], invitations: [] };
+  if (!tenantId) return { members: [], invitations: [], ownerCount: 0 };
   const memberships = await (await col.memberships()).find({ tenantId }).sort({ createdAt: 1 }).toArray();
   const users = memberships.length
     ? await (await col.users()).find({ _id: { $in: memberships.map((membership) => membership.userId) } }, { projection: { email: 1 } }).toArray()
@@ -118,12 +119,63 @@ export async function listWorkspaceAccess(tenantId: string): Promise<{
     tenantId, expiresAt: { $gt: new Date() }, acceptedAt: { $exists: false }, revokedAt: { $exists: false },
   }).sort({ createdAt: -1 }).toArray();
   return {
+    ownerCount: memberships.filter((membership) => membership.role === "owner").length,
     members: memberships.flatMap((membership) => {
       const user = userById.get(membership.userId.toHexString());
       return user ? [{ userId: membership.userId.toHexString(), email: user.email, role: membership.role, createdAt: membership.createdAt.toISOString() }] : [];
     }),
     invitations: invitations.map((invitation) => ({ id: invitation._id.toHexString(), email: invitation.email, role: invitation.role, expiresAt: invitation.expiresAt.toISOString() })),
   };
+}
+
+export type RemoveWorkspaceMemberResult =
+  | { ok: true; role: TenantRole }
+  | { ok: false; reason: "invalid" | "forbidden" | "not_found" | "last_owner" };
+
+/** Remove one membership in the current tenant; the account and other workspace memberships remain. */
+export async function removeWorkspaceMember(input: {
+  tenantId: string;
+  actorUserId: string;
+  targetUserId: string;
+}): Promise<RemoveWorkspaceMemberResult> {
+  const actorId = objectId(input.actorUserId);
+  const targetId = objectId(input.targetUserId);
+  if (!input.tenantId || input.tenantId.length > 80 || !actorId || !targetId) return { ok: false, reason: "invalid" };
+
+  return withMongoTransaction(async (session) => {
+    const tenant = await (await col.tenants()).findOne({ _id: input.tenantId, status: "active" }, { session, projection: { _id: 1 } });
+    if (!tenant) return { ok: false, reason: "forbidden" };
+    const memberships = await col.memberships();
+    const actor = await memberships.findOne({ tenantId: input.tenantId, userId: actorId }, { session });
+    if (!actor || (actor.role !== "owner" && actor.role !== "admin")) return { ok: false, reason: "forbidden" };
+    const target = await memberships.findOne({ tenantId: input.tenantId, userId: targetId }, { session });
+    if (!target) return { ok: false, reason: "not_found" };
+    if (target.role === "owner") {
+      if (actor.role !== "owner") return { ok: false, reason: "forbidden" };
+      const owners = await memberships.find({ tenantId: input.tenantId, role: "owner" }, { session, projection: { _id: 1 } }).toArray();
+      if (owners.length <= 1) return { ok: false, reason: "last_owner" };
+      // Competing owner-removal transactions write this tenant row. Mongo retries
+      // a write-conflicted transaction against a fresh snapshot before rechecking.
+      await (await col.tenants()).updateOne(
+        { _id: input.tenantId, status: "active" },
+        { $inc: { membershipEpoch: 1 }, $set: { updatedAt: new Date() } },
+        { session },
+      );
+    }
+    const deleted = await memberships.deleteOne(
+      { _id: target._id, tenantId: input.tenantId, userId: targetId },
+      { session },
+    );
+    if (deleted.deletedCount !== 1) return { ok: false, reason: "not_found" };
+    await (await col.events()).insertOne({
+      _id: new ObjectId(),
+      tenantId: input.tenantId,
+      type: "workspace_member_removed",
+      at: new Date(),
+      meta: { actorUserId: actorId.toHexString(), targetUserId: targetId.toHexString(), role: target.role },
+    }, { session });
+    return { ok: true, role: target.role };
+  });
 }
 
 export async function getWorkspaceInvitation(token: string): Promise<{ tenantId: string; tenantName: string; email: string; role: "admin" | "member"; expiresAt: string } | null> {

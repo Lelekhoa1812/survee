@@ -15,14 +15,21 @@ vi.mock("../src/lib/password-kdf", () => ({
 
 vi.mock("../src/lib/db", () => ({
   col: {
-    users: async () => ({ findOne: async (filter: any) => state.user?.email === filter.email ? state.user : null }),
+    users: async () => ({ findOne: async (filter: any) => {
+      if (!state.user) return null;
+      if (filter.email !== undefined) return state.user.email === filter.email ? state.user : null;
+      if (filter._id !== undefined) return state.user._id.equals(filter._id) ? state.user : null;
+      return null;
+    } }),
     memberships: async () => ({
+      findOne: async (filter: any) => state.memberships.find((item) => item.userId.equals(filter.userId) && item.tenantId === filter.tenantId) ?? null,
       find: (filter: any) => ({
         sort() { return this; },
         toArray: async () => state.memberships.filter((item) => item.userId.equals(filter.userId)),
       }),
     }),
     tenants: async () => ({
+      findOne: async (filter: any) => state.tenants.find((tenant) => tenant._id === filter._id && tenant.status === filter.status) ?? null,
       find: (filter: any) => ({
         toArray: async () => state.tenants.filter((tenant) => filter._id.$in.includes(tenant._id) && tenant.status === filter.status),
       }),
@@ -30,7 +37,7 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
-import { authenticateAccount } from "../src/lib/repo/accounts";
+import { authenticateAccount, loadAccountPrincipal } from "../src/lib/repo/accounts";
 
 const userId = new ObjectId("000000000000000000000001");
 const passwordHash = `scrypt$16384$salt$${Buffer.alloc(64, 7).toString("base64url")}`;
@@ -64,5 +71,12 @@ describe("account workspace selection", () => {
   it("does not let a stale workspace preference create membership access", async () => {
     state.user.lastTenantId = "not-a-member";
     await expect(authenticateAccount("owner@example.test", "valid password")).resolves.toMatchObject({ tenantId: "axion" });
+  });
+
+  it("drops a workspace session as soon as its persisted membership is removed", async () => {
+    expect(await loadAccountPrincipal(userId.toHexString(), "workspace-b")).toMatchObject({ tenantId: "workspace-b", role: "admin" });
+    state.memberships = state.memberships.filter((membership) => membership.tenantId !== "workspace-b");
+    await expect(loadAccountPrincipal(userId.toHexString(), "workspace-b")).resolves.toBeNull();
+    await expect(loadAccountPrincipal(userId.toHexString(), "axion")).resolves.toMatchObject({ tenantId: "axion", role: "owner" });
   });
 });
