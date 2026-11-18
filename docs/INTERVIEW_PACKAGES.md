@@ -10,7 +10,8 @@ Read [FORMAT.md](FORMAT.md), [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), and [DESIGN
 2. Select one package and draft a small set of neutral questions. Start with low-effort context, move to experience and evidence, then end with priorities and an optional comment. Ask one thing at a time and distinguish facts, perceptions and proposals. Give relevant non-applicability or uncertainty options where appropriate. Do not require an answer merely to increase completion.
 3. Collect the least sensitive detail needed for the decision. Avoid names of third parties and identifying, health, financial or other sensitive details unless necessary and approved for the context. Provide an optional way to decline sensitive items. A collection question is not, by itself, a consent or privacy process.
 4. Use native KQA controls and declarative `when` rules where possible. An eligible routed follow-up may be required; its requirement is suspended while inactive. Inactive answers are retained. Avoid implying that an answer triggers a live service, diagnosis, escalation or notification. Host actions use the MCP endpoint described in [MCP.md](MCP.md).
-5. Pretest wording with representative respondents using cognitive interviews, then test the complete flow with representative users. Review accessibility, small screens and keyboard operation; run the static checker and, where possible, the in-app live check. Record what was actually tested, issues and unresolved limitations. For consequential uses, obtain an appropriate subject-matter review before release.
+5. Keep a review record that maps each decision to the information needed, the question that collects it, the expected analysis, and an accountable owner. Mark assumptions, sensitive fields, branching rules, and any question that could affect an individual's access, employment, safety, money, or care. Do not turn descriptive answers into a score or automated decision.
+6. Pretest wording with representative respondents using cognitive interviews, then test the complete flow with representative users. Review accessibility, small screens and keyboard operation; run the static checker and, where possible, the in-app live check. Record what was actually tested, issues and unresolved limitations. For consequential uses, obtain an appropriate subject-matter review before release.
 
 ## Package selection
 
@@ -23,6 +24,119 @@ Read [FORMAT.md](FORMAT.md), [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), and [DESIGN
 | Education and learning | What support could improve a learning experience? | Learners or educators | Goals, access, feedback |
 | Health service experience | How can a service improve communication or access? | Patients or carers | Access, understanding, improvement |
 | Personal planning | What matters to a person when planning a change? | An individual or household | Goals, resources, next steps |
+| Candidate experience | How can a hiring process improve for applicants? | Candidates | Clarity, access, communication |
+| Employee onboarding | Where can a new starter's first weeks improve? | New employees | Access, role clarity, support |
+| Customer success | What helps a customer reach an agreed outcome? | Customers or account contacts | Goals, use, blockers, support |
+| Supplier and partner review | Which working relationship or delivery issue needs attention? | Suppliers, partners, internal owners | Delivery, coordination, risks |
+| Safety learning | What conditions can help prevent recurrence? | Staff or service participants | Context, barriers, learning |
+| Audit readiness | What evidence or process gaps need follow-up? | Process owners | Control awareness, evidence location, owner |
+| Program evaluation | How did a defined program work for participants? | Participants and delivery partners | Reach, experience, outcomes |
+| Community consultation | What local priorities should inform a decision? | Residents or community groups | Needs, impacts, trade-offs |
+| Event feedback | What should organizers keep or change? | Attendees, speakers, staff | Access, experience, logistics |
+| Personal wellbeing reflection | What support or next step would a person choose? | An individual | Self-defined needs, preferences, next step |
+
+## Additional sector modules
+
+Use these as narrowly scoped modules within a package. They are prompts for an interview, not a validated assessment, audit, incident channel, or professional service.
+
+### Candidate experience
+
+**Use for:** improving application and interview steps, not ranking candidates or deciding who should be hired.
+
+- Clarity (`scale`): “How clear were the next steps in the [stage] process?” Label both ends and include “not applicable” if some candidates did not reach that stage.
+- Access (`longtext`): “Was there anything that made it difficult to take part in the process?”
+- Communication (`single`): “When did you receive an update?” Use time ranges that match the actual process, plus “I did not receive an update”.
+- Improvement (`longtext`): “What is one change that would make the process clearer or easier to take part in?”
+
+**Review:** collect no protected attributes or unnecessary employment history. Keep this feedback separate from selection records and do not treat it as a candidate score.
+
+### Employee onboarding and workplace experience
+
+**Use for:** finding changes to onboarding, tools, role clarity, or team processes.
+
+- Access (`multi`): “Which tools or resources were ready when you needed them?” Use actual resources and an exclusive “none were ready” option.
+- Role clarity (`scale`): “How clear are your current responsibilities?” State the reference period.
+- Support (`longtext`): “What would have helped you do your work in your first month?”
+- Process (`longtext`): “Which handoff or step should we improve?”
+
+**Review:** state who can see identifiable answers and how they will be used. Do not promise anonymity when roles or small teams make people identifiable. Do not use experience feedback as a proxy for performance.
+
+### Customer success and account review
+
+**Use for:** checking whether an agreed service or product is helping with a stated customer goal.
+
+- Goal (`longtext`): “What outcome were you hoping to achieve with [service]?”
+- Progress (`scale`): “How much progress have you made toward that outcome?” Define scale endpoints and timeframe.
+- Blocker (`longtext`): “What, if anything, is getting in the way?”
+- Next step (`single`): “Which next step would be most useful?” Offer only options the team can actually provide.
+
+**Review:** do not ask for passwords, payment details, confidential account data, or details already available to the account team. Do not imply a response creates a support ticket unless the host has configured that workflow.
+
+### Supplier and partner review
+
+**Use for:** identifying delivery, coordination, and relationship issues for a defined contract or period.
+
+- Delivery (`scale`): “How consistently did [deliverable] meet the agreed schedule during [period]?”
+- Quality (`longtext`): “Where did the delivered work meet or miss the agreed requirements?”
+- Coordination (`single`): “How well did the teams coordinate decisions?” Use balanced, labelled options.
+- Risk (`longtext`): “What should the teams resolve before the next milestone?”
+
+**Review:** identify the scope and parties, avoid collecting commercially sensitive detail beyond the need, and keep the questionnaire separate from formal contract notices and procurement decisions.
+
+### Safety and quality learning
+
+**Use for:** understanding conditions, barriers, and possible prevention actions after a defined activity.
+
+- Context (`longtext`): “What was happening immediately before the issue or near miss?”
+- Conditions (`multi`): “Which conditions may have contributed?” Include “not sure” separately from selectable factors.
+- Barrier (`longtext`): “What made the safer or expected process difficult to follow?”
+- Learning (`longtext`): “What change could reduce the chance of this happening again?”
+
+**Review:** this is not an emergency, statutory incident, hazard-reporting, or clinical channel. State the monitored reporting route and its response time separately; do not ask for unnecessary names or blame individuals.
+
+### Audit and compliance readiness
+
+**Use for:** locating process gaps and owners before an authorized review; not certifying compliance.
+
+- Process (`select`): “Which process are you responsible for?” Populate with the actual approved process list.
+- Evidence (`single`): “Can the current evidence be located?” Use “yes”, “partly”, “no”, and “not applicable”.
+- Gap (`longtext`): “What prevents the evidence or control from being available?”
+- Owner (`text`): “Which role should follow up?” Ask for a role where possible, not a personal name.
+
+**Review:** do not collect credentials, secrets, regulated records, or evidence files in free-text answers. Use the authorized evidence system; have a qualified owner interpret requirements and approve conclusions.
+
+### Program evaluation and community consultation
+
+**Use for:** learning whether a defined service, grant, event series, or public initiative reached people and what should change.
+
+- Participation (`single`): “Which activities did you take part in?” Use a checkbox if multiple activities are possible.
+- Access (`longtext`): “What made it easier or harder to take part?”
+- Experience (`scale`): “How well did the activity meet the need you came with?” State the audience and timeframe.
+- Priority (`multi`): “Which changes should be considered next?” Avoid presenting the result as representative unless the sampling method supports that claim.
+
+**Review:** explain how responses will inform the decision, include accessible participation options, and describe whose perspectives are missing. A before-and-after opinion question alone does not establish causal impact.
+
+### Event feedback
+
+**Use for:** improving a specific event's access, schedule, content, or logistics.
+
+- Attendance (`select`): “Which part of [event] did you attend?”
+- Access (`longtext`): “Was there anything that made it difficult to participate?”
+- Value (`scale`): “How useful was [session or event] for your stated purpose?”
+- Change (`longtext`): “What should organizers keep, change, or remove next time?”
+
+**Review:** provide an alternative route for access requests that need action, and do not imply the survey itself will arrange accommodations or reply to a complaint.
+
+### Personal reflection and wellbeing
+
+**Use for:** helping a person describe a goal or preference and choose a self-directed next step.
+
+- Priority (`multi`): “Which areas would you like to focus on?”
+- Importance (`longtext`): “What makes this matter to you now?”
+- Confidence (`scale`): “How confident do you feel about taking a next step this week?”
+- Choice (`longtext`): “What is one small step you would like to try?”
+
+**Review:** let the person skip sensitive questions, avoid collecting diagnoses or detailed financial and relationship information, and do not present responses as clinical screening, therapy, financial advice, or crisis support.
 
 ## Product discovery
 
