@@ -54,7 +54,7 @@ Use these as narrowly scoped modules within a package. They are prompts for an i
 
 **Use for:** finding changes to onboarding, tools, role clarity, or team processes.
 
-- Access (`multi`): “Which tools or resources were ready when you needed them?” Use actual resources and an exclusive “none were ready” option.
+- Access (`single` then conditional `multi`): “Were the tools or resources you needed ready?” If yes, ask “Which ones were ready?” Use actual resources in the checkbox list. KQA does not enforce mutually exclusive checkbox choices, so do not combine a “none” option with selectable resources in one `multi` question.
 - Role clarity (`scale`): “How clear are your current responsibilities?” State the reference period.
 - Support (`longtext`): “What would have helped you do your work in your first month?”
 - Process (`longtext`): “Which handoff or step should we improve?”
