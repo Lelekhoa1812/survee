@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conditional follow-up example</title>
+<script type="application/json" id="kqa-manifest">
+{
+  "format": "kqa/1",
+  "title": "Conditional follow-up example",
+  "description": "An optional follow-up that is shown when relevant.",
+  "sections": [{ "id": "experience", "title": "Your experience" }],
+  "questions": [
+    {
+      "id": "needs-support", "type": "single", "section": "experience",
+      "label": "Would you like to tell us about a support need?",
+      "options": [{ "value": "yes", "label": "Yes" }, { "value": "no", "label": "No" }]
+    },
+    {
+      "id": "support-details", "type": "longtext", "section": "experience",
+      "label": "What would you like us to know about your support need?",
+      "help": "Optional. Do not include sensitive details you do not want to share.",
+      "maxLength": 2000
+    }
+  ]
+}
+</script>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
+  body { margin: 0; background: #f3f5f8; color: #0e1b2a; }
+  main { max-width: 44rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  article { background: #fff; border: 1px solid #bcc8d4; border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
+  h1 { font-size: 1.7rem; line-height: 1.2; }
+  h2 { font-size: 1.1rem; }
+  fieldset { border: 0; margin: 0; padding: 0; }
+  legend { font-weight: 600; padding: 0; }
+  .option { display: flex; align-items: center; gap: .6rem; min-height: 2.75rem; }
+  input { width: 1.2rem; height: 1.2rem; }
+  textarea { box-sizing: border-box; width: 100%; min-height: 8rem; padding: .6rem; font: inherit; color: inherit; background: transparent; border: 1px solid #596b80; border-radius: .25rem; }
+  :focus-visible { outline: 3px solid #1f6feb; outline-offset: 3px; }
+  [hidden] { display: none; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0b1622; color: #e8eef5; }
+    article { background: #101f2e; border-color: #71869a; }
+    textarea { border-color: #a9b8c6; }
+    :focus-visible { outline-color: #6aa3ff; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Your experience</h1>
+  <p>Both questions are optional. Your answer to the first question controls whether the follow-up is shown.</p>
+  <p>If you write a follow-up and later choose No, your written answer is kept even while hidden. To remove it, choose Yes again and erase the text before submitting.</p>
+  <div data-kqa-question-list="experience">
+    <article data-kqa-question-id="needs-support">
+      <fieldset>
+        <legend>Would you like to tell us about a support need?</legend>
+        <label class="option"><input type="radio" name="needs-support" data-kqa="needs-support" value="yes"> Yes</label>
+        <label class="option"><input type="radio" name="needs-support" data-kqa="needs-support" value="no"> No</label>
+      </fieldset>
+    </article>
+    <article id="follow-up" data-kqa-question-id="support-details">
+      <h2><label for="support-details">What would you like us to know about your support need?</label></h2>
+      <p id="support-help">Optional. Do not include sensitive details you do not want to share.</p>
+      <textarea id="support-details" data-kqa="support-details" aria-describedby="support-help" maxlength="2000" rows="5"></textarea>
+    </article>
+  </div>
+</main>
+<script>
+  // Leave the follow-up visible until KQA has restored saved answers. Without
+  // JavaScript both questions remain available. Hiding never clears an answer.
+  (function () {
+    var followUp = document.getElementById("follow-up");
+    function paint() {
+      followUp.hidden = KQA.get("needs-support") !== "yes";
+    }
+    KQA.on("ready", paint);
+    KQA.on("change", paint);
+    KQA.on("lock", paint);
+  })();
+</script>
+</body>
+</html>

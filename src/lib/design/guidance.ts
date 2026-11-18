@@ -205,13 +205,15 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/15",
+    policyVersion: "kqa-design/16",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
       "Questionnaires are self-contained HTML in a sandboxed frame; follow docs/FORMAT.md for supported controls and browser limits.",
       "There is no in-app question builder and no scoring. Keep authoring as HTML plus the KQA checker, and keep analytics descriptive.",
       "Keep original question and option ids stable when revising a live interview; explain data-compatibility findings before applying a new version.",
+      "For adaptable domain briefs and safeguards, read /api/docs/interview-packages on this KQA instance or the full agent bundle at /api/docs/bundle.md. These are starting points, not validated instruments.",
+      "Conditional display does not make requiredness conditional or record whether an item was shown. Keep hidden follow-ups optional, disclose what happens to prior answers, and do not infer eligibility from unanswered items.",
     ],
     designPlan: { ...DESIGN_PLAN, surfaceInstructions },
     visualProfile: surface === "questionnaire"

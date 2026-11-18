@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBundle, DOCS } from "../src/lib/docs";
+import { buildBundle, DOCS, readAsset } from "../src/lib/docs";
 
 describe("agent documentation bundle", () => {
   it("publishes the design system and includes it in the full questionnaire bundle", async () => {
@@ -8,5 +8,17 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("KQA design system and agent guidance");
     expect(bundle).toContain("WCAG 2.2 Quick Reference");
     expect(bundle).toContain("Separate observed facts from interpretation");
+  });
+
+  it("includes the interview packages in the published agent bundle", async () => {
+    expect(DOCS.some((doc) => doc.slug === "interview-packages" && doc.file === "INTERVIEW_PACKAGES.md")).toBe(true);
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("<!-- INTERVIEW_PACKAGES.md -->");
+  });
+
+  it("serves the conditional follow-up example as an HTML asset", async () => {
+    const asset = await readAsset("examples/conditional-follow-up.kqa.html");
+    expect(asset?.type).toBe("text/html; charset=utf-8");
+    expect(asset?.body).toContain('data-kqa="support-details"');
   });
 });

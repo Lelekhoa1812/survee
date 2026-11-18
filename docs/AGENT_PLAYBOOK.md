@@ -24,6 +24,8 @@ Ask at most one round of questions. If you can proceed with a sensible default, 
 
 Use `get_design_guidance` with `surface: "questionnaire"` when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) and `FORMAT.md`. Follow its brief-to-review plan, use the scoped questionnaire profile from `template/starter.kqa.html` unless the host gives a different theme, and report the visual rationale plus checks performed. Treat accessibility requirements as testable constraints and visual taste as a reasoned, user-brief-grounded choice. For a live interview, preserve ids and inspect the semantic and compatibility changes before applying a version. For supported marked ordinary questions, use the source-preserving MCP block preview/apply pair; use the complete-file pair for custom questions, arbitrary page changes, or files without reliable markers.
 
+For a domain-specific brief, adapt the relevant starting point in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md). These packages are prompts and review aids, not validated instruments or substitutes for domain expertise.
+
 When the host supplies brand CSS custom properties or token JSON, use `extract_design_profile` to inspect the values and obtain a scoped proposal. Treat mappings and contrast checks as candidates, review ambiguous/unmapped values and actual rendered states, and never treat the generated overlay as already applied. KQA parses only the supplied token text; it does not fetch linked stylesheets or modify code. Apply reviewed questionnaire changes through the complete-file preview/apply workflow.
 
 ## Step 2. Design the manifest first
@@ -58,10 +60,12 @@ For a new or materially changed respondent flow, plan a separate task-based usab
 | 1 to 5 or 1 to 10 rating | `scale` with `min` and `max`. Add end labels in `help` |
 | NPS (0 to 10) | `scale`, `min: 0`, `max: 10` |
 | Matrix: rate items A, B, C | One question per row, same options. Ids like `fit-speed`, `fit-cost`, `fit-quality` |
-| Ranking | Either one `scale` per item, or a `custom` question storing a string like `"cost>speed>quality"` |
-| Conditional follow-up | Always render the follow-up control, hide it with CSS or script while irrelevant, and keep it optional (a hidden required question blocks Submit) |
+| Ranking | KQA has no native ranking type. Separate ratings permit ties and are not a ranking. If a strict order is essential, a custom text answer can encode it, but the author must build an accessible interaction and validate its ordering; the server does not enforce a permutation. Otherwise ask a different question and explain the tradeoff. |
+| Conditional follow-up | Keep the follow-up optional: hiding it does not make requiredness conditional, and a hidden required question blocks Submit. KQA does not record whether a question was shown. Decide and disclose what happens to an earlier answer if the condition changes; avoid silently deleting it. Test restored answers, keyboard access, and locked state. |
 | A "comments" box at the end | `longtext` with an id like `anything-else` |
 | Respondent details (name, company) | `text` questions. The app already knows the respondent's name, so only ask for what you actually need |
+
+For an optional conditional follow-up that preserves and discloses hidden answers, see [`examples/conditional-follow-up.kqa.html`](examples/conditional-follow-up.kqa.html), also available from this KQA instance at `/api/docs/examples/conditional-follow-up.kqa.html`. It is a starting pattern, not native eligibility tracking or conditional validation.
 
 ## Step 3. Write the markup
 
