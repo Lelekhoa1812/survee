@@ -132,7 +132,7 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 
 Option `value` rules: starts with a letter or digit, then letters, digits, `.`, `_`, `:` or `-`, up to 64 characters (`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`). Values are what is stored. Labels are what people see in the host's views and exports. Keep values short, lowercase and stable.
 
-Routing conditions are intentionally declarative: they cannot contain scripts, nested expressions, or comparisons to free text, numbers, dates or scales. Every referenced question must appear earlier in the manifest and the compared value must be one of its declared option values. When both lists are present, every `all` condition and at least one `any` condition must match; when only one list is present, that list determines visibility. A missing or ineligible source answer does not match. Hidden questions remain in the interview's data model; their answers are retained if a condition later changes. Requiredness applies only while a question is eligible to be answered.
+Routing conditions are intentionally declarative: they cannot contain scripts, nested expressions, or comparisons to free text, numbers, dates or scales. Every referenced question must appear earlier in the manifest and the compared value must be one of its declared option values. When both lists are present, every `all` condition and at least one `any` condition must match; when only one list is present, that list determines visibility. A missing or ineligible source answer does not match. When a parent answer changes, KQA recomputes downstream eligibility in manifest order. The respondent runtime hides, makes inert, and disables controls in an ineligible question block; therefore wrap each routed question in one whole-question element with `data-kqa-question-id="QUESTION_ID"`. Do not put multiple questions in the same marked block. Hidden questions remain in the interview's data model; their answers are retained if a condition later changes. Requiredness and progress apply only while a question is eligible. The server rejects new non-empty values or notes for currently inactive questions, while allowing a respondent to clear a retained value.
 
 For example, after a `priority` single-choice question, a follow-up can use `{ "when": { "all": [{ "question": "priority", "operator": "equals", "value": "accuracy" }] } }`. A multi-choice source uses `contains` or `notContains` instead. Keep each condition list to 20 items or fewer.
 
@@ -259,8 +259,10 @@ Injected automatically. Available as `window.KQA` once the page loads.
 | `KQA.clear(id)` | Same as `KQA.set(id, null)`. Unticks radios and checkboxes and empties text fields (a saved note is kept; clear it with `KQA.setNote(id, "")`). A respondent cannot untick a radio by themselves, so offer a "Clear" button that calls this if people may need to withdraw an answer |
 | `KQA.isAnswered(id)` | `true` when a value is present (non-empty) |
 | `KQA.answers()` | Copy of all answers as `{ [id]: { value, note } }` |
-| `KQA.progress()` | `{ answered, total }` |
-| `KQA.on(name, fn)` / `KQA.off(name, fn)` | `"ready"`, `"change"` (payload `{ id, value, note, source }`), `"lock"` (payload `{ locked }`) |
+| `KQA.progress()` | `{ answered, total }` for currently eligible questions only |
+| `KQA.isEligible(id)` | Current routing eligibility for one question. Treat the result as current-rule state, not historical display evidence; query after `KQA.ready` resolves |
+| `KQA.eligibility()` | Copy of the current `{ [questionId]: boolean }` eligibility map; query after `KQA.ready` resolves |
+| `KQA.on(name, fn)` / `KQA.off(name, fn)` | `"ready"` (snapshot `{ answers, locked, questions, participant }`), `"change"` (payload `{ id, value, note, source }`), `"lock"` (payload `{ locked }`), `"eligibility"` (copy of the full eligibility map, emitted after initial state and when eligibility changes) |
 | `KQA.locked` | `true` after Submit |
 | `KQA.questions` | The manifest questions |
 | `KQA.participant` | `{ name }` of the respondent, or `null` |
@@ -331,7 +333,7 @@ So: **keep question ids and option values. Change labels, wording, layout and st
 
 ## 8. The standard KQA look
 
-The starter template contains the house design kit, used by the app's own chrome so everything reads as one product. Copy its `<style>` block unchanged, then add rules below it, and keep the Google Fonts `<link>` from its `<head>` (it sits just above the manifest). If you are restyling an existing page that has its own CSS, put the kit first and your own rules after it: later rules win, so your colours and layout take precedence. The kit gives:
+The starter template contains KQA's optional questionnaire design kit. It runs inside the sandboxed iframe, separately from the host app; host CSS variables do not cross into the questionnaire. Copy its `<style>` block unchanged, then add rules below it, and keep the Google Fonts `<link>` from its `<head>` (it sits just above the manifest). If you are restyling an existing page that has its own CSS, put the kit first and your own rules after it: later rules win, so your colours and layout take precedence. The kit gives:
 
 * Design tokens as CSS variables: `--bg --surface --surface-2 --ink --ink-2 --muted --line --line-2 --field --brand --accent --accent-soft --accent-ink --focus --danger`, with a dark set under `prefers-color-scheme: dark`.
 * IBM Plex Sans and IBM Plex Mono through Google Fonts.

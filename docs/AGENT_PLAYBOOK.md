@@ -123,7 +123,7 @@ Dropdown, number, scale, and date use the same card. Copy those patterns from `t
 
 4. Update the contents rail (`.kq-rail`) so each link points at a section `id`.
 5. Do not add anything the sandbox blocks (FORMAT.md section 2).
-6. Keep the page readable without JavaScript: all question controls are plain HTML. Script is only for custom controls or progressive enhancement.
+6. Keep the content and controls semantic HTML. KQA's injected runtime is required for saving, progress, locking, and conditional routing; the page is not an offline or no-JavaScript questionnaire. Page-authored scripts should add presentation or custom-control behavior only and must use the KQA API for answers.
 
 ## Step 4. Self-check before you reply
 
