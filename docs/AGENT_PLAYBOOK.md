@@ -90,7 +90,7 @@ Single choice (`single`). Help text is "Pick one." Nothing is pre-checked.
 </article>
 ```
 
-Checkboxes (`multi`). Help text is "Tick all that apply." A required checkbox is answered when at least one box is ticked. There is no minimum or maximum.
+Checkboxes (`multi`). Use "Tick all that apply" when there is no cap. If the question has a meaningful upper bound, set `maxSelections` and say "Choose up to N" in help text. A required checkbox is answered when at least one box is ticked; `maxSelections` never imposes a minimum.
 
 ```html
 <article class="kq-q" id="q-ID">

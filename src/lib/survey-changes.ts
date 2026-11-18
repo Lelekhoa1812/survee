@@ -1,7 +1,7 @@
 import { LIMITS, noteConfig, type Question, type Section } from "./format/schema";
 
 export const QUESTION_FIELDS = [
-  "label", "type", "required", "section", "options", "min", "max", "step", "help", "note", "maxLength", "custom", "when",
+  "label", "type", "required", "section", "options", "maxSelections", "min", "max", "step", "help", "note", "maxLength", "custom", "when",
 ] as const satisfies readonly (keyof Question)[];
 
 export type QuestionField = (typeof QUESTION_FIELDS)[number];
@@ -12,6 +12,7 @@ export const FIELD_LABELS: Record<QuestionField, string> = {
   required: "Required",
   section: "Section",
   options: "Response options",
+  maxSelections: "Maximum choices",
   min: "Minimum",
   max: "Maximum",
   step: "Step",
@@ -122,6 +123,7 @@ export function formatQuestionFieldValue(field: QuestionField, question: Questio
   if (field === "options") {
     return question.options?.map((option) => `${option.label} (value: ${option.value})`).join("; ") ?? "Not applicable";
   }
+  if (field === "maxSelections") return typeof value === "number" ? `${value} choices` : "Unlimited";
   if (field === "note") {
     if (!question.note) return "Disabled";
     const config = noteConfig(question);

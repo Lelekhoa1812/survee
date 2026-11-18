@@ -24,6 +24,7 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
   const prevById = new Map(previous.questions.map((q) => [q.id, q]));
   const answeredPeopleByQuestion = new Map<string, number>();
   const optionUsageByQuestion = new Map<string, Map<string, number>>();
+  const peopleOverNewSelectionLimit = new Map<string, number>();
   let submitted = 0;
 
   // Aggregate participant data once. Compatibility checks run both during admin previews and MCP
@@ -41,6 +42,14 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
           ? answer.value
           : [];
       if (values.length === 0) continue;
+      const nextQuestion = nextById.get(questionId);
+      if (nextQuestion?.type === "multi" && nextQuestion.maxSelections !== undefined && Array.isArray(answer.value)) {
+        const retained = new Set(nextQuestion.options?.map((option) => option.value) ?? []);
+        const retainedSelections = new Set(answer.value.filter((value) => retained.has(value)));
+        if (retainedSelections.size > nextQuestion.maxSelections) {
+          peopleOverNewSelectionLimit.set(questionId, (peopleOverNewSelectionLimit.get(questionId) ?? 0) + 1);
+        }
+      }
       let counts = optionUsageByQuestion.get(questionId);
       if (!counts) {
         counts = new Map();
@@ -78,6 +87,12 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
       for (const o of removed) {
         const used = optionUsageByQuestion.get(q.id)?.get(o.value) ?? 0;
         if (used > 0) out.push(make("KQA702", `Option "${o.value}" ("${o.label}") of "${q.id}" is not in the new version, but ${used} ${used === 1 ? "person chose" : "people chose"} it.`, undefined, q.id));
+      }
+    }
+    if (n.type === "multi" && n.maxSelections !== undefined) {
+      const peopleOverLimit = peopleOverNewSelectionLimit.get(q.id) ?? 0;
+      if (peopleOverLimit > 0) {
+        out.push(make("KQA705", `Question "${q.id}" now allows at most ${n.maxSelections} choices, but ${peopleOverLimit} ${peopleOverLimit === 1 ? "person has" : "people have"} already saved more.`, undefined, q.id));
       }
     }
   }

@@ -13,6 +13,8 @@ Before authoring, read the current KQA `FORMAT.md` and `AGENT_PLAYBOOK.md`. For 
 
 Do not invent question types, routing rules, host actions, privacy promises, or quality guarantees. KQA supports `single`, `multi`, `select`, `text`, `longtext`, `number`, `scale`, and `date`; there is no native score or ranking type. Follow the current format for custom controls and bounded choice-based routing.
 
+For bounded checkbox questions, use `maxSelections` only when the decision requires a fixed upper bound, reflect it in respondent help ("Choose up to N"), and treat it separately from requiredness. Custom controls must handle a rejected `KQA.set` result and the `validation` event. Never remove saved choices silently when a live questionnaire's cap is lowered.
+
 ## Workflow
 
 1. **Understand the brief.** Identify purpose and intended decision, respondent population, inclusion and exclusion, timing, topic scope, burden, language and accessibility needs, data sensitivity, collection/retention expectations, and accountable owner. Ask one consolidated round of essential questions only. If a reasonable assumption lets you proceed, state it and mark it for review. Never invent consent, anonymity, confidentiality, retention, or legal compliance claims.

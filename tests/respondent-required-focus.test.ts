@@ -51,6 +51,28 @@ afterEach(() => {
 });
 
 describe("respondent required-answer recovery", () => {
+  it("lists a saved multi-select answer that exceeds its current cap", async () => {
+    state.api.mockResolvedValueOnce({
+      ok: true, status: 200, data: {
+        ok: true,
+        participant: { name: "Ada", status: "in_progress" },
+        interview: { name: "Study", status: "open" },
+        version: 7,
+        title: "Study questions",
+        questions: [{ id: "channels", type: "multi", label: "Which channels?", maxSelections: 1, options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] }],
+        answers: { channels: { value: ["a", "b"], updatedAt: "now" } },
+      },
+    });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const submit = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("Submit"))!;
+    await act(async () => submit.click());
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Choose no more than 1 option.");
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Which channels?");
+  });
+
   it("returns focus to the first missing question after the warning closes", async () => {
     await act(async () => {
       root.render(createElement(RespondentShell, { token: "participant-token" }));
@@ -64,7 +86,7 @@ describe("respondent required-answer recovery", () => {
     submit.focus();
     await act(async () => submit.click());
 
-    const goBack = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("Go back and answer"))!;
+    const goBack = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("Go back and review"))!;
     await act(async () => goBack.click());
 
     expect(host.querySelector("[role=dialog]")).toBeNull();

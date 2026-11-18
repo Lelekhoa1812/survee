@@ -6,7 +6,7 @@ export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: fal
  * Validate and normalise a value for a question. `null` means "clear the answer".
  * Used by the answer API (server side), the probe and the importer, so there is one definition of "valid".
  */
-export function validateAnswer(q: Question, raw: unknown): ValidateResult {
+export function validateAnswer(q: Question, raw: unknown, options: { allowOverLimit?: boolean } = {}): ValidateResult {
   if (raw === null || raw === undefined) return { ok: true, value: null };
   switch (q.type) {
     case "single":
@@ -23,6 +23,7 @@ export function validateAnswer(q: Question, raw: unknown): ValidateResult {
       const bad = raw.filter((x) => !allowed.has(x));
       if (bad.length) return { ok: false, reason: `not option values: ${bad.map((b) => `"${b}"`).join(", ")}` };
       const unique = [...new Set(raw)];
+      if (!options.allowOverLimit && q.maxSelections !== undefined && unique.length > q.maxSelections) return { ok: false, reason: `choose no more than ${q.maxSelections} options` };
       // Keep the manifest's order so exports and comparisons are stable.
       const order = (q.options ?? []).map((o) => o.value);
       unique.sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -121,6 +122,7 @@ export interface Progress {
   requiredTotal: number;
   requiredAnswered: number;
   missingRequired: string[];
+  invalidSelections: { id: string; selected: number; maximum: number }[];
   eligible: Record<string, boolean>;
   inactive: number;
 }
@@ -130,6 +132,7 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
   let requiredTotal = 0;
   let requiredAnswered = 0;
   const missingRequired: string[] = [];
+  const invalidSelections: Progress["invalidSelections"] = [];
   const eligible = evaluateEligibility(manifest, answers);
   let total = 0;
   for (const q of manifest.questions) {
@@ -137,13 +140,18 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
     total += 1;
     const done = isAnswered(q, answers);
     if (done) answered += 1;
+    const value = answers[q.id]?.value;
+    if (q.type === "multi" && q.maxSelections !== undefined && Array.isArray(value)) {
+      const selected = new Set(value).size;
+      if (selected > q.maxSelections) invalidSelections.push({ id: q.id, selected, maximum: q.maxSelections });
+    }
     if (q.required) {
       requiredTotal += 1;
       if (done) requiredAnswered += 1;
       else missingRequired.push(q.id);
     }
   }
-  return { total, answered, requiredTotal, requiredAnswered, missingRequired, eligible, inactive: manifest.questions.length - total };
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, eligible, inactive: manifest.questions.length - total };
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

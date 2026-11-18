@@ -45,7 +45,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
   return best;
 }
 
-const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "note", "min", "max", "step", "maxLength", "custom", "when"];
+const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "note", "min", "max", "step", "maxLength", "custom", "when"];
 const ROOT_KEYS = ["format", "title", "description", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
@@ -658,6 +658,15 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       }
     } else if (q.options !== undefined && typeof type === "string" && (QUESTION_TYPES as readonly string[]).includes(type)) {
       add(ctx, "KQA209", `${p}${qid ? ` (${qid})` : ""} is a "${t}" question, which cannot have "options".`, `Delete "options", or change the type to single, multi or select.`, { offset: m.at(`${p}.options`), path: `${p}.options`, questionId: qid });
+    }
+
+    if (q.maxSelections !== undefined) {
+      if (t !== "multi") {
+        add(ctx, "KQA219", `${p}.maxSelections applies only to a multi question.`, "Use it only with type \"multi\", or remove it.", { offset: m.at(`${p}.maxSelections`), path: `${p}.maxSelections`, questionId: qid });
+      } else if (!Number.isInteger(q.maxSelections) || (q.maxSelections as number) < 1 || (q.maxSelections as number) > LIMITS.maxOptions || (Array.isArray(q.options) && (q.maxSelections as number) > q.options.length)) {
+        const maximum = Array.isArray(q.options) ? q.options.length : LIMITS.maxOptions;
+        add(ctx, "KQA219", `${p}.maxSelections must be a whole number from 1 to the number of declared options (at most ${maximum}).`, "Set maxSelections to a valid option count.", { offset: m.at(`${p}.maxSelections`), path: `${p}.maxSelections`, questionId: qid });
+      }
     }
 
     // ranges

@@ -5,6 +5,19 @@ import { compareVersions } from "../src/lib/diagnostics/compat";
 const manifest = (questions: Manifest["questions"]): Manifest => ({ format: "kqa/1", title: "Survey", questions });
 
 describe("compareVersions", () => {
+  it("warns once per person when retained multi answers exceed a lowered cap", () => {
+    const previous = manifest([{ id: "q", type: "multi", label: "Choices", options: ["a", "b", "c", "d"].map((value) => ({ value, label: value })) }]);
+    const next = manifest([{ id: "q", type: "multi", label: "Choices", maxSelections: 2, options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);
+    const diagnostics = compareVersions({ previous, next, answers: [
+      { status: "open", answers: { q: { value: ["a", "b", "c", "d"], updatedAt: "now" } } },
+      { status: "open", answers: { q: { value: ["a", "b", "c", "c"], updatedAt: "now" } } },
+      { status: "open", answers: { q: { value: ["a", "d"], updatedAt: "now" } } },
+    ] });
+    expect(diagnostics.filter((d) => d.code === "KQA705").map((d) => d.message)).toEqual([
+      'Question "q" now allows at most 2 choices, but 2 people have already saved more.',
+    ]);
+  });
+
   it("keeps compatibility diagnostics and participant counting semantics", () => {
     const previous = manifest([
       { id: "qgone", type: "text", label: "Removed prompt" },

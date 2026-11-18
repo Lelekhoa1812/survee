@@ -27,7 +27,7 @@ export function RespondentShell({ token }: { token: string }) {
   const [locked, setLocked] = useState(false);
   const [closed, setClosed] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
-  const [counts, setCounts] = useState({ answered: 0, total: 0, missing: [] as Question[] });
+  const [counts, setCounts] = useState({ answered: 0, total: 0, needsAttention: [] as { question: Question; reason: string }[] });
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
@@ -50,8 +50,20 @@ export function RespondentShell({ token }: { token: string }) {
   const recount = useCallback(() => {
     const qs = questions.current;
     const active = qs.filter((q) => eligibility.current[q.id] !== false);
-    const missing = active.filter((q) => q.required && !hasValue(answers.current[q.id]?.value));
-    setCounts({ answered: active.filter((q) => hasValue(answers.current[q.id]?.value)).length, total: active.length, missing });
+    const needsAttention: { question: Question; reason: string }[] = [];
+    const addAttention = (question: Question, reason: string) => {
+      const existing = needsAttention.find((item) => item.question.id === question.id);
+      if (existing) existing.reason += ` ${reason}`;
+      else needsAttention.push({ question, reason });
+    };
+    for (const question of active) {
+      if (question.required && !hasValue(answers.current[question.id]?.value)) addAttention(question, "Answer this required question.");
+      const value = answers.current[question.id]?.value;
+      if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
+        addAttention(question, `Choose no more than ${question.maxSelections} ${question.maxSelections === 1 ? "option" : "options"}.`);
+      }
+    }
+    setCounts({ answered: active.filter((q) => hasValue(answers.current[q.id]?.value)).length, total: active.length, needsAttention });
   }, []);
 
   const post = useCallback((msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ kqa: 1, ...msg }, "*"), []);
@@ -214,7 +226,7 @@ export function RespondentShell({ token }: { token: string }) {
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     if (refreshRequiredRef.current) { setSubmitting(false); setConfirming(false); return; }
     if (Object.keys(pending.current).length) { setSubmitting(false); toast("Your latest changes have not saved yet. Check your connection and try again.", "err"); return; }
-    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
+    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
     setSubmitting(false);
     if (res.ok) {
       setConfirming(false);
@@ -298,11 +310,11 @@ export function RespondentShell({ token }: { token: string }) {
 
       {confirming && (
         <Modal
-          title={counts.missing.length ? "A few required answers are missing" : "Submit your answers?"}
+          title={counts.needsAttention.length ? "Review your answers" : "Submit your answers?"}
           onClose={() => !submitting && setConfirming(false)}
           actions={
-            counts.missing.length ? (
-              <button className="btn primary" onClick={() => { focusQuestionAfterClose.current = counts.missing[0]?.id ?? null; setConfirming(false); }}>Go back and answer</button>
+            counts.needsAttention.length ? (
+              <button className="btn primary" onClick={() => { focusQuestionAfterClose.current = counts.needsAttention[0]?.question.id ?? null; setConfirming(false); }}>Go back and review</button>
             ) : (
               <>
                 <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>Keep editing</button>
@@ -311,10 +323,10 @@ export function RespondentShell({ token }: { token: string }) {
             )
           }
         >
-          {counts.missing.length ? (
+          {counts.needsAttention.length ? (
             <>
-              <p className="muted">These questions are marked required. Answer them, then submit.</p>
-              <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>{counts.missing.map((q) => <li key={q.id}>{q.label}</li>)}</ul>
+              <p className="muted">Resolve these answers before submitting.</p>
+              <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>{counts.needsAttention.map(({ question, reason }) => <li key={question.id}><strong>{question.label}</strong>: {reason}</li>)}</ul>
             </>
           ) : (
             <p className="muted">You have answered {counts.answered} of {counts.total} questions. After you submit, your answers are locked. Your host can reopen them if you need to make a change.</p>

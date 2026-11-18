@@ -77,6 +77,8 @@ export const questionSchema = z.object({
   section: idString.optional(),
   required: z.boolean().optional(),
   options: z.array(optionSchema).min(2).max(LIMITS.maxOptions).optional(),
+  /** Optional maximum number of distinct options for a multi question. */
+  maxSelections: z.number().int().min(1).max(LIMITS.maxOptions).optional(),
   note: noteSchema.optional(),
   min: z.number().finite().optional(),
   max: z.number().finite().optional(),

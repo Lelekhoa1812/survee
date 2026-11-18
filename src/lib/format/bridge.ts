@@ -12,7 +12,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   "use strict";
   if (window.KQA) return;
 
-  var listeners = { ready: [], change: [], lock: [], eligibility: [] };
+  var listeners = { ready: [], change: [], lock: [], eligibility: [], validation: [] };
   var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, participant: null, probe: false, preview: false };
   var errors = [];
   var consoleErrors = [];
@@ -122,6 +122,48 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function writeAll() { state.questions.forEach(function (x) { writeDom(x.id); }); }
 
+  function selectionLimitMessage(question) { return "Choose no more than " + question.maxSelections + (question.maxSelections === 1 ? " option." : " options."); }
+  function selectionLimitError(id, message) {
+    var els = controls(id);
+    var group = els.length && els[0].closest ? els[0].closest("fieldset") : null;
+    var block = els.length && els[0].closest ? els[0].closest("[data-kqa-question-id]") : null;
+    var host = group && group.parentElement ? group.parentElement : block || (els[0] && els[0].parentElement);
+    if (!host) return;
+    var feedback = host.querySelector('[data-kqa-selection-error="' + id + '"]');
+    if (!message) { if (feedback) feedback.remove(); return; }
+    if (!feedback) {
+      feedback = document.createElement("p");
+      feedback.setAttribute("data-kqa-selection-error", id);
+      feedback.setAttribute("role", "alert");
+      feedback.setAttribute("aria-live", "assertive");
+      feedback.className = "kq-selection-limit-error";
+      if (group && group.parentElement === host) host.insertBefore(feedback, group.nextSibling);
+      else host.appendChild(feedback);
+    }
+    feedback.textContent = message;
+  }
+  function applySelectionLimitGuidance() {
+    state.questions.forEach(function (question) {
+      if (question.type !== "multi" || typeof question.maxSelections !== "number") return;
+      var els = controls(question.id);
+      if (!els.length) return;
+      var group = els[0].closest ? els[0].closest("fieldset") : null;
+      var host = group && group.parentElement ? group.parentElement : els[0].parentElement;
+      if (!host || host.querySelector('[data-kqa-selection-limit="' + question.id + '"]')) return;
+      var hint = document.createElement("p");
+      hint.id = "kqa-max-selections-" + question.id;
+      hint.setAttribute("data-kqa-selection-limit", question.id);
+      hint.className = "kq-help";
+      hint.textContent = "Choose up to " + question.maxSelections + (question.maxSelections === 1 ? " option." : " options.");
+      if (group) {
+        var describedBy = (group.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+        if (describedBy.indexOf(hint.id) === -1) describedBy.push(hint.id);
+        group.setAttribute("aria-describedby", describedBy.join(" "));
+        host.insertBefore(hint, group);
+      } else host.insertBefore(hint, els[0]);
+    });
+  }
+
   function applyLock() {
     var els = document.querySelectorAll("[data-kqa], [data-kqa-note]");
     for (var i = 0; i < els.length; i++) {
@@ -144,20 +186,35 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function commit(id, patch, source) {
     var question = q(id);
-    if (!question) { post({ type: "error", message: "KQA: unknown question id \"" + id + "\" (it is not in the manifest)." }); return; }
-    if (state.locked) return;
+    if (!question) { post({ type: "error", message: "KQA: unknown question id \"" + id + "\" (it is not in the manifest)." }); return false; }
+    if (state.locked) return false;
     var cur = state.answers[id] || {};
     var next = { value: cur.value, note: cur.note };
     var changed = false;
     if ("value" in patch) {
       var nv = normalise(question, patch.value);
+      var selected = Array.isArray(nv) ? new Set(nv).size : 0;
+      if (question.type === "multi" && question.maxSelections !== undefined && selected > question.maxSelections) {
+        var previousSelected = Array.isArray(cur.value) ? new Set(cur.value).size : 0;
+        if (source !== "dom" || previousSelected <= question.maxSelections || selected >= previousSelected) {
+          var message = selectionLimitMessage(question);
+          if (source === "dom") writeDom(id);
+          selectionLimitError(id, message);
+          emit("validation", { id: id, valid: false, message: message });
+          return false;
+        }
+        var message = "Remove " + (selected - question.maxSelections) + " more " + ((selected - question.maxSelections) === 1 ? "choice" : "choices") + " to continue.";
+        selectionLimitError(id, message);
+      } else {
+        selectionLimitError(id, null);
+      }
       if (!equal(nv, cur.value === undefined ? null : cur.value)) { next.value = nv === null ? undefined : nv; changed = true; }
     }
     if ("note" in patch) {
       var nn = patch.note === "" || patch.note === null || patch.note === undefined ? undefined : String(patch.note);
       if (nn !== cur.note) { next.note = nn; changed = true; }
     }
-    if (!changed) return;
+    if (!changed) return true;
     if (next.value === undefined && next.note === undefined) delete state.answers[id]; else state.answers[id] = next;
     if (source !== "dom") writeDom(id); else writeStatus(id);
     var msg = { type: "set", id: id };
@@ -166,6 +223,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     post(msg);
     updateEligibility(true);
     emit("change", { id: id, value: next.value, note: next.note, source: source });
+    emit("validation", { id: id, valid: true, message: null });
+    return true;
   }
   function writeStatus(id) {
     var statuses = document.querySelectorAll("[data-kqa-status]");
@@ -274,6 +333,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.answers[id] = { value: a.value === null ? undefined : a.value, note: a.note === null ? undefined : a.note };
     });
     writeAll();
+    state.questions.forEach(function (question) {
+      var value = answerOf(question.id).value;
+      if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
+        var message = "This saved answer has " + new Set(value).size + " choices. Remove choices until no more than " + question.maxSelections + " remain.";
+        selectionLimitError(question.id, message);
+        emit("validation", { id: question.id, valid: false, message: message });
+      }
+    });
   }
   window.addEventListener("message", function (ev) {
     if (ev.source !== parent) return;
@@ -288,6 +355,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.preview = !!m.preview;
       state.locked = !!m.locked;
       state.ready = true;
+      applySelectionLimitGuidance();
       applyAnswers(m.answers);
       updateEligibility(true);
       applyLock();
@@ -340,9 +408,9 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     ready: readyPromise,
     get: function (id) { return answerOf(id).value; },
     getNote: function (id) { return answerOf(id).note; },
-    set: function (id, value) { commit(id, { value: value }, "script"); },
-    setNote: function (id, text) { commit(id, { note: text }, "script"); },
-    clear: function (id) { commit(id, { value: null }, "script"); },
+    set: function (id, value) { return commit(id, { value: value }, "script"); },
+    setNote: function (id, text) { return commit(id, { note: text }, "script"); },
+    clear: function (id) { return commit(id, { value: null }, "script"); },
     isAnswered: isAnswered,
     isEligible: function (id) { return !state.ready || !state.eligibility ? true : state.eligibility[id] !== false; },
     eligibility: eligibilityCopy,
@@ -383,7 +451,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var o = question.options || [];
     switch (question.type) {
       case "single": case "select": return o.length ? o[0].value : null;
-      case "multi": return o.slice(0, 2).map(function (x) { return x.value; });
+      case "multi": return o.slice(0, Math.min(question.maxSelections || 2, 2)).map(function (x) { return x.value; });
       case "text": return "Probe text";
       case "longtext": return "Probe line one\nProbe line two";
       case "number": { var lo = question.min !== undefined ? question.min : 0; var hi = question.max !== undefined ? question.max : lo + 10; return Math.min(hi, Math.max(lo, lo + 1)); }

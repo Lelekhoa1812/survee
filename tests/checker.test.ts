@@ -86,10 +86,20 @@ describe("manifest rules", () => {
   });
   it("rejects duplicate question ids", () => expect(codes(checkHtml(swap(STARTER, '"id": "channels"', '"id": "priority"')))).toContain("KQA207"));
   it("requires options on choice questions", () => {
-    const r = checkHtml(swap(STARTER, /"id": "channels", "type": "multi", "section": "choices",\n\s+"label": "Which channels do you use today\?",\n\s+"help": "Tick every channel that applies.",\n\s+"options": \[[^\]]*\]/, '"id": "channels", "type": "multi", "section": "choices", "label": "Which channels do you use today?"'));
+    const r = checkHtml(swap(STARTER, /"id": "channels", "type": "multi", "section": "choices",\n\s+"label": "Which channels do you use today\?",\n\s+"help": "Choose up to 3 channels that apply.",\n\s+"maxSelections": 3,\n\s+"options": \[[^\]]*\]/, '"id": "channels", "type": "multi", "section": "choices", "label": "Which channels do you use today?"'));
     expect(codes(r)).toContain("KQA209");
   });
   it("rejects duplicate option values", () => expect(codes(checkHtml(swap(STARTER, '"value": "speed"', '"value": "accuracy"')))).toContain("KQA210"));
+  it("accepts a valid multi-select cap and rejects invalid caps", () => {
+    const valid = STARTER;
+    expect(codes(checkHtml(valid))).not.toContain("KQA219");
+    for (const cap of [0, 1.5, 5]) {
+      const invalid = valid.replace('"maxSelections": 3', `"maxSelections": ${cap}`);
+      expect(codes(checkHtml(invalid))).toContain("KQA219");
+    }
+    const wrongType = swap(valid, '"id": "channels", "type": "multi"', '"id": "channels", "type": "single"');
+    expect(codes(checkHtml(wrongType))).toContain("KQA219");
+  });
   it("rejects an unknown section", () => expect(codes(checkHtml(swap(STARTER, '"section": "writing", "required": true', '"section": "nope", "required": true')))).toContain("KQA211"));
   it("rejects a bad scale", () => expect(codes(checkHtml(swap(STARTER, '"id": "confidence", "type": "scale", "section": "writing", "min": 1, "max": 5', '"id": "confidence", "type": "scale", "section": "writing", "min": 5, "max": 1')))).toContain("KQA212"));
   it("rejects scale bounds outside the safe integer range", () => expect(codes(checkHtml(swap(STARTER, '"id": "confidence", "type": "scale", "section": "writing", "min": 1, "max": 5', '"id": "confidence", "type": "scale", "section": "writing", "min": 10000000000000000, "max": 10000000000000002')))).toContain("KQA212"));

@@ -23,6 +23,22 @@ describe("answered, without scores", () => {
     expect(isAnswered(checkbox, {})).toBe(false);
   });
 
+  it("enforces an optional multi-select cap on distinct values", () => {
+    const capped = { ...checkbox, maxSelections: 2 };
+    expect(validateAnswer(capped, ["email", "phone", "email"])).toEqual({ ok: true, value: ["email", "phone"] });
+    expect(validateAnswer(capped, ["email", "phone", "other"]).ok).toBe(false);
+    expect(validateAnswer(capped, [])).toEqual({ ok: true, value: null });
+    expect(validateAnswer(checkbox, ["email", "phone"])).toEqual({ ok: true, value: ["email", "phone"] });
+    expect(validateAnswer(capped, ["email", "phone", "email", "phone"], { allowOverLimit: true })).toEqual({ ok: true, value: ["email", "phone"] });
+  });
+
+  it("blocks progress for an eligible saved answer above a newly lowered cap", () => {
+    const capped = { ...checkbox, required: false, maxSelections: 1 };
+    expect(progress({ format: "kqa/1", title: "Capped", questions: [capped] }, {
+      channels: { value: ["email", "phone"], updatedAt: "now" },
+    }).invalidSelections).toEqual([{ id: "channels", selected: 2, maximum: 1 }]);
+  });
+
   it("treats whitespace-only text as empty", () => {
     expect(validateAnswer(line, "   ")).toEqual({ ok: true, value: null });
     expect(validateAnswer(paragraph, "\n\t  ")).toEqual({ ok: true, value: null });

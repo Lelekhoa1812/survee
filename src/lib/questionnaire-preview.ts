@@ -27,12 +27,12 @@ export function fileNameHash(fileName?: string): string {
 }
 
 export function hasCompatibilityImpact(diagnostics: readonly { code: string }[]): boolean {
-  return diagnostics.some((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code));
+  return diagnostics.some((diagnostic) => /^KQA70[0-5]$/.test(diagnostic.code));
 }
 
 export function hashCompatibilityFindings(diagnostics: readonly { code: string }[]): string {
   const findings = diagnostics
-    .filter((diagnostic) => /^KQA70[0-4]$/.test(diagnostic.code))
+    .filter((diagnostic) => /^KQA70[0-5]$/.test(diagnostic.code))
     .map((diagnostic) => JSON.stringify(diagnostic))
     .sort();
   return sha256(JSON.stringify(findings));

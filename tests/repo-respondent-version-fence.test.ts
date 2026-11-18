@@ -104,6 +104,25 @@ describe("respondent version fence", () => {
     expect(mocks.participantUpdate).toHaveBeenCalledOnce();
   });
 
+  it("lets respondents reduce legacy over-limit multi answers, but blocks additions and submission until valid", async () => {
+    const options = ["a", "b", "c", "d"].map((value) => ({ value, label: value }));
+    mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "multi", label: "Choices", options, maxSelections: 2 }] };
+    mocks.participant.answers = { q1: { value: ["a", "b", "c", "d"], updatedAt: "now" } };
+
+    const add = await asAxion(() => saveAnswers(token, 4, { q1: { value: ["a", "b", "c", "d"] } }));
+    expect(add).toMatchObject({ ok: false, status: 400 });
+
+    const reduce = await asAxion(() => saveAnswers(token, 4, { q1: { value: ["a", "b", "c"] } }));
+    expect(reduce).toMatchObject({ ok: true });
+    mocks.participant.answers.q1.value = ["a", "b", "c"];
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: false, status: 422, code: "incomplete_answers", invalidSelections: [{ id: "q1", selected: 3, maximum: 2 }] });
+
+    const finish = await asAxion(() => saveAnswers(token, 4, { q1: { value: ["a", "b"] } }));
+    expect(finish).toMatchObject({ ok: true });
+    mocks.participant.answers.q1.value = ["a", "b"];
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
+  });
+
   it("rejects a save when publication wins before the transaction fence", async () => {
     mocks.publishBeforeTransaction = true;
 

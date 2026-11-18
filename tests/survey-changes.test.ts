@@ -14,6 +14,7 @@ describe("survey candidate question changes", () => {
       required: false,
       section: "intro",
       options: [{ label: "Keep", value: "keep" }, { label: "Leave", value: "leave" }],
+      maxSelections: 2,
       min: 1,
       max: 5,
       help: "Choose one",
@@ -37,11 +38,12 @@ describe("survey candidate question changes", () => {
     expect(changes.updated[0]).toEqual({
       previous: before[0],
       question: after[0],
-      fields: ["label", "type", "required", "section", "options", "min", "max", "step", "help", "note", "when"],
+      fields: ["label", "type", "required", "section", "options", "maxSelections", "min", "max", "step", "help", "note", "when"],
     });
     expect(formatQuestionFieldValue("label", changes.updated[0].previous, [])).toBe("Old wording");
     expect(formatQuestionFieldValue("label", changes.updated[0].question, [])).toBe("New wording");
     expect(formatQuestionFieldValue("options", changes.updated[0].previous, [])).toBe("Keep (value: keep); Leave (value: leave)");
+    expect(formatQuestionFieldValue("maxSelections", changes.updated[0].previous, [])).toBe("2 choices");
     expect(formatQuestionFieldValue("options", changes.updated[0].question, [])).toBe("Not applicable");
     expect(formatQuestionFieldValue("section", changes.updated[0].previous, [{ id: "intro", title: "Introduction" }])).toBe("Introduction (intro)");
     expect(formatQuestionFieldValue("section", changes.updated[0].question, [])).toBe("closing");
@@ -66,6 +68,7 @@ describe("survey candidate question changes", () => {
     expect(formatQuestionFieldValue("maxLength", oldQuestion, [])).toBe("1200 characters");
     expect(formatQuestionFieldValue("custom", newQuestion, [])).toBe("Custom response set with KQA.set()");
     expect(FIELD_LABELS.options).toBe("Response options");
+    expect(FIELD_LABELS.maxSelections).toBe("Maximum choices");
     expect(FIELD_LABELS.when).toBe("Conditional routing");
   });
 

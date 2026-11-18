@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 80 codes. Severity is **error**, **warning** or **note**.
+There are 82 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -272,6 +272,14 @@ Severity: **error**
 A question's when condition must use bounded all/any lists of comparisons against declared options on earlier choice questions. Invalid routing can hide questions unexpectedly or make the interview impossible to complete.
 
 **How to fix:** Use a non-empty all and/or any list. Refer only to earlier single, select or multi questions and use an option value that question declares. Use equals/notEquals for single or select, and contains/notContains for multi.
+
+### KQA219: Invalid multi-select limit
+
+Severity: **error**
+
+maxSelections only applies to multi questions and must be a whole number no greater than the number of declared options.
+
+**How to fix:** Use maxSelections on a multi question and set it from 1 through the number of declared options.
 
 ## Controls and bindings (KQA3xx, KQA4xx)
 
@@ -758,3 +766,11 @@ Severity: **note**
 People who already submitted have no answer to the new required question.
 
 **How to fix:** Reopen those interviews from the People tab if you need answers.
+
+### KQA705: Saved multi-select answers exceed the new limit
+
+Severity: **warning**
+
+Some saved answers contain more choices than the new maxSelections permits. KQA keeps those choices visible and lets respondents remove them; submission stays blocked until each eligible answer is within the cap.
+
+**How to fix:** Keep the existing limit, choose a cap that fits saved answers, or proceed only after reviewing the correction burden and respondent communication.

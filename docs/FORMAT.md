@@ -123,6 +123,7 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `section` | no | all | Must be the `id` of a declared section |
 | `required` | no | all | `true` blocks Submit until answered. Default `false` |
 | `options` | yes for `single`, `multi`, `select` | those three | 2 to 50 items of `{ "value", "label" }`. Not allowed on other types |
+| `maxSelections` | no | `multi` | Maximum distinct checked options, from 1 through the number of options. Omit for no maximum. It does not set a minimum or change requiredness |
 | `note` | no | all | `true`, or `{ "label", "placeholder", "maxLength" }`. Enables an optional free-text note stored beside the answer. Up to 5000 characters |
 | `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and uses safely representable whole-number bounds, with `min` below `max` and a span of at most 20 steps |
 | `step` | no | `number`, `scale` | Positive number |
@@ -145,6 +146,8 @@ The order of questions on the page does not have to match the manifest. The mani
 Unknown fields are ignored with a warning (KQA216), so a typo in a field name silently does nothing. Check the spelling.
 
 **Label and help.** `label` is the question itself and must make sense on its own, because the host reads it in exports without the page around it. `help` is the instruction to the respondent ("Pick one", "Tick all that apply"). Read-only background text can stay in the page only; it does not need to be repeated in `help`.
+
+For a capped checkbox group, set `maxSelections` and state the same limit in `help` (for example, "Choose up to 3"). The runtime adds visible guidance and rejects additional selections. Existing saved answers above a newly lowered cap stay visible; respondents can remove choices and save each reduction until within the cap. Submission remains blocked until the current eligible answer is within the limit. KQA never silently truncates saved answers.
 
 **Text fields.** `text` is a free line of text. Using `type="email"`, `tel` or `url` on the input only changes the keyboard on a phone; nothing validates the format, so the stored value is whatever was typed.
 
@@ -171,7 +174,7 @@ Bind a control to a question by giving it `data-kqa="<question id>"`. The runtim
 | Type | Markup | Stored value |
 |---|---|---|
 | `single` | Several `<input type="radio" data-kqa="ID" name="ID" value="OPTION">`, one per option. Same `name`. | the chosen option `value` (string) |
-| `multi` | Several `<input type="checkbox" data-kqa="ID" value="OPTION">` | array of chosen option values, in manifest order |
+| `multi` | Several `<input type="checkbox" data-kqa="ID" value="OPTION">` | array of chosen option values, in manifest order; `maxSelections` limits the distinct values |
 | `select` | `<select data-kqa="ID">` with `<option value="OPTION">`. Keep a first `<option value="">` as the placeholder | the chosen option value |
 | `text` | `<input type="text" data-kqa="ID">` | string, trimmed-empty clears |
 | `longtext` | `<textarea data-kqa="ID">` | string |
@@ -215,7 +218,7 @@ The runtime sets `data-state="answered"` or `data-state="empty"`. Style it with 
 
 ### 4.3 Custom questions
 
-When the standard controls are not enough, set `"custom": true`, build your own UI, and talk to the runtime. Three rules make a custom control work: **write** with `KQA.set`, **read** with `KQA.get`, and **repaint** whenever `ready`, `change` or `lock` fires. The repaint rule matters most. It is how a person who returns to their link sees their earlier answer.
+When the standard controls are not enough, set `"custom": true`, build your own UI, and talk to the runtime. Three rules make a custom control work: **write** with `KQA.set`, **read** with `KQA.get`, and **repaint** whenever `ready`, `change` or `lock` fires. The repaint rule matters most. It is how a person who returns to their link sees their earlier answer. `KQA.set` and `KQA.clear` return `false` when a value is rejected; listen for `KQA.on("validation", ...)` to show or clear field-level feedback. A custom `multi` control must enforce `maxSelections` itself and explain any rejection to the respondent.
 
 ```js
 // A five-star control for a custom question with id "stars" (type scale, min 1, max 5)
@@ -254,15 +257,15 @@ Injected automatically. Available as `window.KQA` once the page loads.
 | `KQA.ready` | Promise that resolves with `{ answers, locked, questions, participant }` after the app has supplied the saved answers |
 | `KQA.get(id)` | Current value, or `undefined` |
 | `KQA.getNote(id)` | Current note text, or `undefined` |
-| `KQA.set(id, value)` | Set a value. Updates bound controls, saves it. Pass `null` to clear. Ignored when locked |
-| `KQA.setNote(id, text)` | Set a note. Pass `""` or `null` to clear it |
+| `KQA.set(id, value)` | Set a value. Updates bound controls, saves it, and returns `false` when rejected or locked. Pass `null` to clear |
+| `KQA.setNote(id, text)` | Set a note. Pass `""` or `null` to clear it; returns `false` when rejected or locked |
 | `KQA.clear(id)` | Same as `KQA.set(id, null)`. Unticks radios and checkboxes and empties text fields (a saved note is kept; clear it with `KQA.setNote(id, "")`). A respondent cannot untick a radio by themselves, so offer a "Clear" button that calls this if people may need to withdraw an answer |
 | `KQA.isAnswered(id)` | `true` when a value is present (non-empty) |
 | `KQA.answers()` | Copy of all answers as `{ [id]: { value, note } }` |
 | `KQA.progress()` | `{ answered, total }` for currently eligible questions only |
 | `KQA.isEligible(id)` | Current routing eligibility for one question. Treat the result as current-rule state, not historical display evidence; query after `KQA.ready` resolves |
 | `KQA.eligibility()` | Copy of the current `{ [questionId]: boolean }` eligibility map; query after `KQA.ready` resolves |
-| `KQA.on(name, fn)` / `KQA.off(name, fn)` | `"ready"` (snapshot `{ answers, locked, questions, participant }`), `"change"` (payload `{ id, value, note, source }`), `"lock"` (payload `{ locked }`), `"eligibility"` (copy of the full eligibility map, emitted after initial state and when eligibility changes) |
+| `KQA.on(name, fn)` / `KQA.off(name, fn)` | `"ready"` (snapshot `{ answers, locked, questions, participant }`), `"change"` (payload `{ id, value, note, source }`), `"lock"` (payload `{ locked }`), `"eligibility"` (copy of the full eligibility map, emitted after initial state and when eligibility changes), `"validation"` (payload `{ id, valid, message }` for rejected values and legacy answers that need correction) |
 | `KQA.locked` | `true` after Submit |
 | `KQA.questions` | The manifest questions |
 | `KQA.participant` | `{ name }` of the respondent, or `null` |
