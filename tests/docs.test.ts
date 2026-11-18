@@ -14,6 +14,15 @@ describe("agent documentation bundle", () => {
     expect(DOCS.some((doc) => doc.slug === "interview-packages" && doc.file === "INTERVIEW_PACKAGES.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("<!-- INTERVIEW_PACKAGES.md -->");
+    expect(bundle).toContain("### Safety and quality learning");
+    expect(bundle).toContain("### Personal reflection and wellbeing");
+  });
+
+  it("publishes the native routing runtime contract to agents", async () => {
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("KQA.isEligible(id)");
+    expect(bundle).toContain('"eligibility"');
+    expect(bundle).toContain("currently eligible questions only");
   });
 
   it("serves the conditional follow-up example as an HTML asset", async () => {
