@@ -18,6 +18,14 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("### Personal reflection and wellbeing");
   });
 
+  it("publishes the portable questionnaire author skill and includes it in the bundle", async () => {
+    expect(DOCS.some((doc) => doc.slug === "questionnaire-author-skill" && doc.file === "kqa-questionnaire-author/SKILL.md")).toBe(true);
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("name: kqa-questionnaire-author");
+    expect(bundle).toContain("## Workflow");
+    expect(bundle).toContain("create_interview` operation immediately creates an open interview");
+  });
+
   it("publishes the native routing runtime contract to agents", async () => {
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("KQA.isEligible(id)");

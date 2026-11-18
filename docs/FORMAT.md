@@ -2,7 +2,7 @@
 
 This is the complete specification for the HTML file you upload to KQA. If you are an AI agent asked to build a questionnaire for KQA, read this page end to end, then read `AGENT_PLAYBOOK.md`. Start from `template/starter.kqa.html`, which passes the checker as it stands.
 
-KQA gives every respondent a private link, shows them your HTML exactly as you designed it, saves each answer to MongoDB as they go, and lets the host review and export everything. Your file does not talk to the database, and it does not send email. It declares its questions, marks which controls hold which answer, and the KQA runtime does the rest.
+KQA gives every respondent a private link, renders your HTML inside a sandboxed frame with the KQA respondent shell and runtime, saves each answer to MongoDB as they go, and lets the host review and export everything. Your file does not talk to the database, and it does not send email. It declares its questions, marks which controls hold which answer, and the KQA runtime does the rest.
 
 The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, and dates are supported as well. Section 3.4 is the full list. KQA does not score answers. A required checkbox is answered when at least one box is ticked. Text that is only spaces is empty.
 
@@ -162,7 +162,7 @@ Unknown fields are ignored with a warning (KQA216), so a typo in a field name si
 | A calendar date | `date` | `<input type="date">` |
 | Anything else (ranking, drag and drop, matrix, sliders with custom UI) | any type + `custom: true` | your own markup that calls `KQA.set` |
 
-A matrix such as "rate each of these five items" is **five questions**, one per row, usually `scale` or `single` with the same options. A ranking is a `multi` question where the stored array order is not meaningful, or several `single`/`scale` questions, or a `custom` question storing a string value such as `"a>c>b"`. Pick whichever is easiest to export and read.
+A matrix such as "rate each of these five items" is **five questions**, one per row, usually `scale` or `single` with the same options. KQA has no native ranking type, and `multi` does not preserve rank order. If a strict order is essential, a `custom` question may store a documented representation such as `"a>c>b"`; the author must provide an accessible interaction and validate the ordering because KQA does not enforce a permutation. Otherwise, ask a different question and explain the tradeoff.
 
 ## 4. Binding controls
 

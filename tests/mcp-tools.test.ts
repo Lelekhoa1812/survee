@@ -178,6 +178,16 @@ describe("MCP tools", () => {
     expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_interview_packages");
   });
 
+  it("returns the portable questionnaire author skill to interview readers", async () => {
+    const res = await call("get_questionnaire_authoring_skill", {});
+    const body = await res.json() as { result: { structuredContent: { source: string; skill: string } } };
+    expect(body.result.structuredContent.source).toBe("docs/kqa-questionnaire-author/SKILL.md");
+    expect(body.result.structuredContent.skill).toContain("name: kqa-questionnaire-author");
+    expect(body.result.structuredContent.skill).toContain("Do not use it for an unapproved draft");
+    expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_questionnaire_authoring_skill");
+    expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_questionnaire_authoring_skill");
+  });
+
   it("omits credential identities from MCP event listings", async () => {
     const res = await call("list_events", { interviewId });
     const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[] } } };

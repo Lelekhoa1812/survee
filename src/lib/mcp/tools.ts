@@ -303,6 +303,15 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "get_questionnaire_authoring_skill",
+    description: "Return KQA's portable Agent Skills workflow for planning, authoring, checking, and reviewing questionnaires. It links to the authoritative KQA format and operational docs; it does not validate suitability or replace human review.",
+    inputSchema: obj({}),
+    async run() {
+      const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
+      return skill ? ok({ source: "docs/kqa-questionnaire-author/SKILL.md", skill }) : err("The questionnaire authoring skill is unavailable.", "docs_unavailable");
+    },
+  },
+  {
     name: "get_analytics_guidance",
     description: "Return deterministic, versioned guidance for interpreting KQA summaries and generating accessible, traceable charts, with primary sources. KQA does not run an LLM.",
     inputSchema: obj({}),
@@ -1694,7 +1703,7 @@ const TOOLS: ToolDef[] = [
 
 export function listToolDefs(capabilities?: readonly McpCapability[]) {
   const readOnlyTools = new Set([
-    "get_analytics_guidance", "get_design_guidance", "get_interview_packages", "extract_design_profile", "audit_questionnaire_design", "list_interviews", "get_interview",
+    "get_analytics_guidance", "get_design_guidance", "get_interview_packages", "get_questionnaire_authoring_skill", "extract_design_profile", "audit_questionnaire_design", "list_interviews", "get_interview",
     "get_survey_html", "list_versions", "check_questionnaire", "list_image_assets", "list_people", "get_person", "get_answers",
     "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_version_patch", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
   ]);

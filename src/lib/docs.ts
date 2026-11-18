@@ -6,6 +6,7 @@ export const DOCS = [
   { slug: "agent-playbook", file: "AGENT_PLAYBOOK.md", title: "AI agent playbook", blurb: "Step-by-step instructions for an agent that writes the file." },
   { slug: "design-system", file: "DESIGN_SYSTEM.md", title: "Design system", blurb: "Sourced visual, accessibility, interaction, and analytics guidance." },
   { slug: "interview-packages", file: "INTERVIEW_PACKAGES.md", title: "Interview packages", blurb: "Adaptable domain briefs, safeguards and review criteria for interview authors." },
+  { slug: "questionnaire-author-skill", file: "kqa-questionnaire-author/SKILL.md", title: "Questionnaire author skill", blurb: "Portable, repeatable workflow for agents authoring and reviewing KQA interviews." },
   { slug: "diagnostics", file: "DIAGNOSTICS.md", title: "Checker codes", blurb: "What each error and warning means and how to fix it." },
 ] as const;
 

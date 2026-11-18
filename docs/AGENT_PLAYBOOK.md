@@ -8,6 +8,8 @@ Output **one complete HTML file** that (1) declares every question in a JSON man
 
 This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
 
+Agents that support portable skills can also load [`kqa-questionnaire-author/SKILL.md`](kqa-questionnaire-author/SKILL.md), or retrieve it through the `get_questionnaire_authoring_skill` MCP tool. This skill summarizes the workflow; this playbook and [`FORMAT.md`](FORMAT.md) remain authoritative for KQA behavior.
+
 ## Step 1. Gather what you need
 
 Before writing, make sure you know:
