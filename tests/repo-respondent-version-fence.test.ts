@@ -178,4 +178,33 @@ describe("respondent version fence", () => {
     expect(fields(mocks.participantUpdate.mock.calls[0][0]).revision).toBe(0);
     expect(mocks.participant.status).toBe("invited");
   });
+
+  it("rejects direct writes to an ineligible routed question", async () => {
+    mocks.versionManifest.questions = [
+      { id: "kind", type: "single", label: "Kind", options: [{ value: "person", label: "Person" }, { value: "org", label: "Organisation" }] },
+      { id: "org-details", type: "text", label: "Organisation details", when: { all: [{ question: "kind", operator: "equals", value: "org" }] } },
+    ];
+    mocks.participant.answers = { kind: { value: "person", updatedAt: new Date().toISOString() } };
+
+    const result = await asAxion(() => saveAnswers(token, 4, { "org-details": { value: "Private data" } }));
+
+    expect(result).toMatchObject({ ok: false, status: 400, details: [{ id: "org-details", reason: expect.stringContaining("not available") }] });
+    expect(mocks.participantUpdate).not.toHaveBeenCalled();
+  });
+
+  it("allows changing a route parent while retaining the now-inactive prior answer", async () => {
+    mocks.versionManifest.questions = [
+      { id: "kind", type: "single", label: "Kind", options: [{ value: "person", label: "Person" }, { value: "org", label: "Organisation" }] },
+      { id: "org-details", type: "text", label: "Organisation details", when: { all: [{ question: "kind", operator: "equals", value: "org" }] } },
+    ];
+    mocks.participant.answers = {
+      kind: { value: "org", updatedAt: new Date().toISOString() },
+      "org-details": { value: "Earlier answer", updatedAt: new Date().toISOString() },
+    };
+
+    const result = await asAxion(() => saveAnswers(token, 4, { kind: { value: "person" } }));
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.participantUpdate).toHaveBeenCalledOnce();
+  });
 });

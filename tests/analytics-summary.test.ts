@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createQuestionSummaryAccumulator, summarizeQuestion, type AnalyticsRespondent } from "../src/lib/analytics/summary";
+import { createQuestionSummaryAccumulator, summarizeQuestion, withCurrentEligibility, type AnalyticsRespondent } from "../src/lib/analytics/summary";
+import { eligibilityQuestionIds } from "../src/lib/format/answers";
 import { formatPercentage } from "../src/lib/analytics/format";
 import type { Question } from "../src/lib/format/schema";
 
@@ -58,6 +59,36 @@ describe("descriptive question summaries", () => {
       { value: "yes", label: "Yes", count: 1, percent: 50 },
       { value: "no", label: "No", count: 1, percent: 50 },
     ]);
+  });
+
+  it("separates current-rule inactive people from eligible nonresponse", () => {
+    const q: Question = { id: "details", type: "longtext", label: "Details" };
+    const summary = summarizeQuestion(q, [
+      { answers: {}, eligibility: { details: true } },
+      { answers: {}, eligibility: { details: false } },
+      { answers: { details: { value: "old stored answer", updatedAt: at } }, eligibility: { details: false } },
+    ]);
+    expect(summary).toMatchObject({ cohortCount: 3, eligibleCount: 1, inactiveCount: 2, answeredCount: 0, noAnswerCount: 1 });
+  });
+
+  it("projects transitive routing prerequisites and infers eligibility from them", async () => {
+    const manifest = {
+      format: "kqa/1" as const,
+      title: "Routing",
+      questions: [
+        { id: "start", type: "single" as const, label: "Start?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+        { id: "middle", type: "single" as const, label: "Middle?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }], when: { all: [{ question: "start", operator: "equals" as const, value: "yes" }] } },
+        { id: "target", type: "longtext" as const, label: "Target", when: { all: [{ question: "middle", operator: "equals" as const, value: "yes" }] } },
+      ],
+    };
+    expect(eligibilityQuestionIds(manifest, ["target"])).toEqual(["start", "middle", "target"]);
+    async function* respondents() {
+      yield { answers: { start: { value: "no", updatedAt: at }, middle: { value: "yes", updatedAt: at } } };
+    }
+    const inferred: Array<{ eligibility: Record<string, boolean> }> = [];
+    for await (const item of withCurrentEligibility(manifest, respondents())) inferred.push(item);
+    const [respondentWithEligibility] = inferred;
+    expect(respondentWithEligibility.eligibility).toMatchObject({ start: true, middle: false, target: false });
   });
 
   it("uses respondent shares for multi-select options", () => {

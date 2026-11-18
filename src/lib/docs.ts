@@ -23,6 +23,7 @@ export async function readAsset(rel: string): Promise<{ body: string; type: stri
   const allowed: Record<string, string> = {
     "template/starter.kqa.html": "text/html; charset=utf-8",
     "examples/conditional-follow-up.kqa.html": "text/html; charset=utf-8",
+    "examples/routed-follow-up.kqa.html": "text/html; charset=utf-8",
     "kqa-manifest.schema.json": "application/json; charset=utf-8",
   };
   const type = allowed[rel];

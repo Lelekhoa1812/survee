@@ -128,8 +128,15 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `step` | no | `number`, `scale` | Positive number |
 | `maxLength` | no | `text`, `longtext` | Default 500 for `text`, 20000 for `longtext` |
 | `custom` | no | all | `true` when the answer is set from script with `KQA.set()` and has no `data-kqa` control |
+| `when` | no | all | Bounded visibility rule. Use `all` and/or `any`, each with 1 to 20 conditions. Conditions compare an earlier `single`/`select` answer using `equals` or `notEquals`, or an earlier `multi` answer using `contains` or `notContains` |
 
 Option `value` rules: starts with a letter or digit, then letters, digits, `.`, `_`, `:` or `-`, up to 64 characters (`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`). Values are what is stored. Labels are what people see in the host's views and exports. Keep values short, lowercase and stable.
+
+Routing conditions are intentionally declarative: they cannot contain scripts, nested expressions, or comparisons to free text, numbers, dates or scales. Every referenced question must appear earlier in the manifest and the compared value must be one of its declared option values. When both lists are present, every `all` condition and at least one `any` condition must match; when only one list is present, that list determines visibility. A missing or ineligible source answer does not match. Hidden questions remain in the interview's data model; their answers are retained if a condition later changes. Requiredness applies only while a question is eligible to be answered.
+
+For example, after a `priority` single-choice question, a follow-up can use `{ "when": { "all": [{ "question": "priority", "operator": "equals", "value": "accuracy" }] } }`. A multi-choice source uses `contains` or `notContains` instead. Keep each condition list to 20 items or fewer.
+
+See the complete [`routed-follow-up.kqa.html`](examples/routed-follow-up.kqa.html) example for an eligible required follow-up, respondent disclosure, and stable saved-answer behavior.
 
 When the labels are long sentences, use a short meaningful slug (`agree-with-suggestion`, `prefer-phased-rollout`) or a positional key (`o1`, `o2`, `o3`) that you never reorder or reuse. Never use the sentence itself as the value.
 

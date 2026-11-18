@@ -3,7 +3,8 @@ import { InterviewView } from "@/components/InterviewView";
 import type { InterviewData } from "@/components/interview-types";
 import { publicBaseUrl } from "@/lib/env";
 import { progress } from "@/lib/format/answers";
-import { summarizeQuestionCohorts } from "@/lib/analytics/summary";
+import { eligibilityQuestionIds } from "@/lib/format/answers";
+import { summarizeQuestionCohorts, withCurrentEligibility } from "@/lib/analytics/summary";
 import { currentMail } from "@/lib/mail/state";
 import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listParticipants, listVersions, recentEvents } from "@/lib/repo";
 import { listMailByInterview, mailRecord } from "@/lib/repo/mail";
@@ -38,7 +39,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   let analysis: InterviewData["analysis"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
-    analysis = await summarizeQuestionCohorts(current.manifest.questions, iterateAnalyticsParticipants(id, questionIds));
+    analysis = await summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds))));
   }
   const names = new Map(people.map((p) => [p.id, p.name]));
   const mailByPerson = new Map<string, ReturnType<typeof mailRecord>[]>();

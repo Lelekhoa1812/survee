@@ -61,11 +61,11 @@ For a new or materially changed respondent flow, plan a separate task-based usab
 | NPS (0 to 10) | `scale`, `min: 0`, `max: 10` |
 | Matrix: rate items A, B, C | One question per row, same options. Ids like `fit-speed`, `fit-cost`, `fit-quality` |
 | Ranking | KQA has no native ranking type. Separate ratings permit ties and are not a ranking. If a strict order is essential, a custom text answer can encode it, but the author must build an accessible interaction and validate its ordering; the server does not enforce a permutation. Otherwise ask a different question and explain the tradeoff. |
-| Conditional follow-up | Keep the follow-up optional: hiding it does not make requiredness conditional, and a hidden required question blocks Submit. KQA does not record whether a question was shown. Decide and disclose what happens to an earlier answer if the condition changes; avoid silently deleting it. Test restored answers, keyboard access, and locked state. |
+| Conditional follow-up | Prefer manifest `when` rules for supported choice-based routing. A required routed question is required only while eligible. Eligibility is inferred from current answers and rules, not a record of what was actually displayed. Inactive answers are retained, excluded from progress and analysis, and labelled inactive in exports. Disclose this behavior, test the route changes and restored answers, and keep reveals simple. |
 | A "comments" box at the end | `longtext` with an id like `anything-else` |
 | Respondent details (name, company) | `text` questions. The app already knows the respondent's name, so only ask for what you actually need |
 
-For an optional conditional follow-up that preserves and discloses hidden answers, see [`examples/conditional-follow-up.kqa.html`](examples/conditional-follow-up.kqa.html), also available from this KQA instance at `/api/docs/examples/conditional-follow-up.kqa.html`. It is a starting pattern, not native eligibility tracking or conditional validation.
+For a complete routed example, see [`examples/routed-follow-up.kqa.html`](examples/routed-follow-up.kqa.html), also available from this KQA instance at `/api/docs/examples/routed-follow-up.kqa.html`. The earlier [`conditional-follow-up.kqa.html`](examples/conditional-follow-up.kqa.html) shows a custom scripted reveal and does not contribute native eligibility semantics.
 
 ## Step 3. Write the markup
 
@@ -227,7 +227,7 @@ The format's design kit is the default. If the old page already has a good desig
 2. Replace any state held in JavaScript variables, `localStorage` or form posts with bound controls or `KQA.set`.
 3. Replace dialogs and navigation with inline UI.
 4. Keep the visual design if it is good. Re-skin with the standard kit if it is not.
-5. Keep your own scripts for presentation only (tabs, accordions, progress, conditional reveal). They must not own the answers. Delete copy-to-clipboard, download, print and `window.open` buttons: they do nothing in the frame.
+5. Use the manifest's `when` rules for supported routing; keep scripts for presentation only (tabs and accordions). Do not build custom visibility that conflicts with manifest eligibility. Delete copy-to-clipboard, download, print and `window.open` buttons: they do nothing in the frame.
 6. Re-run the checker.
 7. For anything script-driven or custom, test by hand in a browser: answer, reload, confirm the answer is still shown, then confirm the controls are disabled after Submit. The live check in the app does this for standard controls, and calls `KQA.set` on custom ones, but cannot be run from a terminal.
 

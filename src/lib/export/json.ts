@@ -1,4 +1,4 @@
-import { displayValue, progress } from "../format/answers";
+import { displayValue, evaluateEligibility, progress } from "../format/answers";
 import { exportFilename, sortedParticipants } from "./rows";
 import type { ExportFile, ExportInput } from "./types";
 
@@ -25,6 +25,7 @@ export function jsonExport(input: ExportInput): ExportFile {
     },
     participants: sortedParticipants(input).map((p) => {
       const pr = progress(manifest, p.answers);
+      const eligibility = evaluateEligibility(manifest, p.answers);
       const answers: Record<string, { value?: unknown; display: string; note?: string; updatedAt: string }> = {};
       for (const q of manifest.questions) {
         const a = p.answers[q.id];
@@ -47,9 +48,13 @@ export function jsonExport(input: ExportInput): ExportFile {
         progress: {
           answered: pr.answered,
           total: pr.total,
+          surveyTotal: manifest.questions.length,
+          inactive: pr.inactive,
           requiredAnswered: pr.requiredAnswered,
           requiredTotal: pr.requiredTotal,
         },
+        /** Current-rule inference; KQA does not record whether a question was actually rendered. */
+        eligibility: Object.fromEntries(manifest.questions.map((q) => [q.id, eligibility[q.id] === false ? "inactive" : "eligible"])),
         answers,
       };
     }),

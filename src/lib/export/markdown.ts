@@ -1,4 +1,4 @@
-import { displayValue, isAnswered, progress } from "../format/answers";
+import { displayValue, evaluateEligibility, isAnswered, progress } from "../format/answers";
 import { type Question } from "../format/schema";
 import { exportFilename, sortedParticipants } from "./rows";
 import type { ExportFile, ExportInput, ExportParticipant } from "./types";
@@ -55,19 +55,22 @@ function groupQuestions(input: ExportInput): Group[] {
 }
 
 /** Bullets for one question: one per participant who answered, plus notes, then one "No answer" line. */
-function questionBody(q: Question, people: ExportParticipant[]): string[] {
+function questionBody(q: Question, people: ExportParticipant[], manifest: ExportInput["manifest"]): string[] {
   const bullets: string[] = [];
   const unanswered: string[] = [];
+  const inactive: string[] = [];
   for (const p of people) {
+    const isEligible = evaluateEligibility(manifest, p.answers)[q.id] !== false;
     const answered = isAnswered(q, p.answers);
     const note = p.answers[q.id]?.note ?? "";
     const hasNote = note.trim() !== "";
-    const head = `- **${cell(p.name)}** (${cell(p.status)}): `;
+    const head = `- **${cell(p.name)}** (${cell(p.status)}${isEligible ? "" : "; inactive under current rules"}): `;
+    if (!isEligible) inactive.push(cell(p.name));
     if (answered) {
       const [first, ...rest] = textLines(displayValue(q, p.answers[q.id]?.value));
       bullets.push(head + first, ...rest.map((l) => `  ${l}`));
     } else {
-      unanswered.push(cell(p.name));
+      if (isEligible) unanswered.push(cell(p.name));
       if (hasNote) bullets.push(`${head}_no answer, note only_`);
     }
     if (hasNote) bullets.push(...textLines(note).map((l) => `  > ${l}`));
@@ -75,6 +78,7 @@ function questionBody(q: Question, people: ExportParticipant[]): string[] {
   const lines: string[] = [];
   if (bullets.length) lines.push(...bullets, "");
   if (unanswered.length) lines.push(`No answer: ${unanswered.join(", ")}`, "");
+  if (inactive.length) lines.push(`Inactive under current rules: ${inactive.join(", ")}. This is inferred from current answers and does not record whether the question was displayed.`, "");
   return lines;
 }
 
@@ -97,7 +101,7 @@ export function markdownExport(input: ExportInput): ExportFile {
     out.push(`## ${cell(group.title)}`, "");
     for (const q of group.questions) {
       out.push(`### ${cell(q.label)} \`${q.id}\``, "");
-      out.push(...questionBody(q, people));
+      out.push(...questionBody(q, people, input.manifest));
     }
   }
 

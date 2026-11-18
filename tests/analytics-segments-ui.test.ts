@@ -279,7 +279,7 @@ describe("answer-segment analytics UI", () => {
     expect(host.textContent).toContain("Satisfaction");
     expect(host.textContent).toContain("Budget");
     expect(host.textContent).toContain("Agree");
-    expect(host.textContent).toContain("0 answered · 1 no answer · cohort n=1");
+    expect(host.textContent).toContain("0 answered · 1 eligible with no answer · 0 inactive · eligible n=1 · cohort n=1");
     expect(new URL(String(fetchMock.mock.calls.at(-1)?.[0]), window.location.href).searchParams.getAll("questionId")).toEqual(["region", "satisfaction", "budget"]);
 
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Compare statuses")!);

@@ -128,13 +128,21 @@ const expectedHeader = [
   "Status",
   "Last saved",
   "Submitted",
+  "start | eligibility",
   "start | Start date",
+  "role | eligibility",
   "role | Role",
+  "tools | eligibility",
   "tools | Tools used",
+  "team | eligibility",
   "team | Team",
+  "title | eligibility",
   "title | Job title",
+  "comments | eligibility",
   "comments | Comments",
+  "delta | eligibility",
   "delta | Headcount change",
+  "satisfaction | eligibility",
   "satisfaction | Satisfaction",
   "satisfaction | note",
 ];
@@ -143,9 +151,9 @@ describe("wide table", () => {
   it("has one row per participant and one column per question, with notes where enabled", () => {
     const wide = wideTable(input);
     expect(wide.header).toEqual(expectedHeader);
-    expect(wide.header).toHaveLength(14);
+    expect(wide.header).toHaveLength(22);
     expect(wide.rows).toHaveLength(3);
-    for (const row of wide.rows) expect(row).toHaveLength(14);
+    for (const row of wide.rows) expect(row).toHaveLength(22);
   });
 
   it("sorts participants by name case-insensitively", () => {
@@ -179,6 +187,7 @@ describe("long table", () => {
       "Question id",
       "Question",
       "Type",
+      "Current eligibility",
       "Answer",
       "Answer value",
       "Note",
@@ -195,21 +204,53 @@ describe("long table", () => {
   it("gives raw machine values and display values", () => {
     const long = longTable(input);
     const tools = long.rows.find((r) => r[0] === "Ana Lopez" && r[3] === "tools")!;
-    expect(tools[6]).toBe("Email; CRM");
-    expect(tools[7]).toBe("a;c");
+    expect(tools[7]).toBe("Email; CRM");
+    expect(tools[8]).toBe("a;c");
     const delta = long.rows.find((r) => r[0] === "Ana Lopez" && r[3] === "delta")!;
-    expect(delta[7]).toBe("-3");
+    expect(delta[8]).toBe("-3");
     const role = long.rows.find((r) => r[0] === "Ana Lopez" && r[3] === "role")!;
     expect(role[2]).toBe("About you");
-    expect(role[6]).toBe("Engineering");
-    expect(role[7]).toBe("E1");
+    expect(role[7]).toBe("Engineering");
+    expect(role[8]).toBe("E1");
     const start = long.rows.find((r) => r[0] === "Ana Lopez" && r[3] === "start")!;
     expect(start[2]).toBe("");
   });
 
   it("keeps the note with its line break on the long row", () => {
     const row = longTable(input).rows.find((r) => r[0] === "Ben Okafor" && r[3] === "satisfaction")!;
-    expect(row[8]).toBe(benNote);
+    expect(row[9]).toBe(benNote);
+  });
+});
+
+describe("routed export eligibility", () => {
+  it("labels current inactivity while retaining hidden saved answers", () => {
+    const routed: Manifest = {
+      ...manifest,
+      questions: [
+        { id: "eligible", type: "single", label: "Continue?", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+        { id: "details", type: "longtext", label: "Details", when: { all: [{ question: "eligible", operator: "equals", value: "yes" }] } },
+      ],
+    };
+    const routedInput: ExportInput = {
+      ...input,
+      manifest: routed,
+      participants: [{
+        id: "p-routed", name: "Routed person", status: "submitted", createdAt: T,
+        answers: {
+          eligible: { value: "no", updatedAt: T },
+          details: { value: "Saved before routing changed", updatedAt: T },
+        },
+      }],
+    };
+    const wide = wideTable(routedInput);
+    expect(wide.rows[0][wide.header.indexOf("details | eligibility")]).toBe("inactive");
+    expect(wide.rows[0][wide.header.indexOf("details | Details")]).toBe("Saved before routing changed");
+    const long = longTable(routedInput);
+    expect(long.rows.find((row) => row[3] === "details")).toContain("inactive");
+    expect(long.rows.find((row) => row[3] === "details")).toContain("Saved before routing changed");
+    const json = JSON.parse(jsonExport(routedInput).body as string);
+    expect(json.participants[0].eligibility.details).toBe("inactive");
+    expect(json.participants[0].answers.details.value).toBe("Saved before routing changed");
   });
 });
 
@@ -273,8 +314,8 @@ describe("JSON", () => {
 
     const [sum, ana, ben] = doc.participants;
     expect(sum.name).toBe("=SUM(A1)");
-    expect(ana.progress).toEqual({ answered: 8, total: 8, requiredAnswered: 2, requiredTotal: 2 });
-    expect(ben.progress).toEqual({ answered: 1, total: 8, requiredAnswered: 1, requiredTotal: 2 });
+    expect(ana.progress).toEqual({ answered: 8, total: 8, surveyTotal: 8, inactive: 0, requiredAnswered: 2, requiredTotal: 2 });
+    expect(ben.progress).toEqual({ answered: 1, total: 8, surveyTotal: 8, inactive: 0, requiredAnswered: 1, requiredTotal: 2 });
     expect(ana.answers.delta).toEqual({ value: -3, display: "-3", updatedAt: T });
     expect(ana.answers.tools.display).toBe("Email; CRM");
     expect(ana.answers.satisfaction.note).toBe("Fine");
@@ -320,12 +361,14 @@ describe("XLSX", () => {
     expect(labels).toContain("Question id");
     const summaryRows = Array.from({ length: summary.rowCount }, (_, index) => summary.getRow(index + 1));
     const questionHeader = summaryRows.find((row) => row.getCell(1).value === "Question id");
-    expect(questionHeader?.getCell(5).value).toBe("Share with stored answer");
+    expect(questionHeader?.getCell(7).value).toBe("Share of eligible with stored answer");
     const roleSummary = summaryRows.find((row) => row.getCell(1).value === "role");
-    expect(roleSummary?.getCell(4).value).toBe(2);
-    expect(roleSummary?.getCell(5).value).toBeCloseTo(2 / input.participants.length);
+    expect(roleSummary?.getCell(4).value).toBe(3);
+    expect(roleSummary?.getCell(5).value).toBe(0);
+    expect(roleSummary?.getCell(6).value).toBe(2);
+    expect(roleSummary?.getCell(7).value).toBeCloseTo(2 / input.participants.length);
     const metricNote = summaryRows.find((row) => row.getCell(1).value === "Metric note");
-    expect(metricNote?.getCell(2).value).toContain("not an item response rate");
+    expect(metricNote?.getCell(2).value).toContain("record historical display");
   });
 });
 

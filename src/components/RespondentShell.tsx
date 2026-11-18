@@ -13,6 +13,7 @@ interface Loaded {
   title: string;
   questions: Question[];
   answers: AnswerMap;
+  progress: { eligible?: Record<string, boolean> };
 }
 type Patch = Record<string, { value?: unknown; note?: unknown }>;
 
@@ -37,6 +38,7 @@ export function RespondentShell({ token }: { token: string }) {
   const version = useRef(0);
   const refreshRequiredRef = useRef(false);
   const questions = useRef<Question[]>([]);
+  const eligibility = useRef<Record<string, boolean>>({});
   const pending = useRef<Patch>({});
   const focusQuestionAfterClose = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -47,8 +49,9 @@ export function RespondentShell({ token }: { token: string }) {
 
   const recount = useCallback(() => {
     const qs = questions.current;
-    const missing = qs.filter((q) => q.required && !hasValue(answers.current[q.id]?.value));
-    setCounts({ answered: qs.filter((q) => hasValue(answers.current[q.id]?.value)).length, total: qs.length, missing });
+    const active = qs.filter((q) => eligibility.current[q.id] !== false);
+    const missing = active.filter((q) => q.required && !hasValue(answers.current[q.id]?.value));
+    setCounts({ answered: active.filter((q) => hasValue(answers.current[q.id]?.value)).length, total: active.length, missing });
   }, []);
 
   const post = useCallback((msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ kqa: 1, ...msg }, "*"), []);
@@ -73,6 +76,7 @@ export function RespondentShell({ token }: { token: string }) {
     setRefreshRequired(false);
     answers.current = res.data.answers ?? {};
     questions.current = res.data.questions;
+    eligibility.current = res.data.progress?.eligible ?? Object.fromEntries(res.data.questions.map((q) => [q.id, true]));
     setData(res.data);
     setClosed(res.data.interview.status === "closed");
     lockedRef.current = res.data.participant.status === "submitted" || res.data.interview.status === "closed";
@@ -130,6 +134,7 @@ export function RespondentShell({ token }: { token: string }) {
     const fresh = await api<Loaded>(`/api/p/${token}`);
     if (fresh.ok && fresh.data.answers) {
       answers.current = fresh.data.answers;
+      if (fresh.data.progress?.eligible) eligibility.current = fresh.data.progress.eligible;
       post({ type: "answers", answers: fresh.data.answers });
       recount();
       setSave("saved");
@@ -166,11 +171,16 @@ export function RespondentShell({ token }: { token: string }) {
         if ("value" in m) part.value = m.value;
         if ("note" in m) part.note = m.note;
         queue(m.id, part);
+      } else if (m.type === "eligibility" && m.eligible && typeof m.eligible === "object" && !Array.isArray(m.eligible)) {
+        const next: Record<string, boolean> = {};
+        for (const question of questions.current) next[question.id] = (m.eligible as Record<string, unknown>)[question.id] !== false;
+        eligibility.current = next;
+        recount();
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [data, post, queue]);
+  }, [data, post, queue, recount]);
 
   // ---- connectivity and leaving the page
   useEffect(() => {

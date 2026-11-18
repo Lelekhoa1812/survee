@@ -98,6 +98,22 @@ describe("manifest rules", () => {
     expect(d?.message).toMatch(/Did you mean "required"/);
   });
   it("flags options on a text question", () => expect(codes(checkHtml(swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "options": [{"value":"a","label":"A"},{"value":"b","label":"B"}],')))).toContain("KQA209"));
+  it("accepts bounded conditions that refer to earlier declared choice values", () => {
+    const html = swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "when": {"all":[{"question":"priority","operator":"equals","value":"accuracy"}]},');
+    expect(codes(checkHtml(html))).not.toContain("KQA218");
+  });
+  it("rejects routing references to later questions", () => {
+    const html = swap(STARTER, '"id": "priority", "type": "single",', '"id": "priority", "type": "single", "when": {"any":[{"question":"channels","operator":"equals","value":"email"}]},');
+    expect(codes(checkHtml(html))).toContain("KQA218");
+  });
+  it("rejects conditions whose operator does not match the source type or option value", () => {
+    const html = swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "when": {"all":[{"question":"channels","operator":"equals","value":"missing"}]},');
+    expect(codes(checkHtml(html)).filter((code) => code === "KQA218").length).toBeGreaterThanOrEqual(2);
+  });
+  it("rejects empty condition groups", () => {
+    const html = swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "when": {"all":[]},');
+    expect(codes(checkHtml(html))).toContain("KQA218");
+  });
 });
 
 describe("bindings", () => {

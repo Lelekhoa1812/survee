@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 79 codes. Severity is **error**, **warning** or **note**.
+There are 80 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -264,6 +264,14 @@ Severity: **warning**
 A section is declared but no question belongs to it.
 
 **How to fix:** Remove the section or assign questions to it.
+
+### KQA218: Invalid routing condition
+
+Severity: **error**
+
+A question's when condition must use bounded all/any lists of comparisons against declared options on earlier choice questions. Invalid routing can hide questions unexpectedly or make the interview impossible to complete.
+
+**How to fix:** Use a non-empty all and/or any list. Refer only to earlier single, select or multi questions and use an option value that question declares. Use equals/notEquals for single or select, and contains/notContains for multi.
 
 ## Controls and bindings (KQA3xx, KQA4xx)
 

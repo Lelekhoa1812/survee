@@ -1,11 +1,13 @@
-import { isAnswered, validateAnswer } from "../format/answers";
-import { LIMITS, scaleBounds, type AnswerMap, type Question } from "../format/schema";
+import { evaluateEligibility, isAnswered, validateAnswer } from "../format/answers";
+import { LIMITS, scaleBounds, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { LogCollapsingHighestDenseDDSketch } from "@datadog/sketches-js";
 import { ANALYTICS_COHORTS, ANALYTICS_STATUSES, type AnalyticsCohortKey } from "./cohorts";
 import type { ParticipantStatus } from "../repo/types";
 
 export interface AnalyticsRespondent {
   answers: AnswerMap;
+  /** Eligibility inferred from the current manifest rules, not a record of what was rendered. */
+  eligibility?: Record<string, boolean>;
 }
 
 export interface DistributionRow {
@@ -51,12 +53,14 @@ export interface QuestionSummaryDisclosureRisk {
 }
 
 export interface QuestionSummary {
-  /** Everyone in the selected status cohort; KQA does not track item-level display eligibility. */
+  /** Everyone in the selected status cohort, including those currently inactive by routing rules. */
   cohortCount: number;
-  /** @deprecated Use cohortCount; this is not item-level eligibility. */
+  /** People eligible under the current manifest rules. This is inferred, not a historical display record. */
   eligibleCount: number;
+  /** People currently inactive under the current manifest rules. */
+  inactiveCount: number;
   answeredCount: number;
-  /** People in the cohort without a non-empty stored answer; may include people who did not see the item. */
+  /** Currently eligible people without a non-empty stored answer. */
   noAnswerCount: number;
   /** @deprecated Use noAnswerCount; this is not item-level missingness. */
   missingCount: number;
@@ -77,6 +81,8 @@ export interface QuestionSummary {
 
 export interface QuestionSummaryAccumulatorSnapshot {
   cohortCount: number;
+  eligibleCount: number;
+  inactiveCount: number;
   answeredCount: number;
   noteOnlyCount: number;
   distributionDenominator: number;
@@ -103,6 +109,8 @@ export interface QuestionSummaryAccumulator {
 
 interface QuestionSummaryAccumulatorMergeState {
   cohortCount: number;
+  eligibleCount: number;
+  inactiveCount: number;
   answeredCount: number;
   noteOnlyCount: number;
   distributionDenominator: number;
@@ -129,6 +137,13 @@ export const NUMERIC_SKETCH_BIN_LIMIT_PER_SIGN = 512;
 
 export interface CohortAnalyticsRespondent extends AnalyticsRespondent {
   status: ParticipantStatus;
+}
+
+/** Attach current-rule eligibility to an analytics stream. This is inferred from answers, not historical display telemetry. */
+export async function* withCurrentEligibility<T extends AnalyticsRespondent>(manifest: Manifest, respondents: AsyncIterable<T>): AsyncGenerator<T & { eligibility: Record<string, boolean> }> {
+  for await (const respondent of respondents) {
+    yield { ...respondent, eligibility: evaluateEligibility(manifest, respondent.answers) };
+  }
 }
 
 export interface QuestionCohortSummaries {
@@ -209,6 +224,8 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   const hasDistribution = q.type === "single" || q.type === "select" || q.type === "multi" || q.type === "scale";
   const hasNumericSummary = q.type === "number" || q.type === "scale";
   let cohortCount = 0;
+  let eligibleCount = 0;
+  let inactiveCount = 0;
   let answeredCount = 0;
   let noteOnlyCount = 0;
   let distributionDenominator = 0;
@@ -286,6 +303,11 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
 
   function add(respondent: AnalyticsRespondent) {
     cohortCount += 1;
+    if (respondent.eligibility?.[q.id] === false) {
+      inactiveCount += 1;
+      return;
+    }
+    eligibleCount += 1;
     const answer = respondent.answers[q.id];
     const answered = isAnswered(q, respondent.answers);
     if (!answered && typeof answer?.note === "string" && answer.note.trim() !== "") noteOnlyCount += 1;
@@ -368,12 +390,13 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       ...row,
       percent: distributionDenominator ? (row.count / distributionDenominator) * 100 : 0,
     }));
-    const noAnswerCount = cohortCount - answeredCount;
+    const noAnswerCount = eligibleCount - answeredCount;
     const unmappedResponseCount = Math.max(distributionUnmappedResponseCount, numericUnmappedResponseCount);
 
     return {
       cohortCount,
-      eligibleCount: cohortCount,
+      eligibleCount,
+      inactiveCount,
       answeredCount,
       noAnswerCount,
       missingCount: noAnswerCount,
@@ -400,6 +423,8 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   function snapshot(): QuestionSummaryAccumulatorSnapshot {
     return {
       cohortCount,
+      eligibleCount,
+      inactiveCount,
       answeredCount,
       noteOnlyCount,
       distributionDenominator,
@@ -433,6 +458,8 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       throw new Error("Cannot merge a numeric sketch snapshot without its mergeable accumulator state.");
     }
     cohortCount += source.cohortCount;
+    eligibleCount += source.eligibleCount;
+    inactiveCount += source.inactiveCount;
     answeredCount += source.answeredCount;
     noteOnlyCount += source.noteOnlyCount;
     distributionDenominator += source.distributionDenominator;
@@ -485,6 +512,8 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
 
   function clear() {
     cohortCount = 0;
+    eligibleCount = 0;
+    inactiveCount = 0;
     answeredCount = 0;
     noteOnlyCount = 0;
     distributionDenominator = 0;
@@ -504,6 +533,8 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
   const accumulator = { add, merge, finish, snapshot };
   accumulatorMergeStates.set(accumulator, () => ({
     cohortCount,
+    eligibleCount,
+    inactiveCount,
     answeredCount,
     noteOnlyCount,
     distributionDenominator,

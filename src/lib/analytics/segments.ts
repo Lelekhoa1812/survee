@@ -4,7 +4,7 @@ import type { ParticipantStatus } from "../repo/types";
 import { ANALYTICS_STATUSES } from "./cohorts";
 import { createQuestionSummaryAccumulator, type CohortAnalyticsRespondent, type QuestionSummary, type QuestionSummaryAccumulator } from "./summary";
 
-export type AnswerSegmentKind = "answer" | "no_answer" | "unmapped";
+export type AnswerSegmentKind = "answer" | "no_answer" | "unmapped" | "inactive";
 
 export interface AnswerSegmentDisclosureRisk {
   /** A detectable singleton signal, not a complete assessment of identifiability. */
@@ -103,11 +103,13 @@ function definitions(question: Question): SegmentDefinition[] {
   return [
     ...values.map(({ value, label }) => ({ key: `answer:${value}`, kind: "answer" as const, value, label })),
     { key: "special:no_answer", kind: "no_answer", label: "No stored answer" },
+    { key: "special:inactive", kind: "inactive", label: "Inactive by current rules" },
     { key: "special:unmapped", kind: "unmapped", label: "Unmapped answer" },
   ];
 }
 
 function answerSegments(question: Question, respondent: CohortAnalyticsRespondent): string[] {
+  if (respondent.eligibility?.[question.id] === false) return ["special:inactive"];
   if (!isAnswered(question, respondent.answers)) return ["special:no_answer"];
   const validation = validateAnswer(question, respondent.answers[question.id]?.value);
   if (!validation.ok || validation.value === null) return ["special:unmapped"];

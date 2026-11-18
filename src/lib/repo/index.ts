@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
-import { progress, validateAnswer } from "../format/answers";
+import { evaluateEligibility, progress, validateAnswer } from "../format/answers";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
@@ -538,6 +538,18 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     }
     if (merged.value === undefined && merged.note === undefined) delete next[id];
     else next[id] = merged;
+  }
+  if (!problems.length) {
+    const eligible = evaluateEligibility(ctx.version.manifest, next);
+    for (const id of ids) {
+      if (eligible[id] !== false) continue;
+      const entry = patch[id] ?? {};
+      const question = byId.get(id)!;
+      const submittedValue = "value" in entry ? validateAnswer(question, entry.value) : null;
+      const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
+      const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
+      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
+    }
   }
   if (problems.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems };
   if (JSON.stringify(next).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };

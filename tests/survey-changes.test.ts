@@ -17,6 +17,7 @@ describe("survey candidate question changes", () => {
       min: 1,
       max: 5,
       help: "Choose one",
+      when: { all: [{ question: "prior", operator: "equals", value: "yes" }] },
     })];
     const after = [question("q1", {
       label: "New wording",
@@ -28,6 +29,7 @@ describe("survey candidate question changes", () => {
       step: 2,
       help: "Rate your experience",
       note: { label: "Why?", placeholder: "Optional reason", maxLength: 300 },
+      when: { any: [{ question: "prior", operator: "equals", value: "no" }] },
     })];
 
     const changes = summarizeQuestionChanges(before, after);
@@ -35,7 +37,7 @@ describe("survey candidate question changes", () => {
     expect(changes.updated[0]).toEqual({
       previous: before[0],
       question: after[0],
-      fields: ["label", "type", "required", "section", "options", "min", "max", "step", "help", "note"],
+      fields: ["label", "type", "required", "section", "options", "min", "max", "step", "help", "note", "when"],
     });
     expect(formatQuestionFieldValue("label", changes.updated[0].previous, [])).toBe("Old wording");
     expect(formatQuestionFieldValue("label", changes.updated[0].question, [])).toBe("New wording");
@@ -44,6 +46,7 @@ describe("survey candidate question changes", () => {
     expect(formatQuestionFieldValue("section", changes.updated[0].previous, [{ id: "intro", title: "Introduction" }])).toBe("Introduction (intro)");
     expect(formatQuestionFieldValue("section", changes.updated[0].question, [])).toBe("closing");
     expect(formatQuestionFieldValue("note", changes.updated[0].question, [])).toContain("Why? · placeholder: Optional reason · 300 characters maximum");
+    expect(formatQuestionFieldValue("when", changes.updated[0].question, [])).toBe('{"any":[{"question":"prior","operator":"equals","value":"no"}]}');
     expect(changes.moved).toEqual([]);
   });
 
@@ -63,6 +66,7 @@ describe("survey candidate question changes", () => {
     expect(formatQuestionFieldValue("maxLength", oldQuestion, [])).toBe("1200 characters");
     expect(formatQuestionFieldValue("custom", newQuestion, [])).toBe("Custom response set with KQA.set()");
     expect(FIELD_LABELS.options).toBe("Response options");
+    expect(FIELD_LABELS.when).toBe("Conditional routing");
   });
 
   it("identifies changed order among existing questions", () => {

@@ -1,4 +1,4 @@
-import { displayValue, isAnswered } from "../format/answers";
+import { displayValue, evaluateEligibility, isAnswered } from "../format/answers";
 import { noteConfig, type AnswerValue, type Manifest, type Question } from "../format/schema";
 import type { ExportInput, ExportParticipant } from "./types";
 
@@ -10,7 +10,7 @@ export interface Table {
 
 export interface WideColumn {
   header: string;
-  kind: "fixed" | "answer" | "note";
+  kind: "fixed" | "answer" | "note" | "eligibility";
   cell: (p: ExportParticipant) => string;
 }
 
@@ -32,6 +32,15 @@ function answerDisplay(q: Question, p: ExportParticipant): string {
 
 /** The columns of the wide table, in order. Shared with the XLSX writer so both agree on layout. */
 export function wideColumns(manifest: Manifest): WideColumn[] {
+  const eligibilityByParticipant = new WeakMap<ExportParticipant, Record<string, boolean>>();
+  const currentEligibility = (p: ExportParticipant, questionId: string) => {
+    let eligibility = eligibilityByParticipant.get(p);
+    if (!eligibility) {
+      eligibility = evaluateEligibility(manifest, p.answers);
+      eligibilityByParticipant.set(p, eligibility);
+    }
+    return eligibility[questionId] !== false;
+  };
   const cols: WideColumn[] = [
     { header: "Person", kind: "fixed", cell: (p) => p.name },
     { header: "Person note", kind: "fixed", cell: (p) => p.note ?? "" },
@@ -40,6 +49,7 @@ export function wideColumns(manifest: Manifest): WideColumn[] {
     { header: "Submitted", kind: "fixed", cell: (p) => p.submittedAt ?? "" },
   ];
   for (const q of manifest.questions) {
+    cols.push({ header: `${q.id} | eligibility`, kind: "eligibility", cell: (p) => currentEligibility(p, q.id) ? "eligible" : "inactive" });
     cols.push({ header: `${q.id} | ${q.label}`, kind: "answer", cell: (p) => answerDisplay(q, p) });
     if (noteConfig(q).enabled) {
       cols.push({ header: `${q.id} | note`, kind: "note", cell: (p) => p.answers[q.id]?.note ?? "" });
@@ -64,6 +74,7 @@ export const LONG_HEADER = [
   "Question id",
   "Question",
   "Type",
+  "Current eligibility",
   "Answer",
   "Answer value",
   "Note",
@@ -82,12 +93,14 @@ export function longTable(input: ExportInput): Table {
   const sectionTitles = new Map((input.manifest.sections ?? []).map((s) => [s.id, s.title]));
   const rows: string[][] = [];
   for (const p of sortedParticipants(input)) {
+    const eligibility = evaluateEligibility(input.manifest, p.answers);
     for (const q of input.manifest.questions) {
       const a = p.answers[q.id];
       const note = a?.note ?? "";
       const hasNote = note.trim() !== "";
       const answered = isAnswered(q, p.answers);
-      if (!answered && !hasNote) continue;
+      const eligible = eligibility[q.id] !== false;
+      if (eligible && !answered && !hasNote) continue;
       rows.push([
         p.name,
         p.status,
@@ -95,6 +108,7 @@ export function longTable(input: ExportInput): Table {
         q.id,
         q.label,
         q.type,
+        eligible ? "eligible" : "inactive",
         answered ? displayValue(q, a?.value) : "",
         answered ? rawValue(a?.value) : "",
         note,

@@ -49,15 +49,15 @@ describe("analytics CSV export", () => {
     expect(csv).toContain('"Everyone","interview-123","2","2026-11-15T00:00:00.000Z"');
     expect(csv).toContain(`"'=HYPERLINK(""https://example.test"")"`);
     expect(csv).toContain("\"response_count\"");
-    expect(csv.split("\r\n")[0]).toContain('"cohort_count","answered","no_answer","no_answer_note"');
+    expect(csv.split("\r\n")[0]).toContain('"cohort_count","eligible","inactive","answered","no_answer","no_answer_note"');
     expect(csv.split("\r\n")[0]).toContain('"note_only","unmapped"');
     expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_question_summary"');
     expect(csv).toContain("singletonDistributionValues");
     expect(csv).toContain('""singletonDistributionValues"":[""email"",""phone""]');
     expect(csv).toContain("Singleton signals cover counts of one only");
-    expect(csv).toContain("KQA does not track conditional or routed item display");
-    expect(csv).toContain('"2","2","2","0","KQA does not track conditional or routed item display');
-    expect(csv).toContain('"1","2","1","1","KQA does not track conditional or routed item display');
+    expect(csv).toContain("Eligibility is inferred from current routing rules, not recorded display");
+    expect(csv).toContain('"2","2","0","2","0","Eligibility is inferred');
+    expect(csv).toContain('"2","2","0","1","1","Eligibility is inferred');
     expect(csv).not.toContain("Private response text");
     expect(csv).not.toContain("Private note");
   });
@@ -87,7 +87,7 @@ describe("analytics CSV export", () => {
     expect(summary.unmappedResponseCount).toBe(1);
     expect(summary.distributionDenominator).toBe(1);
     const csv = buildAnalyticsCsv([{ question: option, summary }], "Everyone");
-    expect(csv).toContain('"1","2","2","0","KQA does not track conditional or routed item display');
+    expect(csv).toContain('"1","2","2","0","2","0","Eligibility is inferred');
     expect(csv).toContain('"0","1",,,,,,');
   });
 

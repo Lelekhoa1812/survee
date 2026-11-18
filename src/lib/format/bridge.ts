@@ -12,8 +12,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   "use strict";
   if (window.KQA) return;
 
-  var listeners = { ready: [], change: [], lock: [] };
-  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, participant: null, probe: false, preview: false };
+  var listeners = { ready: [], change: [], lock: [], eligibility: [] };
+  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, participant: null, probe: false, preview: false };
   var errors = [];
   var consoleErrors = [];
   var readyResolve;
@@ -126,8 +126,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var els = document.querySelectorAll("[data-kqa], [data-kqa-note]");
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
-      if (state.locked) { if (!el.hasAttribute("data-kqa-was-disabled")) el.setAttribute("data-kqa-was-disabled", el.disabled ? "1" : "0"); el.disabled = true; }
-      else if (el.hasAttribute("data-kqa-was-disabled")) { el.disabled = el.getAttribute("data-kqa-was-disabled") === "1"; el.removeAttribute("data-kqa-was-disabled"); }
+      var id = el.getAttribute("data-kqa") || el.getAttribute("data-kqa-note");
+      if (!el.hasAttribute("data-kqa-condition-disabled")) el.setAttribute("data-kqa-condition-disabled", el.disabled ? "1" : "0");
+      var baseline = el.getAttribute("data-kqa-condition-disabled") === "1";
+      el.disabled = state.locked || baseline || !!(state.eligibility && state.eligibility[id] === false);
     }
     setHtmlState(state.ready ? (state.locked ? "locked" : "ready") : "loading");
   }
@@ -162,11 +164,94 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if ("value" in patch) msg.value = next.value === undefined ? null : next.value;
     if ("note" in patch) msg.note = next.note === undefined ? null : next.note;
     post(msg);
+    updateEligibility(true);
     emit("change", { id: id, value: next.value, note: next.note, source: source });
   }
   function writeStatus(id) {
     var statuses = document.querySelectorAll("[data-kqa-status]");
     for (var i = 0; i < statuses.length; i++) if (statuses[i].getAttribute("data-kqa-status") === id) statuses[i].setAttribute("data-state", isAnswered(id) ? "answered" : "empty");
+  }
+
+  // Conditional questions depend on earlier answers. Hiding a block never
+  // clears its answer; the answer can become eligible again if its parent changes.
+  function conditionMatches(condition, eligible) {
+    if (!condition || typeof condition.question !== "string" || !eligible[condition.question]) return false;
+    var actual = answerOf(condition.question).value;
+    if (actual === undefined || actual === null) return false;
+    var expected = condition.value;
+    switch (condition.operator) {
+      case "equals": return equal(actual, expected);
+      case "notEquals": return !equal(actual, expected);
+      case "contains":
+        return Array.isArray(actual) ? actual.some(function (value) { return equal(value, expected); })
+          : typeof actual === "string" && typeof expected === "string" ? actual.indexOf(expected) !== -1 : false;
+      case "notContains":
+        return Array.isArray(actual) ? !actual.some(function (value) { return equal(value, expected); })
+          : typeof actual === "string" && typeof expected === "string" ? actual.indexOf(expected) === -1 : false;
+      default: return false;
+    }
+  }
+  function setConditionalVisibility(question, eligible) {
+    var blocks = document.querySelectorAll("[data-kqa-question-id]");
+    for (var i = 0; i < blocks.length; i++) {
+      var block = blocks[i];
+      if (block.getAttribute("data-kqa-question-id") !== question.id) continue;
+      if (!block.hasAttribute("data-kqa-condition-state")) {
+        block.setAttribute("data-kqa-condition-state", "1");
+        block.setAttribute("data-kqa-condition-hidden", block.hidden ? "1" : "0");
+        block.setAttribute("data-kqa-condition-aria-hidden", block.getAttribute("aria-hidden") === null ? "" : block.getAttribute("aria-hidden"));
+        block.setAttribute("data-kqa-condition-inert", block.hasAttribute("inert") ? "1" : "0");
+      }
+      var shouldHide = !eligible[question.id] || block.getAttribute("data-kqa-condition-hidden") === "1";
+      block.hidden = shouldHide;
+      if (shouldHide) {
+        block.setAttribute("aria-hidden", "true");
+        block.setAttribute("inert", "");
+      } else {
+        var aria = block.getAttribute("data-kqa-condition-aria-hidden");
+        if (aria === "") block.removeAttribute("aria-hidden"); else block.setAttribute("aria-hidden", aria);
+        if (block.getAttribute("data-kqa-condition-inert") === "1") block.setAttribute("inert", ""); else block.removeAttribute("inert");
+      }
+      var controlsInBlock = block.querySelectorAll("[data-kqa], [data-kqa-note]");
+      for (var c = 0; c < controlsInBlock.length; c++) {
+        var control = controlsInBlock[c];
+        if (!control.hasAttribute("data-kqa-condition-disabled")) control.setAttribute("data-kqa-condition-disabled", control.disabled ? "1" : "0");
+        control.disabled = shouldHide || state.locked || control.getAttribute("data-kqa-condition-disabled") === "1";
+      }
+      var focusables = block.querySelectorAll("a[href], button, input, select, textarea, [tabindex]");
+      for (var f = 0; f < focusables.length; f++) {
+        var focusable = focusables[f];
+        if (!focusable.hasAttribute("data-kqa-condition-tabindex")) focusable.setAttribute("data-kqa-condition-tabindex", focusable.getAttribute("tabindex") === null ? "__none__" : focusable.getAttribute("tabindex"));
+        if (shouldHide) focusable.setAttribute("tabindex", "-1");
+        else {
+          var priorTab = focusable.getAttribute("data-kqa-condition-tabindex");
+          if (priorTab === "__none__") focusable.removeAttribute("tabindex"); else focusable.setAttribute("tabindex", priorTab);
+        }
+      }
+    }
+  }
+  function updateEligibility(announce) {
+    var eligible = {};
+    state.questions.forEach(function (question) {
+      var when = question.when;
+      var all = when && Array.isArray(when.all) ? when.all : [];
+      var any = when && Array.isArray(when.any) ? when.any : [];
+      var ok = all.every(function (condition) { return conditionMatches(condition, eligible); }) &&
+        (!any.length || any.some(function (condition) { return conditionMatches(condition, eligible); }));
+      eligible[question.id] = ok;
+      setConditionalVisibility(question, eligible);
+    });
+    var changed = !equal(eligible, state.eligibility || {});
+    state.eligibility = eligible;
+    if (announce && changed) {
+      post({ type: "eligibility", eligible: eligible });
+      emit("eligibility", eligibilityCopy());
+    }
+  }
+  function eligibilityCopy() {
+    var out = {};
+    Object.keys(state.eligibility || {}).forEach(function (id) { out[id] = state.eligibility[id]; });
+    return out;
   }
 
   // ---- binding controls
@@ -204,12 +289,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.locked = !!m.locked;
       state.ready = true;
       applyAnswers(m.answers);
+      updateEligibility(true);
       applyLock();
       readyResolve(snapshot());
       emit("ready", snapshot());
       if (state.probe) setTimeout(runProbe, 60);
     } else if (m.type === "answers") {
       applyAnswers(m.answers);
+      updateEligibility(true);
       state.questions.forEach(function (x) { emit("change", { id: x.id, value: answerOf(x.id).value, note: answerOf(x.id).note, source: "app" }); });
     } else if (m.type === "lock") {
       state.locked = !!m.locked;
@@ -257,8 +344,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     setNote: function (id, text) { commit(id, { note: text }, "script"); },
     clear: function (id) { commit(id, { value: null }, "script"); },
     isAnswered: isAnswered,
+    isEligible: function (id) { return !state.ready || !state.eligibility ? true : state.eligibility[id] !== false; },
+    eligibility: eligibilityCopy,
     answers: answersCopy,
-    progress: function () { var n = 0; state.questions.forEach(function (x) { if (isAnswered(x.id)) n++; }); return { answered: n, total: state.questions.length }; },
+    progress: function () { var n = 0; var total = 0; state.questions.forEach(function (x) { if (state.eligibility[x.id] === false) return; total++; if (isAnswered(x.id)) n++; }); return { answered: n, total: total }; },
     on: function (name, fn) { if (listeners[name] && typeof fn === "function") { listeners[name].push(fn); if (name === "ready" && state.ready) { try { fn(snapshot()); } catch (e) {} } } },
     off: function (name, fn) { var l = listeners[name]; if (l) { var i = l.indexOf(fn); if (i !== -1) l.splice(i, 1); } },
     get locked() { return state.locked; },

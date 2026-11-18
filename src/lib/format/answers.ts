@@ -80,12 +80,49 @@ export function isAnswered(q: Question, answers: AnswerMap): boolean {
   return true;
 }
 
+/** Evaluate the current manifest's bounded routing rules in question order. */
+export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Record<string, boolean> {
+  const eligible: Record<string, boolean> = {};
+  for (const question of manifest.questions) {
+    const when = question.when;
+    if (!when) { eligible[question.id] = true; continue; }
+    const matches = (condition: NonNullable<typeof when.all>[number]): boolean => {
+      if (!eligible[condition.question]) return false;
+      const value = answers[condition.question]?.value;
+      if (value === undefined || value === null) return false;
+      const has = Array.isArray(value) ? value.includes(condition.value) : value === condition.value;
+      return condition.operator === "equals" || condition.operator === "contains" ? has : !has;
+    };
+    const all = when.all ?? [];
+    const any = when.any ?? [];
+    eligible[question.id] = (all.length === 0 || all.every(matches)) && (any.length === 0 || any.some(matches));
+  }
+  return eligible;
+}
+
+/** Return requested question ids plus every transitive routing prerequisite needed to infer their current eligibility. */
+export function eligibilityQuestionIds(manifest: Manifest, requestedIds: readonly string[]): string[] {
+  const byId = new Map(manifest.questions.map((question) => [question.id, question]));
+  const included = new Set<string>();
+  const visit = (id: string) => {
+    if (included.has(id)) return;
+    const question = byId.get(id);
+    if (!question) return;
+    included.add(id);
+    for (const condition of [...(question.when?.all ?? []), ...(question.when?.any ?? [])]) visit(condition.question);
+  };
+  for (const id of requestedIds) visit(id);
+  return manifest.questions.filter((question) => included.has(question.id)).map((question) => question.id);
+}
+
 export interface Progress {
   total: number;
   answered: number;
   requiredTotal: number;
   requiredAnswered: number;
   missingRequired: string[];
+  eligible: Record<string, boolean>;
+  inactive: number;
 }
 
 export function progress(manifest: Manifest, answers: AnswerMap): Progress {
@@ -93,7 +130,11 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
   let requiredTotal = 0;
   let requiredAnswered = 0;
   const missingRequired: string[] = [];
+  const eligible = evaluateEligibility(manifest, answers);
+  let total = 0;
   for (const q of manifest.questions) {
+    if (!eligible[q.id]) continue;
+    total += 1;
     const done = isAnswered(q, answers);
     if (done) answered += 1;
     if (q.required) {
@@ -102,7 +143,7 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
       else missingRequired.push(q.id);
     }
   }
-  return { total: manifest.questions.length, answered, requiredTotal, requiredAnswered, missingRequired };
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, eligible, inactive: manifest.questions.length - total };
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

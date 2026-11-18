@@ -191,10 +191,10 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
             {question.required && <Badge kind="info" plain>Required</Badge>}
           </div>
         </div>
-        <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · {summary.noAnswerCount} no answer · cohort n={summary.cohortCount}</p>
+        <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · {summary.noAnswerCount} eligible with no answer · {summary.inactiveCount} inactive · eligible n={summary.eligibleCount} · cohort n={summary.cohortCount}</p>
       </div>}
 
-      {!showHeading && <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · {summary.noAnswerCount} no answer · cohort n={summary.cohortCount}</p>}
+      {!showHeading && <p className="analysis-response-count"><b>{summary.answeredCount}</b> answered · {summary.noAnswerCount} eligible with no answer · {summary.inactiveCount} inactive · eligible n={summary.eligibleCount} · cohort n={summary.cohortCount}</p>}
 
       <SingletonDisclosureNote summary={summary} />
 
@@ -755,7 +755,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
-        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. KQA does not track whether a conditional or routed question was shown, so no-answer counts may include people who did not see the question. Checkbox percentages can total more than 100%. Text and note content are excluded. Singleton signals flag counts of one, but do not assess identification from combinations of attributes or guarantee anonymity. These summaries describe the selected interview cohort; nonresponse or self-selection can shape results. They do not establish population representativeness, statistical significance, or causal effects.</p>
+        <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. Eligibility and inactivity are inferred from current routing rules and saved answers; they are not historical records that a question was displayed. No-answer counts include eligible people only, with inactive people reported separately. Checkbox percentages can total more than 100%. Text and note content are excluded. Singleton signals flag counts of one, but do not assess identification from combinations of attributes or guarantee anonymity. These summaries describe the selected interview cohort; nonresponse or self-selection can shape results. They do not establish population representativeness, statistical significance, or causal effects.</p>
         {data.analysis?.asOf && <p className="analysis-freshness" role="status">Analytics read completed {fullTime(data.analysis.asOf)}. Status groups share one live scan; updates during that scan may be observed.</p>}
       </section>
 

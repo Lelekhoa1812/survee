@@ -10,8 +10,8 @@ const state = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not found"); } }));
 vi.mock("@/lib/http", () => ({ adminSession: async () => ({ role: state.role, tenantId: "tenant-1" }) }));
 vi.mock("@/lib/env", () => ({ publicBaseUrl: () => ({ ok: true, origin: "https://kqa.test" }) }));
-vi.mock("@/lib/format/answers", () => ({ progress: () => ({ answered: 1, total: 1, missingRequired: [] }) }));
-vi.mock("@/lib/analytics/summary", () => ({ summarizeQuestionCohorts: async () => ({ asOf: "2026-11-16T00:00:00.000Z", statusCounts: { invited: 0, in_progress: 0, submitted: 1 }, summaries: {} }) }));
+vi.mock("@/lib/analytics/summary", () => ({ summarizeQuestionCohorts: async () => ({ asOf: "2026-11-16T00:00:00.000Z", statusCounts: { invited: 0, in_progress: 0, submitted: 1 }, summaries: {} }), withCurrentEligibility: (_manifest: unknown, respondents: unknown) => respondents }));
+vi.mock("@/lib/format/answers", () => ({ progress: () => ({ answered: 1, total: 1, missingRequired: [] }), eligibilityQuestionIds: (_manifest: unknown, ids: string[]) => ids }));
 vi.mock("@/lib/mail/state", () => ({ currentMail: () => ({ state: "sent", sentAt: "2026-11-16T00:00:00.000Z", delivery: "unknown" }) }));
 vi.mock("@/lib/repo/mail", () => ({ listMailByInterview: state.listMailByInterview, mailRecord: (row: unknown) => row }));
 vi.mock("@/lib/repo", () => ({

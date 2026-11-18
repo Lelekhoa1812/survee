@@ -537,7 +537,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.statusCohorts[0].questions[0].disclosureRisk).toMatchObject({ singletonCohort: true, singletonUnmappedResponseCount: true });
     expect(body.result.structuredContent.statusCohorts[1].questions[0].disclosureRisk).toMatchObject({ singletonCohort: true, singletonDistributionDenominator: true, singletonDistributionValues: ["yes"] });
     expect(body.result.structuredContent.methodology.join(" ")).toContain("including invited people with no answers");
-    expect(body.result.structuredContent.methodology.join(" ")).toContain("does not track item-level display or eligibility");
+    expect(body.result.structuredContent.methodology.join(" ")).toContain("not historical display telemetry");
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
   });
 

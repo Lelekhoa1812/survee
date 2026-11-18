@@ -1,5 +1,5 @@
 import { Workbook, type Worksheet } from "exceljs";
-import { isAnswered, progress } from "../format/answers";
+import { evaluateEligibility, isAnswered, progress } from "../format/answers";
 import { neutraliseCell } from "./csv";
 import { exportFilename, longTable, sortedParticipants, wideColumns, wideTable } from "./rows";
 import type { ExportFile, ExportInput, ExportParticipant } from "./types";
@@ -96,20 +96,24 @@ function writeSummary(wb: Workbook, input: ExportInput, people: ExportParticipan
   ws.addRow([]);
 
   const tableHeaderRow = ws.rowCount + 1;
-  const header = ["Question id", "Question", "Type", "Answered", "Share with stored answer"];
+  const header = ["Question id", "Question", "Type", "Eligible", "Inactive", "Answered", "Share of eligible with stored answer"];
   ws.addRow(header);
+  const personState = people.map((p) => ({ p, eligibility: evaluateEligibility(input.manifest, p.answers) }));
   for (const q of input.manifest.questions) {
-    const answered = people.filter((p) => isAnswered(q, p.answers)).length;
-    const share = people.length ? answered / people.length : 0;
-    const row = ws.addRow([q.id, neutraliseCell(q.label), q.type, answered, share]);
-    row.getCell(5).numFmt = "0%";
+    const status = personState.map(({ p, eligibility }) => ({ eligible: eligibility[q.id] !== false, answered: isAnswered(q, p.answers) }));
+    const eligible = status.filter((item) => item.eligible).length;
+    const inactive = status.length - eligible;
+    const answered = status.filter((item) => item.eligible && item.answered).length;
+    const share = eligible ? answered / eligible : 0;
+    const row = ws.addRow([q.id, neutraliseCell(q.label), q.type, eligible, inactive, answered, share]);
+    row.getCell(7).numFmt = "0%";
   }
   ws.addRow([
     "Metric note",
-    "Share with stored answer = people with a stored answer divided by all participants. KQA does not track whether conditional or routed questions were shown, so this is not an item response rate.",
+    "Eligibility and inactivity are inferred from the current manifest rules and saved answers; they do not record historical display. Share of eligible with stored answer = eligible people with a stored answer divided by eligible people. Stored answers to currently inactive questions remain in the Wide and Long sheets.",
   ]);
 
-  const widths = [28, 60, 14, 12, 28];
+  const widths = [28, 60, 14, 12, 12, 12, 36];
   widths.forEach((w, i) => (ws.getColumn(i + 1).width = w));
   applyBodyStyle(ws, ws.rowCount, header.length, new Set([1]));
   styleHeader(ws, tableHeaderRow, header.length);
@@ -121,7 +125,8 @@ function writePeople(wb: Workbook, input: ExportInput, people: ExportParticipant
     "Person note",
     "Status",
     "Answered",
-    "Questions",
+    "Eligible questions",
+    "Inactive questions",
     "Required answered",
     "Required questions",
     "Last saved",
@@ -135,6 +140,7 @@ function writePeople(wb: Workbook, input: ExportInput, people: ExportParticipant
       p.status,
       pr.answered,
       pr.total,
+      pr.inactive,
       pr.requiredAnswered,
       pr.requiredTotal,
       p.lastSavedAt ?? "",

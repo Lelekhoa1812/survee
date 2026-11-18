@@ -21,4 +21,11 @@ describe("agent documentation bundle", () => {
     expect(asset?.type).toBe("text/html; charset=utf-8");
     expect(asset?.body).toContain('data-kqa="support-details"');
   });
+
+  it("serves the native routed follow-up example as an HTML asset", async () => {
+    const asset = await readAsset("examples/routed-follow-up.kqa.html");
+    expect(asset?.type).toBe("text/html; charset=utf-8");
+    expect(asset?.body).toContain('"when": { "all":');
+    expect(asset?.body).toContain('"required": true');
+  });
 });

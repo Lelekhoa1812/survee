@@ -42,6 +42,18 @@ export const optionSchema = z.object({
   label: z.string().min(1).max(LIMITS.maxLabel),
 });
 
+/** A deliberately shallow, bounded predicate over an earlier choice answer. */
+export const conditionSchema = z.object({
+  question: idString,
+  operator: z.enum(["equals", "notEquals", "contains", "notContains"]),
+  value: z.string().regex(OPTION_VALUE_RE),
+});
+
+export const whenSchema = z.object({
+  all: z.array(conditionSchema).max(20).optional(),
+  any: z.array(conditionSchema).max(20).optional(),
+});
+
 export const noteSchema = z.union([
   z.boolean(),
   z.object({
@@ -72,6 +84,8 @@ export const questionSchema = z.object({
   maxLength: z.number().int().min(1).max(LIMITS.longtextMax).optional(),
   /** True when the page sets this answer from script with KQA.set() instead of a bound control. */
   custom: z.boolean().optional(),
+  /** Show this question only when its bounded conditions match earlier answers. */
+  when: whenSchema.optional(),
 });
 
 export const manifestSchema = z.object({
@@ -86,6 +100,7 @@ export type Manifest = z.infer<typeof manifestSchema>;
 export type Question = z.infer<typeof questionSchema>;
 export type Section = z.infer<typeof sectionSchema>;
 export type Option = z.infer<typeof optionSchema>;
+export type Condition = z.infer<typeof conditionSchema>;
 
 /** Types that must carry an `options` list. */
 export const OPTION_TYPES: readonly QuestionType[] = ["single", "multi", "select"];

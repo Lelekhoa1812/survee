@@ -1,7 +1,7 @@
 import { LIMITS, noteConfig, type Question, type Section } from "./format/schema";
 
 export const QUESTION_FIELDS = [
-  "label", "type", "required", "section", "options", "min", "max", "step", "help", "note", "maxLength", "custom",
+  "label", "type", "required", "section", "options", "min", "max", "step", "help", "note", "maxLength", "custom", "when",
 ] as const satisfies readonly (keyof Question)[];
 
 export type QuestionField = (typeof QUESTION_FIELDS)[number];
@@ -19,6 +19,7 @@ export const FIELD_LABELS: Record<QuestionField, string> = {
   note: "Note field",
   maxLength: "Text length",
   custom: "Custom response behavior",
+  when: "Conditional routing",
 };
 
 export interface QuestionChanges {
@@ -136,6 +137,7 @@ export function formatQuestionFieldValue(field: QuestionField, question: Questio
     return "Not applicable";
   }
   if (field === "custom") return question.custom ? "Custom response set with KQA.set()" : "Standard respondent control";
+  if (field === "when") return question.when ? JSON.stringify(question.when) : "Always eligible";
   return "Not set";
 }
 

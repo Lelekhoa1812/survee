@@ -45,11 +45,13 @@ function closest(word: string, candidates: readonly string[]): string | undefine
   return best;
 }
 
-const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "note", "min", "max", "step", "maxLength", "custom"];
+const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "note", "min", "max", "step", "maxLength", "custom", "when"];
 const ROOT_KEYS = ["format", "title", "description", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
 const NOTE_KEYS = ["label", "placeholder", "maxLength"];
+const WHEN_KEYS = ["all", "any"];
+const CONDITION_KEYS = ["question", "operator", "value"];
 
 interface Ctx {
   html: string;
@@ -602,6 +604,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
   if (qs.length === 0) add(ctx, "KQA205", '"questions" is empty.', undefined, { offset: m.at("questions"), path: "questions" });
   if (qs.length > LIMITS.maxQuestions) add(ctx, "KQA213", `There are ${qs.length} questions; the maximum is ${LIMITS.maxQuestions}.`, undefined, { offset: m.at("questions"), path: "questions" });
   const seen = new Map<string, number>();
+  const earlierQuestions = new Map<string, { type: unknown; values: Set<string> }>();
   qs.forEach((q, i) => {
     const p = `questions[${i}]`;
     if (!isObj(q)) return void add(ctx, "KQA203", `${p} must be an object.`, undefined, { offset: m.at(p), path: p });
@@ -679,6 +682,64 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
     if (q.note !== undefined) {
       if (isObj(q.note)) checkUnknownKeys(q.note, NOTE_KEYS, `${p}.note`, m);
       else if (typeof q.note !== "boolean") add(ctx, "KQA203", `${p}.note must be true, false or an object { label, placeholder, maxLength }.`, undefined, { offset: m.at(`${p}.note`), path: `${p}.note`, questionId: qid });
+    }
+
+    // Conditions are intentionally shallow and can only inspect an earlier choice question.
+    if (q.when !== undefined) {
+      const wp = `${p}.when`;
+      if (!isObj(q.when)) {
+        add(ctx, "KQA218", `${wp} must be an object with a non-empty "all" and/or "any" list.`, undefined, { offset: m.at(wp), path: wp, questionId: qid });
+      } else {
+        checkUnknownKeys(q.when, WHEN_KEYS, wp, m);
+        const when = q.when;
+        const hasAll = Array.isArray(when.all) && when.all.length > 0;
+        const hasAny = Array.isArray(when.any) && when.any.length > 0;
+        if (!hasAll && !hasAny) add(ctx, "KQA218", `${wp} must contain at least one non-empty "all" or "any" list.`, undefined, { offset: m.at(wp), path: wp, questionId: qid });
+        for (const group of ["all", "any"] as const) {
+          const list = when[group];
+          if (list === undefined) continue;
+          if (!Array.isArray(list)) {
+            add(ctx, "KQA218", `${wp}.${group} must be an array of conditions.`, undefined, { offset: m.at(`${wp}.${group}`), path: `${wp}.${group}`, questionId: qid });
+            continue;
+          }
+          if (list.length === 0) add(ctx, "KQA218", `${wp}.${group} cannot be empty.`, undefined, { offset: m.at(`${wp}.${group}`), path: `${wp}.${group}`, questionId: qid });
+          if (list.length > 20) add(ctx, "KQA218", `${wp}.${group} has ${list.length} conditions; the maximum is 20.`, undefined, { offset: m.at(`${wp}.${group}`), path: `${wp}.${group}`, questionId: qid });
+          list.forEach((condition, j) => {
+            const cp = `${wp}.${group}[${j}]`;
+            if (!isObj(condition)) return void add(ctx, "KQA218", `${cp} must be an object with question, operator and value.`, undefined, { offset: m.at(cp), path: cp, questionId: qid });
+            checkUnknownKeys(condition, CONDITION_KEYS, cp, m);
+            const ref = typeof condition.question === "string" ? condition.question : undefined;
+            const op = condition.operator;
+            const value = condition.value;
+            if (!ref || !ID_RE.test(ref)) {
+              add(ctx, "KQA218", `${cp}.question must be a valid earlier question id.`, undefined, { offset: m.at(`${cp}.question`), path: `${cp}.question`, questionId: qid });
+            } else if (!earlierQuestions.has(ref)) {
+              add(ctx, "KQA218", `${cp} refers to "${ref}", which must be declared before this question.`, undefined, { offset: m.at(`${cp}.question`), path: `${cp}.question`, questionId: qid });
+            }
+            if (typeof op !== "string" || !["equals", "notEquals", "contains", "notContains"].includes(op)) {
+              add(ctx, "KQA218", `${cp}.operator must be "equals", "notEquals", "contains" or "notContains".`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
+            }
+            if (typeof value !== "string" || !OPTION_VALUE_RE.test(value)) {
+              add(ctx, "KQA218", `${cp}.value must be a valid option value.`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+            }
+            const source = ref ? earlierQuestions.get(ref) : undefined;
+            if (source && typeof op === "string") {
+              const multiOp = op === "contains" || op === "notContains";
+              if (multiOp ? source.type !== "multi" : source.type !== "single" && source.type !== "select") {
+                add(ctx, "KQA218", `${cp} uses "${op}" with ${source.type}; contains operators require a multi question, and equals operators require single or select.`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
+              }
+              if (typeof value === "string" && !source.values.has(value)) {
+                add(ctx, "KQA218", `${cp}.value "${value}" is not an option of earlier question "${ref}".`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+              }
+            }
+          });
+        }
+      }
+    }
+    if (qid && !earlierQuestions.has(qid)) {
+      const values = new Set<string>();
+      if (Array.isArray(q.options)) for (const option of q.options) if (isObj(option) && typeof option.value === "string") values.add(option.value);
+      earlierQuestions.set(qid, { type, values });
     }
   });
   for (const id of sectionIds) if (!usedSections.has(id)) add(ctx, "KQA217", `Section "${id}" has no questions.`, undefined, { offset: m.at(`sections[${(raw.sections as { id: string }[]).findIndex((s) => s.id === id)}]`), path: "sections" });

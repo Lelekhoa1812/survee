@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isAnswered, validateAnswer } from "../src/lib/format/answers";
-import type { Question } from "../src/lib/format/schema";
+import { eligibilityQuestionIds, evaluateEligibility, isAnswered, progress, validateAnswer } from "../src/lib/format/answers";
+import type { Manifest, Question } from "../src/lib/format/schema";
 
 const checkbox: Question = {
   id: "channels",
@@ -39,5 +39,46 @@ describe("answered, without scores", () => {
       expect(validateAnswer(date, value).ok).toBe(false);
     }
     expect(validateAnswer(date, "")).toEqual({ ok: true, value: null });
+  });
+
+  it("evaluates earlier-question routing and excludes inactive questions from required progress", () => {
+    const manifest: Manifest = {
+      format: "kqa/1", title: "Routing", questions: [
+        { id: "kind", type: "single", label: "Kind?", required: true, options: [{ value: "person", label: "Person" }, { value: "org", label: "Organisation" }] },
+        { id: "contact", type: "text", label: "Contact", required: true, when: { all: [{ question: "kind", operator: "equals", value: "org" }] } },
+        { id: "other", type: "text", label: "Other", when: { any: [{ question: "kind", operator: "equals", value: "person" }, { question: "kind", operator: "equals", value: "org" }] } },
+      ],
+    };
+    const answers = { kind: { value: "person", updatedAt: "" }, contact: { value: "Old contact", updatedAt: "" } };
+    expect(evaluateEligibility(manifest, answers)).toEqual({ kind: true, contact: false, other: true });
+    expect(progress(manifest, answers)).toMatchObject({ answered: 1, total: 2, requiredTotal: 1, missingRequired: [], inactive: 1 });
+    expect(evaluateEligibility(manifest, {})).toEqual({ kind: true, contact: false, other: false });
+    expect(evaluateEligibility(manifest, { kind: { value: "org", updatedAt: "" } })).toEqual({ kind: true, contact: true, other: true });
+  });
+
+  it("combines all and any groups and handles multi-select membership", () => {
+    const manifest: Manifest = {
+      format: "kqa/1", title: "Routing", questions: [
+        { ...checkbox, required: false },
+        { id: "email-only", type: "text", label: "Email details", when: { all: [{ question: "channels", operator: "contains", value: "email" }], any: [{ question: "channels", operator: "contains", value: "email" }, { question: "channels", operator: "contains", value: "phone" }] } },
+        { id: "no-email", type: "text", label: "No email", when: { all: [{ question: "channels", operator: "notContains", value: "email" }] } },
+      ],
+    };
+    expect(evaluateEligibility(manifest, { channels: { value: ["email"], updatedAt: "" } })).toEqual({ channels: true, "email-only": true, "no-email": false });
+    expect(evaluateEligibility(manifest, { channels: { value: ["phone"], updatedAt: "" } })).toEqual({ channels: true, "email-only": false, "no-email": true });
+    // An unanswered parent makes even a negative predicate false.
+    expect(evaluateEligibility(manifest, {})).toEqual({ channels: true, "email-only": false, "no-email": false });
+  });
+
+  it("projects transitive routing dependencies in manifest order for selected analysis questions", () => {
+    const manifest: Manifest = {
+      format: "kqa/1", title: "Routing", questions: [
+        { id: "root", type: "single", label: "Root", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] },
+        { id: "branch", type: "single", label: "Branch", options: [{ value: "x", label: "X" }, { value: "y", label: "Y" }], when: { all: [{ question: "root", operator: "equals", value: "a" }] } },
+        { id: "outcome", type: "text", label: "Outcome", when: { any: [{ question: "branch", operator: "equals", value: "x" }] } },
+      ],
+    };
+    expect(eligibilityQuestionIds(manifest, ["outcome"])).toEqual(["root", "branch", "outcome"]);
+    expect(eligibilityQuestionIds(manifest, ["branch"])).toEqual(["root", "branch"]);
   });
 });

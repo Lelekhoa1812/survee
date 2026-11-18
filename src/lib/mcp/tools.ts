@@ -1,8 +1,8 @@
-import { displayValue, progress } from "../format/answers";
+import { displayValue, eligibilityQuestionIds, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
 import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "../analytics/segments";
-import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, type QuestionSummary } from "../analytics/summary";
+import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, withCurrentEligibility, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
@@ -638,7 +638,7 @@ const TOOLS: ToolDef[] = [
         const crossTab = await summarizeAnswerCrossTab(
           segmentQuestion,
           crossTabQuestion,
-          iterateAnalyticsParticipants(id, [segmentQuestion.id, crossTabQuestion.id], { statuses }),
+          withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, [segmentQuestion.id, crossTabQuestion.id]), { statuses })),
           statuses,
         );
         return ok({
@@ -664,7 +664,7 @@ const TOOLS: ToolDef[] = [
         const segmented = await summarizeAnswerSegments(
           segmentQuestion,
           analysisQuestions,
-          iterateAnalyticsParticipants(id, [...new Set([segmentQuestion.id, ...analysisQuestions.map((question) => question.id)])], { statuses }),
+          withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, [segmentQuestion.id, ...analysisQuestions.map((question) => question.id)]), { statuses })),
           statuses,
           compareRequested,
         );
@@ -734,7 +734,7 @@ const TOOLS: ToolDef[] = [
       if (compareRequested) {
         const cohortAnalysis = await summarizeSelectedQuestionCohort(
           analysisQuestions,
-          iterateAnalyticsParticipants(id, analysisQuestions.map((question) => question.id), { statuses }),
+          withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, analysisQuestions.map((question) => question.id)), { statuses })),
           statuses,
         );
         Object.assign(statusCounts, cohortAnalysis.statusCounts);
@@ -743,7 +743,7 @@ const TOOLS: ToolDef[] = [
         asOf = cohortAnalysis.asOf;
       } else {
         const accumulators = new Map(analysisQuestions.map((question) => [question.id, createQuestionSummaryAccumulator(question)]));
-        for await (const respondent of iterateAnalyticsParticipants(id, analysisQuestions.map((question) => question.id), { statuses })) {
+        for await (const respondent of withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, analysisQuestions.map((question) => question.id)), { statuses }))) {
           statusCounts[respondent.status] += 1;
           for (const accumulator of accumulators.values()) accumulator.add(respondent);
         }
@@ -790,8 +790,8 @@ const TOOLS: ToolDef[] = [
           "Summaries use the current survey version and the participant statuses shown in scope.",
           "participantCount counts everyone in the selected status cohort, including invited people with no answers. respondentCount is a compatibility alias; do not describe people with no answers as respondents.",
           "answeredCount counts non-empty stored values, including values that are incompatible with the current version; unmapped values are excluded from valid numeric summaries and distributions.",
-          "cohortCount includes everyone in each selected status cohort; noAnswerCount is the count without a non-empty stored value and may include people who were not shown a conditional or routed question because KQA does not track item-level display or eligibility.",
-          "eligibleCount and missingCount remain as compatibility aliases for cohortCount and noAnswerCount; they do not measure item-level eligibility or missingness. Distribution percentages use valid answers that match the current options or scale.",
+          "cohortCount includes everyone in each selected status cohort. eligibleCount and inactiveCount are inferred from current routing rules and saved answers, not historical display telemetry. noAnswerCount counts eligible people without a non-empty stored value; inactive people are excluded from item summaries and counted separately.",
+          "missingCount remains a compatibility alias for noAnswerCount. Distribution percentages use valid answers from currently eligible people that match the current options or scale.",
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
           "All summaries in this result use one live participant scan; changes during the scan are not isolated by a database snapshot.",
           ...(createRun ? ["This completed aggregate run supports stable pagination for up to one hour. Pages share the same asOf and completed output; participant changes during the initial live scan were not isolated by a database snapshot."] : []),
