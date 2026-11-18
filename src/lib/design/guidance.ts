@@ -56,6 +56,8 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire"], text: "Pretest new or high-impact questions with people like the intended respondents when feasible; record uncertainty that remains." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "For new or materially changed flows, observe representative users completing realistic end-to-end tasks. Record task success, hesitation, errors, recovery, content misunderstandings, participant context, and limitations; mark usability untested when sessions were not run. This is distinct from item pretesting and WCAG evaluation." },
   { surfaces: ["questionnaire"], text: "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden." },
+  { surfaces: ["questionnaire"], text: "Keep conditional reveals simple; use a separate step or a simpler non-conditional flow for multipart follow-ups. Explain input-driven context changes before they happen. Test show, hide, focus, restored answers, and locked states with keyboard and representative screen reader/browser combinations; record untested combinations. A reveal or ARIA attribute alone does not establish accessibility." },
+  { surfaces: ["questionnaire"], text: "Decide and disclose what happens to previously entered answers when a condition changes, including how a respondent can remove them. Consider the collection purpose and sensitivity; do not promise automatic deletion or eligibility tracking that KQA does not provide." },
   { surfaces: ["analytics"], text: "For analytics, verify survey version, participant scope, cohort n, no-answer count, valid n, and multi-select denominator; state that KQA does not track item-level display eligibility." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Treat automated/static findings as evidence for specific checks only; they do not establish full WCAG conformance or visual quality." },
   { surfaces: ["host"], text: "Run npm run a11y:audit on representative public routes at desktop and 320 CSS px. Use --authenticated with a disposable local account to include protected host flows, and --report to retain a commit-scoped JSON summary; include interview and respondent fixtures when available. Review every violation and incomplete result, then perform manual keyboard, focus, content, and assistive-technology checks." },
@@ -74,6 +76,10 @@ const SOURCES = [
   { name: "WAI-ARIA Authoring Practices Guide: Tabs", url: "https://www.w3.org/WAI/ARIA/apg/patterns/tabs/", role: "Implementation guidance for accessible tab interactions; not a conformance standard." },
   { name: "WAI-ARIA Authoring Practices Guide: Radio Group", url: "https://www.w3.org/WAI/ARIA/apg/patterns/radio/", role: "Keyboard interaction guidance for custom radio groups; native radio controls remain preferable." },
   { name: "WAI Forms Tutorial: User Notifications", url: "https://www.w3.org/WAI/tutorials/forms/notifications/", role: "Guidance for concise, understandable form errors and status messages." },
+  { name: "WCAG 2.2 SC 3.2.2: On Input", url: "https://www.w3.org/WAI/WCAG22/Understanding/on-input", role: "Explains predictable behavior and advance notice of changes of context caused by changing an input; a content change is not necessarily a context change." },
+  { name: "GOV.UK Design System: Radios", url: "https://design-system.service.gov.uk/components/radios/", role: "Recommends simple conditional questions and documents a known assistive-technology notification issue in its conditional reveal component; it does not establish accessibility of KQA's implementation." },
+  { name: "ICO: Data minimisation", url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/", role: "Explains limiting personal data to what is needed for its specified purpose; apply applicable local requirements and context." },
+  { name: "ICO: Storage limitation", url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/storage-limitation/", role: "Explains retention and erasure considerations for personal data; apply applicable local requirements and context." },
   { name: "GitHub Primer Product Design", url: "https://primer.style/product/", role: "First-party design-system reference for product principles, components, and tokens." },
   { name: "GOV.UK Design System", url: "https://design-system.service.gov.uk/", role: "Research-informed service design and content patterns; localize UK-specific conventions." },
   { name: "GOV.UK Service Manual: User research", url: "https://www.gov.uk/service-manual/user-research", role: "Methods for observing representative users doing realistic tasks; research evidence complements automated checks." },
@@ -205,7 +211,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/16",
+    policyVersion: "kqa-design/17",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

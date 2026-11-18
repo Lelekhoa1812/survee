@@ -52,7 +52,15 @@ export function validateAnswer(q: Question, raw: unknown): ValidateResult {
     case "date": {
       if (typeof raw !== "string") return { ok: false, reason: `expected a date as YYYY-MM-DD, got ${describe(raw)}` };
       if (raw === "") return { ok: true, value: null };
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(Date.parse(raw + "T00:00:00Z"))) return { ok: false, reason: `"${raw}" is not a valid YYYY-MM-DD date` };
+      // Date.parse normalises impossible days (for example, February 31) instead
+      // of rejecting them. Compare calendar parts explicitly, including leap years.
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+      const year = match ? Number(match[1]) : 0;
+      const month = match ? Number(match[2]) : 0;
+      const day = match ? Number(match[3]) : 0;
+      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return { ok: false, reason: `"${raw}" is not a valid YYYY-MM-DD date` };
       return { ok: true, value: raw };
     }
   }

@@ -572,28 +572,33 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
   if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
   if (ctx.version.version !== expectedVersion) return versionConflict();
   if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
-  if (ctx.participant.status === "submitted") return { ok: true, submittedAt: ctx.participant.submittedAt ?? new Date().toISOString() };
-  const pr = progress(ctx.version.manifest, ctx.participant.answers);
-  if (pr.missingRequired.length) {
-    const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
-    return { ok: false, status: 422, error: `${pr.missingRequired.length} required ${pr.missingRequired.length === 1 ? "question is" : "questions are"} not answered yet.`, missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })) };
-  }
-  const now = new Date();
   const participants = await col.participants();
   const interviewId = new ObjectId(ctx.interview.id);
   const participantId = new ObjectId(ctx.participant.id);
-  const result = await withMongoTransaction(async (session): Promise<SubmitResult> => {
+  const result = await withMongoTransaction(async (session): Promise<SubmitResult & { newlySubmitted?: boolean }> => {
     const fence = await fenceRespondentWrite(session, ctx.tenantId, interviewId, expectedVersion);
     if (!fence.ok) return fence;
+    // Read after the shared write fence, on every transaction retry. A save that
+    // wins the fence must be reflected in the answers used for validation.
+    const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: participantId, token }), { session });
+    if (!current) return { ok: false, status: 404, error: "This link is not valid." };
+    if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
+    const pr = progress(ctx.version.manifest, current.answers);
+    if (pr.missingRequired.length) {
+      const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
+      return { ok: false, status: 422, error: `${pr.missingRequired.length} required ${pr.missingRequired.length === 1 ? "question is" : "questions are"} not answered yet.`, missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })) };
+    }
+    const now = new Date();
     const res = await participants.findOneAndUpdate(
-      tenantFilter(ctx.tenantId, { _id: participantId }),
+      tenantFilter(ctx.tenantId, { _id: participantId, token, revision: current.revision, status: { $ne: "submitted" } }),
       { $set: { status: "submitted", submittedAt: now, updatedAt: now } },
       { returnDocument: "after", session },
     );
-    if (!res) return { ok: false, status: 404, error: "This link is not valid." };
-    return { ok: true, submittedAt: (res.submittedAt ?? now).toISOString() };
+    if (!res) return { ok: false, status: 409, error: "Your answers changed in another window. Please try submitting again." };
+    return { ok: true, submittedAt: (res.submittedAt ?? now).toISOString(), newlySubmitted: true };
   });
-  if (result.ok) logEvent(ctx.tenantId, interviewId, "submit", participantId);
+  if (result.ok && result.newlySubmitted) logEvent(ctx.tenantId, interviewId, "submit", participantId);
+  if (result.ok) return { ok: true, submittedAt: result.submittedAt };
   return result;
 }
 

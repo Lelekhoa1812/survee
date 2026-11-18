@@ -1,6 +1,6 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/15` · reviewed 16 November 2026
+Version: `kqa-design/17` · reviewed 19 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
@@ -48,6 +48,8 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 - Were new or high-impact questions pretested with people like the intended respondents where feasible?
 - For new or materially changed flows, did representative users attempt realistic end-to-end tasks? Record task success, hesitation, errors, recovery, misunderstandings, participant context, and limitations; mark usability untested if no sessions were run. This is separate from item pretesting and WCAG evaluation.
 - Are ids stable, required questions visible, and data-impacting survey changes explained?
+- Are conditional reveals simple, with multipart follow-ups presented as a separate step where supported or redesigned as a simpler non-conditional flow? Explain input-driven changes of context before they happen. Test show/hide, focus, restored answers, and locked states with keyboard and representative screen reader/browser combinations; record combinations not tested. A reveal or ARIA attribute alone does not establish accessibility.
+- Is the handling of earlier answers when a condition changes decided and disclosed, including how respondents can remove an answer? Consider the collection purpose and sensitivity. Do not promise automatic deletion or eligibility tracking that KQA does not provide. Hidden follow-ups must remain optional; see the [agent playbook](AGENT_PLAYBOOK.md#mapping-common-survey-shapes) for KQA's current limits.
 - For every analytic figure, are survey version, cohort, valid n, no-answer count, and multi-select denominator clear, with KQA's item-eligibility limit stated?
 - Are static checker results described only as evidence for the individual checks they cover? They do not judge wording quality, prove visual quality, or establish full WCAG conformance.
 - For a conformance evaluation, are the product scope, essential task paths, representative views/states/branches, target criteria, findings, and unresolved gaps documented?
@@ -69,6 +71,9 @@ This is a repeatable sample, not a scan of authenticated host screens, responden
 - [WAI-ARIA Authoring Practices Guide: Tabs](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/) provides implementation patterns for tab interactions; it is guidance, not a conformance standard.
 - [WAI-ARIA Authoring Practices Guide: Radio Group](https://www.w3.org/WAI/ARIA/apg/patterns/radio/) describes the keyboard behavior expected of custom radio groups; native radio controls are preferable when they fit.
 - [WAI Forms Tutorial: User Notifications](https://www.w3.org/WAI/tutorials/forms/notifications/) explains how to make form errors and status messages concise and understandable.
+- [WCAG 2.2: On Input](https://www.w3.org/WAI/WCAG22/Understanding/on-input) explains predictable behavior and advance notice for a change of context caused by changing an input; a content change is not necessarily a change of context.
+- [GOV.UK Design System: Radios](https://design-system.service.gov.uk/components/radios/) recommends keeping conditional questions simple and documents a known assistive-technology notification issue in its own reveal component. This does not establish accessibility of a KQA implementation.
+- [ICO: Data minimisation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/) and [storage limitation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/storage-limitation/) explain purpose-based collection and retention considerations; apply requirements appropriate to the context and jurisdiction.
 - [GitHub Primer Product Design](https://primer.style/product/) is a first-party product design-system reference for principles, components, and tokens.
 - [GOV.UK Design System](https://design-system.service.gov.uk/) shares research-informed service patterns. Localize UK-specific language and conventions for KQA's Australian English.
 - [GOV.UK Service Manual: User research](https://www.gov.uk/service-manual/user-research) describes methods for observing representative users completing realistic tasks; research complements automated checks.

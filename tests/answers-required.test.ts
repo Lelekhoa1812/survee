@@ -29,4 +29,15 @@ describe("answered, without scores", () => {
     expect(isAnswered(line, { company: { value: "   ", updatedAt: "2026-11-13T00:00:00.000Z" } })).toBe(false);
     expect(isAnswered(line, { company: { value: "Acme", updatedAt: "2026-11-13T00:00:00.000Z" } })).toBe(true);
   });
+
+  it("accepts real calendar dates and rejects impossible dates", () => {
+    const date: Question = { id: "date", type: "date", label: "Date" };
+    for (const value of ["0001-01-01", "2000-02-29", "2024-02-29", "9999-12-31"]) {
+      expect(validateAnswer(date, value)).toEqual({ ok: true, value });
+    }
+    for (const value of ["0000-01-01", "1900-02-29", "2023-02-29", "2024-02-30", "2024-04-31", "2024-00-01", "2024-13-01", "2024-01-00", "2024-1-01"]) {
+      expect(validateAnswer(date, value).ok).toBe(false);
+    }
+    expect(validateAnswer(date, "")).toEqual({ ok: true, value: null });
+  });
 });

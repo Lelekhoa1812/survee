@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   events: [] as string[],
   session: { transaction: true },
   publishBeforeTransaction: false,
+  beforeTransaction: undefined as (() => void) | undefined,
   fenceUpdate: vi.fn(),
   participantUpdate: vi.fn(),
   withMongoTransaction: vi.fn(),
@@ -66,6 +67,7 @@ beforeEach(() => {
   };
   mocks.events.length = 0;
   mocks.publishBeforeTransaction = false;
+  mocks.beforeTransaction = undefined;
   mocks.fenceUpdate.mockReset().mockImplementation(async (filter: Record<string, any>, _update: unknown, options: Record<string, any>) => {
     mocks.events.push("fence");
     expect(options.session).toBe(mocks.session);
@@ -73,9 +75,11 @@ beforeEach(() => {
     const matched = f.currentVersion === mocks.currentVersion && f.status === mocks.interviewStatus && mocks.interviewStatus === "open";
     return { matchedCount: matched ? 1 : 0, modifiedCount: matched ? 1 : 0 };
   });
-  mocks.participantUpdate.mockReset().mockImplementation(async (_filter: Record<string, any>, update: Record<string, any>, options: Record<string, any>) => {
+  mocks.participantUpdate.mockReset().mockImplementation(async (filter: Record<string, any>, update: Record<string, any>, options: Record<string, any>) => {
     mocks.events.push("participant");
     expect(options.session).toBe(mocks.session);
+    const f = fields(filter);
+    if (f.revision !== undefined && f.revision !== mocks.participant.revision) return null;
     if (mocks.participant.status === "submitted") return null;
     Object.assign(mocks.participant, update.$set);
     mocks.participant.revision += update.$inc?.revision ?? 0;
@@ -83,6 +87,7 @@ beforeEach(() => {
   });
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => {
     if (mocks.publishBeforeTransaction) mocks.currentVersion = 5;
+    mocks.beforeTransaction?.();
     return work(mocks.session);
   });
 });
@@ -125,5 +130,52 @@ describe("respondent version fence", () => {
     expect(result).toMatchObject({ ok: false, status: 409, code: "questionnaire_version_changed" });
     expect(mocks.withMongoTransaction).not.toHaveBeenCalled();
     expect(mocks.participantUpdate).not.toHaveBeenCalled();
+  });
+
+  it("checks the answers saved after the initial read before submitting", async () => {
+    mocks.versionManifest.questions = [{ ...question, required: true }];
+    mocks.participant.answers = { q1: { value: "Initially answered", updatedAt: new Date().toISOString() } };
+    mocks.beforeTransaction = () => { mocks.participant.answers = {}; mocks.participant.revision++; };
+
+    const result = await asAxion(() => submitAnswers(token, 4));
+
+    expect(result).toMatchObject({ ok: false, status: 422, missing: [{ id: "q1" }] });
+    expect(mocks.participantUpdate).not.toHaveBeenCalled();
+    expect(mocks.participant.status).toBe("invited");
+  });
+
+  it("accepts a required answer saved after the initial read", async () => {
+    mocks.versionManifest.questions = [{ ...question, required: true }];
+    mocks.beforeTransaction = () => {
+      mocks.participant.answers = { q1: { value: "Saved", updatedAt: new Date().toISOString() } };
+      mocks.participant.revision++;
+    };
+
+    const result = await asAxion(() => submitAnswers(token, 4));
+
+    expect(result).toMatchObject({ ok: true });
+    expect(fields(mocks.participantUpdate.mock.calls[0][0]).revision).toBe(1);
+    expect(mocks.participant.status).toBe("submitted");
+  });
+
+  it("returns the first submission timestamp when another submit wins the fence", async () => {
+    const submittedAt = new Date("2026-11-19T00:00:00Z");
+    mocks.beforeTransaction = () => { mocks.participant.status = "submitted"; mocks.participant.submittedAt = submittedAt; };
+
+    const result = await asAxion(() => submitAnswers(token, 4));
+
+    expect(result).toEqual({ ok: true, submittedAt: submittedAt.toISOString() });
+    expect(mocks.participantUpdate).not.toHaveBeenCalled();
+    expect(mocks.events).not.toContain("submit");
+  });
+
+  it("does not submit if the validated revision no longer matches", async () => {
+    mocks.participantUpdate.mockImplementationOnce(async () => { mocks.participant.revision++; return null; });
+
+    const result = await asAxion(() => submitAnswers(token, 4));
+
+    expect(result).toMatchObject({ ok: false, status: 409 });
+    expect(fields(mocks.participantUpdate.mock.calls[0][0]).revision).toBe(0);
+    expect(mocks.participant.status).toBe("invited");
   });
 });

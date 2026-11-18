@@ -170,7 +170,7 @@ Bind a control to a question by giving it `data-kqa="<question id>"`. The runtim
 | `longtext` | `<textarea data-kqa="ID">` | string |
 | `number` | `<input type="number" data-kqa="ID" min max step>` | finite number within `min`/`max` |
 | `scale` | `<input type="radio" data-kqa="ID" name="ID" value="1">` … one radio per integer, or `<input type="range" data-kqa="ID" min max step>` | integer within the scale |
-| `date` | `<input type="date" data-kqa="ID">` | string `YYYY-MM-DD` |
+| `date` | `<input type="date" data-kqa="ID">` | real calendar date as `YYYY-MM-DD`, years 0001–9999 |
 
 Rules the checker enforces:
 
