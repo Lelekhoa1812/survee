@@ -26,6 +26,14 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("create_interview` operation immediately creates an open interview");
   });
 
+  it("publishes the live MCP operating guide as a named doc and in the agent bundle", async () => {
+    expect(DOCS.some((doc) => doc.slug === "mcp" && doc.file === "MCP.md")).toBe(true);
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("<!-- MCP.md -->");
+    expect(bundle).toContain("KQA MCP server");
+    expect(bundle).toContain("KQA does not persist reviewer identity");
+  });
+
   it("publishes the native routing runtime contract to agents", async () => {
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("KQA.isEligible(id)");
