@@ -4,6 +4,7 @@ import { analyticsCohortForStatuses } from "../analytics/cohorts";
 import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "../analytics/segments";
 import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, withCurrentEligibility, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
+import { readDoc } from "../docs";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
@@ -292,6 +293,15 @@ async function onePerson(personId: string) {
 }
 
 const TOOLS: ToolDef[] = [
+  {
+    name: "get_interview_packages",
+    description: "Return KQA's current domain-specific interview packages, reusable prompts, and safeguards for industrial, public-service, research, and personal use. These are design aids, not validated instruments or automated decisions.",
+    inputSchema: obj({}),
+    async run() {
+      const packages = await readDoc("INTERVIEW_PACKAGES.md");
+      return packages ? ok({ source: "docs/INTERVIEW_PACKAGES.md", packages }) : err("The interview package guide is unavailable.", "docs_unavailable");
+    },
+  },
   {
     name: "get_analytics_guidance",
     description: "Return deterministic, versioned guidance for interpreting KQA summaries and generating accessible, traceable charts, with primary sources. KQA does not run an LLM.",
@@ -1684,7 +1694,7 @@ const TOOLS: ToolDef[] = [
 
 export function listToolDefs(capabilities?: readonly McpCapability[]) {
   const readOnlyTools = new Set([
-    "get_analytics_guidance", "get_design_guidance", "extract_design_profile", "audit_questionnaire_design", "list_interviews", "get_interview",
+    "get_analytics_guidance", "get_design_guidance", "get_interview_packages", "extract_design_profile", "audit_questionnaire_design", "list_interviews", "get_interview",
     "get_survey_html", "list_versions", "check_questionnaire", "list_image_assets", "list_people", "get_person", "get_answers",
     "analyze_answers", "get_status", "list_events", "export_interview", "get_mail_status", "preview_questionnaire_version_patch", "preview_questionnaire_block_patch", "preview_questionnaire_required_patch",
   ]);

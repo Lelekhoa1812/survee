@@ -168,6 +168,16 @@ beforeEach(() => {
 });
 
 describe("MCP tools", () => {
+  it("returns the interview package guide to interview readers", async () => {
+    const res = await call("get_interview_packages", {});
+    const body = await res.json() as { result: { structuredContent: { source: string; packages: string } } };
+    expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
+    expect(body.result.structuredContent.packages).toContain("Candidate experience");
+    expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
+    expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_interview_packages");
+    expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_interview_packages");
+  });
+
   it("omits credential identities from MCP event listings", async () => {
     const res = await call("list_events", { interviewId });
     const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[] } } };

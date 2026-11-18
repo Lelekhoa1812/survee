@@ -16,7 +16,7 @@ export const MCP_CAPABILITIES = [
 export type McpCapability = (typeof MCP_CAPABILITIES)[number];
 
 export const MCP_CAPABILITY_INFO: Record<McpCapability, { label: string; description: string }> = {
-  "interviews:read": { label: "Interview setup", description: "List interviews, questionnaire files, versions, and static checks, and preview question edits." },
+  "interviews:read": { label: "Interview setup and authoring guidance", description: "Read design principles and interview packages, list questionnaire files and versions, run static checks, and preview question edits." },
   "analytics:read": { label: "Aggregated analysis", description: "Read descriptive answer summaries and analytics guidance." },
   "respondents:read": { label: "Respondent details", description: "Read names, emails, private links, individual answers, exports, and event or mail status." },
   "respondents:manage": { label: "Manage respondents", description: "Add, edit, remove, reopen respondents, or regenerate private links." },
@@ -59,6 +59,7 @@ export function effectiveMcpCapabilitiesForRole(
 export const MCP_TOOL_CAPABILITIES = {
   get_analytics_guidance: "analytics:read",
   get_design_guidance: "interviews:read",
+  get_interview_packages: "interviews:read",
   extract_design_profile: "interviews:read",
   audit_questionnaire_design: "interviews:read",
   list_interviews: "interviews:read",

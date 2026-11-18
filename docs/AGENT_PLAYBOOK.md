@@ -4,7 +4,7 @@ You are an AI agent asked to produce an HTML questionnaire for the KQA app. This
 
 ## The one-paragraph version
 
-Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
+Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. The format includes eight answer types and bounded choice-based `when` routing; it does not score answers. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
 
 This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
 
@@ -16,7 +16,7 @@ Before writing, make sure you know:
 |---|---|
 | Who answers, and what the questionnaire is for | Ask once, briefly. Do not invent a purpose |
 | The questions, in order, with answer choices | If given as prose, list them back as a numbered table and proceed |
-| Which questions are mandatory | Default to optional. Mark `required` only for answers the host cannot do without |
+| Which questions are mandatory and when they apply | Default to optional. Mark a question `required` only when the host cannot proceed without it, and use supported `when` rules when requiredness depends on an earlier choice |
 | Existing ids and option values, if this replaces an earlier file | Reuse them exactly. See "Updating an existing questionnaire" |
 | Brand or tone | Default to the standard KQA look and plain Australian English |
 
@@ -24,7 +24,7 @@ Ask at most one round of questions. If you can proceed with a sensible default, 
 
 Use `get_design_guidance` with `surface: "questionnaire"` when available, or read [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) and `FORMAT.md`. Follow its brief-to-review plan, use the scoped questionnaire profile from `template/starter.kqa.html` unless the host gives a different theme, and report the visual rationale plus checks performed. Treat accessibility requirements as testable constraints and visual taste as a reasoned, user-brief-grounded choice. For a live interview, preserve ids and inspect the semantic and compatibility changes before applying a version. For supported marked ordinary questions, use the source-preserving MCP block preview/apply pair; use the complete-file pair for custom questions, arbitrary page changes, or files without reliable markers.
 
-For a domain-specific brief, adapt the relevant starting point in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md). These packages are prompts and review aids, not validated instruments or substitutes for domain expertise.
+For a domain-specific brief, use `get_interview_packages` when available or adapt the relevant starting point in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md). These packages are prompts and review aids, not validated instruments or substitutes for domain expertise.
 
 When the host supplies brand CSS custom properties or token JSON, use `extract_design_profile` to inspect the values and obtain a scoped proposal. Treat mappings and contrast checks as candidates, review ambiguous/unmapped values and actual rendered states, and never treat the generated overlay as already applied. KQA parses only the supplied token text; it does not fetch linked stylesheets or modify code. Apply reviewed questionnaire changes through the complete-file preview/apply workflow.
 
