@@ -1,8 +1,10 @@
 # KQA production plan: question types, MCP, and email
 
 Date: 2026-11-13
-Status: plan only. No product code in this change.
+Status: historical planning record; superseded by the shipped implementation and current documentation.
 Scope: make single-choice, checkbox, and free-text unmistakable in the product; expose the host's real controls to other agents over MCP; send the private-link email the product already implies, over the SMTP account already configured.
+
+> **Archive notice (reviewed 2026-11-19):** This document records research and decisions made before implementation. Statements below about missing email, MCP, workspace, analytics, question, or export features describe the repository at that time and are not current product documentation. Several proposed choices and open questions were resolved during implementation. For current behavior, use [`README.md`](../../README.md), [`FORMAT.md`](../FORMAT.md), [`MCP.md`](../MCP.md), [`DESIGN_SYSTEM.md`](../DESIGN_SYSTEM.md), and [`INTERVIEW_PACKAGES.md`](../INTERVIEW_PACKAGES.md). Verify implementation in source when the current contract is unclear. The linked plan remains as an audit trail; do not use it as an active backlog or operating guide.
 
 This plan does not choose product policy where the choice changes behaviour. Those forks are in [Decisions required before build](#decisions-required-before-build). Each one has a recommendation.
 

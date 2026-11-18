@@ -1,8 +1,8 @@
-# Locked decisions — 2026-11-13
+# Historical decisions — 2026-11-13
 
-Status: locked. Implemented on the working tree. Not committed by this change.
+Status: archival snapshot of decisions made on 2026-11-13. The implementation has since evolved; consult current product docs and source before relying on a detail below.
 
-The plan in `2026-11-13-question-types-mcp-email.md` is unchanged. Where that plan offered a choice, the decisions below win. Every decision in this file is locked.
+> **Archive notice (reviewed 2026-11-19):** This file is not a current policy or release checklist. It captures a point-in-time resolution of choices in the historical plan [`2026-11-13-question-types-mcp-email.md`](2026-11-13-question-types-mcp-email.md). Current authoritative guides are [`README.md`](../../README.md), [`FORMAT.md`](../FORMAT.md), [`MCP.md`](../MCP.md), [`DESIGN_SYSTEM.md`](../DESIGN_SYSTEM.md), and [`INTERVIEW_PACKAGES.md`](../INTERVIEW_PACKAGES.md). Confirm sensitive behavior against the implementation before operating the service.
 
 ## Product decisions
 
