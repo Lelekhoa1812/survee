@@ -154,7 +154,7 @@ npm run check -- path/to/questionnaire.html --agent    # the report format shown
 
 or open the app's **Check a file** page, drop the file in and use **Copy for AI agent**.
 
-The checker is static. The app also runs a **live check** in a real sandboxed frame: it changes every control the way a person would, then hands the saved answers back and confirms the page shows them. You cannot run the live check from a terminal, so be especially careful with custom controls (they must update their display when `KQA.on("change")` fires) and with anything script-driven.
+The checker is static. The app also runs a **live check** in a hidden sandboxed frame. It programmatically sets standard bound controls to sample values, confirms the runtime records them, then restores the same answers and checks that the page shows them. For custom questions without bound native controls, it calls `KQA.set` and checks for a visible page mutation. This is a smoke test, not a real pointer or keyboard interaction, an end-to-end routing test, a submission/locking check, an accessibility evaluation, or a usability session. You cannot run the live check from a terminal; manually test custom behavior and any interaction paths that the probe cannot exercise.
 
 ## Step 6. Fix loop
 
@@ -231,23 +231,23 @@ The format's design kit is the default. If the old page already has a good desig
 4. Keep the visual design if it is good. Re-skin with the standard kit if it is not.
 5. Use the manifest's `when` rules for supported routing; keep scripts for presentation only (tabs and accordions). Do not build custom visibility that conflicts with manifest eligibility. Delete copy-to-clipboard, download, print and `window.open` buttons: they do nothing in the frame.
 6. Re-run the checker.
-7. For anything script-driven or custom, test by hand in a browser: answer, reload, confirm the answer is still shown, then confirm the controls are disabled after Submit. The live check in the app does this for standard controls, and calls `KQA.set` on custom ones, but cannot be run from a terminal.
+7. For anything script-driven or custom, test by hand in a browser: answer, reload, confirm the answer is still shown, then test respondent submission and confirm controls lock. The live check sets standard controls programmatically and checks answer restoration; for custom controls it calls `KQA.set` and checks for a visible mutation. It does not test human input, routing end to end, submission/locking, accessibility, or usability, and cannot be run from a terminal.
 
 ## Output contract
 
 Your final reply contains:
 
 1. The complete HTML file in one code block, from `<!doctype html>` to `</html>`.
-2. Two or three sentences: how many questions, how many sections, which are required, and any assumptions or decisions you want confirmed.
-3. A one-line statement that you checked it against the pre-flight list. If you could run the checker, say the result. Do not claim a pass you did not observe.
+2. A concise review record: question and section counts, required questions, purpose and population, key assumptions, and any decision or risk the host must review.
+3. A concise evidence line with the checker result and the actual render/accessibility/testing coverage. Mark unrun checks as not tested; do not claim a pass you did not observe.
 
-Nothing else. No second copy of the file, no unrequested commentary.
+Do not repeat the HTML outside its one code block or claim unperformed checks.
 
 ## Prompt to give an agent
 
 Paste this, then attach or paste the bundle from the app's **Format guide** page (Copy everything for an AI agent):
 
-> Read the attached KQA format bundle completely. Then write a questionnaire file for the content below. Follow `AGENT_PLAYBOOK.md` exactly. Output the complete HTML file and nothing else except a short note of assumptions. Content: …
+> Read the attached KQA format bundle completely. Then write a questionnaire file for the content below. Follow `AGENT_PLAYBOOK.md` exactly. Output the complete HTML file, a concise review record, and a concise evidence line with checks actually performed. Content: …
 
 To get a fix, paste the checker's **Copy for AI agent** output with:
 

@@ -3,8 +3,9 @@ import type { Diagnostic } from "./diagnostics/types";
 import type { Question } from "./format/schema";
 
 /**
- * Run the live check: load the file in the same kind of sandboxed frame respondents get, drive every control the
- * way a person would, then hand the saved answers back and confirm they show. Browser only.
+ * Run a hidden-frame smoke check: set standard controls programmatically and confirm answer round-trip; for custom
+ * controls without native bindings, call KQA.set and check for a visible mutation. This does not simulate human input
+ * or test routing end to end, submission/locking, accessibility, or usability. Browser only.
  * The file is posted into the frame so it is served with the real headers; nothing is stored.
  */
 export function runProbe(html: string, questions: Question[], opts: { timeoutMs?: number } = {}): Promise<Diagnostic[]> {

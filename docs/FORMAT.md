@@ -20,7 +20,7 @@ The everyday questions are a single choice (`single`), checkboxes (`multi`), a o
 1. The host uploads your file. KQA runs the **checker**, which reads the manifest and matches every question to its controls. Errors block the upload and come back as a report you can act on.
 2. For each respondent, KQA serves your file inside a sandboxed frame and **injects the KQA runtime** as the first script in `<head>`. You never write or load that script.
 3. The runtime reads the controls you marked with `data-kqa`, sends every change to the app, and fills the controls back in when the person returns. The app validates each value against your manifest and saves it.
-4. When the person presses **Submit** in the app's top bar, their answers lock. The host can reopen them.
+4. When the person presses **Review answers** in the app's top bar, KQA opens a **Check your answers** review. The respondent can see current eligible answers, notes, and any answer that needs attention, then return to edit a question. They can open the review even when required answers are still empty. Submitting locks answers; the host can reopen them. Questions inactive under current routing rules are omitted from the review, and the review explains that their earlier answers are retained and may reappear if they become eligible again.
 
 Your file is therefore three things: a manifest, markup with bindings, and your own look.
 

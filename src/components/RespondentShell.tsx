@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerMap, Question } from "@/lib/format/schema";
+import { displayValue } from "@/lib/format/answers";
 import { api, BrandMark, Icon, Modal, Spinner, useToast } from "./ui";
 
 type Phase = "loading" | "ready" | "invalid" | "error";
@@ -265,6 +266,7 @@ export function RespondentShell({ token }: { token: string }) {
   const submitted = data.participant.status === "submitted";
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: "Offline, will save" };
+  const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
 
   return (
     <div className="rs">
@@ -286,7 +288,7 @@ export function RespondentShell({ token }: { token: string }) {
               <small>{counts.answered}/{counts.total} answered</small>
             </div>
             <span className={`save-state ${save}`} role="status" aria-live="polite" title={lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
-            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || counts.answered === 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Submit"}</button>
+            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>
           </div>
         </div>
       </div>
@@ -310,27 +312,41 @@ export function RespondentShell({ token }: { token: string }) {
 
       {confirming && (
         <Modal
-          title={counts.needsAttention.length ? "Review your answers" : "Submit your answers?"}
+          title="Check your answers"
           onClose={() => !submitting && setConfirming(false)}
+          className="review-modal"
           actions={
-            counts.needsAttention.length ? (
-              <button className="btn primary" onClick={() => { focusQuestionAfterClose.current = counts.needsAttention[0]?.question.id ?? null; setConfirming(false); }}>Go back and review</button>
-            ) : (
-              <>
-                <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>Keep editing</button>
-                <button className="btn accent" disabled={submitting} onClick={submit}>{submitting && <Spinner />} Submit answers</button>
-              </>
-            )
+            <>
+              <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>Keep editing</button>
+              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting} onClick={submit}>{submitting && <Spinner />} Submit answers</button>}
+            </>
           }
         >
-          {counts.needsAttention.length ? (
-            <>
-              <p className="muted">Resolve these answers before submitting.</p>
-              <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>{counts.needsAttention.map(({ question, reason }) => <li key={question.id}><strong>{question.label}</strong>: {reason}</li>)}</ul>
-            </>
-          ) : (
-            <p className="muted">You have answered {counts.answered} of {counts.total} questions. After you submit, your answers are locked. Your host can reopen them if you need to make a change.</p>
-          )}
+          <div className="review-content">
+            <p className="muted">Check the answers below. After submission, your answers are locked; your host can reopen them if you need a change.</p>
+            {counts.needsAttention.length ? (
+              <p className="review-problems" role="status">Resolve the marked answers before submitting. Choose Answer or Edit to return to that question.</p>
+            ) : null}
+            <div className="review-list">
+              {reviewQuestions.map((question) => {
+                const answer = answers.current[question.id];
+                const attention = counts.needsAttention.find((item) => item.question.id === question.id);
+                const answered = hasValue(answer?.value);
+                return (
+                  <section className="review-entry" key={question.id}>
+                    <div className="review-entry-copy">
+                      <h3>{question.label}</h3>
+                      <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{answered ? displayValue(question, answer?.value) : "Not answered"}</p>
+                      {answer?.note && <p className="review-note"><strong>Note:</strong> {answer.note}</p>}
+                      {attention && <p className="review-problem" role="alert">{attention.reason}</p>}
+                    </div>
+                    <button className="btn" disabled={submitting} onClick={() => { focusQuestionAfterClose.current = question.id; setConfirming(false); }}>{answered ? "Edit" : "Answer"}</button>
+                  </section>
+                );
+              })}
+            </div>
+            <p className="muted review-retention">Questions hidden by your current answers are not listed here. Any earlier answers to them are retained and may reappear if the question becomes eligible.</p>
+          </div>
         </Modal>
       )}
     </div>

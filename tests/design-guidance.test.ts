@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/17");
+    expect(guidance.policyVersion).toBe("kqa-design/18");
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
@@ -58,7 +58,10 @@ describe("design guidance package", () => {
     expect(checklist).toContain("representative screen reader/browser combinations");
     expect(checklist).toContain("does not establish accessibility");
     expect(checklist).toContain("how a respondent can remove them");
-    expect(guidance.productConstraints.join(" ")).toContain("Keep hidden follow-ups optional");
+    const constraints = guidance.productConstraints.join(" ");
+    expect(constraints).toContain("requiredness applies only while a question is eligible");
+    expect(constraints).toContain("For custom/script-driven reveals outside `when`, KQA cannot calculate eligibility");
+    expect(constraints).toContain("keep hidden questions optional");
     expect(guidance.sources.find((source) => source.name === "GOV.UK Design System: Radios")?.url).toBe("https://design-system.service.gov.uk/components/radios/");
     expect(getDesignGuidance("host").reviewChecklist.join(" ")).not.toContain("Keep conditional reveals simple");
   });

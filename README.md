@@ -32,7 +32,7 @@ In the app, **Format guide** has a one-click **Copy everything for an AI agent**
 Every upload is checked before anything is created. It reports errors, warnings and notes with a stable code, line and column, the offending source, a plain-language fix and a did-you-mean suggestion. **Copy for AI agent** produces a report written to be pasted straight back to the agent that wrote the file.
 
 * In the app: **Check a file** (nothing is saved) or the upload step when creating an interview or replacing a version.
-* Live check: in the browser the app also loads the file in a real sandboxed frame, drives every control the way a person would, hands the saved answers back, and confirms the page shows them.
+* Live check: in a hidden sandboxed frame, the app programmatically sets standard bound controls to sample values and checks that the runtime records and restores them. For custom questions without native bound controls, it calls `KQA.set` and checks for a visible page mutation. This smoke test does not simulate real pointer/keyboard use, routing end to end, submission/locking, accessibility, or usability.
 * From a terminal: `npm run check -- file.html` (`--agent` for the report, `--json` for the full result).
 * Replacing a file that already has answers adds a compatibility diff (removed questions, changed types, removed options).
 

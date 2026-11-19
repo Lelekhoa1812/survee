@@ -11,30 +11,35 @@ Read [FORMAT.md](FORMAT.md), [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), and [DESIGN
 3. Collect the least sensitive detail needed for the decision. Avoid names of third parties and identifying, health, financial or other sensitive details unless necessary and approved for the context. Provide an optional way to decline sensitive items. A collection question is not, by itself, a consent or privacy process.
 4. Use native KQA controls and declarative `when` rules where possible. Use `maxSelections` only when a real upper bound serves the decision, and state that same limit in the checkbox help; it is a maximum, not a minimum. A cap does not make choices exclusive, so a “none” option still needs a separate question or a tested custom interaction. An eligible routed follow-up may be required; its requirement is suspended while inactive. Inactive answers are retained. Avoid implying that an answer triggers a live service, diagnosis, escalation or notification. Host actions use the MCP endpoint described in [MCP.md](MCP.md).
 5. Keep a review record that maps each decision to the information needed, the question that collects it, the expected analysis, and an accountable owner. Mark assumptions, sensitive fields, branching rules, and any question that could affect an individual's access, employment, safety, money, or care. Do not turn descriptive answers into a score or automated decision.
-6. Pretest wording with representative respondents using cognitive interviews, then test the complete flow with representative users. Review accessibility, small screens and keyboard operation; run the static checker and, where possible, the in-app live check. Record what was actually tested, issues and unresolved limitations. For consequential uses, obtain an appropriate subject-matter review before release.
-7. Use staged release gates when the context warrants them: discovery confirms the user need and population; an alpha review tests wording and flow; a limited beta pilot checks completion, routing, and exported data; live operation monitors burden and data quality; retirement follows the host's retention and deletion policy. KQA supplies the questionnaire checker and live check, but does not run these phases, recruit testers, monitor respondents, or set retention policy.
+6. For decisions that may affect employment, education access, health, safety, public benefits, finances, or other consequential outcomes, involve a qualified domain owner and the appropriate legal, privacy, accessibility, and methodology reviewers before collection. Separate experience research from eligibility, performance, diagnosis, compliance certification, and incident reporting unless a separately governed process has been approved.
+7. Pretest wording with representative respondents using cognitive interviews, then test the complete flow with representative users. Review accessibility, small screens and keyboard operation; run the static checker and, where possible, the in-app live check. Record what was actually tested, issues and unresolved limitations. For consequential uses, obtain an appropriate subject-matter review before release.
+8. Use staged release gates when the context warrants them: discovery confirms the user need and population; an alpha review tests wording and flow; a limited beta pilot checks completion, routing, and exported data; live operation monitors burden and data quality; retirement follows the host's retention and deletion policy. KQA supplies the questionnaire checker and live check, but does not run these phases, recruit testers, monitor respondents, or set retention policy.
 
 ## Package selection
 
-| Package | Decision supported | Respondents | Typical modules |
+| Package or module | Type | Decision supported | Respondents | Typical modules |
 | --- | --- | --- | --- |
-| Product discovery | What problem should a team investigate? | Customers or users | Recent experience, workaround, unmet need |
-| Service improvement | Where should a service improve? | Service users | Journey, friction, recovery |
-| Workplace process | Which process change deserves investigation? | Staff or process participants | Work context, handoffs, barriers |
-| Project discovery | What needs clarification before planning? | Sponsors and delivery stakeholders | Outcomes, constraints, dependencies |
-| Education and learning | What support could improve a learning experience? | Learners or educators | Goals, access, feedback |
-| Health service experience | How can a service improve communication or access? | Patients or carers | Access, understanding, improvement |
-| Personal planning | What matters to a person when planning a change? | An individual or household | Goals, resources, next steps |
-| Candidate experience | How can a hiring process improve for applicants? | Candidates | Clarity, access, communication |
-| Employee onboarding | Where can a new starter's first weeks improve? | New employees | Access, role clarity, support |
-| Customer success | What helps a customer reach an agreed outcome? | Customers or account contacts | Goals, use, blockers, support |
-| Supplier and partner review | Which working relationship or delivery issue needs attention? | Suppliers, partners, internal owners | Delivery, coordination, risks |
-| Safety learning | What conditions can help prevent recurrence? | Staff or service participants | Context, barriers, learning |
-| Audit readiness | What evidence or process gaps need follow-up? | Process owners | Control awareness, evidence location, owner |
-| Program evaluation | How did a defined program work for participants? | Participants and delivery partners | Reach, experience, outcomes |
-| Community consultation | What local priorities should inform a decision? | Residents or community groups | Needs, impacts, trade-offs |
-| Event feedback | What should organizers keep or change? | Attendees, speakers, staff | Access, experience, logistics |
-| Personal wellbeing reflection | What support or next step would a person choose? | An individual | Self-defined needs, preferences, next step |
+| Product discovery | Full package | What problem should a team investigate? | Customers or users | Recent experience, workaround, unmet need |
+| Service improvement | Full package | Where should a service improve? | Service users | Journey, friction, recovery |
+| Workplace process | Full package | Which process change deserves investigation? | Staff or process participants | Work context, handoffs, barriers |
+| Project discovery | Full package | What needs clarification before planning? | Sponsors and delivery stakeholders | Outcomes, constraints, dependencies |
+| Education and learning | Full package | What support could improve a learning experience? | Learners or educators | Goals, access, feedback |
+| Health service experience | Full package | How can a service improve communication or access? | Patients or carers | Access, understanding, improvement |
+| Personal planning | Full package | What matters to a person when planning a change? | An individual or household | Goals, resources, next steps |
+| Candidate experience | Sector module | How can a hiring process improve for applicants? | Candidates | Clarity, access, communication |
+| Employee onboarding | Sector module | Where can a new starter's first weeks improve? | New employees | Access, role clarity, support |
+| Customer success | Sector module | What helps a customer reach an agreed outcome? | Customers or account contacts | Goals, use, blockers, support |
+| Supplier and partner review | Sector module | Which working relationship or delivery issue needs attention? | Suppliers, partners, internal owners | Delivery, coordination, risks |
+| Safety learning | Sector module | What conditions can help prevent recurrence? | Staff or service participants | Context, barriers, learning |
+| Audit readiness | Sector module | What evidence or process gaps need follow-up? | Process owners | Control awareness, evidence location, owner |
+| Program evaluation | Sector module | How did a defined program work for participants? | Participants and delivery partners | Reach, experience, outcomes |
+| Community consultation | Sector module | What local priorities should inform a decision? | Residents or community groups | Needs, impacts, trade-offs |
+| Event feedback | Sector module | What should organizers keep or change? | Attendees, speakers, staff | Access, experience, logistics |
+| Personal wellbeing reflection | Sector module | What support or next step would a person choose? | An individual | Self-defined needs, preferences, next step |
+
+Full packages have complete decision-oriented question examples below. Sector modules are shorter patterns and need the same purpose, respondent, timeframe, privacy, method-fit and review decisions established in the common operating procedure. The table is a routing aid, not a claim that a package is validated for a population or outcome.
+
+Before drafting, confirm the decision and accountable owner, intended population and recruitment, response use and audience, timeframe, reporting and retention facts, and accessibility or sensitivity needs. Ask about critical unknowns or mark them as assumptions; do not invent them. When reporting, retain question wording and response options with results, describe recruitment and collection mode, field period, respondent count and known limitations, and distinguish respondents from the wider population. Do not claim representativeness or report margins of error unless the sampling design supports it.
 
 ## Additional sector modules
 
@@ -49,7 +54,7 @@ Use these as narrowly scoped modules within a package. They are prompts for an i
 - Communication (`single`): “When did you receive an update?” Use time ranges that match the actual process, plus “I did not receive an update”.
 - Improvement (`longtext`): “What is one change that would make the process clearer or easier to take part in?”
 
-**Review:** collect no protected attributes or unnecessary employment history. Keep this feedback separate from selection records and do not treat it as a candidate score.
+**Review:** collect no protected attributes or unnecessary employment history. Keep this feedback separate from selection records and do not use it to rank or select applicants. If the host intends any selection use, stop and obtain qualified, jurisdiction-specific assessment and legal review; this package does not establish job-related validity or fairness.
 
 ### Employee onboarding and workplace experience
 
@@ -106,16 +111,27 @@ Use these as narrowly scoped modules within a package. They are prompts for an i
 
 **Review:** do not collect credentials, secrets, regulated records, or evidence files in free-text answers. Use the authorized evidence system; have a qualified owner interpret requirements and approve conclusions.
 
-### Program evaluation and community consultation
+### Program evaluation
 
-**Use for:** learning whether a defined service, grant, event series, or public initiative reached people and what should change.
+**Use for:** learning whether a defined service, grant, or initiative reached its intended participants, how it was delivered, and what outcomes merit further evaluation. Start from the program logic or theory of change. Define the population, period, intended use, and whether questions concern implementation/reach, participant experience, or outcomes. Map each question to an indicator and credible evidence source with the evaluation owner.
 
 - Participation (`single`): “Which activities did you take part in?” Use a checkbox if multiple activities are possible.
 - Access (`longtext`): “What made it easier or harder to take part?”
 - Experience (`scale`): “How well did the activity meet the need you came with?” State the audience and timeframe.
 - Priority (`multi`): “Which changes should be considered next?” Avoid presenting the result as representative unless the sampling method supports that claim.
 
-**Review:** explain how responses will inform the decision, include accessible participation options, and describe whose perspectives are missing. A before-and-after opinion question alone does not establish causal impact.
+**Review:** self-report can inform an evaluation but does not by itself establish representativeness, a counterfactual, impact, or causal attribution. Distinguish implementation and participant experience from outcomes, document the evaluation design and limitations, and get domain review for outcome measures.
+
+### Community consultation
+
+**Use for:** gathering community perspectives on a specific decision while options are still open. Name the decision-maker, decision window, affected population, who is invited, the participation method (open/opt-in, targeted, sampled, or deliberative), how input will be weighed, and when participants will hear what happened.
+
+- Place (`select`): “Which area or community do you live, work, or spend time in?” Offer only categories needed for analysis and a skip option where appropriate.
+- Impact (`longtext`): “How could [proposal] affect you or your community?”
+- Trade-off (`multi`): “Which considerations should decision-makers weigh?” Include a balanced set grounded in the proposal and allow an unlisted response if useful.
+- Priority (`longtext`): “What should decision-makers consider before deciding?”
+
+**Review:** use accessible participation routes; identify groups not reached. Do not describe voluntary responses as representative unless recruitment and sampling support that claim. Explain how input will be analyzed and reported back, including disagreement and minority views. Consultation informs a decision; it is not a vote or a promise that every suggestion will be adopted.
 
 ### Event feedback
 
@@ -230,3 +246,8 @@ Use these as narrowly scoped modules within a package. They are prompts for an i
 - The UK ICO's [purpose limitation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/purpose-limitation/) and [data minimisation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/) guidance illustrates the relationship between a stated purpose and what data is needed. Applicable obligations depend on jurisdiction and context.
 - The Australian OAIC's [APP 3 guidance](https://www.oaic.gov.au/privacy/australian-privacy-principles/australian-privacy-principles-guidelines/chapter-3-app-3-collection-of-solicited-personal-information) explains Australian Privacy Principle collection limits, including reasonable necessity and data minimisation; its application depends on the organisation and context. OAIC's [Privacy by Design guidance](https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design) recommends identifying information flows and privacy risks early and revisiting them as a project changes.
 - AHRQ provides [plain-language communication guidance](https://www.ahrq.gov/health-literacy/improve/precautions/tool4.html) for health settings. Adapt terminology to the intended audience.
+- The [CDC Program Evaluation Framework, 2024](https://www.cdc.gov/mmwr/volumes/73/rr/rr7306a1.htm) emphasizes context, collaborative engagement, credible evidence, and use of findings. It is a framework, not a plug-in questionnaire.
+- The [OECD Guidelines for Citizen Participation Processes](https://www.oecd.org/en/publications/oecd-guidelines-for-citizen-participation-processes_f765caf6-en.html) cover defining the policy question, participant selection, methods, and feedback to participants. Adapt to local public-sector and community context.
+- [AAPOR's disclosure standards](https://aapor.org/standards-and-ethics/disclosure-standards/) explain the information needed to assess survey methods and findings, including population, sampling, collection mode, field dates, and response disposition. Report only what the host can substantiate.
+- For employment-related work, [OPM structured interview guidance](https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/) and the [EEOC employment test guidance](https://www.eeoc.gov/laws/guidance/employment-tests-and-selection-procedures) distinguish structured selection methods and consequential assessment from experience research. KQA packages do not validate hiring assessments.
+- For safety learning, [OSHA worker participation guidance](https://www.osha.gov/safety-management/worker-participation) emphasizes worker involvement and reporting pathways. A KQA questionnaire is not an emergency or statutory reporting channel.
