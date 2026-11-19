@@ -130,7 +130,7 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `options` | yes for `single`, `multi`, `select`, `rank` | those four | 2 to 50 items of `{ "value", "label" }`; `rank` requires 2 to 8. Not allowed on other types |
 | `maxSelections` | no | `multi` | Maximum distinct checked options, from 1 through the number of options. Omit for no maximum. It does not set a minimum or change requiredness |
 | `exclusiveOptions` | no | `multi` | Non-empty list of declared option values that must be selected alone (for example, `none`, `not-sure`, or `prefer-not`). These options are not added automatically |
-| Full-order contract | — | `rank` | A non-empty answer contains every declared option exactly once; partial rankings are invalid. The stored value is an array of option values in respondent-chosen order. An optional rank may remain unanswered. |
+| Full-order contract | — | `rank` | A non-empty answer contains every declared option exactly once; partial rankings are invalid. The stored value is an array of option values in respondent-chosen order. An optional rank may remain unanswered. If a later questionnaire version changes the option set, a retained old order must be confirmed against every current option before submission. |
 | `note` | no | all | `true`, or `{ "label", "placeholder", "maxLength" }`. Enables an optional free-text note stored beside the answer. Up to 5000 characters |
 | `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and uses safely representable whole-number bounds, with `min` below `max` and a span of at most 20 steps |
 | `step` | no | `number`, `scale` | Positive number |
@@ -341,7 +341,7 @@ Per respondent, in MongoDB collection `participants`:
 
 Answers are keyed by **question id**. That is why ids and option values must stay stable. The survey file itself is stored immutably per version in `survey_versions`, so older exports can always be reproduced.
 
-The app validates every value against the manifest before saving (types, option membership, number ranges, lengths). An invalid value is rejected, never stored, and the page is reset to what is actually saved.
+The app validates every value against the manifest before saving (types, option membership, number ranges, lengths). An invalid value is rejected, never stored, and the page is reset to what is actually saved. A retained full-order ranking is checked against the current option set; after options change, the respondent must confirm an order that includes every current option before submitting.
 
 There is no answer key and no score. "Answered" means a non-empty value: one chosen option, at least one ticked checkbox, or text that is not blank after trimming. A note on its own does not count. An optional email address may be stored on the person so the host can send the private link. That address is not a question in this file, and this file never sends mail.
 

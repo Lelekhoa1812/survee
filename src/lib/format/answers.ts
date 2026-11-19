@@ -95,6 +95,7 @@ function describe(v: unknown): string {
 export function isAnswered(q: Question, answers: AnswerMap): boolean {
   const a = answers[q.id];
   if (!a || a.value === undefined || a.value === null) return false;
+  if (q.type === "rank") return validateAnswer(q, a.value).ok && Array.isArray(a.value) && a.value.length > 0;
   if (Array.isArray(a.value)) return a.value.length > 0;
   if (typeof a.value === "string") return a.value.trim() !== "";
   return true;
@@ -146,6 +147,7 @@ export interface Progress {
   missingRequired: string[];
   invalidSelections: { id: string; selected: number; maximum: number }[];
   invalidExclusiveSelections: { id: string }[];
+  invalidRankSelections: { id: string }[];
   eligible: Record<string, boolean>;
   inactive: number;
 }
@@ -157,6 +159,7 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
   const missingRequired: string[] = [];
   const invalidSelections: Progress["invalidSelections"] = [];
   const invalidExclusiveSelections: Progress["invalidExclusiveSelections"] = [];
+  const invalidRankSelections: Progress["invalidRankSelections"] = [];
   const eligible = evaluateEligibility(manifest, answers);
   let total = 0;
   for (const q of manifest.questions) {
@@ -170,13 +173,14 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
       if (selected > q.maxSelections) invalidSelections.push({ id: q.id, selected, maximum: q.maxSelections });
     }
     if (q.type === "multi" && Array.isArray(value) && value.some((item) => q.exclusiveOptions?.includes(item)) && new Set(value).size > 1) invalidExclusiveSelections.push({ id: q.id });
+    if (q.type === "rank" && value !== undefined && value !== null && !validateAnswer(q, value).ok) invalidRankSelections.push({ id: q.id });
     if (q.required) {
       requiredTotal += 1;
       if (done) requiredAnswered += 1;
       else missingRequired.push(q.id);
     }
   }
-  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidExclusiveSelections, eligible, inactive: manifest.questions.length - total };
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidExclusiveSelections, invalidRankSelections, eligible, inactive: manifest.questions.length - total };
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

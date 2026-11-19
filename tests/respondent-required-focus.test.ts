@@ -106,7 +106,7 @@ describe("respondent required-answer recovery", () => {
 
   it("keeps the review open and maps server validation errors to their answers", async () => {
     state.api.mockImplementation(async (url: string) => url.endsWith("/submit")
-      ? { ok: false, status: 422, data: { error: "Some answers need attention.", missing: [], invalidSelections: [{ id: "channels", selected: 2, maximum: 1 }] } }
+      ? { ok: false, status: 422, data: { error: "Some answers need attention.", missing: [], invalidSelections: [{ id: "channels", selected: 2, maximum: 1 }], invalidRankSelections: [{ id: "priorities" }] } }
       : {
         ok: true, status: 200, data: {
           ok: true,
@@ -114,8 +114,11 @@ describe("respondent required-answer recovery", () => {
           interview: { name: "Study", status: "open" },
           version: 7,
           title: "Study questions",
-          questions: [{ id: "channels", type: "multi", label: "Which channels?", options: [{ value: "email", label: "Email" }, { value: "phone", label: "Phone" }] }],
-          answers: { channels: { value: ["email", "phone"], updatedAt: "now" } },
+          questions: [
+            { id: "channels", type: "multi", label: "Which channels?", options: [{ value: "email", label: "Email" }, { value: "phone", label: "Phone" }] },
+            { id: "priorities", type: "rank", label: "Order priorities", options: [{ value: "cost", label: "Cost" }, { value: "speed", label: "Speed" }] },
+          ],
+          answers: { channels: { value: ["email", "phone"], updatedAt: "now" }, priorities: { value: ["speed"], updatedAt: "now" } },
         },
       });
     await act(async () => {
@@ -133,6 +136,7 @@ describe("respondent required-answer recovery", () => {
     expect(review).not.toBeNull();
     expect(review.querySelector('[role="alert"]')?.textContent).toContain("Some answers need attention.");
     expect(review.textContent).toContain("Choose no more than 1 option.");
+    expect(review.textContent).toContain("Rank every current option exactly once, then choose Use this order.");
     expect(review.textContent).toContain("Email; Phone");
   });
 

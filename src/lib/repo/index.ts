@@ -592,7 +592,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   return result;
 }
 
-export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidExclusiveSelections?: { id: string }[] };
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[] };
 
 export async function submitAnswers(token: string, expectedVersion: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
@@ -611,9 +611,9 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
     if (!current) return { ok: false, status: 404, error: "This link is not valid." };
     if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
     const pr = progress(ctx.version.manifest, current.answers);
-    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidExclusiveSelections.length) {
+    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length) {
       const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
-      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidExclusiveSelections.length;
+      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidExclusiveSelections.length + pr.invalidRankSelections.length;
       return {
         ok: false,
         status: 422,
@@ -622,6 +622,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
         missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })),
         invalidSelections: pr.invalidSelections,
         invalidExclusiveSelections: pr.invalidExclusiveSelections,
+        invalidRankSelections: pr.invalidRankSelections,
       };
     }
     const now = new Date();

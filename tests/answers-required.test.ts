@@ -52,7 +52,23 @@ describe("answered, without scores", () => {
     expect(validateAnswer(rank, ["quality", "quality", "speed"]).ok).toBe(false);
     expect(validateAnswer(rank, ["quality", "cost", "other"]).ok).toBe(false);
     expect(isAnswered(rank, { priorities: { value: ["quality", "cost", "speed"], updatedAt: "" } })).toBe(true);
+    expect(isAnswered(rank, { priorities: { value: ["quality", "cost"], updatedAt: "" } })).toBe(false);
+    expect(isAnswered(rank, { priorities: { value: ["quality", "cost", "retired"], updatedAt: "" } })).toBe(false);
     expect(displayValue(rank, ["quality", "cost", "speed"])).toBe("1. Quality; 2. Cost; 3. Speed");
+  });
+
+  it("flags a saved rank that no longer matches the current option set", () => {
+    const current: Question = { id: "priorities", type: "rank", label: "Order these", options: [
+      { value: "cost", label: "Cost" }, { value: "quality", label: "Quality" }, { value: "speed", label: "Speed" }, { value: "access", label: "Access" },
+    ] };
+    const manifest: Manifest = { format: "kqa/1", title: "Updated ranking", questions: [current] };
+    expect(progress(manifest, { priorities: { value: ["quality", "cost", "speed"], updatedAt: "now" } })).toMatchObject({
+      answered: 0, invalidRankSelections: [{ id: "priorities" }],
+    });
+    const removed: Question = { ...current, options: current.options!.slice(0, 3) };
+    expect(progress({ ...manifest, questions: [removed] }, { priorities: { value: ["quality", "cost", "speed", "access"], updatedAt: "now" } })).toMatchObject({
+      answered: 0, invalidRankSelections: [{ id: "priorities" }],
+    });
   });
 
   it("blocks progress for an eligible saved answer above a newly lowered cap", () => {

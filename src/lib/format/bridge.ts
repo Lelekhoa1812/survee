@@ -39,6 +39,11 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function isAnswered(id) {
     var v = answerOf(id).value;
     if (v === undefined || v === null) return false;
+    var question = q(id);
+    if (question && question.type === "rank") {
+      var allowed = (question.options || []).map(function (option) { return option.value; });
+      return Array.isArray(v) && v.length > 0 && v.length === allowed.length && new Set(v).size === allowed.length && v.every(function (value) { return allowed.indexOf(value) !== -1; });
+    }
     if (Array.isArray(v)) return v.length > 0;
     if (typeof v === "string") return v.trim() !== "";
     return true;
@@ -604,6 +609,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     writeAll();
     state.questions.forEach(function (question) {
       var value = answerOf(question.id).value;
+      if (question.type === "rank" && value !== undefined && value !== null && !isAnswered(question.id)) {
+        var rankLists = controls(question.id);
+        var rankLive = rankLists.length && rankLists[0].parentElement.querySelector('[data-kqa-rank-status="' + question.id + '"]');
+        if (rankLive) rankLive.textContent = "This ranking's options changed. Rank every current option exactly once, then confirm the order.";
+        emit("validation", { id: question.id, valid: false, message: "Rank every current option exactly once, then choose Use this order." });
+      }
       if (question.type === "multi" && Array.isArray(value)) exclusiveSelectionMessage(question.id, value.some(function (item) { return (question.exclusiveOptions || []).indexOf(item) !== -1; }) && new Set(value).size > 1);
       if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
         var message = "This saved answer has " + new Set(value).size + " choices. Remove choices until no more than " + question.maxSelections + " remain.";

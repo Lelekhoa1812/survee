@@ -58,6 +58,28 @@ describe("rank answer bridge", () => {
     page.window.close();
   });
 
+  it("asks respondents to confirm a complete order after the option set changes", () => {
+    const changedQuestions = [{ id: "priority", type: "rank", label: "Order these", options: [
+      { value: "cost", label: "Cost" }, { value: "speed", label: "Speed" },
+    ] }];
+    const dom = new JSDOM(`<!doctype html><html><body><fieldset><legend>Order these</legend>
+      <ol data-kqa="priority"><li data-value="cost">Cost</li><li data-value="speed">Speed</li></ol>
+    </fieldset></body></html>`, { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type: "init", questions: changedQuestions,
+      answers: { priority: { value: ["quality", "cost", "speed"] } } }, source: window }));
+    const confirm = window.document.querySelector<HTMLButtonElement>('[data-kqa-rank-confirm="priority"]')!;
+    expect(window.KQA.isAnswered("priority")).toBe(false);
+    expect(window.KQA.progress()).toMatchObject({ answered: 0, total: 1 });
+    expect(confirm.hidden).toBe(false);
+    expect(window.document.querySelector('[data-kqa-rank-status="priority"]')?.textContent).toContain("options changed");
+    confirm.click();
+    expect(window.KQA.get("priority")).toEqual(["cost", "speed"]);
+    expect(window.KQA.isAnswered("priority")).toBe(true);
+    window.close();
+  });
+
   it("probes rank binding and restoration with a non-initial permutation", async () => {
     const page = start(["cost", "speed", "quality"], true);
     await new Promise((resolve) => setTimeout(resolve, 100));

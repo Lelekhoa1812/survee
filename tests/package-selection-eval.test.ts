@@ -10,7 +10,7 @@ const decision = (action: string, packageId: string | null, overrides: Record<st
 });
 const resultsFor = (fn: (c: any) => any) => ({
   benchmarkVersion: benchmark.benchmarkVersion, model: "test/model", runDate: "2026-11-19",
-  promptVersion: "test-prompt", packageLibraryVersion: "kqa-interview-packages/4",
+  promptVersion: "test-prompt", packageLibraryVersion: "kqa-interview-packages/5",
   cases: benchmark.cases.map((c: any) => ({ caseId: c.id, decision: fn(c) })),
 });
 

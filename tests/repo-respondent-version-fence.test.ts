@@ -148,6 +148,18 @@ describe("respondent version fence", () => {
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true, submittedAt: expect.any(String) });
   });
 
+  it("blocks submission of a retained rank that no longer covers the current options", async () => {
+    const options = ["a", "b", "c"].map((value) => ({ value, label: value.toUpperCase() }));
+    mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "rank", label: "Order options", required: false, options }] };
+    mocks.participant.answers = { q1: { value: ["c", "a"], updatedAt: "now" } };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({
+      ok: false, status: 422, code: "incomplete_answers", invalidRankSelections: [{ id: "q1" }],
+    });
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: ["c", "a", "b"] } }))).toMatchObject({ ok: true });
+    mocks.participant.answers.q1.value = ["c", "a", "b"];
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true, submittedAt: expect.any(String) });
+  });
+
   it("rejects a save when publication wins before the transaction fence", async () => {
     mocks.publishBeforeTransaction = true;
 
