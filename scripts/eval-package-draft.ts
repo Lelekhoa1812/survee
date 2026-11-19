@@ -60,7 +60,17 @@ function validateRunDate(value: unknown) {
 
 export function validateResults(benchmark: any, results: any) {
   assert(results?.benchmarkVersion === benchmark.benchmarkVersion, "Result benchmarkVersion does not match the corpus.");
+  assert(results?.resultsSchemaVersion === "kqa-package-draft-results/1", "Unsupported package-draft results schema version.");
   assert(NONEMPTY(results.model) && NONEMPTY(results.skillVersion) && NONEMPTY(results.promptVersion), "Record model, skillVersion and promptVersion.");
+  const provenance = results.runProvenance;
+  assert(provenance && NONEMPTY(provenance.provider) && NONEMPTY(provenance.modelSnapshot), "Record provider and immutable modelSnapshot in runProvenance.");
+  assert(provenance.generationSettings && typeof provenance.generationSettings === "object" && !Array.isArray(provenance.generationSettings) && Object.keys(provenance.generationSettings).length > 0, "Record effective generationSettings, including explicit defaults or unavailable values.");
+  assert(typeof provenance.promptSha256 === "string" && /^[a-f0-9]{64}$/.test(provenance.promptSha256), "Record promptSha256 as a lowercase SHA-256 hash.");
+  assert(typeof provenance.skillSha256 === "string" && /^[a-f0-9]{64}$/.test(provenance.skillSha256), "Record skillSha256 as a lowercase SHA-256 hash.");
+  const blinding = provenance.reviewerBlinding;
+  assert(blinding && ["modelProvider", "prompt", "skill", "otherReviewerRatings"].every((field) => typeof blinding[field] === "boolean"), "Record each reviewerBlinding dimension as true or false.");
+  assert(Array.isArray(blinding.exceptions) && blinding.exceptions.every(NONEMPTY), "Record reviewerBlinding exceptions as non-empty explanations (or an empty array when none).");
+  if (["modelProvider", "prompt", "skill", "otherReviewerRatings"].some((field) => blinding[field] === false)) assert(blinding.exceptions.length > 0, "Explain every reviewerBlinding exception.");
   assert(results.packageLibraryVersion === benchmark.packageLibraryVersion, "Result packageLibraryVersion does not match the corpus.");
   assert(validateRunDate(results.runDate), "Record runDate as a valid YYYY-MM-DD date.");
   const expected = new Map<string, any>(benchmark.cases.map((item: any) => [item.id, item]));
@@ -221,10 +231,14 @@ export function scoreResults(benchmark: any, results: any, artifactChecks: any[]
   const unresolvedHardGateFlags = hardGateFlags.filter((finding) => adjudicationMap.get(`${finding.caseId}\u0000${finding.gateId}`)?.outcome !== "cleared");
   return {
     benchmarkVersion: benchmark.benchmarkVersion,
+    resultsSchemaVersion: results.resultsSchemaVersion,
     track: benchmark.track,
     developmentOnly: true,
-    run: { model: results.model, skillVersion: results.skillVersion, promptVersion: results.promptVersion, packageLibraryVersion: results.packageLibraryVersion, runDate: results.runDate },
-    cases: benchmark.cases.map((item: any) => ({ caseId: item.id, packageId: item.packageId, htmlPath: validated.outputs.get(item.id).htmlPath, reviewPath: validated.outputs.get(item.id).reviewPath, evidenceStatus: validated.evidenceByCase.get(item.id) })),
+    run: { model: results.model, skillVersion: results.skillVersion, promptVersion: results.promptVersion, packageLibraryVersion: results.packageLibraryVersion, runDate: results.runDate, runProvenance: results.runProvenance },
+    cases: benchmark.cases.map((item: any) => {
+      const artifactCheck = artifactChecks.find((check) => check.caseId === item.id);
+      return { caseId: item.id, packageId: item.packageId, htmlPath: validated.outputs.get(item.id).htmlPath, reviewPath: validated.outputs.get(item.id).reviewPath, ...(artifactCheck ? { htmlSha256: artifactCheck.htmlSha256, reviewSha256: artifactCheck.reviewSha256 } : {}), evidenceStatus: validated.evidenceByCase.get(item.id) };
+    }),
     dimensions: dimensionResults,
     requiredIntentStatusCounts: intentCounts,
     hardGateReview: { reviewerFlags: hardGateFlags, adjudications: validated.adjudications, unresolvedFlags: unresolvedHardGateFlags, unresolvedFlagCount: unresolvedHardGateFlags.length, flaggedCaseCount: new Set(hardGateFlags.map((finding) => finding.caseId)).size, interpretation: "A gate flag is a non-compensatory review trigger. A documented cleared outcome resolves that flag; confirmed or unresolved flags remain release blockers. High dimension scores cannot offset a gate." },

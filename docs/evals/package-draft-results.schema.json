@@ -2,12 +2,37 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "KQA package-draft review results",
   "type": "object",
-  "required": ["benchmarkVersion", "model", "skillVersion", "promptVersion", "packageLibraryVersion", "runDate", "outputs", "reviewers", "ratings", "evidenceStatus"],
+  "required": ["resultsSchemaVersion", "benchmarkVersion", "model", "skillVersion", "promptVersion", "runProvenance", "packageLibraryVersion", "runDate", "outputs", "reviewers", "ratings", "evidenceStatus"],
   "properties": {
+    "resultsSchemaVersion": { "const": "kqa-package-draft-results/1" },
     "benchmarkVersion": { "const": "kqa-package-draft/4" },
     "model": { "type": "string", "minLength": 1 },
     "skillVersion": { "type": "string", "minLength": 1 },
     "promptVersion": { "type": "string", "minLength": 1 },
+    "runProvenance": {
+      "type": "object",
+      "required": ["provider", "modelSnapshot", "generationSettings", "promptSha256", "skillSha256", "reviewerBlinding"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "modelSnapshot": { "type": "string", "minLength": 1, "description": "Immutable provider model revision or snapshot identifier." },
+        "generationSettings": { "type": "object", "minProperties": 1, "description": "Record every effective generation parameter, including explicit defaults and unavailable fields.", "additionalProperties": true },
+        "promptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "skillSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "reviewerBlinding": {
+          "type": "object",
+          "required": ["modelProvider", "prompt", "skill", "otherReviewerRatings", "exceptions"],
+          "properties": {
+            "modelProvider": { "type": "boolean" },
+            "prompt": { "type": "boolean" },
+            "skill": { "type": "boolean" },
+            "otherReviewerRatings": { "type": "boolean" },
+            "exceptions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Explain each dimension that was not blinded; use an empty array when none." }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "packageLibraryVersion": { "const": "kqa-interview-packages/8" },
     "runDate": { "type": "string", "format": "date" },
     "outputs": {

@@ -1,4 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { auditArtifacts, scoreResults, validateBenchmark, validateResults } from "../scripts/eval-package-draft";
 import { INTERVIEW_PACKAGES } from "../src/lib/interview-packages";
@@ -7,11 +9,20 @@ const benchmark = JSON.parse(await readFile(new URL("../docs/evals/package-draft
 const dimensions = benchmark.dimensions;
 const resultsFor = () => ({
   benchmarkVersion: benchmark.benchmarkVersion,
+  resultsSchemaVersion: "kqa-package-draft-results/1",
   model: "test/model@1",
   skillVersion: "test-skill@1",
   promptVersion: "test-prompt@1",
   packageLibraryVersion: benchmark.packageLibraryVersion,
   runDate: "2026-11-19",
+  runProvenance: {
+    provider: "test-provider",
+    modelSnapshot: "test/model@1+2026-11-19",
+    generationSettings: { temperature: 0, maxOutputTokens: 4096, seed: "unavailable" },
+    promptSha256: "a".repeat(64),
+    skillSha256: "b".repeat(64),
+    reviewerBlinding: { modelProvider: true, prompt: true, skill: true, otherReviewerRatings: true, exceptions: [] },
+  },
   // Shared known-good artifacts exercise only hashing/checker plumbing; this is not a semantic benchmark run.
   outputs: benchmark.cases.map((item: any) => ({
     caseId: item.id,
@@ -73,6 +84,25 @@ describe("package draft development benchmark", () => {
     expect(() => validateResults(benchmark, incomplete)).toThrow("Missing independent rating");
   });
 
+  it("requires machine-checkable run provenance and explains blinding exceptions", () => {
+    const missing = resultsFor();
+    delete (missing as any).runProvenance;
+    expect(() => validateResults(benchmark, missing)).toThrow("provider and immutable modelSnapshot");
+    const badHash = resultsFor();
+    badHash.runProvenance.promptSha256 = "A".repeat(64);
+    expect(() => validateResults(benchmark, badHash)).toThrow("promptSha256 as a lowercase SHA-256");
+    const noSettings: any = resultsFor();
+    noSettings.runProvenance.generationSettings = {};
+    expect(() => validateResults(benchmark, noSettings)).toThrow("effective generationSettings");
+    const unexplained = resultsFor();
+    unexplained.runProvenance.reviewerBlinding.prompt = false;
+    expect(() => validateResults(benchmark, unexplained)).toThrow("Explain every reviewerBlinding exception");
+    const explained: any = resultsFor();
+    explained.runProvenance.reviewerBlinding.prompt = false;
+    explained.runProvenance.reviewerBlinding.exceptions = ["Prompt label was visible to reviewers."];
+    expect(validateResults(benchmark, explained)).toBeDefined();
+  });
+
   it("requires every intent to be rated and rejects unanchored or duplicate gate findings", () => {
     const missingIntent = resultsFor();
     missingIntent.ratings[0].intentCoverage.pop();
@@ -109,6 +139,30 @@ describe("package draft development benchmark", () => {
     const report = scoreResults(benchmark, results, checks);
     expect(report.staticFormatChecks).toEqual(checks);
     expect(report.dimensions).not.toHaveProperty("staticFormat");
+    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/1");
+    expect(report.run.runProvenance).toEqual(results.runProvenance);
+    expect(report.cases[0]).toMatchObject({ htmlSha256: checks[0].htmlSha256, reviewSha256: checks[0].reviewSha256 });
+    expect(report.cases[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);
+
+    const directory = await mkdtemp(path.join(os.tmpdir(), "kqa-package-draft-eval-"));
+    try {
+      for (const output of results.outputs) {
+        const sourceHtml = path.resolve(output.htmlPath);
+        const sourceReview = path.resolve(output.reviewPath);
+        const targetHtml = path.join(directory, output.htmlPath);
+        const targetReview = path.join(directory, output.reviewPath);
+        await Promise.all([mkdir(path.dirname(targetHtml), { recursive: true }), mkdir(path.dirname(targetReview), { recursive: true })]);
+        await Promise.all([copyFile(sourceHtml, targetHtml), copyFile(sourceReview, targetReview)]);
+      }
+      const before = await auditArtifacts(benchmark, results, directory);
+      const firstOutput = path.join(directory, results.outputs[0].htmlPath);
+      await writeFile(firstOutput, `${await readFile(firstOutput, "utf8")}\n`);
+      const after = await auditArtifacts(benchmark, results, directory);
+      expect(after[0].htmlSha256).not.toBe(before[0].htmlSha256);
+      expect(after[0].reviewSha256).toBe(before[0].reviewSha256);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("rejects incomplete artifacts and evidence lane statuses", () => {

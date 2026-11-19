@@ -20,7 +20,37 @@ Save results matching [`package-draft-results.schema.json`](package-draft-result
 npm run eval:package-draft -- --results path/to/results.json
 ```
 
-Paths in `outputs` are relative to the current working directory. The scorer hashes each HTML and review artifact, runs the KQA static checker on the HTML, validates complete case/reviewer/intent/dimension coverage, and reports descriptive ratings, pairwise exact agreement, mean absolute reviewer difference, and quadratic weighted kappa. The JSON Schema describes the record shape; the CLI additionally validates cross-references and complete case coverage. For gate adjudication, add one `adjudications` record per disputed case/gate with an outcome, adjudicator ID, and rationale/evidence. The scorer retains the raw reviewer flags and ratings; a `cleared` outcome resolves a flag, while `confirmed` and `unresolved` remain blockers. Keep any broader review notes with the report. The scorer does not verify that human evidence is accurate or that reviewers are qualified or independent. Keep raw ratings and artifacts with the report.
+Paths in `outputs` are relative to the current working directory. The scorer hashes each HTML and review artifact, includes both hashes beside the case in the report, runs the KQA static checker on the HTML, validates complete case/reviewer/intent/dimension coverage, and reports descriptive ratings, pairwise exact agreement, mean absolute reviewer difference, and quadratic weighted kappa. The JSON Schema describes the record shape; the CLI additionally validates cross-references and complete case coverage. For gate adjudication, add one `adjudications` record per disputed case/gate with an outcome, adjudicator ID, and rationale/evidence. The scorer retains the raw reviewer flags and ratings; a `cleared` outcome resolves a flag, while `confirmed` and `unresolved` remain blockers. Keep any broader review notes with the report. The scorer does not verify that human evidence is accurate or that reviewers are qualified or independent. Keep raw ratings and artifacts with the report.
+
+### Run provenance (`kqa-package-draft-results/1`)
+
+The result record has its own version, separate from the case corpus version. Keep the human-readable model, skill, and prompt labels, and include machine-checkable provenance:
+
+```json
+{
+  "resultsSchemaVersion": "kqa-package-draft-results/1",
+  "runProvenance": {
+    "provider": "provider-name",
+    "modelSnapshot": "immutable-provider-model-revision",
+    "generationSettings": {
+      "temperature": 0,
+      "maxOutputTokens": 4096,
+      "seed": "unavailable"
+    },
+    "promptSha256": "<64 lowercase hex characters>",
+    "skillSha256": "<64 lowercase hex characters>",
+    "reviewerBlinding": {
+      "modelProvider": true,
+      "prompt": true,
+      "skill": true,
+      "otherReviewerRatings": true,
+      "exceptions": []
+    }
+  }
+}
+```
+
+Record every effective generation parameter, including defaults and unavailable values, and use the provider's immutable model revision where one is available. Reviewer IDs should be pseudonymous and paired only with expertise roles; do not put reviewer names or personal details in the results file. `reviewerBlinding` records what the protocol says was concealed and explains every exception. The scorer checks required fields and formats; it cannot verify provider/model claims, actual reviewer independence, qualifications, or whether reviewers were truly blinded. Hashes help identify exact prompt, skill, and output artifacts, but do not establish their quality.
 
 ## Separate evidence lanes
 

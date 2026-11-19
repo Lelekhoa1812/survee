@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import path from "node:path";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkHtml } from "../src/lib/diagnostics/static";
@@ -214,7 +215,17 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/kqa-questionnaire-author/SKILL.md");
     expect(body.result.structuredContent.skill).toContain("name: kqa-questionnaire-author");
     expect(body.result.structuredContent.skill).toContain("Do not use it for an unapproved draft");
-    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/PACKAGE_DRAFT_BENCHMARK.md", "references/AUTHORING_TRUST_BOUNDARY_EVAL.md", "references/AUTHORING_TRUST_BOUNDARY_CASES.json", "references/starter.kqa.html", "references/routed-follow-up.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
+    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/questionnaire-authoring-cases.json", "references/PACKAGE_DRAFT_BENCHMARK.md", "references/package-draft-cases.json", "references/package-draft-results.schema.json", "references/AUTHORING_TRUST_BOUNDARY_EVAL.md", "references/AUTHORING_TRUST_BOUNDARY_CASES.json", "references/starter.kqa.html", "references/routed-follow-up.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
+    const availablePaths = new Set(body.result.structuredContent.files.map((file) => file.path));
+    const benchmarkGuides = new Set(["references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/PACKAGE_DRAFT_BENCHMARK.md"]);
+    for (const file of body.result.structuredContent.files.filter((item) => benchmarkGuides.has(item.path))) {
+      for (const [, rawTarget] of file.content.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+        const target = rawTarget.split("#")[0];
+        if (!target || /^(?:https?:|mailto:|\/)/i.test(target)) continue;
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file.path), decodeURIComponent(target)));
+        expect(availablePaths, `${file.path} links to missing bundle path ${resolved}`).toContain(resolved);
+      }
+    }
     expect(body.result.structuredContent.files.find((file) => file.path === "references/PACKAGE_DRAFT_BENCHMARK.md")?.content).toContain("two independent reviewers");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/AUTHORING_TRUST_BOUNDARY_EVAL.md")?.content).toContain("unsafe-call rate (release gate: zero)");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/AUTHORING_TRUST_BOUNDARY_CASES.json")?.content).toContain("no-approval-no-fielding");

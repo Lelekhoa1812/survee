@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KQA package-draft review results",
+  "type": "object",
+  "required": ["resultsSchemaVersion", "benchmarkVersion", "model", "skillVersion", "promptVersion", "runProvenance", "packageLibraryVersion", "runDate", "outputs", "reviewers", "ratings", "evidenceStatus"],
+  "properties": {
+    "resultsSchemaVersion": { "const": "kqa-package-draft-results/1" },
+    "benchmarkVersion": { "const": "kqa-package-draft/4" },
+    "model": { "type": "string", "minLength": 1 },
+    "skillVersion": { "type": "string", "minLength": 1 },
+    "promptVersion": { "type": "string", "minLength": 1 },
+    "runProvenance": {
+      "type": "object",
+      "required": ["provider", "modelSnapshot", "generationSettings", "promptSha256", "skillSha256", "reviewerBlinding"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "modelSnapshot": { "type": "string", "minLength": 1, "description": "Immutable provider model revision or snapshot identifier." },
+        "generationSettings": { "type": "object", "minProperties": 1, "description": "Record every effective generation parameter, including explicit defaults and unavailable fields.", "additionalProperties": true },
+        "promptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "skillSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "reviewerBlinding": {
+          "type": "object",
+          "required": ["modelProvider", "prompt", "skill", "otherReviewerRatings", "exceptions"],
+          "properties": {
+            "modelProvider": { "type": "boolean" },
+            "prompt": { "type": "boolean" },
+            "skill": { "type": "boolean" },
+            "otherReviewerRatings": { "type": "boolean" },
+            "exceptions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Explain each dimension that was not blinded; use an empty array when none." }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "packageLibraryVersion": { "const": "kqa-interview-packages/8" },
+    "runDate": { "type": "string", "format": "date" },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "htmlPath", "reviewPath"],
+        "properties": { "caseId": { "type": "string", "minLength": 1 }, "htmlPath": { "type": "string", "minLength": 1 }, "reviewPath": { "type": "string", "minLength": 1 } },
+        "additionalProperties": false
+      }
+    },
+    "reviewers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["id", "role"],
+        "properties": { "id": { "type": "string", "minLength": 1 }, "role": { "enum": ["domain", "methodologist", "accessibility", "respondent-proxy", "other"] } },
+        "additionalProperties": false
+      },
+      "allOf": [
+        { "contains": { "properties": { "role": { "const": "domain" } }, "required": ["role"] } },
+        { "contains": { "properties": { "role": { "const": "methodologist" } }, "required": ["role"] } }
+      ]
+    },
+    "ratings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "reviewerId", "dimensions", "intentCoverage", "hardGateFindings"],
+        "properties": {
+          "caseId": { "type": "string", "minLength": 1 },
+          "reviewerId": { "type": "string", "minLength": 1 },
+          "dimensions": {
+            "type": "object",
+            "required": ["intent_coverage", "construct_and_question_design", "respondent_and_context_fit", "response_options_and_recall", "flow_and_burden", "privacy_and_risk", "analysis_and_interpretation", "review_record_and_evidence"],
+            "properties": {
+              "intent_coverage": { "$ref": "#/$defs/rating" },
+              "construct_and_question_design": { "$ref": "#/$defs/rating" },
+              "respondent_and_context_fit": { "$ref": "#/$defs/rating" },
+              "response_options_and_recall": { "$ref": "#/$defs/rating" },
+              "flow_and_burden": { "$ref": "#/$defs/rating" },
+              "privacy_and_risk": { "$ref": "#/$defs/rating" },
+              "analysis_and_interpretation": { "$ref": "#/$defs/rating" },
+              "review_record_and_evidence": { "$ref": "#/$defs/rating" }
+            },
+            "additionalProperties": false
+          },
+          "intentCoverage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["intentId", "status", "evidence"],
+              "properties": { "intentId": { "type": "string", "minLength": 1 }, "status": { "enum": ["covered", "partial", "missing", "unsupported"] }, "evidence": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          },
+          "hardGateFindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["gateId", "evidence"],
+              "properties": { "gateId": { "type": "string", "minLength": 1 }, "evidence": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidenceStatus": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "functional", "accessibility", "respondentPretest"],
+        "properties": {
+          "caseId": { "type": "string", "minLength": 1 },
+          "functional": { "$ref": "#/$defs/evidence" },
+          "accessibility": { "$ref": "#/$defs/evidence" },
+          "respondentPretest": { "$ref": "#/$defs/evidence" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "adjudications": {
+      "type": "array",
+      "description": "Optional outcomes for disputed hard-gate flags. These never replace raw reviewer ratings.",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "gateId", "outcome", "adjudicatorId", "evidence"],
+        "properties": {
+          "caseId": { "type": "string", "minLength": 1 },
+          "gateId": { "type": "string", "minLength": 1 },
+          "outcome": { "enum": ["confirmed", "cleared", "unresolved"] },
+          "adjudicatorId": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "rating": { "type": "object", "required": ["score", "evidence"], "properties": { "score": { "type": "integer", "minimum": 0, "maximum": 3 }, "evidence": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+    "evidence": {
+      "type": "object",
+      "required": ["status"],
+      "properties": { "status": { "enum": ["not_tested", "passed", "issues_found", "not_applicable"] }, "evidence": { "type": "string" } },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "enum": ["passed", "issues_found", "not_applicable"] } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["evidence"],
+            "properties": { "evidence": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

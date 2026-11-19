@@ -144,7 +144,10 @@ describe("agent documentation bundle", () => {
       ["QUESTION_BLUEPRINT.md", "QUESTION_BLUEPRINT.md"],
       ["MCP.md", "MCP.md"],
       ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
+      ["questionnaire-authoring-cases.json", "evals/questionnaire-authoring-cases.json"],
       ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
+      ["package-draft-cases.json", "evals/package-draft-cases.json"],
+      ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
       ["AUTHORING_TRUST_BOUNDARY_EVAL.md", "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md"],
       ["starter.kqa.html", "template/starter.kqa.html"],
       ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
@@ -172,6 +175,7 @@ describe("agent documentation bundle", () => {
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
     expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/4");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
+    expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/1");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
     const trustCases = await readAsset("evals/authoring-trust-boundary-cases.json");
     expect(trustCases?.type).toBe("application/json; charset=utf-8");
