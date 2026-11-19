@@ -4,9 +4,11 @@ const mocks = vi.hoisted(() => ({
   context: {
     participant: { name: "Ada", status: "invited", revision: 0, answers: {}, recordGroups: { people: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } },
     interview: { name: "Study", status: "open" },
-    version: { version: 7, manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] } },
+    version: { version: 7, manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] as { id: string }[] } as Record<string, any> },
   },
   loadByToken: vi.fn(),
+  ensureQuestionOrderAssignment: vi.fn(),
+  shouldRecordVisit: vi.fn(() => false),
   saveAnswers: vi.fn(),
   submitAnswers: vi.fn(),
 }));
@@ -21,11 +23,12 @@ vi.mock("@/lib/http", () => ({
 }));
 vi.mock("@/lib/repo", () => ({
   loadByToken: mocks.loadByToken,
+  ensureQuestionOrderAssignment: mocks.ensureQuestionOrderAssignment,
   saveAnswers: mocks.saveAnswers,
   submitAnswers: mocks.submitAnswers,
 }));
 vi.mock("@/lib/tokens", () => ({ looksLikeToken: () => true }));
-vi.mock("@/lib/visit", () => ({ shouldRecordVisit: () => false }));
+vi.mock("@/lib/visit", () => ({ shouldRecordVisit: mocks.shouldRecordVisit }));
 
 import { GET as getRespondent } from "../src/app/api/p/[token]/route";
 import { PUT as saveRespondentAnswers } from "../src/app/api/p/[token]/answers/route";
@@ -42,6 +45,8 @@ const request = (url: string, method: string, body?: unknown) => new Request(url
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.loadByToken.mockResolvedValue(mocks.context);
+  mocks.ensureQuestionOrderAssignment.mockImplementation(async (input) => ({ ...input, assignedAt: "2026-11-16T00:00:00.000Z" }));
+  mocks.shouldRecordVisit.mockReturnValue(false);
   mocks.saveAnswers.mockResolvedValue({ ok: true, revision: 1, savedAt: "2026-11-16T00:00:00.000Z", status: "in_progress" });
   mocks.submitAnswers.mockResolvedValue({ ok: true, submittedAt: "2026-11-16T00:00:00.000Z" });
 });
@@ -52,6 +57,48 @@ describe("respondent questionnaire version routes", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }], recordGroups: { people: [{ id: "row-1" }] } });
+  });
+
+  it("persists and returns a complete order on respondent visits while preserving canonical questions", async () => {
+    mocks.shouldRecordVisit.mockReturnValue(true);
+    mocks.context.version.manifest = {
+      ...mocks.context.version.manifest,
+      questionOrderGroups: [{ id: "context-pair", questionIds: ["first", "second"] }],
+      questions: [{ id: "first" }, { id: "second" }, { id: "last" }],
+    };
+    mocks.ensureQuestionOrderAssignment.mockResolvedValue({
+      surveyVersion: 7,
+      algorithmVersion: "kqa-question-order-v1",
+      groups: { "context-pair": ["second", "first"] },
+      assignedAt: "2026-11-16T00:00:00.000Z",
+    });
+
+    const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
+    const body = await response.json();
+
+    expect(mocks.ensureQuestionOrderAssignment).toHaveBeenCalledWith(expect.objectContaining({
+      surveyVersion: 7,
+      algorithmVersion: "kqa-question-order-v1",
+      groups: { "context-pair": expect.arrayContaining(["first", "second"]) },
+    }));
+    expect(body.questionOrder).toEqual(["second", "first", "last"]);
+    expect(body.questions.map((question: { id: string }) => question.id)).toEqual(["first", "second", "last"]);
+    expect(body.questionOrderAssignment.assignedAt).toBe("2026-11-16T00:00:00.000Z");
+  });
+
+  it("does not persist a proposed order for link prefetches", async () => {
+    mocks.context.version.manifest = {
+      ...mocks.context.version.manifest,
+      questionOrderGroups: [{ id: "context-pair", questionIds: ["first", "second"] }],
+      questions: [{ id: "first" }, { id: "second" }],
+    };
+
+    const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
+    const body = await response.json();
+
+    expect(mocks.ensureQuestionOrderAssignment).not.toHaveBeenCalled();
+    expect(body.questionOrder).toHaveLength(2);
+    expect(body.questionOrderAssignment.assignedAt).toBeUndefined();
   });
 
   it("requires and forwards the loaded version on answer saves", async () => {

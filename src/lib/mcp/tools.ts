@@ -311,7 +311,7 @@ const TOOLS: ToolDef[] = [
     async run() {
       const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
       if (!skill) return err("The questionnaire authoring skill is unavailable.", "docs_unavailable");
-      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "REPEATABLE_RECORDS_DESIGN.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "questionnaire-authoring-cases.json", "PACKAGE_DRAFT_BENCHMARK.md", "package-draft-cases.json", "package-draft-results.schema.json", "AUTHORING_TRUST_BOUNDARY_EVAL.md", "AUTHORING_TRUST_BOUNDARY_CASES.json", "starter.kqa.html", "conditional-follow-up.kqa.html", "routed-follow-up.kqa.html", "repeated-assets.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
+      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "REPEATABLE_RECORDS_DESIGN.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "questionnaire-authoring-cases.json", "PACKAGE_DRAFT_BENCHMARK.md", "package-draft-cases.json", "package-draft-results.schema.json", "AUTHORING_TRUST_BOUNDARY_EVAL.md", "AUTHORING_TRUST_BOUNDARY_CASES.json", "starter.kqa.html", "conditional-follow-up.kqa.html", "routed-follow-up.kqa.html", "repeated-assets.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md", "question-order-variation.kqa.html"];
       const references = await Promise.all(referenceNames.map(async (name) => ({ path: `references/${name}`, content: await readDoc(`kqa-questionnaire-author/references/${name}`) })));
       if (references.some((reference) => reference.content === null)) return err("The questionnaire authoring skill references are incomplete.", "docs_unavailable");
       return ok({ source: "docs/kqa-questionnaire-author/SKILL.md", skill, files: [{ path: "SKILL.md", content: skill }, ...references] });
@@ -530,7 +530,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_answers",
-    description: "Read answers for review. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present. There is no score.",
+    description: "Read answers for review. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present. Assigned question-order groups are returned separately by survey version, including unanswered questions. There is no score.",
     inputSchema: obj({ interviewId: str, personId: str, submittedOnly: bool }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -559,6 +559,7 @@ const TOOLS: ToolDef[] = [
             return { questionId: q.id, type: q.type, label: q.label, value: stored?.value ?? null, display: displayValue(q, stored?.value), note: stored?.note ?? null, updatedAt: stored?.updatedAt ?? null };
           }),
           ...(Object.keys(recordGroups).length ? { recordGroups } : {}),
+          ...(p.questionOrderAssignments?.length ? { questionOrderAssignments: p.questionOrderAssignments } : {}),
         };
       });
       return ok({ interviewStatus: interview.status, people: rows });
@@ -908,7 +909,7 @@ const TOOLS: ToolDef[] = [
           interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, createdAt: interview.createdAt.toISOString() },
           manifest: version.manifest,
           surveyVersion: version.version,
-          participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups })),
+          participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups, questionOrderAssignments: p.questionOrderAssignments })),
           generatedAt: new Date().toISOString(),
         },
         format,

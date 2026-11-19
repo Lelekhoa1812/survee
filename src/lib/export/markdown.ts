@@ -105,6 +105,18 @@ export function markdownExport(input: ExportInput): ExportFile {
     }
   }
 
+  const orderAssignments = people.flatMap((person) => (person.questionOrderAssignments ?? []).flatMap((assignment) =>
+    Object.entries(assignment.groups).map(([groupId, questionIds]) => ({ person, assignment, groupId, questionIds })),
+  ));
+  if (orderAssignments.length) {
+    out.push("## Assigned question order", "", "These are assigned presentation orders, including groups with no saved answers. Assignment does not prove that a respondent viewed every question.", "");
+    out.push("| Person | Survey version | Group | Assigned question ids | Algorithm | Assigned at |", "| --- | ---: | --- | --- | --- | --- |");
+    for (const { person, assignment, groupId, questionIds } of orderAssignments) {
+      out.push(`| ${cell(person.name)} | ${assignment.surveyVersion} | ${cell(groupId)} | ${cell(questionIds.join(" → "))} | ${cell(assignment.algorithmVersion)} | ${cell(assignment.assignedAt)} |`);
+    }
+    out.push("");
+  }
+
   out.push("## People", "");
   out.push("| Name | Status | Answered | Submitted |", "| --- | --- | --- | --- |");
   for (const p of people) {

@@ -192,6 +192,12 @@ describe("long table", () => {
       "Answer value",
       "Presented option order",
       "Option order version",
+      "Row type",
+      "Assignment survey version",
+      "Assignment algorithm",
+      "Question-order group",
+      "Assigned question order",
+      "Assignment time",
       "Note",
       "Updated at",
     ]);
@@ -220,7 +226,7 @@ describe("long table", () => {
 
   it("keeps the note with its line break on the long row", () => {
     const row = longTable(input).rows.find((r) => r[0] === "Ben Okafor" && r[3] === "satisfaction")!;
-    expect(row[11]).toBe(benNote);
+    expect(row[17]).toBe(benNote);
   });
 });
 
@@ -327,6 +333,33 @@ describe("JSON", () => {
     expect(doc.participants.every((person: Record<string, unknown>) => !Object.hasOwn(person, "recordGroups"))).toBe(true);
   });
 
+  it("exports complete question-order assignments by version even when a group has no answers", () => {
+    const orderedManifest: Manifest = {
+      ...manifest,
+      questionOrderGroups: [{ id: "about-context", questionIds: ["role", "tools"] }],
+    };
+    const orderedInput: ExportInput = {
+      ...input,
+      manifest: orderedManifest,
+      participants: input.participants.map((person) => person.id === "p-ben" ? {
+        ...person,
+        questionOrderAssignments: [
+          { surveyVersion: 2, algorithmVersion: "kqa-question-order-v1", groups: { "about-context": ["tools", "role"] }, assignedAt: T },
+          { surveyVersion: 3, algorithmVersion: "kqa-question-order-v1", groups: { "about-context": ["role", "tools"] }, assignedAt: T },
+        ],
+      } : person),
+    };
+    const ben = JSON.parse(jsonExport(orderedInput).body as string).participants.find((person: { id: string }) => person.id === "p-ben");
+    expect(ben.questionOrderAssignments).toHaveLength(2);
+    expect(ben.questionOrderAssignments[0].groups["about-context"]).toEqual(["tools", "role"]);
+    const metadataRows = longTable(orderedInput).rows.filter((row) => row[0] === "Ben Okafor" && row[11] === "presentation");
+    expect(metadataRows.map((row) => [row[12], row[14], row[15]])).toEqual([
+      ["2", "about-context", "tools;role"],
+      ["3", "about-context", "role;tools"],
+    ]);
+    expect(wideTable(orderedInput).rows.find((row) => row[0] === "Ben Okafor")?.at(-1)).toBe("role;tools");
+  });
+
   it("adds public repeat rows only when present and omits internal revision counters", () => {
     const repeatManifest: Manifest = {
       ...manifest,
@@ -414,6 +447,24 @@ describe("repeat record exports", () => {
     const legacyBook = new Workbook();
     await legacyBook.xlsx.load(legacy.body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
     expect(legacyBook.worksheets.map((sheet) => sheet.name)).toEqual(["Summary", "Wide", "Long", "People"]);
+  });
+
+  it("adds a dedicated Presentations sheet with all versioned assignments", async () => {
+    const orderedInput: ExportInput = {
+      ...input,
+      manifest: { ...manifest, questionOrderGroups: [{ id: "about-context", questionIds: ["role", "tools"] }] },
+      participants: input.participants.map((person) => person.id === "p-ben" ? {
+        ...person,
+        questionOrderAssignments: [{ surveyVersion: 2, algorithmVersion: "kqa-question-order-v1", groups: { "about-context": ["tools", "role"] }, assignedAt: T }],
+      } : person),
+    };
+    const file = await xlsxExport(orderedInput);
+    const workbook = new Workbook();
+    await workbook.xlsx.load(file.body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toContain("Presentations");
+    const presentations = workbook.getWorksheet("Presentations")!;
+    expect(presentations.getRow(2).values).toContain("kqa-question-order-v1");
+    expect(presentations.getRow(2).values).toContain("tools;role");
   });
 });
 

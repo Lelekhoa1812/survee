@@ -7,7 +7,7 @@ import { orderOptions } from "../format/option-order";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question, type RepeatField, type RepeatRecordMap, type RepeatRecordOperation } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
-import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
+import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
 import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
 
@@ -215,6 +215,7 @@ export async function deleteInterview(id: string): Promise<boolean> {
     // sequential so a failed dependent delete rolls the parent removal back as well.
     await (await col.versions()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
+    await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }, { session });
     await deleteMailForInterview(oid, session);
@@ -229,7 +230,54 @@ export async function listParticipants(interviewId: string): Promise<Participant
   const tenantId = await currentTenantId();
   if (!tenantId) return [];
   const docs = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid })).sort({ createdAt: 1 }).toArray();
-  return docs.map(participantView);
+  if (!docs.length) return [];
+  const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, { interviewId: oid, participantId: { $in: docs.map((doc) => doc._id) } })).sort({ surveyVersion: 1 }).toArray();
+  const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
+  for (const assignment of assignments) {
+    const id = assignment.participantId.toHexString();
+    const rows = byParticipant.get(id) ?? [];
+    rows.push({ surveyVersion: assignment.surveyVersion, algorithmVersion: assignment.algorithmVersion, groups: assignment.groups, assignedAt: assignment.assignedAt.toISOString() });
+    byParticipant.set(id, rows);
+  }
+  return docs.map((doc) => ({ ...participantView(doc), ...(byParticipant.has(doc._id.toHexString()) ? { questionOrderAssignments: byParticipant.get(doc._id.toHexString()) } : {}) }));
+}
+
+/** Persist the first respondent-facing assignment for an immutable survey version. */
+export async function ensureQuestionOrderAssignment(input: {
+  tenantId: string;
+  interviewId: string;
+  participantId: string;
+  surveyVersion: number;
+  algorithmVersion: string;
+  groups: Record<string, string[]>;
+}): Promise<QuestionOrderAssignmentView> {
+  const interviewId = toOid(input.interviewId);
+  const participantId = toOid(input.participantId);
+  if (!interviewId || !participantId) throw new Error("Cannot assign question order to an invalid participant or interview.");
+  const collection = await col.questionOrderAssignments();
+  const filter = { tenantId: input.tenantId, interviewId, participantId, surveyVersion: input.surveyVersion };
+  const asView = (doc: QuestionOrderAssignmentDoc) => ({ surveyVersion: doc.surveyVersion, algorithmVersion: doc.algorithmVersion, groups: doc.groups, assignedAt: doc.assignedAt.toISOString() });
+  try {
+    return await withMongoTransaction(async (session) => {
+      const existing = await collection.findOne(filter, { session });
+      if (existing) return asView(existing);
+      const participant = await (await col.participants()).findOne(tenantFilter(input.tenantId, { _id: participantId, interviewId }), { session, projection: { _id: 1 } });
+      if (!participant) throw new Error("Cannot assign question order to a deleted participant.");
+      const assignedAt = new Date();
+      const doc = {
+        _id: new ObjectId(), tenantId: input.tenantId, interviewId, participantId,
+        surveyVersion: input.surveyVersion, algorithmVersion: input.algorithmVersion,
+        groups: input.groups, assignedAt,
+      };
+      await collection.insertOne(doc, { session });
+      return asView(doc);
+    });
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const existing = await collection.findOne(filter);
+    if (existing) return asView(existing);
+    throw error;
+  }
 }
 
 export interface AnalyticsParticipant {
@@ -402,8 +450,13 @@ export async function deleteParticipant(id: string): Promise<boolean> {
   if (!oid) return false;
   const tenantId = await currentTenantId();
   if (!tenantId) return false;
-  const res = await (await col.participants()).deleteOne(tenantFilter(tenantId, { _id: oid }));
-  if (!res.deletedCount) return false;
+  const deleted = await withMongoTransaction(async (session) => {
+    const res = await (await col.participants()).deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
+    if (!res.deletedCount) return false;
+    await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
+    return true;
+  });
+  if (!deleted) return false;
   await deleteMailForPerson(oid);
   return true;
 }

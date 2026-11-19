@@ -46,7 +46,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
 }
 
 const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "minSelections", "exclusiveOptions", "randomizeOptions", "fixedOptionValues", "note", "min", "max", "step", "maxLength", "fields", "maxRows", "minRows", "itemLabel", "custom", "when"];
-const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questions"];
+const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questionOrderGroups", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
 const NOTE_KEYS = ["label", "placeholder", "maxLength"];
@@ -864,6 +864,70 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       earlierQuestions.set(qid, { type, values, min: q.min, max: q.max });
     }
   });
+
+  // Question-order variation is opt-in and restricted to adjacent, independent root questions.
+  if (raw.questionOrderGroups !== undefined) {
+    const groupPath = "questionOrderGroups";
+    if (!Array.isArray(raw.questionOrderGroups)) {
+      add(ctx, "KQA224", '"questionOrderGroups" must be an array.', undefined, { offset: m.at(groupPath), path: groupPath });
+    } else {
+      const groups = raw.questionOrderGroups;
+      const groupIds = new Set<string>();
+      const memberGroup = new Map<string, string>();
+      const questionIndexes = new Map<string, number>();
+      for (const [index, item] of qs.entries()) if (isObj(item) && typeof item.id === "string") questionIndexes.set(item.id, index);
+      if (groups.length > Math.floor(LIMITS.maxQuestions / 2)) add(ctx, "KQA224", `"questionOrderGroups" has ${groups.length} groups; the maximum is ${Math.floor(LIMITS.maxQuestions / 2)}.`, undefined, { offset: m.at(groupPath), path: groupPath });
+      if (raw.presentation === "guided") add(ctx, "KQA224", '"questionOrderGroups" is supported only when presentation is "all".', 'Remove questionOrderGroups or use the default full-page presentation; guided section navigation cannot be reordered.', { offset: m.at("presentation"), path: "presentation" });
+      groups.forEach((item, groupIndex) => {
+        const path = `${groupPath}[${groupIndex}]`;
+        if (!isObj(item)) return void add(ctx, "KQA224", `${path} must be an object with an id and questionIds.`, undefined, { offset: m.at(path), path });
+        checkUnknownKeys(item, ["id", "questionIds"], path, m);
+        if (typeof item.id !== "string" || !ID_RE.test(item.id)) add(ctx, "KQA224", `${path}.id must be a valid stable id.`, undefined, { offset: m.at(`${path}.id`), path: `${path}.id` });
+        else if (groupIds.has(item.id)) add(ctx, "KQA224", `Question-order group id "${item.id}" is repeated.`, "Give each group a unique stable id.", { offset: m.at(`${path}.id`), path: `${path}.id` });
+        else groupIds.add(item.id);
+        if (!Array.isArray(item.questionIds) || item.questionIds.length < 2 || item.questionIds.length > LIMITS.maxQuestions) {
+          add(ctx, "KQA224", `${path}.questionIds must contain between 2 and ${LIMITS.maxQuestions} question ids.`, undefined, { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+          return;
+        }
+        const ids = item.questionIds;
+        const validIds = ids.filter((id): id is string => typeof id === "string" && ID_RE.test(id));
+        if (validIds.length !== ids.length) add(ctx, "KQA224", `${path}.questionIds contains an invalid question id.`, undefined, { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+        if (new Set(validIds).size !== ids.length) add(ctx, "KQA224", `${path}.questionIds contains a duplicate id.`, undefined, { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+        for (const id of validIds) {
+          if (!questionIndexes.has(id)) add(ctx, "KQA224", `${path} refers to unknown question "${id}".`, undefined, { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+          if (memberGroup.has(id)) add(ctx, "KQA224", `Question "${id}" belongs to more than one question-order group.`, undefined, { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+          else memberGroup.set(id, typeof item.id === "string" ? item.id : path);
+        }
+        const indexes = validIds.map((id) => questionIndexes.get(id)).filter((value): value is number => value !== undefined).sort((a, b) => a - b);
+        if (indexes.length === validIds.length && indexes[indexes.length - 1] - indexes[0] + 1 !== indexes.length) add(ctx, "KQA224", `${path}.questionIds must be a contiguous run in manifest order.`, "List adjacent, independent questions only; questions outside the group keep their authored position.", { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+        const authored = [...validIds].sort((a, b) => (questionIndexes.get(a) ?? 0) - (questionIndexes.get(b) ?? 0));
+        if (authored.some((id, index) => id !== validIds[index])) add(ctx, "KQA224", `${path}.questionIds must follow the authored manifest order.`, "List the group question ids in their canonical manifest order.", { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+        const members = validIds.map((id) => { const index = questionIndexes.get(id); return index === undefined ? undefined : qs[index]; }).filter(isObj);
+        if (members.length === validIds.length && members.length) {
+          const section = members[0].section;
+          if (members.some((question) => question.section !== section)) add(ctx, "KQA224", `${path} questions must all belong to the same section (or all be unsectioned).`, undefined, { offset: m.at(`${path}.questionIds`), path: `${path}.questionIds` });
+          members.forEach((question, memberIndex) => {
+            const id = validIds[memberIndex];
+            if (question.custom === true) add(ctx, "KQA224", `Question "${id}" is custom and cannot be moved safely.`, "Use a standard question block for randomized groups.", { offset: m.at(`questions[${questionIndexes.get(id)}].custom`), path: `questions[${questionIndexes.get(id)}].custom`, questionId: id });
+            if (question.when !== undefined) add(ctx, "KQA224", `Question "${id}" has routing conditions and cannot be randomized.`, undefined, { offset: m.at(`questions[${questionIndexes.get(id)}].when`), path: `questions[${questionIndexes.get(id)}].when`, questionId: id });
+          });
+        }
+      });
+      if (memberGroup.size) {
+        qs.forEach((item, questionIndex) => {
+          if (!isObj(item) || !isObj(item.when)) return;
+          for (const conditionList of [item.when.all, item.when.any]) {
+            if (!Array.isArray(conditionList)) continue;
+            for (const condition of conditionList) {
+              if (isObj(condition) && typeof condition.question === "string" && memberGroup.has(condition.question)) {
+                add(ctx, "KQA224", `Question "${condition.question}" is a routing source and cannot be reordered safely.`, "Remove the question-order group or the routing dependency.", { offset: m.at(`questions[${questionIndex}].when`), path: `questions[${questionIndex}].when`, questionId: typeof item.id === "string" ? item.id : undefined });
+              }
+            }
+          }
+        });
+      }
+    }
+  }
   for (const id of sectionIds) if (!usedSections.has(id)) add(ctx, "KQA217", `Section "${id}" has no questions.`, undefined, { offset: m.at(`sections[${(raw.sections as { id: string }[]).findIndex((s) => s.id === id)}]`), path: "sections" });
 
   // return a typed manifest only when nothing structural is broken, so later checks can trust the shape
@@ -952,6 +1016,37 @@ function checkBindings(manifest: Manifest, b: BCtx) {
     for (const question of manifest.questions) {
       const count = blockCounts.get(question.id) ?? 0;
       if (count !== 1) add(ctx, "KQA321", `Guided question "${question.id}" needs exactly one data-kqa-question-id wrapper; found ${count}.`, `Add one whole-question wrapper marked data-kqa-question-id="${question.id}".`, { path: `questions[${manifest.questions.indexOf(question)}]`, questionId: question.id, offset: b.at(`questions[${manifest.questions.indexOf(question)}]`) });
+    }
+  }
+
+  for (const group of manifest.questionOrderGroups ?? []) {
+    const memberBlocks = group.questionIds.map((id) => b.questionBlocks.filter((block) => attr(block.el, "data-kqa-question-id") === id));
+    const members = group.questionIds.map((id) => byId.get(id)).filter((question): question is Question => !!question);
+    const expectedSection = members[0]?.section ?? "";
+    const candidates = memberBlocks.flat();
+    const parents = new Set(candidates.map((block) => block.ancestors[block.ancestors.length - 1]).filter((parent): parent is El => !!parent));
+    const complete = memberBlocks.every((blocks) => blocks.length === 1) && candidates.length === group.questionIds.length;
+    const memberIds = new Set(group.questionIds);
+    const orderedMemberBlocks = b.questionBlocks.filter((block) => memberIds.has(attr(block.el, "data-kqa-question-id") ?? ""));
+    const domOrder = orderedMemberBlocks.map((block) => attr(block.el, "data-kqa-question-id"));
+    const blockIndexes = orderedMemberBlocks.map((block) => b.questionBlocks.indexOf(block));
+    const domRun = blockIndexes.length === group.questionIds.length && Math.max(...blockIndexes) - Math.min(...blockIndexes) + 1 === blockIndexes.length;
+    const authoredDomOrder = domOrder.every((id, index) => id === group.questionIds[index]);
+    const parent = parents.size === 1 ? [...parents][0] : undefined;
+    const parentMarker = parent ? attr(parent, "data-kqa-question-list") : undefined;
+    const memberNodes = candidates.map((block) => block.el);
+    const childNodes = parent ? kids(parent) : [];
+    const memberPositions = memberNodes.map((node) => childNodes.indexOf(node));
+    const minMemberPosition = memberPositions.length ? Math.min(...memberPositions) : -1;
+    const maxMemberPosition = memberPositions.length ? Math.max(...memberPositions) : -1;
+    const onlyTriviaBetweenMembers = complete && minMemberPosition >= 0 && maxMemberPosition >= 0 && childNodes.slice(minMemberPosition + 1, maxMemberPosition).every((node) => {
+      if (isEl(node)) return memberNodes.includes(node);
+      if ("value" in node && typeof node.value === "string") return node.value.trim() === "";
+      return (node as { nodeName?: string }).nodeName === "#comment";
+    });
+    const markedLists = b.questionLists.filter((list) => (attr(list.el, "data-kqa-question-list") ?? "") === expectedSection);
+    if (!complete || !domRun || !onlyTriviaBetweenMembers || !authoredDomOrder || !parent || parentMarker !== expectedSection || markedLists.length !== 1) {
+      add(ctx, "KQA322", `Question-order group "${group.id}" needs exactly one marked root wrapper for every member, as adjacent direct children of the same data-kqa-question-list="${expectedSection}".`, `Place each whole-question wrapper next to the previous member in one matching data-kqa-question-list; keep explanatory content inside its question wrapper.`, { path: `questionOrderGroups.${group.id}`, offset: b.at(`questionOrderGroups[${(manifest.questionOrderGroups ?? []).indexOf(group)}]`) });
     }
   }
 

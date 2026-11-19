@@ -126,7 +126,16 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `description` | no | Up to 500 characters |
 | `presentation` | no | `"all"` (default) or `"guided"`; guided shows one eligible section at a time and requires section assignments and question/list markers |
 | `sections` | no | Up to 50. Groups and orders questions in exports and the answers view |
+| `questionOrderGroups` | no | Off by default. Explicit groups of adjacent, independent root questions whose respondent-facing order may vary; supported only with `presentation: "all"` |
 | `questions` | yes | 1 to 500 questions, in the order they should appear in exports |
+
+`questionOrderGroups` is a list of `{ "id", "questionIds" }` objects. Each group needs a stable id and at least two question ids in their authored manifest order. Members must form one contiguous run, share the same section (or all be unsectioned), use standard non-custom questions, and have no `when` condition. No question may use a group member as a routing source. The checker reports unsafe configurations as KQA224.
+
+Each group member must have one whole-question `data-kqa-question-id` wrapper, including any instructions or supporting content for that item. The wrappers must be adjacent direct children of one `data-kqa-question-list` matching the group section; for unsectioned groups, use `data-kqa-question-list=""`. Keep explanatory content inside its question wrapper rather than between members. The checker reports incomplete or mismatched markup as KQA322. The runtime moves complete wrappers in the DOM, so visual, reading, and keyboard sequence follow the same assigned order. If runtime markup does not match, it keeps the authored order.
+
+KQA assigns a repeatable permutation per participant, survey version, and group, then stores that complete assignment independently from answers. Reloads keep the stored order; a later survey version gets its own assignment. The manifest order stays canonical for routing, validation, and exports. Hosts can review the assigned group order and exports retain the exact question ids, survey version, algorithm version, and assignment time, including groups with no answers. “Assigned” records the order returned to the respondent app; it does not confirm that every question was viewed.
+
+Use question-order variation only when the research question or usability goal warrants it. Question context can change answers, and rotation distributes rather than removes order effects. Pretest wording and navigation with intended respondents; for an experiment, define the comparison and outcome criteria in advance and analyze assignments by survey version. Do not shuffle screeners, routed questions, consent or instructions, sensitive sequences, or content whose order carries meaning. See the [AAPOR Best Practices](https://aapor.org/standards-and-ethics/best-practices/), [Census Standard A2](https://www.census.gov/about/policies/quality/standards/standarda2.html), [Census Appendix A2](https://www.census.gov/about/policies/quality/standards/appendixa2.html), and [WCAG 2.2 Focus Order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html).
 
 ### 3.2 Section fields
 

@@ -1,6 +1,6 @@
 import { MongoClient, type ClientSession, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc, WorkspaceInvitationDoc } from "./repo/types";
+import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, QuestionOrderAssignmentDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc, WorkspaceInvitationDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -128,6 +128,8 @@ async function ensureIndexes(d: Db) {
     d.collection("image_assets").createIndex({ publicId: 1 }, { unique: true, name: "image_asset_public_id_unique" }),
     d.collection("image_assets").createIndex({ tenantId: 1, _id: -1 }, { name: "image_assets_by_tenant" }),
     d.collection("participants").createIndex({ token: 1 }, { unique: true, name: "token_unique" }),
+    d.collection("question_order_assignments").createIndex({ participantId: 1, surveyVersion: 1 }, { unique: true, name: "participant_version_order_unique" }),
+    d.collection("question_order_assignments").createIndex({ tenantId: 1, interviewId: 1, surveyVersion: 1 }, { name: "interview_version_orders" }),
     d.collection("interviews").createIndex({ tenantId: 1, updatedAt: -1 }, { name: "tenant_recent" }),
     d.collection("participants").createIndex({ tenantId: 1, interviewId: 1, createdAt: 1 }, { name: "tenant_people" }),
     d.collection("survey_versions").createIndex({ tenantId: 1, interviewId: 1, version: -1 }, { name: "tenant_versions" }),
@@ -173,6 +175,7 @@ export const col = {
   interviews: async (): Promise<Collection<InterviewDoc>> => (await db()).collection<InterviewDoc>("interviews"),
   versions: async (): Promise<Collection<SurveyVersionDoc>> => (await db()).collection<SurveyVersionDoc>("survey_versions"),
   participants: async (): Promise<Collection<ParticipantDoc>> => (await db()).collection<ParticipantDoc>("participants"),
+  questionOrderAssignments: async (): Promise<Collection<QuestionOrderAssignmentDoc>> => (await db()).collection<QuestionOrderAssignmentDoc>("question_order_assignments"),
   events: async (): Promise<Collection<EventDoc>> => (await db()).collection<EventDoc>("events"),
   analyticsRuns: async (): Promise<Collection<AnalyticsRunDoc>> => (await db()).collection<AnalyticsRunDoc>("analytics_runs"),
   questionnaireReviewDrafts: async (): Promise<Collection<QuestionnaireReviewDraftDoc>> => (await db()).collection<QuestionnaireReviewDraftDoc>("questionnaire_review_drafts"),

@@ -1,7 +1,8 @@
 import { progress } from "@/lib/format/answers";
 import { orderOptions } from "@/lib/format/option-order";
+import { assignQuestionOrder, presentedQuestionIds } from "@/lib/format/question-order";
 import { fail, json } from "@/lib/http";
-import { loadByToken } from "@/lib/repo";
+import { ensureQuestionOrderAssignment, loadByToken } from "@/lib/repo";
 import { looksLikeToken } from "@/lib/tokens";
 import { shouldRecordVisit } from "@/lib/visit";
 
@@ -12,9 +13,15 @@ export async function GET(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
   // Prefetch of the invite link must not count as the person opening it. Status changes only on save.
-  const ctx = await loadByToken(token, { touch: shouldRecordVisit(req) });
+  const respondentVisit = shouldRecordVisit(req);
+  const ctx = await loadByToken(token, { touch: respondentVisit });
   if (!ctx) return fail(404, "This link is not valid.");
   const { manifest } = ctx.version;
+  const proposedOrder = assignQuestionOrder(manifest, ctx.participant.id, ctx.version.version);
+  const questionOrderAssignment = respondentVisit && manifest.questionOrderGroups?.length
+    ? await ensureQuestionOrderAssignment({ tenantId: ctx.tenantId, interviewId: ctx.interview.id, participantId: ctx.participant.id, surveyVersion: ctx.version.version, ...proposedOrder })
+    : { ...proposedOrder, assignedAt: undefined };
+  const questionOrder = presentedQuestionIds(manifest, questionOrderAssignment);
   const questions = manifest.questions.map((question) => question.randomizeOptions
     ? { ...question, options: orderOptions({ options: question.options ?? [], randomizeOptions: true, fixedOptionValues: question.fixedOptionValues, participantId: ctx.participant.id, questionnaireVersion: String(ctx.version.version), questionId: question.id }) }
     : question);
@@ -26,6 +33,9 @@ export async function GET(req: Request, { params }: Ctx) {
     title: manifest.title,
     presentation: manifest.presentation ?? "all",
     sections: manifest.sections ?? [],
+    questionOrderGroups: manifest.questionOrderGroups ?? [],
+    questionOrder,
+    questionOrderAssignment: { algorithmVersion: questionOrderAssignment.algorithmVersion, groups: questionOrderAssignment.groups, assignedAt: questionOrderAssignment.assignedAt },
     questions,
     answers: ctx.participant.answers,
     recordGroups: ctx.participant.recordGroups ?? {},

@@ -31,7 +31,7 @@ function answerDisplay(q: Question, p: ExportParticipant): string {
 }
 
 /** The columns of the wide table, in order. Shared with the XLSX writer so both agree on layout. */
-export function wideColumns(manifest: Manifest): WideColumn[] {
+export function wideColumns(manifest: Manifest, surveyVersion: number): WideColumn[] {
   const eligibilityByParticipant = new WeakMap<ExportParticipant, Record<string, boolean>>();
   const currentEligibility = (p: ExportParticipant, questionId: string) => {
     let eligibility = eligibilityByParticipant.get(p);
@@ -56,12 +56,19 @@ export function wideColumns(manifest: Manifest): WideColumn[] {
       cols.push({ header: `${q.id} | note`, kind: "note", cell: (p) => p.answers[q.id]?.note ?? "" });
     }
   }
+  for (const group of manifest.questionOrderGroups ?? []) {
+    cols.push({
+      header: `${group.id} | assigned question order (survey v${surveyVersion})`,
+      kind: "presentation-order",
+      cell: (p) => p.questionOrderAssignments?.find((assignment) => assignment.surveyVersion === surveyVersion)?.groups[group.id]?.join(";") ?? "",
+    });
+  }
   return cols;
 }
 
 /** One row per participant; one answer column per question, plus a note column where notes are enabled. */
 export function wideTable(input: ExportInput): Table {
-  const cols = wideColumns(input.manifest);
+  const cols = wideColumns(input.manifest, input.surveyVersion);
   return {
     header: cols.map((c) => c.header),
     rows: sortedParticipants(input).map((p) => cols.map((c) => c.cell(p))),
@@ -80,6 +87,12 @@ export const LONG_HEADER = [
   "Answer value",
   "Presented option order",
   "Option order version",
+  "Row type",
+  "Assignment survey version",
+  "Assignment algorithm",
+  "Question-order group",
+  "Assigned question order",
+  "Assignment time",
   "Note",
   "Updated at",
 ];
@@ -116,9 +129,23 @@ export function longTable(input: ExportInput): Table {
         answered ? rawValue(a?.value) : "",
         a?.presentedOptionOrder?.join(";") ?? "",
         a?.optionOrderVersion === undefined ? "" : String(a.optionOrderVersion),
+        "answer",
+        "",
+        "",
+        "",
+        "",
+        "",
         note,
         a?.updatedAt ?? "",
       ]);
+    }
+    for (const assignment of p.questionOrderAssignments ?? []) {
+      for (const [groupId, ids] of Object.entries(assignment.groups)) {
+        rows.push([
+          p.name, p.status, "", "", "", "presentation-order", "", "", "", "", "",
+          "presentation", String(assignment.surveyVersion), assignment.algorithmVersion, groupId, ids.join(";"), assignment.assignedAt, "", "",
+        ]);
+      }
     }
   }
   return { header: [...LONG_HEADER], rows };

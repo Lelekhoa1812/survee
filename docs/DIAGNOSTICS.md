@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 92 codes. Severity is **error**, **warning** or **note**.
+There are 94 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -305,6 +305,14 @@ randomizeOptions applies only to unordered nominal single, multi, or select ques
 
 **How to fix:** Use randomizeOptions only when the choices have no inherent order. Mark fixedOptionValues explicitly; keep ordinal scales, ranks, and ordered bands in their intended order, and pretest the resulting questionnaire.
 
+### KQA224: Invalid question-order group
+
+Severity: **error**
+
+Question-order groups must be explicit, disjoint runs of adjacent, independent standard questions. Routing dependencies and guided sections rely on the authored manifest order.
+
+**How to fix:** Use groups of adjacent questions in the same section, list ids in manifest order, avoid custom or routed questions, and do not reference group questions from routing conditions. Keep guided presentation fixed.
+
 ### KQA220: Guided presentation needs sections
 
 Severity: **error**
@@ -322,6 +330,14 @@ Severity: **error**
 Guided presentation hides inactive sections and needs one stable wrapper for every question, inside the matching section list. Without those markers KQA cannot safely switch sections.
 
 **How to fix:** Mark each section container with data-kqa-question-list="<section-id>" and each complete question wrapper with data-kqa-question-id="<question-id>" as a direct child.
+
+### KQA322: Question-order group markup is incomplete
+
+Severity: **error**
+
+Question-order variation moves complete question blocks. Every group member must be an adjacent marked sibling in the same declared question list so interstitial content cannot become associated with a different question after movement.
+
+**How to fix:** Wrap each question and its supporting content in one data-kqa-question-id wrapper; place group wrappers next to each other as direct children of one matching data-kqa-question-list container.
 
 ### KQA300: Question has no control in the page
 

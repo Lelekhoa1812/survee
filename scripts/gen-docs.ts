@@ -40,6 +40,7 @@ const skillReferences: Record<string, string> = {
   "service-improvement.review.md": "examples/service-improvement.review.md",
   "personal-planning.kqa.html": "examples/personal-planning.kqa.html",
   "personal-planning.review.md": "examples/personal-planning.review.md",
+  "question-order-variation.kqa.html": "examples/question-order-variation.kqa.html",
 };
 const referencesDir = path.join(root, "kqa-questionnaire-author", "references");
 mkdirSync(referencesDir, { recursive: true });

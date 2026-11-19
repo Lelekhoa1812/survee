@@ -158,7 +158,7 @@ export async function xlsxExport(input: ExportInput): Promise<ExportFile> {
   writeSummary(wb, input, people);
 
   const wide = wideTable(input);
-  const cols = wideColumns(input.manifest);
+  const cols = wideColumns(input.manifest, input.surveyVersion);
   writeTable(wb, {
     name: "Wide",
     header: wide.header,
@@ -185,6 +185,24 @@ export async function xlsxExport(input: ExportInput): Promise<ExportFile> {
       header: records.header,
       rows: records.rows,
       wrap: indexesWhere(records.header, (header) => header === "Question" || header === "Field" || header === "Value"),
+      filter: true,
+    });
+  }
+
+  const presentationRows: CellValue[][] = [];
+  for (const person of sortedParticipants(input)) {
+    for (const assignment of person.questionOrderAssignments ?? []) {
+      for (const [groupId, questionIds] of Object.entries(assignment.groups)) {
+        presentationRows.push([person.id, person.name, assignment.surveyVersion, assignment.algorithmVersion, groupId, questionIds.join(";"), assignment.assignedAt]);
+      }
+    }
+  }
+  if (presentationRows.length) {
+    writeTable(wb, {
+      name: "Presentations",
+      header: ["Person id", "Person", "Survey version", "Assignment algorithm", "Question-order group", "Assigned question order", "Assigned at"],
+      rows: presentationRows,
+      wrap: new Set([1, 4, 5]),
       filter: true,
     });
   }

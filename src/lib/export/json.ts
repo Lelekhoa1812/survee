@@ -64,6 +64,7 @@ export function jsonExport(input: ExportInput): ExportFile {
         eligibility: Object.fromEntries(manifest.questions.map((q) => [q.id, eligibility[q.id] === false ? "inactive" : "eligible"])),
         answers,
         ...(Object.keys(recordGroups).length ? { recordGroups } : {}),
+        ...(p.questionOrderAssignments?.length ? { questionOrderAssignments: p.questionOrderAssignments } : {}),
       };
     }),
   };

@@ -97,6 +97,12 @@ export const sectionSchema = z.object({
   description: z.string().max(LIMITS.maxHelp).optional(),
 });
 
+/** Explicitly selected, adjacent questions whose presentation order may vary by respondent. */
+export const questionOrderGroupSchema = z.object({
+  id: idString,
+  questionIds: z.array(idString).min(2).max(LIMITS.maxQuestions),
+});
+
 /** A bounded scalar field repeated inside one respondent's record group. */
 export const repeatFieldSchema = z.object({
   id: idString,
@@ -237,12 +243,15 @@ export const manifestSchema = z.object({
   /** Opt-in step presentation. Omitted manifests retain the full-page experience. */
   presentation: z.enum(["all", "guided"]).optional(),
   sections: z.array(sectionSchema).max(LIMITS.maxSections).optional(),
+  /** Off by default. The checker restricts groups to adjacent, independent root questions. */
+  questionOrderGroups: z.array(questionOrderGroupSchema).max(Math.floor(LIMITS.maxQuestions / 2)).optional(),
   questions: z.array(questionSchema).min(1).max(LIMITS.maxQuestions),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;
 export type Question = z.infer<typeof questionSchema>;
 export type Section = z.infer<typeof sectionSchema>;
+export type QuestionOrderGroup = z.infer<typeof questionOrderGroupSchema>;
 export type Option = z.infer<typeof optionSchema>;
 export type Condition = z.infer<typeof conditionSchema>;
 export type RepeatField = z.infer<typeof repeatFieldSchema>;

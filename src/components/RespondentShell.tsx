@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AnswerMap, AnswerValue, Question, RepeatRecordMap, RepeatRecordOperation, RepeatRecordRow, Section } from "@/lib/format/schema";
+import type { AnswerMap, AnswerValue, Question, QuestionOrderGroup, RepeatRecordMap, RepeatRecordOperation, RepeatRecordRow, Section } from "@/lib/format/schema";
 import { displayValue } from "@/lib/format/answers";
 import { RESPONDENT_LOCALE_META, type RespondentLocale, type RespondentMessage, respondentBridgeMessages, respondentMessage, respondentTime } from "@/lib/respondent-locale";
 import { api, BrandMark, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
@@ -14,6 +14,9 @@ interface Loaded {
   version: number;
   title: string;
   sections?: Section[];
+  questionOrderGroups?: QuestionOrderGroup[];
+  questionOrder?: string[];
+  questionOrderAssignment?: { algorithmVersion: string; groups: Record<string, string[]>; assignedAt?: string };
   questions: Question[];
   answers: AnswerMap;
   recordGroups?: RepeatRecordMap;
@@ -92,6 +95,13 @@ export function buildQuestionNavigation(questions: Question[], sections: Section
     group.questions.push(question);
   }
   return groups;
+}
+
+function questionsInPresentationOrder(questions: Question[], order?: string[]): Question[] {
+  if (!order || order.length !== questions.length) return questions;
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  if (new Set(order).size !== questions.length || order.some((id) => !byId.has(id))) return questions;
+  return order.map((id) => byId.get(id)!);
 }
 
 function LocalePicker({ locale, label, onChange }: { locale: RespondentLocale; label: string; onChange: (value: string) => void }) {
@@ -206,7 +216,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
 
   const post = useCallback((msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ kqa: 1, ...msg }, "*"), []);
 
-  const questionGroups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current, t("otherQuestions"));
+  const displayedQuestions = questionsInPresentationOrder(questions.current, data?.questionOrder);
+  const questionGroups = buildQuestionNavigation(displayedQuestions, data?.sections ?? [], eligibility.current, t("otherQuestions"));
   const activeGuidedGroup = questionGroups.find((group) => group.id === guidedSectionId) ?? null;
   const activeGuidedIndex = activeGuidedGroup ? questionGroups.findIndex((group) => group.id === activeGuidedGroup.id) : -1;
   const guidedStepIssues = activeGuidedGroup
@@ -214,7 +225,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     : [];
 
   const goToGuidedGroup = useCallback((id: string, focusId?: string) => {
-    const groups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current, respondentMessage(locale, "otherQuestions"));
+    const groups = buildQuestionNavigation(questionsInPresentationOrder(questions.current, data?.questionOrder), data?.sections ?? [], eligibility.current, respondentMessage(locale, "otherQuestions"));
     const group = groups.find((item) => item.id === id);
     if (!group) return;
     setGuidedSectionId(group.id);
@@ -223,7 +234,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     post({ type: "guided", enabled: true, section: group.id });
     const target = focusId ?? group.questions[0]?.id;
     if (target) post({ type: "focus-question", id: target });
-  }, [data?.sections, locale, post]);
+  }, [data?.questionOrder, data?.sections, locale, post]);
 
   useEffect(() => {
     if (data?.presentation !== "guided") return;
@@ -448,7 +459,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         window.open(m.url, "_blank", "noopener,noreferrer");
       } else if (m.type === "hello") {
         if (typeof m.lang === "string" && m.lang) setQuestionnaireLanguage(m.lang);
-        post({ type: "init", questions: questions.current, answers: answers.current, recordGroups: recordGroupsRef.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided", guidedSection: guidedSectionId, locale, messages: respondentBridgeMessages(locale) });
+        post({ type: "init", questions: questions.current, questionOrderGroups: data?.questionOrderGroups ?? [], questionOrderAssignment: data?.questionOrderAssignment, answers: answers.current, recordGroups: recordGroupsRef.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided", guidedSection: guidedSectionId, locale, messages: respondentBridgeMessages(locale) });
         setFrameReady(true);
       } else if (m.type === "set" && typeof m.id === "string") {
         const part: { value?: unknown; note?: unknown } = {};
@@ -646,13 +657,13 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     else post({ type: "focus-question", id: lengthDraftFocusId });
   };
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? t("locked") : t("autosaveOn"), saving: t("saving"), saved: t("saved"), error: t("retrying"), failed: t("notSaved"), offline: hasUnsavedChanges ? t("offlinePending") : t("offline") };
-  const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
+  const reviewQuestions = displayedQuestions.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
-  const retainedAnswers = questions.current.filter((question) => eligibility.current[question.id] === false && (
+  const retainedAnswers = displayedQuestions.filter((question) => eligibility.current[question.id] === false && (
     hasValue(answers.current[question.id]?.value) || Boolean(answers.current[question.id]?.note)
   ));
-  const retainedRecordGroups = questions.current.filter((question) => question.type === "repeat" && eligibility.current[question.id] === false && (recordGroups[question.id] ?? []).some((row) => !row.deletedAt));
-  const currentQuestionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current, t("otherQuestions"));
+  const retainedRecordGroups = displayedQuestions.filter((question) => question.type === "repeat" && eligibility.current[question.id] === false && (recordGroups[question.id] ?? []).some((row) => !row.deletedAt));
+  const currentQuestionGroups = buildQuestionNavigation(displayedQuestions, data.sections ?? [], eligibility.current, t("otherQuestions"));
   const isQuestionAnswered = (question: Question) => question.type === "repeat"
     ? (recordGroups[question.id] ?? []).some((row) => !row.deletedAt)
     : hasValue(answers.current[question.id]?.value);

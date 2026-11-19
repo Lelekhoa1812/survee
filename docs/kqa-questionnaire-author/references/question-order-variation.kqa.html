@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Question order variation example</title>
+  <script type="application/json" id="kqa-manifest">
+  {
+    "format": "kqa/1",
+    "title": "Question order variation example",
+    "description": "A small demonstration of explicitly grouped, independent questions.",
+    "sections": [{ "id": "work", "title": "Your work" }],
+    "questionOrderGroups": [{ "id": "work-context", "questionIds": ["process", "support"] }],
+    "questions": [
+      { "id": "process", "type": "longtext", "section": "work", "label": "Thinking about your recent work, what part of the process took the most effort?", "maxLength": 1200 },
+      { "id": "support", "type": "longtext", "section": "work", "label": "What information or support would have helped you do that work?", "maxLength": 1200 },
+      { "id": "anything-else", "type": "longtext", "section": "work", "label": "Is there anything else you would like the team to understand?", "maxLength": 1200 }
+    ]
+  }
+  </script>
+  <style>
+    :root { color-scheme: light dark; font: 17px/1.55 system-ui, sans-serif; }
+    body { max-width: 780px; margin: 0 auto; padding: 1.25rem; }
+    [data-kqa-question-id] { margin: 1rem 0; padding: 1rem; border: 1px solid #8888; border-radius: 12px; }
+    label { display: grid; gap: .55rem; }
+    textarea { width: 100%; min-height: 8rem; box-sizing: border-box; font: inherit; }
+    :focus-visible { outline: 3px solid #3978c5; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Your recent work</h1>
+    <p>This example varies only two independent questions. Their order stays stable when you return to this questionnaire version.</p>
+    <div data-kqa-question-list="work">
+      <section data-kqa-question-id="process">
+        <label for="process">Thinking about your recent work, what part of the process took the most effort?
+          <textarea id="process" data-kqa="process" maxlength="1200"></textarea>
+        </label>
+      </section>
+      <section data-kqa-question-id="support">
+        <label for="support">What information or support would have helped you do that work?
+          <textarea id="support" data-kqa="support" maxlength="1200"></textarea>
+        </label>
+      </section>
+      <section data-kqa-question-id="anything-else">
+        <label for="anything-else">Is there anything else you would like the team to understand?
+          <textarea id="anything-else" data-kqa="anything-else" maxlength="1200"></textarea>
+        </label>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

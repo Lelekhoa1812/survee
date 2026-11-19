@@ -834,6 +834,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.questions = m.questions || [];
       state.qmap = {};
       state.questions.forEach(function (x) { state.qmap[x.id] = x; });
+      applyQuestionOrderGroups(m.questionOrderGroups, m.questionOrderAssignment);
       reorderResponseOptions();
       state.questions.forEach(function (question) {
         if (question.type === "text" || question.type === "longtext") controls(question.id).forEach(function (control) { control.removeAttribute("maxlength"); });
@@ -935,6 +936,56 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         var row = rows.find(function (item) { return item.value === option.value; });
         if (row) parent.appendChild(row.label);
       });
+    });
+  }
+  function applyQuestionOrderGroups(groups, assignment) {
+    if (!Array.isArray(groups) || !assignment || !assignment.groups) return;
+    groups.forEach(function (group) {
+      if (!group || typeof group.id !== "string" || !Array.isArray(group.questionIds) || group.questionIds.length < 2) return;
+      var assigned = assignment.groups[group.id];
+      if (!Array.isArray(assigned) || assigned.length !== group.questionIds.length) return;
+      var expected = new Set(group.questionIds);
+      if (expected.size !== group.questionIds.length || new Set(assigned).size !== expected.size || assigned.some(function (id) { return !expected.has(id); })) return;
+      var section = state.qmap[group.questionIds[0]] && state.qmap[group.questionIds[0]].section || "";
+      if (group.questionIds.some(function (id) { return !state.qmap[id] || (state.qmap[id].section || "") !== section || state.qmap[id].when || state.qmap[id].custom === true; })) return;
+      var blocks = {};
+      var allBlocks = document.querySelectorAll("[data-kqa-question-id]");
+      for (var i = 0; i < group.questionIds.length; i++) {
+        var id = group.questionIds[i];
+        var matched = [];
+        for (var j = 0; j < allBlocks.length; j++) if (allBlocks[j].getAttribute("data-kqa-question-id") === id) matched.push(allBlocks[j]);
+        if (matched.length !== 1) return;
+        blocks[id] = matched[0];
+      }
+      var parent = blocks[group.questionIds[0]].parentElement;
+      if (!parent || parent.getAttribute("data-kqa-question-list") !== section || group.questionIds.some(function (id) { return blocks[id].parentElement !== parent; })) return;
+      var wrappersInDom = [];
+      var wrapperPositions = [];
+      for (var k = 0; k < parent.children.length; k++) {
+        var childId = parent.children[k].getAttribute("data-kqa-question-id");
+        if (childId !== null && expected.has(childId)) { wrappersInDom.push(childId); wrapperPositions.push(k); }
+      }
+      var wrapperRun = wrapperPositions.length === group.questionIds.length && wrapperPositions[wrapperPositions.length - 1] - wrapperPositions[0] + 1 === wrapperPositions.length;
+      var childNodes = Array.prototype.slice.call(parent.childNodes);
+      var nodePositions = group.questionIds.map(function (id) { return childNodes.indexOf(blocks[id]); });
+      var onlyTriviaBetween = nodePositions.every(function (position) { return position >= 0; });
+      if (onlyTriviaBetween) {
+        var start = Math.min.apply(Math, nodePositions);
+        var end = Math.max.apply(Math, nodePositions);
+        onlyTriviaBetween = childNodes.slice(start + 1, end).every(function (node) {
+          if (node.nodeType === 1) return expected.has(node.getAttribute("data-kqa-question-id"));
+          if (node.nodeType === 3) return !node.nodeValue.trim();
+          return node.nodeType === 8;
+        });
+      }
+      if (!wrapperRun || !onlyTriviaBetween || wrappersInDom.length !== group.questionIds.length || wrappersInDom.some(function (id, index) { return id !== group.questionIds[index]; })) return;
+      var placeholders = [];
+      group.questionIds.forEach(function (id) {
+        var placeholder = document.createComment("kqa-order");
+        parent.replaceChild(placeholder, blocks[id]);
+        placeholders.push(placeholder);
+      });
+      assigned.forEach(function (id, index) { parent.replaceChild(blocks[id], placeholders[index]); });
     });
   }
   function controlsForQuestion(id) { return controls(id); }

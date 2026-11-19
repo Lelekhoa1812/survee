@@ -1,4 +1,5 @@
 import type { AnswerMap, Manifest, RepeatRecordMap } from "../format/schema";
+import type { QuestionOrderAssignmentView } from "../repo/types";
 
 export type ExportFormat = "json" | "csv-wide" | "csv-long" | "xlsx" | "md";
 export const EXPORT_FORMATS: ExportFormat[] = ["json", "csv-wide", "csv-long", "xlsx", "md"];
@@ -15,6 +16,7 @@ export interface ExportParticipant {
   submittedAt?: string; // ISO
   answers: AnswerMap;
   recordGroups?: RepeatRecordMap;
+  questionOrderAssignments?: QuestionOrderAssignmentView[];
 }
 
 export interface ExportInput {

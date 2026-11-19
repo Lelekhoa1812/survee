@@ -177,6 +177,25 @@ export interface ParticipantDoc {
   submittedAt?: Date;
 }
 
+/** Immutable question-order assignment delivered to one participant for one survey version. */
+export interface QuestionOrderAssignmentDoc {
+  _id: ObjectId;
+  tenantId: string;
+  interviewId: ObjectId;
+  participantId: ObjectId;
+  surveyVersion: number;
+  algorithmVersion: string;
+  groups: Record<string, string[]>;
+  assignedAt: Date;
+}
+
+export interface QuestionOrderAssignmentView {
+  surveyVersion: number;
+  algorithmVersion: string;
+  groups: Record<string, string[]>;
+  assignedAt: string;
+}
+
 /** collection: events. A light audit trail, expires after 180 days. */
 export interface EventDoc {
   _id: ObjectId;
@@ -345,6 +364,7 @@ export interface ParticipantView {
   status: ParticipantStatus;
   answers: AnswerMap;
   recordGroups?: RepeatRecordMap;
+  questionOrderAssignments?: QuestionOrderAssignmentView[];
   revision: number;
   createdAt: string;
   updatedAt: string;
