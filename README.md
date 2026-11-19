@@ -30,6 +30,7 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/examples/`](docs/examples) | Real questionnaires converted to the format |
 | [`docs/MCP.md`](docs/MCP.md) | How an agent operates a live interview (not how to write the HTML) |
 | [`docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | Reproducible review cases, scoring contract and evidence limits |
+| [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification and boundary evaluation |
 
 In the app, **Format guide** has a one-click **Copy everything for an AI agent** button, and `/api/docs/bundle.md` serves the same bundle as a single markdown document an agent can fetch.
 
