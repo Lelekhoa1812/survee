@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kqa.invalid/schemas/package-selection-benchmark-v1.json",
+  "title": "KQA package selection benchmark result",
+  "type": "object",
+  "required": ["benchmarkVersion", "model", "runDate", "promptVersion", "packageLibraryVersion", "cases"],
+  "properties": {
+    "benchmarkVersion": { "const": "kqa-package-selection/1" },
+    "model": { "type": "string", "minLength": 1 },
+    "runDate": { "type": "string", "format": "date" },
+    "promptVersion": { "type": "string", "minLength": 1 },
+    "packageLibraryVersion": { "type": "string", "minLength": 1 },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "decision"],
+        "properties": {
+          "caseId": { "type": "string", "minLength": 1 },
+          "decision": {
+            "type": "object",
+            "required": ["action", "packageId", "candidatePackageIds", "clarificationSlots", "gates"],
+            "properties": {
+              "action": { "enum": ["recommend", "clarify", "out_of_scope"] },
+              "packageId": { "type": ["string", "null"] },
+              "candidatePackageIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "clarificationSlots": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "gates": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
