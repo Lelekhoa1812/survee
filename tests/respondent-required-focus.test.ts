@@ -76,6 +76,38 @@ describe("respondent required-answer recovery", () => {
     expect(Array.from(review.querySelectorAll("button")).some((button) => button.textContent?.includes("Submit answers"))).toBe(false);
   });
 
+  it("keeps the review open and maps server validation errors to their answers", async () => {
+    state.api.mockImplementation(async (url: string) => url.endsWith("/submit")
+      ? { ok: false, status: 422, data: { error: "Some answers need attention.", missing: [], invalidSelections: [{ id: "channels", selected: 2, maximum: 1 }] } }
+      : {
+        ok: true, status: 200, data: {
+          ok: true,
+          participant: { name: "Ada", status: "in_progress" },
+          interview: { name: "Study", status: "open" },
+          version: 7,
+          title: "Study questions",
+          questions: [{ id: "channels", type: "multi", label: "Which channels?", options: [{ value: "email", label: "Email" }, { value: "phone", label: "Phone" }] }],
+          answers: { channels: { value: ["email", "phone"], updatedAt: "now" } },
+        },
+      });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const reviewButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!;
+    await act(async () => reviewButton.click());
+    const submit = Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!;
+    await act(async () => {
+      submit.click();
+      await Promise.resolve();
+    });
+    const review = host.querySelector("[role=dialog]")!;
+    expect(review).not.toBeNull();
+    expect(review.querySelector('[role="alert"]')?.textContent).toContain("Some answers need attention.");
+    expect(review.textContent).toContain("Choose no more than 1 option.");
+    expect(review.textContent).toContain("Email; Phone");
+  });
+
   it("lists a saved multi-select answer that exceeds its current cap", async () => {
     state.api.mockResolvedValueOnce({
       ok: true, status: 200, data: {

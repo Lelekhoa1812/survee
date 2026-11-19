@@ -31,6 +31,8 @@ export function RespondentShell({ token }: { token: string }) {
   const [counts, setCounts] = useState({ answered: 0, total: 0, needsAttention: [] as { question: Question; reason: string }[] });
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitProblems, setSubmitProblems] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState("");
   const [frameReady, setFrameReady] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -156,6 +158,13 @@ export function RespondentShell({ token }: { token: string }) {
 
   const queue = useCallback((id: string, part: { value?: unknown; note?: unknown }) => {
     if (lockedRef.current) return;
+    setSubmitProblems((current) => {
+      if (!(id in current)) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    setSubmitError("");
     const cur = answers.current[id] ?? { updatedAt: new Date().toISOString() };
     const next = { ...cur };
     if ("value" in part) { if (hasValue(part.value)) next.value = part.value as never; else delete next.value; }
@@ -231,12 +240,14 @@ export function RespondentShell({ token }: { token: string }) {
     setSubmitting(false);
     if (res.ok) {
       setConfirming(false);
+      setSubmitProblems({});
+      setSubmitError("");
       applyLock(true);
       setData((d) => (d ? { ...d, participant: { ...d.participant, status: "submitted", submittedAt: res.data.submittedAt } } : d));
       setSave("idle");
     } else {
-      setConfirming(false);
       if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
+        setConfirming(false);
         pending.current = {};
         refreshRequiredRef.current = true;
         setRefreshRequired(true);
@@ -245,8 +256,17 @@ export function RespondentShell({ token }: { token: string }) {
         toast("This questionnaire was updated. Reload to continue; your saved answers are safe.", "err");
         return;
       }
+      if (res.status === 422) {
+        const problems: Record<string, string> = {};
+        for (const item of res.data.missing ?? []) problems[item.id] = "Answer this required question.";
+        for (const item of res.data.invalidSelections ?? []) problems[item.id] = `Choose no more than ${item.maximum} ${item.maximum === 1 ? "option" : "options"}.`;
+        setSubmitProblems(problems);
+        setSubmitError(res.data.error ?? "Some answers need attention before you can submit. Review the marked questions.");
+        recount();
+        return;
+      }
+      setConfirming(false);
       toast(res.data.error ?? "Could not submit.", "err");
-      if (res.status === 422) recount();
     }
   }
 
@@ -324,13 +344,14 @@ export function RespondentShell({ token }: { token: string }) {
         >
           <div className="review-content">
             <p className="muted">Check the answers below. After submission, your answers are locked; your host can reopen them if you need a change.</p>
-            {counts.needsAttention.length ? (
-              <p className="review-problems" role="status">Resolve the marked answers before submitting. Choose Answer or Edit to return to that question.</p>
+            {counts.needsAttention.length || submitError ? (
+              <p className="review-problems" role="alert">{submitError || "Resolve the marked answers before submitting."} Choose Answer or Edit to return to that question.</p>
             ) : null}
             <div className="review-list">
               {reviewQuestions.map((question) => {
                 const answer = answers.current[question.id];
                 const attention = counts.needsAttention.find((item) => item.question.id === question.id);
+                const problem = attention?.reason ?? submitProblems[question.id];
                 const answered = hasValue(answer?.value);
                 return (
                   <section className="review-entry" key={question.id}>
@@ -338,7 +359,7 @@ export function RespondentShell({ token }: { token: string }) {
                       <h3>{question.label}</h3>
                       <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{answered ? displayValue(question, answer?.value) : "Not answered"}</p>
                       {answer?.note && <p className="review-note"><strong>Note:</strong> {answer.note}</p>}
-                      {attention && <p className="review-problem" role="alert">{attention.reason}</p>}
+                      {problem && <p className="review-problem">{problem}</p>}
                     </div>
                     <button className="btn" disabled={submitting} onClick={() => { focusQuestionAfterClose.current = question.id; setConfirming(false); }}>{answered ? "Edit" : "Answer"}</button>
                   </section>
