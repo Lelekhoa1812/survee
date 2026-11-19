@@ -20,6 +20,10 @@ describe("agent documentation bundle", () => {
     ["REPEATABLE_RECORD_SELECTION_BENCHMARK.md", "evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md"],
     ["repeatable-record-selection-cases.json", "evals/repeatable-record-selection-cases.json"],
     ["repeatable-record-selection.schema.json", "evals/repeatable-record-selection.schema.json"],
+    ["INTERACTION_PATTERN_SELECTION_BENCHMARK.md", "evals/INTERACTION_PATTERN_SELECTION_BENCHMARK.md"],
+    ["interaction-pattern-selection-cases.json", "evals/interaction-pattern-selection-cases.json"],
+    ["interaction-pattern-selection.schema.json", "evals/interaction-pattern-selection.schema.json"],
+    ["eval-interaction-pattern-selection.mjs", "evals/eval-interaction-pattern-selection.mjs"],
     ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
     ["package-draft-cases.json", "evals/package-draft-cases.json"],
     ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
@@ -180,10 +184,26 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("This is a public development set, not a held-out benchmark");
   });
 
+  it("publishes the interaction-pattern selection benchmark and its development corpus", async () => {
+    expect(DOCS.some((doc) => doc.slug === "interaction-pattern-selection-benchmark" && doc.file === "evals/INTERACTION_PATTERN_SELECTION_BENCHMARK.md")).toBe(true);
+    const benchmark = await readAsset("evals/interaction-pattern-selection-cases.json");
+    const schema = await readAsset("evals/interaction-pattern-selection.schema.json");
+    expect(JSON.parse(benchmark!.body).benchmarkVersion).toBe("kqa-interaction-pattern-selection/1");
+    expect(JSON.parse(benchmark!.body).cases).toHaveLength(21);
+    expect(JSON.parse(schema!.body).properties.benchmarkVersion.const).toBe("kqa-interaction-pattern-selection/1");
+    expect(JSON.parse(schema!.body).properties.cases.items.properties.decision.properties.presentation.enum).toEqual(["all", "guided", "guided-question", null]);
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("<!-- evals/INTERACTION_PATTERN_SELECTION_BENCHMARK.md -->");
+    expect(bundle).toContain("not a held-out benchmark");
+  });
+
   it("documents package and repeat-pattern evaluation in the portable skill", async () => {
     const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
     expect(skill).toContain("PACKAGE_SELECTION_BENCHMARK.md");
     expect(skill).toContain("REPEATABLE_RECORD_SELECTION_BENCHMARK.md");
+    expect(skill).toContain("INTERACTION_PATTERN_SELECTION_BENCHMARK.md");
+    expect(await readDoc("kqa-questionnaire-author/references/eval-interaction-pattern-selection.mjs")).toContain("interaction-pattern-selection-cases.json");
+    expect(await readDoc("kqa-questionnaire-author/references/interaction-pattern-selection-cases.json")).toContain('"benchmarkVersion": "kqa-interaction-pattern-selection/1"');
     expect(await readDoc("kqa-questionnaire-author/references/package-selection-cases.json")).toContain('"benchmarkVersion": "kqa-package-selection/6"');
     expect(await readDoc("kqa-questionnaire-author/references/repeatable-record-selection-cases.json")).toContain('"benchmarkVersion": "kqa-repeatable-record-selection/2"');
   });

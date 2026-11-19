@@ -1,0 +1,412 @@
+{
+  "benchmarkVersion": "kqa-interaction-pattern-selection/1",
+  "track": "interaction-pattern-selection",
+  "status": "public-development-fixture",
+  "description": "Synthetic development cases testing whether authoring agents select KQA interaction patterns that fit the decision and respondent context, clarify material unknowns, or identify unsupported uses.",
+  "allowedActions": [
+    "recommend",
+    "clarify",
+    "out_of_scope"
+  ],
+  "allowedPatterns": [
+    "routing",
+    "question-order-variation",
+    "option-randomization",
+    "ranking",
+    "independent-ratings",
+    "repeat",
+    "required-answer",
+    "optional-answer"
+  ],
+  "allowedClarificationSlots": [
+    "decision_focus",
+    "respondent_context",
+    "device_or_accessibility_evidence",
+    "questionnaire_length",
+    "sequence_effects",
+    "comparison_design",
+    "rank_construct",
+    "option_order_effect",
+    "requiredness_basis",
+    "reference_period",
+    "repeated_unit",
+    "record_cap",
+    "live_operation_boundary"
+  ],
+  "allowedGates": [
+    "respondent_pretest",
+    "pretest_navigation_and_recovery",
+    "retain_inactive_answers_and_disclose",
+    "full_order_of_2_to_8",
+    "avoid_forced_rank",
+    "preserve_ordered_categories",
+    "explicit_fixed_option_values",
+    "retain_order_provenance",
+    "predeclare_comparison_outcomes",
+    "requiredness_only_for_essential_answers",
+    "sensitive_disclosure_optional",
+    "bounded_repeat_and_subset_rule",
+    "not_a_live_log",
+    "not_individual_decision_use",
+    "not_adaptive_live_interview",
+    "preserve_logical_sequence"
+  ],
+  "cases": [
+    {
+      "id": "short-service-feedback",
+      "brief": "A service owner needs four short, independent questions about a recent interaction. They fit on one mobile screen, there are no conditional follow-ups, and no respondent evidence suggests that extra steps would help.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "long-multi-section-consultation",
+      "brief": "A community consultation has 24 questions grouped into five coherent topics. Respondents can complete it at their own pace, and a small usability test found clear section headings and Back/Continue navigation helpful. A full question-by-question pager made it harder to keep the topic context.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "pretest_navigation_and_recovery",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "guided"
+      }
+    },
+    {
+      "id": "single-task-mobile-flow",
+      "brief": "A short mobile questionnaire asks people to describe one recent, emotionally neutral service task. Respondent task testing found that one prompt at a time reduced missed instructions without increasing abandonment; the items do not require comparing answers across a page.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "pretest_navigation_and_recovery",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "guided-question"
+      }
+    },
+    {
+      "id": "guided-mode-without-evidence",
+      "brief": "A host requests one question per page because it looks modern. The questionnaire has six short, unrelated questions. The intended respondents, devices, completion context, and any burden or usability evidence have not been established.",
+      "gold": {
+        "action": "clarify",
+        "patterns": [],
+        "clarificationSlots": [
+          "respondent_context",
+          "device_or_accessibility_evidence"
+        ],
+        "requiredGates": [
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    },
+    {
+      "id": "relevant-follow-up",
+      "brief": "Only respondents who say they used a support channel can answer which channel they used. The follow-up has no meaning for others. The host will disclose the conditional path and has tested that respondents can review and correct answers after a route changes.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "routing"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "retain_inactive_answers_and_disclose",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "all-respondents-can-answer",
+      "brief": "A service asks every respondent how clear the instructions were, including people who did not use the service. The host proposes hiding the question from non-users, although they can answer that it was not applicable.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [
+          "routing"
+        ],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "strict-priority-order",
+      "brief": "A team has six feasible improvement options and must allocate one fixed budget. The decision requires each respondent's complete relative ordering of all six, ties are intentionally disallowed, the respondent group knows every option, and the order itself is the construct.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "ranking"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "full_order_of_2_to_8",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "separate-service-dimensions",
+      "brief": "A service team needs separate judgments of access, clarity, timeliness, and follow-up. A person may rate several dimensions equally or find some inapplicable. No forced trade-off is part of the decision.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "independent-ratings"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "avoid_forced_rank",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [
+          "ranking"
+        ],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "rank-more-than-native-limit",
+      "brief": "A host wants respondents to rank 12 maintenance initiatives in a native KQA rank question. All 12 cannot be reduced without changing the decision; ties should be allowed and respondents may not know every initiative.",
+      "gold": {
+        "action": "clarify",
+        "patterns": [],
+        "clarificationSlots": [
+          "decision_focus",
+          "rank_construct"
+        ],
+        "requiredGates": [
+          "avoid_forced_rank",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    },
+    {
+      "id": "unordered-option-position-concern",
+      "brief": "A long unordered list of nominal product discovery channels may be affected by position. The host wants to opt into per-respondent option rotation and can retain the order shown. \u201cOther\u201d and \u201cNone of these\u201d must remain in their authored positions by their explicit stable option values.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "option-randomization"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "explicit_fixed_option_values",
+          "retain_order_provenance",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "ordered-frequency-categories",
+      "brief": "A response list ranges from never to daily. The host is concerned about first-option effects and proposes randomizing all choices.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "preserve_ordered_categories",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [
+          "option-randomization"
+        ],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "question-order-experiment",
+      "brief": "Researchers want to compare whether two adjacent, independent, non-sensitive questions produce different answers when asked first versus second. They will predeclare the comparison and analysis, keep each question's meaning unchanged, and record assigned order.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "question-order-variation"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "predeclare_comparison_outcomes",
+          "retain_order_provenance",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "ordered-safety-sequence",
+      "brief": "An operations questionnaire first defines a reference period, then asks about a specific handoff, then asks for an improvement idea. The host proposes varying question order to prevent bias, but the later questions depend on the earlier context.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "preserve_logical_sequence",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [
+          "question-order-variation"
+        ],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "essential-eligibility-question",
+      "brief": "A program can only route a respondent to the correct service information if it knows whether they are an existing participant. The answer is a low-risk eligibility fact; the host will explain why it is needed and provide a valid skip route when the respondent does not know.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "routing",
+          "required-answer"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "requiredness_only_for_essential_answers",
+          "retain_inactive_answers_and_disclose",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "sensitive-personal-disclosure",
+      "brief": "A personal reflection questionnaire asks about a sensitive health experience that is not needed for the respondent's self-selected goal. The host proposes making it required to improve completion rates.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "optional-answer"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "sensitive_disclosure_optional",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [
+          "required-answer"
+        ],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "repeatable-own-goals",
+      "brief": "A person preparing for a coaching conversation may list up to four self-chosen goals. The same small optional fields apply to each goal, zero goals is a valid response, and the host will explain the limit. No third-party preferences are being collected.",
+      "gold": {
+        "action": "recommend",
+        "patterns": [
+          "repeat"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "bounded_repeat_and_subset_rule",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": "all"
+      }
+    },
+    {
+      "id": "unbounded-maintenance-log",
+      "brief": "Operations wants every worker to add a record whenever equipment changes state during a shift and expects the form to alert the next crew about open work.",
+      "gold": {
+        "action": "out_of_scope",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "not_a_live_log"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    },
+    {
+      "id": "adaptive-moderator-probing",
+      "brief": "A researcher wants KQA to listen to each answer in real time, generate follow-up probes, and adapt the interview dynamically during a moderated interview.",
+      "gold": {
+        "action": "out_of_scope",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "not_adaptive_live_interview"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    },
+    {
+      "id": "individual-employee-ranking",
+      "brief": "A manager wants employees to rank named coworkers so the employer can identify who should be disciplined. They ask for a ranking question and a guided flow to make it faster.",
+      "gold": {
+        "action": "out_of_scope",
+        "patterns": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "not_individual_decision_use"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    },
+    {
+      "id": "unclear-requiredness",
+      "brief": "The host wants every question in a personal planning questionnaire to be required, but has not said which answers are essential, how unanswered items affect the outcome, or whether sensitive questions can be skipped.",
+      "gold": {
+        "action": "clarify",
+        "patterns": [],
+        "clarificationSlots": [
+          "decision_focus",
+          "requiredness_basis"
+        ],
+        "requiredGates": [
+          "requiredness_only_for_essential_answers",
+          "sensitive_disclosure_optional"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    },
+    {
+      "id": "sequence-study-mode-confound",
+      "brief": "A team wants to compare question order, but half the respondents would use a full-page flow and half a guided flow, and mobile versus desktop assignment is also uncontrolled. The analysis plan does not account for these differences.",
+      "gold": {
+        "action": "clarify",
+        "patterns": [],
+        "clarificationSlots": [
+          "sequence_effects",
+          "comparison_design"
+        ],
+        "requiredGates": [
+          "predeclare_comparison_outcomes",
+          "respondent_pretest"
+        ],
+        "prohibitedPatterns": [],
+        "presentation": null
+      }
+    }
+  ],
+  "allowedPresentations": [
+    "all",
+    "guided",
+    "guided-question"
+  ]
+}

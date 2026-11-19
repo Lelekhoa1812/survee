@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kqa.invalid/schemas/interaction-pattern-selection-v1.json",
+  "title": "KQA interaction pattern selection benchmark result",
+  "type": "object",
+  "required": [
+    "benchmarkVersion",
+    "model",
+    "runDate",
+    "skillVersion",
+    "cases"
+  ],
+  "properties": {
+    "benchmarkVersion": {
+      "const": "kqa-interaction-pattern-selection/1"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "skillVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "caseId",
+          "decision"
+        ],
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision": {
+            "type": "object",
+            "required": [
+              "action",
+              "presentation",
+              "patterns",
+              "clarificationSlots",
+              "gates",
+              "rationale"
+            ],
+            "properties": {
+              "action": {
+                "enum": [
+                  "recommend",
+                  "clarify",
+                  "out_of_scope"
+                ]
+              },
+              "patterns": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "routing",
+                    "question-order-variation",
+                    "option-randomization",
+                    "ranking",
+                    "independent-ratings",
+                    "repeat",
+                    "required-answer",
+                    "optional-answer"
+                  ]
+                }
+              },
+              "clarificationSlots": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "decision_focus",
+                    "respondent_context",
+                    "device_or_accessibility_evidence",
+                    "questionnaire_length",
+                    "sequence_effects",
+                    "comparison_design",
+                    "rank_construct",
+                    "option_order_effect",
+                    "requiredness_basis",
+                    "reference_period",
+                    "repeated_unit",
+                    "record_cap",
+                    "live_operation_boundary"
+                  ]
+                }
+              },
+              "gates": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "respondent_pretest",
+                    "pretest_navigation_and_recovery",
+                    "retain_inactive_answers_and_disclose",
+                    "full_order_of_2_to_8",
+                    "avoid_forced_rank",
+                    "preserve_ordered_categories",
+                    "explicit_fixed_option_values",
+                    "retain_order_provenance",
+                    "predeclare_comparison_outcomes",
+                    "requiredness_only_for_essential_answers",
+                    "sensitive_disclosure_optional",
+                    "bounded_repeat_and_subset_rule",
+                    "not_a_live_log",
+                    "not_individual_decision_use",
+                    "not_adaptive_live_interview",
+                    "preserve_logical_sequence"
+                  ]
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": ".*\\S.*"
+              },
+              "presentation": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "all",
+                  "guided",
+                  "guided-question",
+                  null
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "recommend"
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "patterns": {
+                      "minItems": 1
+                    },
+                    "clarificationSlots": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "clarify"
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "patterns": {
+                      "maxItems": 0
+                    },
+                    "clarificationSlots": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "out_of_scope"
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "patterns": {
+                      "maxItems": 0
+                    },
+                    "clarificationSlots": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

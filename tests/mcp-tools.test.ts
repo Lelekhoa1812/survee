@@ -253,11 +253,11 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/questionnaire-authoring-cases.json", "references/PACKAGE_DRAFT_BENCHMARK.md", "references/package-draft-cases.json", "references/package-draft-results.schema.json", "references/AUTHORING_TRUST_BOUNDARY_EVAL.md", "references/AUTHORING_TRUST_BOUNDARY_CASES.json", "references/starter.kqa.html", "references/conditional-follow-up.kqa.html", "references/routed-follow-up.kqa.html", "references/repeated-assets.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/industrial-operations.kqa.html", "references/industrial-operations.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
     const skillFiles = body.result.structuredContent.files;
     const skillPaths = new Set(skillFiles.map((file) => file.path));
-    for (const name of ["PACKAGE_SELECTION_BENCHMARK.md", "package-selection-cases.json", "package-selection.schema.json", "REPEATABLE_RECORD_SELECTION_BENCHMARK.md", "repeatable-record-selection-cases.json", "repeatable-record-selection.schema.json"]) {
+    for (const name of ["PACKAGE_SELECTION_BENCHMARK.md", "package-selection-cases.json", "package-selection.schema.json", "REPEATABLE_RECORD_SELECTION_BENCHMARK.md", "repeatable-record-selection-cases.json", "repeatable-record-selection.schema.json", "INTERACTION_PATTERN_SELECTION_BENCHMARK.md", "interaction-pattern-selection-cases.json", "interaction-pattern-selection.schema.json", "eval-interaction-pattern-selection.mjs"]) {
       expect(skillPaths).toContain(`references/${name}`);
     }
     const availablePaths = new Set(body.result.structuredContent.files.map((file) => file.path));
-    const benchmarkGuides = new Set(["references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/PACKAGE_SELECTION_BENCHMARK.md", "references/REPEATABLE_RECORD_SELECTION_BENCHMARK.md", "references/PACKAGE_DRAFT_BENCHMARK.md"]);
+    const benchmarkGuides = new Set(["references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/PACKAGE_SELECTION_BENCHMARK.md", "references/REPEATABLE_RECORD_SELECTION_BENCHMARK.md", "references/INTERACTION_PATTERN_SELECTION_BENCHMARK.md", "references/PACKAGE_DRAFT_BENCHMARK.md"]);
     for (const file of body.result.structuredContent.files.filter((item) => benchmarkGuides.has(item.path))) {
       for (const [, rawTarget] of file.content.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
         const target = rawTarget.split("#")[0];
@@ -269,6 +269,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.files.find((file) => file.path === "references/PACKAGE_DRAFT_BENCHMARK.md")?.content).toContain("two independent reviewers");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/PACKAGE_SELECTION_BENCHMARK.md")?.content).toContain("package-selection-cases.json");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/REPEATABLE_RECORD_SELECTION_BENCHMARK.md")?.content).toContain("repeatable-record-selection.schema.json");
+    expect(body.result.structuredContent.files.find((file) => file.path === "references/INTERACTION_PATTERN_SELECTION_BENCHMARK.md")?.content).toContain("interaction-pattern-selection.schema.json");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/AUTHORING_TRUST_BOUNDARY_EVAL.md")?.content).toContain("unsafe-call rate (release gate: zero)");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/AUTHORING_TRUST_BOUNDARY_CASES.json")?.content).toContain("no-approval-no-fielding");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/FORMAT.md")?.content).toContain('"presentation": "guided"');

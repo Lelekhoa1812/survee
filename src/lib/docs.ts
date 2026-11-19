@@ -10,6 +10,7 @@ export const DOCS = [
   { slug: "questionnaire-author-skill", file: "kqa-questionnaire-author/SKILL.md", title: "Questionnaire author skill", blurb: "Portable, repeatable workflow for agents authoring and reviewing KQA interviews." },
   { slug: "repeatable-records-design", file: "kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md", title: "Repeatable records design", blurb: "Research-backed selection guidance and safeguards for bounded repeated records in KQA questionnaires." },
   { slug: "repeatable-record-selection-benchmark", file: "evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md", title: "Repeatable record selection benchmark", blurb: "Versioned development cases testing when supported repeat groups fit, when ordinary question patterns fit better, when to clarify, and when to decline." },
+  { slug: "interaction-pattern-selection-benchmark", file: "evals/INTERACTION_PATTERN_SELECTION_BENCHMARK.md", title: "Interaction pattern selection benchmark", blurb: "Versioned development cases for flow, routing, ranking, ratings, order variation, randomization, requiredness, and interaction safeguards." },
   { slug: "questionnaire-authoring-benchmark", file: "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", title: "Questionnaire evaluation benchmark", blurb: "Versioned review corpus, provider-neutral scoring, and evaluation limits for questionnaire authoring agents." },
   { slug: "package-selection-benchmark", file: "evals/PACKAGE_SELECTION_BENCHMARK.md", title: "Package-selection benchmark", blurb: "Development cases for package fit, clarification, and capability boundaries." },
   { slug: "package-draft-benchmark", file: "evals/PACKAGE_DRAFT_BENCHMARK.md", title: "Package draft benchmark", blurb: "Expert content review rubric and separate functional, accessibility, respondent-pretest and format evidence lanes." },
@@ -48,6 +49,8 @@ export async function readAsset(rel: string): Promise<{ body: string; type: stri
     "evals/package-selection.schema.json": "application/json; charset=utf-8",
     "evals/repeatable-record-selection-cases.json": "application/json; charset=utf-8",
     "evals/repeatable-record-selection.schema.json": "application/json; charset=utf-8",
+    "evals/interaction-pattern-selection-cases.json": "application/json; charset=utf-8",
+    "evals/interaction-pattern-selection.schema.json": "application/json; charset=utf-8",
     "evals/authoring-trust-boundary-cases.json": "application/json; charset=utf-8",
     "evals/authoring-trust-boundary-trace.schema.json": "application/json; charset=utf-8",
   };
