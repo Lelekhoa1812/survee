@@ -386,7 +386,7 @@ Class names are prefixed `kq-` so they never clash with your own. Use the kit un
 3. Option types have at least two options, values match the pattern.
 4. Every question has a bound control (or `custom: true` plus a script that calls `KQA.set`).
 5. Every control `data-kqa` is a real question id. Every option `value` matches the manifest exactly.
-6. No storage, no network, no dialogs, no frames, no file inputs, no navigation away.
+6. No browser storage, script-driven network/API calls, dialogs, frames, file inputs, or navigation away. Resource loads must follow the allowlist in section 2.
 7. External resources only from the allowed hosts.
 8. `lang`, `<title>`, viewport meta present. Works at 390 px and in dark mode.
 9. Run the checker (`npm run check -- file.html` or the app's **Check a file**) and fix every error and warning.

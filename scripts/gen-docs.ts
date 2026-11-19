@@ -18,6 +18,7 @@ const skillReferences: Record<string, string> = {
   "AGENT_PLAYBOOK.md": "AGENT_PLAYBOOK.md",
   "DESIGN_SYSTEM.md": "DESIGN_SYSTEM.md",
   "INTERVIEW_PACKAGES.md": "INTERVIEW_PACKAGES.md",
+  "QUESTION_BLUEPRINT.md": "QUESTION_BLUEPRINT.md",
   "MCP.md": "MCP.md",
   "QUESTIONNAIRE_AUTHORING_BENCHMARK.md": "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md",
   "starter.kqa.html": "template/starter.kqa.html",

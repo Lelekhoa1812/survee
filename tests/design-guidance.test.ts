@@ -5,11 +5,15 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/22");
+    expect(guidance.policyVersion).toBe("kqa-design/23");
     expect(guidance.principles.some((principle) => principle.id === "host-freshness")).toBe(true);
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
     expect(guidance.designPlan.output.fields).toContain("reviewEvidence");
+    expect(guidance.designPlan.output.fields).toContain("questionBlueprint");
+    expect(guidance.designPlan.output.questionBlueprint.reference).toBe("docs/QUESTION_BLUEPRINT.md");
+    expect(guidance.designPlan.output.questionBlueprint.fields).toContain("dataUserNeedOrDecision");
+    expect(guidance.principles.some((principle) => principle.id === "language-adaptation")).toBe(true);
     expect(guidance.designPlan.output.reviewEvidenceMatrix.required).toBe(true);
     expect(guidance.designPlan.output.reviewEvidenceMatrix.columns.map((column) => column.name)).toEqual([
       "surfaceRoute", "stateTheme", "viewportInputMethod", "criterion", "methodTool", "observedResult", "evidenceReference", "limitationUntestedReason",
@@ -50,6 +54,9 @@ describe("design guidance package", () => {
     expect(guidance.sources.find((source) => source.name === "GOV.UK Service Manual: Plan user research")?.url).toBe("https://www.gov.uk/service-manual/user-research/plan-user-research-for-your-service");
     expect(guidance.sources.find((source) => source.name === "CDC/NCHS: Cognitive Interviewing")?.url).toBe("https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html");
     expect(guidance.sources.find((source) => source.name === "U.S. Census Bureau: Statistical Quality Standard A2")?.url).toBe("https://www.census.gov/about/policies/quality/standards/standarda2.html");
+    expect(guidance.sources.find((source) => source.name === "U.S. Census Bureau: Question Template for Non-Methodologists")?.url).toBe("https://www.census.gov/library/working-papers/2025/adrm/rsm2025-07.html");
+    expect(guidance.sources.find((source) => source.name === "Pew Research Center: Questionnaire Design and Translation")?.role).toContain("meaning-equivalent");
+    expect(guidance.sources.find((source) => source.name === "AAPOR: Code of Professional Ethics and Practices")?.role).toContain("June 2026");
     expect(guidance.sources.find((source) => source.name === "W3C WAI: Multi-page Forms")?.url).toBe("https://www.w3.org/WAI/tutorials/forms/multi-page/");
     expect(guidance.sources.find((source) => source.name === "ONS Design System: Hub and Spoke")?.url).toBe("https://service-manual.ons.gov.uk/design-system/patterns/hub-and-spoke");
     expect(guidance.reviewChecklist.join(" ")).toContain("npm run a11y:audit");

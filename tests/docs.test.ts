@@ -112,6 +112,7 @@ describe("agent documentation bundle", () => {
 
   it("publishes the portable questionnaire author skill and includes it in the bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-author-skill" && doc.file === "kqa-questionnaire-author/SKILL.md")).toBe(true);
+    expect(DOCS.some((doc) => doc.slug === "question-blueprint" && doc.file === "QUESTION_BLUEPRINT.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("name: kqa-questionnaire-author");
     expect(bundle).toContain("## Workflow");
@@ -122,6 +123,7 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("sample plan");
     expect(bundle).toContain("pre-submit **Check your answers** review");
     expect(bundle).toContain("does not simulate respondent input");
+    expect(bundle).toContain("<!-- QUESTION_BLUEPRINT.md -->");
   });
 
   it("ships version-matched references for the standalone questionnaire author skill", async () => {
@@ -129,11 +131,13 @@ describe("agent documentation bundle", () => {
     expect(skill).toContain("references/FORMAT.md");
     expect(skill).toContain("install each item at its supplied relative path");
     expect(skill).toContain("references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
+    expect(skill).toContain("references/QUESTION_BLUEPRINT.md");
     const references = [
       ["FORMAT.md", "FORMAT.md"],
       ["AGENT_PLAYBOOK.md", "AGENT_PLAYBOOK.md"],
       ["DESIGN_SYSTEM.md", "DESIGN_SYSTEM.md"],
       ["INTERVIEW_PACKAGES.md", "INTERVIEW_PACKAGES.md"],
+      ["QUESTION_BLUEPRINT.md", "QUESTION_BLUEPRINT.md"],
       ["MCP.md", "MCP.md"],
       ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
       ["starter.kqa.html", "template/starter.kqa.html"],

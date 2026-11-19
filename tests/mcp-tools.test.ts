@@ -209,7 +209,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/kqa-questionnaire-author/SKILL.md");
     expect(body.result.structuredContent.skill).toContain("name: kqa-questionnaire-author");
     expect(body.result.structuredContent.skill).toContain("Do not use it for an unapproved draft");
-    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/starter.kqa.html", "references/routed-follow-up.kqa.html"]));
+    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/starter.kqa.html", "references/routed-follow-up.kqa.html"]));
     expect(body.result.structuredContent.files.find((file) => file.path === "references/FORMAT.md")?.content).toContain('"presentation": "guided"');
     expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_questionnaire_authoring_skill");
     expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_questionnaire_authoring_skill");
@@ -340,7 +340,7 @@ describe("MCP tools", () => {
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/22");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/23");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix).toMatchObject({ required: true });
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix?.columns?.map(({ name }) => name)).toContain("limitationUntestedReason");
@@ -390,7 +390,7 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { profileVersion?: string; policyVersion?: string; sourceFormat?: string; surface?: string; proposedMappings?: { role: string }[]; contrastChecks?: { status: string }[]; integrationProposal?: { status: string; cssOverlay: string | null } } } };
 
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/22", sourceFormat: "css", surface: "host" });
+    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/23", sourceFormat: "css", surface: "host" });
     expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
     expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
     expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });

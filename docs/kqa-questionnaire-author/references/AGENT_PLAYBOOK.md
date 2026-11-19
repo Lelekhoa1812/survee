@@ -4,9 +4,9 @@ You are an AI agent asked to produce an HTML questionnaire for the KQA app. This
 
 ## The one-paragraph version
 
-Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. The format includes nine answer types and bounded declarative routing; it does not score answers or rank people. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
+Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no browser storage, script-driven network/API calls, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. Only the resource loads allowed in `FORMAT.md` are available. The format includes nine answer types and bounded declarative routing; it does not score answers or rank people. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
 
-This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
+This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, paragraphs, dropdown, number, scale, date, and full-order ranking. It does not score, and it does not send email.
 
 Agents that support portable skills can also load [`kqa-questionnaire-author/SKILL.md`](kqa-questionnaire-author/SKILL.md), or retrieve it through the `get_questionnaire_authoring_skill` MCP tool. This skill summarizes the workflow; this playbook and [`FORMAT.md`](FORMAT.md) remain authoritative for KQA behavior.
 
