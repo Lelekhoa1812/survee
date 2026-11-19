@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBundle, DOCS, readAsset } from "../src/lib/docs";
+import { buildBundle, DOCS, readAsset, readDoc } from "../src/lib/docs";
 
 describe("agent documentation bundle", () => {
   it("publishes the design system and includes it in the full questionnaire bundle", async () => {
@@ -16,6 +16,21 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("<!-- INTERVIEW_PACKAGES.md -->");
     expect(bundle).toContain("### Safety and quality learning");
     expect(bundle).toContain("### Personal reflection and wellbeing");
+  });
+
+  it("keeps the package taxonomy and high-risk use safeguards explicit", async () => {
+    const packages = await readDoc("INTERVIEW_PACKAGES.md");
+    expect(packages).not.toBeNull();
+    const selection = packages!.split("## Package selection")[1].split("## Additional sector modules")[0];
+    const rows = Array.from(selection.matchAll(/^\| (.+?) \| (Full package|Sector module) \|/gm));
+    expect(rows).toHaveLength(17);
+    expect(rows.filter(([, , type]) => type === "Full package")).toHaveLength(7);
+    expect(rows.filter(([, , type]) => type === "Sector module")).toHaveLength(10);
+    expect(packages).toContain("### Program evaluation");
+    expect(packages).toContain("### Community consultation");
+    expect(packages).toContain("Do not claim representativeness or report margins of error unless the sampling design supports it.");
+    expect(packages).toContain("jurisdiction-specific assessment and legal review");
+    expect(packages).toContain("not an emergency or statutory reporting channel");
   });
 
   it("publishes the portable questionnaire author skill and includes it in the bundle", async () => {
