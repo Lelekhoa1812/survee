@@ -10,6 +10,7 @@ The docs are part of KQA's authoring and operating interface. Keep the source co
 | Authoring workflow and release evidence | [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), [questionnaire author skill](kqa-questionnaire-author/SKILL.md) | `src/lib/diagnostics/`, `src/lib/questionnaire-preview.ts` |
 | Visual, accessibility, interaction and analytics design | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | `src/lib/design/`, `src/app/globals.css`, respondent components |
 | Domain-specific starting packages and safeguards | [INTERVIEW_PACKAGES.md](INTERVIEW_PACKAGES.md) | `src/lib/interview-packages.ts` and the package guide |
+| Worked package examples | [`examples/service-improvement.kqa.html`](examples/service-improvement.kqa.html), [`examples/personal-planning.kqa.html`](examples/personal-planning.kqa.html) and adjacent `.review.md` records | Package-based teaching examples; explicitly illustrative, not validated instruments |
 | Per-question purpose, interpretation and test plan | [QUESTION_BLUEPRINT.md](QUESTION_BLUEPRINT.md) | author review record and cognitive pretest plan |
 | MCP connection, access, tools and live operations | [MCP.md](MCP.md) | `src/app/api/mcp/route.ts`, `src/lib/mcp/` |
 | Static checker findings | [DIAGNOSTICS.md](DIAGNOSTICS.md) | `src/lib/diagnostics/catalog.ts`, `src/lib/diagnostics/static.ts` |

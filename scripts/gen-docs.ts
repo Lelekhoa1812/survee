@@ -23,6 +23,10 @@ const skillReferences: Record<string, string> = {
   "QUESTIONNAIRE_AUTHORING_BENCHMARK.md": "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md",
   "starter.kqa.html": "template/starter.kqa.html",
   "routed-follow-up.kqa.html": "examples/routed-follow-up.kqa.html",
+  "service-improvement.kqa.html": "examples/service-improvement.kqa.html",
+  "service-improvement.review.md": "examples/service-improvement.review.md",
+  "personal-planning.kqa.html": "examples/personal-planning.kqa.html",
+  "personal-planning.review.md": "examples/personal-planning.review.md",
 };
 const referencesDir = path.join(root, "kqa-questionnaire-author", "references");
 mkdirSync(referencesDir, { recursive: true });

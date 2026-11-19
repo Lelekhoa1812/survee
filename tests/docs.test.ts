@@ -142,6 +142,10 @@ describe("agent documentation bundle", () => {
       ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
       ["starter.kqa.html", "template/starter.kqa.html"],
       ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
+      ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
+      ["service-improvement.review.md", "examples/service-improvement.review.md"],
+      ["personal-planning.kqa.html", "examples/personal-planning.kqa.html"],
+      ["personal-planning.review.md", "examples/personal-planning.review.md"],
     ];
     for (const [copy, source] of references) expect(await readDoc(`kqa-questionnaire-author/references/${copy}`)).toBe(await readDoc(source));
   });
@@ -182,5 +186,20 @@ describe("agent documentation bundle", () => {
     expect(asset?.type).toBe("text/html; charset=utf-8");
     expect(asset?.body).toContain('"when": { "all":');
     expect(asset?.body).toContain('"required": true');
+  });
+
+  it("publishes package-based worked examples with non-validation limits", async () => {
+    for (const [htmlPath, reviewPath, packageId] of [
+      ["examples/service-improvement.kqa.html", "examples/service-improvement.review.md", "service-improvement"],
+      ["examples/personal-planning.kqa.html", "examples/personal-planning.review.md", "personal-planning"],
+    ]) {
+      const html = await readAsset(htmlPath);
+      const review = await readAsset(reviewPath);
+      expect(html?.type).toBe("text/html; charset=utf-8");
+      expect(html?.body).toContain('id="kqa-manifest"');
+      expect(review?.type).toBe("text/markdown; charset=utf-8");
+      expect(review?.body).toContain(packageId);
+      expect(review?.body?.toLowerCase()).toContain("not validated");
+    }
   });
 });

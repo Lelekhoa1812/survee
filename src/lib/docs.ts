@@ -28,6 +28,10 @@ export async function readAsset(rel: string): Promise<{ body: string; type: stri
     "template/starter.kqa.html": "text/html; charset=utf-8",
     "examples/conditional-follow-up.kqa.html": "text/html; charset=utf-8",
     "examples/routed-follow-up.kqa.html": "text/html; charset=utf-8",
+    "examples/service-improvement.kqa.html": "text/html; charset=utf-8",
+    "examples/service-improvement.review.md": "text/markdown; charset=utf-8",
+    "examples/personal-planning.kqa.html": "text/html; charset=utf-8",
+    "examples/personal-planning.review.md": "text/markdown; charset=utf-8",
     "kqa-manifest.schema.json": "application/json; charset=utf-8",
     "evals/questionnaire-authoring-cases.json": "application/json; charset=utf-8",
   };

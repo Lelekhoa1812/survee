@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service improvement feedback</title>
+<script type="application/json" id="kqa-manifest">
+{
+  "format": "kqa/1",
+  "title": "Service improvement feedback",
+  "description": "Illustrative, non-sensitive feedback about one recent interaction with a defined service.",
+  "sections": [
+    { "id": "experience", "title": "Your recent experience", "description": "Purpose, channel, completion and ease of one recent interaction." },
+    { "id": "friction", "title": "Difficulties and recovery", "description": "A simple conditional follow-up about general barriers." },
+    { "id": "improvement", "title": "Possible improvement", "description": "One optional idea for improving the general experience." }
+  ],
+  "questions": [
+    { "id": "purpose", "type": "single", "section": "experience", "label": "What was the main reason for your most recent interaction with [service name]?", "help": "Choose the closest answer. Do not include personal or account details.", "options": [ { "value": "find-information", "label": "Find information" }, { "value": "start-request", "label": "Start a request or service" }, { "value": "manage-request", "label": "Manage or check an existing request" }, { "value": "complete-task", "label": "Complete another service task" }, { "value": "other", "label": "Another reason" }, { "value": "unsure", "label": "Not sure or prefer not to say" } ] },
+    { "id": "channel", "type": "single", "section": "experience", "label": "How did you mainly interact with [service name]?", "help": "Choose one channel for the interaction you are thinking about.", "options": [ { "value": "online", "label": "Website or online form" }, { "value": "phone", "label": "Phone" }, { "value": "in-person", "label": "In person" }, { "value": "email-or-letter", "label": "Email or letter" }, { "value": "other", "label": "Another way" }, { "value": "unsure", "label": "Not sure or prefer not to say" } ] },
+    { "id": "completion", "type": "single", "section": "experience", "label": "Were you able to complete what you needed in that interaction?", "options": [ { "value": "yes", "label": "Yes, completely" }, { "value": "partly", "label": "Partly" }, { "value": "no", "label": "No" }, { "value": "unsure", "label": "Not sure or prefer not to say" } ] },
+    { "id": "ease", "type": "scale", "section": "experience", "min": 1, "max": 5, "label": "Overall, how easy or difficult was it to complete what you needed?", "help": "1 is Very difficult; 5 is Very easy. Choose one. Leave unanswered if you cannot judge." },
+    { "id": "step", "type": "single", "section": "friction", "label": "Which part, if any, was most difficult?", "help": "Choose the closest answer. You can leave this blank if no part was difficult or you are not sure.", "options": [ { "value": "find-information", "label": "Finding or understanding information" }, { "value": "start-interaction", "label": "Knowing how to start" }, { "value": "provide-information", "label": "Providing information or documents" }, { "value": "track-progress", "label": "Knowing what was happening next" }, { "value": "get-response", "label": "Getting a response or update" }, { "value": "finish-task", "label": "Completing the task" }, { "value": "none", "label": "No part was difficult" }, { "value": "unsure", "label": "Not sure or prefer not to say" } ] },
+    { "id": "barrier", "type": "longtext", "section": "friction", "label": "In general terms, what made the interaction difficult or incomplete?", "help": "Optional. Do not include names, reference numbers, contact details, sensitive personal information, or details needing urgent attention. This questionnaire is not monitored for requests or reports.", "maxLength": 1000, "when": { "any": [ { "question": "completion", "operator": "equals", "value": "partly" }, { "question": "completion", "operator": "equals", "value": "no" } ] } },
+    { "id": "improvement", "type": "longtext", "section": "improvement", "label": "What one change would most improve this service experience for you?", "help": "Optional. Describe a general change, not a personal case or urgent request.", "maxLength": 1500 }
+  ]
+}
+</script>
+<style>
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --surface-2: #f8fafc; --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084;
+  --line: #e2e7ee; --line-2: #cdd6e0; --field: #8794a5; --brand: #0b2a42; --accent: #087960; --accent-soft: #e5f3ee; --accent-ink: #ffffff;
+  --focus: #1f6feb; --danger: #b4261c; --r: 10px; --r-sm: 6px; --shadow: 0 1px 2px rgba(14, 27, 42, .05);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1622; --surface: #101f2e; --surface-2: #142536; --ink: #e8eef5; --ink-2: #b9c6d4; --muted: #8fa1b3;
+    --line: #213548; --line-2: #2f465c; --field: #5f7790; --brand: #07121d; --accent: #2bb58f; --accent-soft: #123428; --accent-ink: #04130e;
+    --focus: #6aa3ff; --danger: #f59a92; --shadow: none; color-scheme: dark;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; line-height: 1.25; font-weight: 600; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.kq-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* page: a contents rail on wide screens, one reading column everywhere */
+.kq-shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+.kq-rail { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--brand); color: #cfdbe6; padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
+.kq-rail strong { color: #fff; font-weight: 600; font-size: .95rem; padding: 0 8px 12px; }
+.kq-rail a { color: inherit; text-decoration: none; font-size: .9rem; padding: 7px 8px; border-radius: 6px; }
+.kq-rail a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.kq-page { width: 100%; max-width: 860px; margin: 0 auto; padding: 44px max(32px, env(safe-area-inset-right)) 96px max(32px, env(safe-area-inset-left)); }
+.kq-kicker { font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.kq-title h1 { font-size: 1.9rem; letter-spacing: -.01em; margin-top: 6px; }
+.kq-lede { color: var(--ink-2); max-width: 64ch; margin-top: 12px; font-size: 1.02rem; }
+.kq-locked-note { display: none; margin-top: 20px; padding: 12px 16px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--r); color: var(--ink); font-size: .92rem; }
+html[data-kqa-state="locked"] .kq-locked-note { display: block; }
+
+/* sections and question cards */
+.kq-section { padding-top: 52px; scroll-margin-top: 12px; }
+.kq-section-head { display: grid; gap: 6px; margin-bottom: 18px; }
+.kq-section-head h2 { font-size: 1.35rem; }
+.kq-section-head p { color: var(--ink-2); max-width: 64ch; }
+.kq-stack { display: grid; gap: 14px; }
+.kq-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 12px; }
+.kq-q-head { display: flex; align-items: baseline; gap: 10px; }
+.kq-q-head h3 { font-size: 1rem; flex: 1; }
+.kq-n { font: 500 .76rem var(--mono); color: var(--muted); }
+.kq-help { color: var(--ink-2); font-size: .9rem; max-width: 68ch; }
+.kq-tick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-2); flex: none; align-self: center; }
+.kq-tick[data-state="answered"] { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; border-color: var(--accent); }
+
+/* choices */
+.kq-options { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; min-width: 0; }
+.kq-opt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-size: .92rem; transition: border-color .15s, background .15s; }
+.kq-opt:hover { border-color: var(--field); }
+.kq-opt input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.kq-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.kq-opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.kq-opt input:focus-visible { outline: none; }
+
+/* inputs */
+.kq-field { display: grid; gap: 6px; }
+input[type="text"], input[type="number"], input[type="date"], input[type="email"], select, textarea { width: 100%; font: inherit; font-size: .95rem; color: var(--ink); background: var(--surface); border: 1px solid var(--field); border-radius: 8px; padding: 9px 11px; }
+textarea { resize: vertical; min-height: 84px; }
+::placeholder { color: var(--muted); opacity: 1; }
+input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-allowed; }
+
+/* scales: numbered radio buttons, or an input[type=range] */
+.kq-scale { display: flex; flex-wrap: wrap; gap: 6px; max-width: 520px; }
+.kq-scale label { flex: 1 0 44px; min-width: 44px; display: grid; place-items: center; height: 44px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-weight: 500; font-variant-numeric: tabular-nums; }
+.kq-scale label:hover { border-color: var(--field); }
+.kq-scale input { position: absolute; opacity: 0; pointer-events: none; }
+.kq-scale label:has(input:checked) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.kq-scale label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.kq-scale-ends { display: flex; justify-content: space-between; max-width: 420px; color: var(--muted); font-size: .8rem; }
+.kq-rank { padding-left: 2rem; display: grid; gap: 8px; }
+.kq-rank li { padding-left: 4px; }
+.kq-rank li button { min-height: 44px; margin-left: 8px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.kq-rank li button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* notes */
+.kq-note summary { list-style: none; cursor: pointer; display: inline-block; font-size: .84rem; color: var(--muted); border-radius: 4px; }
+.kq-note summary::-webkit-details-marker { display: none; }
+.kq-note summary:hover { color: var(--ink); }
+.kq-note[open] summary { margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .kq-shell { grid-template-columns: minmax(0, 1fr); }
+  .kq-rail { display: none; }
+  .kq-page { padding: 28px max(16px, env(safe-area-inset-right)) 72px max(16px, env(safe-area-inset-left)); }
+  .kq-q { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="kq-shell">
+  <nav class="kq-rail" aria-label="Contents">
+    <strong>Service feedback</strong>
+    <a href="#experience">Recent experience</a>
+    <a href="#friction">Difficulties and recovery</a>
+    <a href="#improvement">Possible improvement</a>
+  </nav>
+  <main class="kq-page">
+    <header class="kq-title">
+      <span class="kq-kicker">Illustrative service-improvement questionnaire</span>
+      <h1>Tell us about a recent service experience</h1>
+      <p class="kq-lede">This example asks about one recent interaction with <strong>[service name]</strong> during <strong>[reference period]</strong>. Answer only what you are comfortable sharing. Please do not include names, account details, health or financial information, or details of an urgent or sensitive incident.</p>
+      <aside class="kq-locked-note" role="status">You have submitted your answers. They are now read-only. Your host can reopen them if you need to change anything.</aside>
+      <section aria-labelledby="notice-heading" class="kq-q" style="margin-top:18px">
+        <h2 id="notice-heading" style="font-size:1rem">Before you begin</h2>
+        <p><strong>[Host: replace this placeholder with the approved respondent notice before use.]</strong> Explain the purpose, who can see identifiable answers, how responses will be used, retention or deletion expectations, and a contact route. KQA stores answers with a participant record; do not describe this collection as anonymous unless a separately verified method supports that claim.</p>
+        <p>This questionnaire is for service-improvement feedback only. It is not a request for service, complaint, incident report or urgent-help channel. No response or follow-up is implied. If an earlier answer makes a follow-up no longer apply, that answer remains saved and may reappear if the follow-up becomes relevant again. You can inspect and clear retained answers in Check your answers before submitting.</p>
+      </section>
+    </header>
+
+    <section class="kq-section" id="experience" aria-labelledby="experience-h">
+      <div class="kq-section-head"><span class="kq-kicker">Part 1</span><h2 id="experience-h">Your recent experience</h2><p>Think about one interaction with [service name] during [reference period]. If you had more than one, use the most recent.</p></div>
+      <div class="kq-stack" data-kqa-question-list="experience">
+        <article class="kq-q" id="q-purpose" data-kqa-question-id="purpose">
+          <div class="kq-q-head"><span class="kq-n">1</span><h3>What was the main reason for your most recent interaction with [service name]?</h3><span class="kq-tick" data-kqa-status="purpose" aria-hidden="true"></span></div>
+          <p class="kq-help">Choose the closest answer. Do not include personal or account details.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">What was the main reason for your most recent interaction with [service name]?</legend>
+            <label class="kq-opt"><input type="radio" name="purpose" data-kqa="purpose" value="find-information"><span>Find information</span></label>
+            <label class="kq-opt"><input type="radio" name="purpose" data-kqa="purpose" value="start-request"><span>Start a request or service</span></label>
+            <label class="kq-opt"><input type="radio" name="purpose" data-kqa="purpose" value="manage-request"><span>Manage or check an existing request</span></label>
+            <label class="kq-opt"><input type="radio" name="purpose" data-kqa="purpose" value="complete-task"><span>Complete another service task</span></label>
+            <label class="kq-opt"><input type="radio" name="purpose" data-kqa="purpose" value="other"><span>Another reason</span></label>
+            <label class="kq-opt"><input type="radio" name="purpose" data-kqa="purpose" value="unsure"><span>Not sure or prefer not to say</span></label>
+          </fieldset>
+        </article>
+
+        <article class="kq-q" id="q-channel" data-kqa-question-id="channel">
+          <div class="kq-q-head"><span class="kq-n">2</span><h3>How did you mainly interact with [service name]?</h3><span class="kq-tick" data-kqa-status="channel" aria-hidden="true"></span></div>
+          <p class="kq-help">Choose one channel for the interaction you are thinking about.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">How did you mainly interact with [service name]?</legend>
+            <label class="kq-opt"><input type="radio" name="channel" data-kqa="channel" value="online"><span>Website or online form</span></label>
+            <label class="kq-opt"><input type="radio" name="channel" data-kqa="channel" value="phone"><span>Phone</span></label>
+            <label class="kq-opt"><input type="radio" name="channel" data-kqa="channel" value="in-person"><span>In person</span></label>
+            <label class="kq-opt"><input type="radio" name="channel" data-kqa="channel" value="email-or-letter"><span>Email or letter</span></label>
+            <label class="kq-opt"><input type="radio" name="channel" data-kqa="channel" value="other"><span>Another way</span></label>
+            <label class="kq-opt"><input type="radio" name="channel" data-kqa="channel" value="unsure"><span>Not sure or prefer not to say</span></label>
+          </fieldset>
+        </article>
+
+        <article class="kq-q" id="q-completion" data-kqa-question-id="completion">
+          <div class="kq-q-head"><span class="kq-n">3</span><h3>Were you able to complete what you needed in that interaction?</h3><span class="kq-tick" data-kqa-status="completion" aria-hidden="true"></span></div>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">Were you able to complete what you needed in that interaction?</legend>
+            <label class="kq-opt"><input type="radio" name="completion" data-kqa="completion" value="yes"><span>Yes, completely</span></label>
+            <label class="kq-opt"><input type="radio" name="completion" data-kqa="completion" value="partly"><span>Partly</span></label>
+            <label class="kq-opt"><input type="radio" name="completion" data-kqa="completion" value="no"><span>No</span></label>
+            <label class="kq-opt"><input type="radio" name="completion" data-kqa="completion" value="unsure"><span>Not sure or prefer not to say</span></label>
+          </fieldset>
+        </article>
+
+        <article class="kq-q" id="q-ease" data-kqa-question-id="ease">
+          <div class="kq-q-head"><span class="kq-n">4</span><h3>Overall, how easy or difficult was it to complete what you needed?</h3><span class="kq-tick" data-kqa-status="ease" aria-hidden="true"></span></div>
+          <p class="kq-help">1 is Very difficult; 5 is Very easy. Choose one. Leave unanswered if you cannot judge.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">Overall, how easy or difficult was it to complete what you needed? 1 is Very difficult; 5 is Very easy.</legend>
+            <div class="kq-scale">
+              <label><input type="radio" name="ease" data-kqa="ease" value="1">1</label>
+              <label><input type="radio" name="ease" data-kqa="ease" value="2">2</label>
+              <label><input type="radio" name="ease" data-kqa="ease" value="3">3</label>
+              <label><input type="radio" name="ease" data-kqa="ease" value="4">4</label>
+              <label><input type="radio" name="ease" data-kqa="ease" value="5">5</label>
+            </div>
+            <div class="kq-scale-ends" aria-hidden="true"><span>Very difficult</span><span>Very easy</span></div>
+          </fieldset>
+        </article>
+      </div>
+    </section>
+
+    <section class="kq-section" id="friction" aria-labelledby="friction-h">
+      <div class="kq-section-head"><span class="kq-kicker">Part 2</span><h2 id="friction-h">Difficulties and recovery</h2><p>A short follow-up appears if you report that you could not fully complete what you needed. The extra answer is optional and should stay general.</p></div>
+      <div class="kq-stack" data-kqa-question-list="friction">
+        <article class="kq-q" id="q-step" data-kqa-question-id="step">
+          <div class="kq-q-head"><span class="kq-n">5</span><h3>Which part, if any, was most difficult?</h3><span class="kq-tick" data-kqa-status="step" aria-hidden="true"></span></div>
+          <p class="kq-help">Choose the closest answer. You can leave this blank if no part was difficult or you are not sure.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">Which part, if any, was most difficult?</legend>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="find-information"><span>Finding or understanding information</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="start-interaction"><span>Knowing how to start</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="provide-information"><span>Providing information or documents</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="track-progress"><span>Knowing what was happening next</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="get-response"><span>Getting a response or update</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="finish-task"><span>Completing the task</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="none"><span>No part was difficult</span></label>
+            <label class="kq-opt"><input type="radio" name="step" data-kqa="step" value="unsure"><span>Not sure or prefer not to say</span></label>
+          </fieldset>
+        </article>
+
+        <article class="kq-q" id="q-barrier" data-kqa-question-id="barrier">
+          <div class="kq-q-head"><span class="kq-n">6</span><h3>In general terms, what made the interaction difficult or incomplete?</h3><span class="kq-tick" data-kqa-status="barrier" aria-hidden="true"></span></div>
+          <p class="kq-help">Optional. Do not include names, reference numbers, contact details, sensitive personal information, or details needing urgent attention. This questionnaire is not monitored for requests or reports.</p>
+          <textarea id="f-barrier" data-kqa="barrier" rows="4" maxlength="1000" aria-label="In general terms, what made the interaction difficult or incomplete?"></textarea>
+        </article>
+      </div>
+    </section>
+
+    <section class="kq-section" id="improvement" aria-labelledby="improvement-h">
+      <div class="kq-section-head"><span class="kq-kicker">Part 3</span><h2 id="improvement-h">Possible improvement</h2><p>Feedback can inform general service learning; it does not guarantee a change or an individual response.</p></div>
+      <div class="kq-stack" data-kqa-question-list="improvement">
+        <article class="kq-q" id="q-improvement" data-kqa-question-id="improvement">
+          <div class="kq-q-head"><span class="kq-n">7</span><h3>What one change would most improve this service experience for you?</h3><span class="kq-tick" data-kqa-status="improvement" aria-hidden="true"></span></div>
+          <p class="kq-help">Optional. Describe a general change, not a personal case or urgent request.</p>
+          <textarea id="f-improvement" data-kqa="improvement" rows="4" maxlength="1500" aria-label="What one change would most improve this service experience for you?"></textarea>
+        </article>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

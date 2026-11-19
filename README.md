@@ -28,7 +28,7 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/DIAGNOSTICS.md`](docs/DIAGNOSTICS.md) | Every checker code, why it matters, how to fix it (generated) |
 | [`docs/kqa-manifest.schema.json`](docs/kqa-manifest.schema.json) | JSON Schema of the manifest (generated) |
 | [`docs/template/starter.kqa.html`](docs/template/starter.kqa.html) | A known-good file with every question type and the standard design kit |
-| [`docs/examples/`](docs/examples) | Real questionnaires converted to the format |
+| [`docs/examples/`](docs/examples) | Runnable feature examples plus clearly labeled, illustrative service-improvement and personal-planning questionnaires with review records; examples are not validated instruments |
 | [`docs/MCP.md`](docs/MCP.md) | How an agent operates a live interview (not how to write the HTML) |
 | [`docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | Reproducible review cases, scoring contract and evidence limits |
 | [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification and boundary evaluation |

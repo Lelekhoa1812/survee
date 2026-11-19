@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>A personal planning reflection</title>
+<script type="application/json" id="kqa-manifest">
+{
+  "format": "kqa/1",
+  "title": "A personal planning reflection",
+  "description": "A respondent-controlled reflection to help shape one practical next step. All answers are optional.",
+  "sections": [
+    { "id": "focus", "title": "Choose a focus", "description": "Start wherever feels useful. You can skip any question." },
+    { "id": "next-step", "title": "Shape a next step", "description": "Describe a direction and a manageable action in your own words." },
+    { "id": "check-in", "title": "Check and adjust", "description": "Consider what could help and whether the plan fits you today." }
+  ],
+  "questions": [
+    {
+      "id": "focus-area", "type": "single", "section": "focus",
+      "label": "What would you like this reflection to focus on today?",
+      "help": "Choose one, or leave this unanswered. This is for your own planning, not an assessment.",
+      "options": [
+        { "value": "everyday-routine", "label": "An everyday routine or habit" },
+        { "value": "learning", "label": "Learning or practising something" },
+        { "value": "personal-project", "label": "A personal project" },
+        { "value": "home-community", "label": "Home, relationships, or community life" },
+        { "value": "something-else", "label": "Something else" },
+        { "value": "prefer-not-to-say", "label": "I would rather keep the focus private" }
+      ]
+    },
+    {
+      "id": "focus-detail", "type": "longtext", "section": "focus",
+      "label": "What would you like to make progress on in this area?",
+      "help": "A phrase or a few sentences is enough. Leave out details you do not want to share.",
+      "maxLength": 1200,
+      "when": { "any": [
+        { "question": "focus-area", "operator": "equals", "value": "everyday-routine" },
+        { "question": "focus-area", "operator": "equals", "value": "learning" },
+        { "question": "focus-area", "operator": "equals", "value": "personal-project" },
+        { "question": "focus-area", "operator": "equals", "value": "home-community" },
+        { "question": "focus-area", "operator": "equals", "value": "something-else" }
+      ] }
+    },
+    {
+      "id": "planning-horizon", "type": "select", "section": "focus",
+      "label": "What time horizon feels useful for thinking about this?",
+      "help": "This is a planning preference, not a commitment.",
+      "options": [
+        { "value": "today-week", "label": "Today or this week" },
+        { "value": "next-few-weeks", "label": "The next few weeks" },
+        { "value": "few-months", "label": "The next few months" },
+        { "value": "open-ended", "label": "Open-ended" },
+        { "value": "not-sure", "label": "Not sure yet" }
+      ]
+    },
+    {
+      "id": "first-step", "type": "text", "section": "next-step", "maxLength": 300,
+      "label": "What is one small next step you might choose?",
+      "help": "Keep it as small or tentative as you like. You can leave this blank or revise it later."
+    },
+    {
+      "id": "friction", "type": "multi", "section": "next-step", "maxSelections": 3,
+      "label": "What could make that step harder to take?",
+      "help": "Choose up to 3, or skip. These are possible circumstances, not personal shortcomings.",
+      "options": [
+        { "value": "time", "label": "Finding time" },
+        { "value": "energy", "label": "Having enough energy" },
+        { "value": "resources", "label": "Access to a resource or tool" },
+        { "value": "clarity", "label": "Knowing where to begin" },
+        { "value": "other", "label": "Something else" }
+      ]
+    },
+    {
+      "id": "friction-other", "type": "text", "section": "next-step", "maxLength": 300,
+      "label": "What other circumstance would you like to note?",
+      "help": "Please avoid details you would prefer not to share.",
+      "when": { "all": [{ "question": "friction", "operator": "contains", "value": "other" }] }
+    },
+    {
+      "id": "helpful-support", "type": "multi", "section": "check-in", "maxSelections": 3,
+      "label": "What, if anything, might make this step easier?",
+      "help": "Choose up to 3. These can be things you already have or might explore.",
+      "options": [
+        { "value": "reminder", "label": "A reminder or a regular time" },
+        { "value": "materials", "label": "A useful material, tool, or place" },
+        { "value": "another-person", "label": "Time with or encouragement from another person" },
+        { "value": "smaller-step", "label": "Breaking it into a smaller step" },
+        { "value": "other", "label": "Something else" }
+      ]
+    },
+    {
+      "id": "step-fit", "type": "scale", "section": "check-in", "min": 1, "max": 5,
+      "label": "How manageable does this next step feel to you right now?",
+      "help": "1 means not manageable right now; 5 means very manageable. This is a momentary planning check, not a score or judgement."
+    },
+    {
+      "id": "adjustment", "type": "longtext", "section": "check-in", "maxLength": 1200,
+      "label": "Would you change, shrink, or set aside any part of this plan?",
+      "help": "You can describe an adjustment, say it already feels right, or leave this blank."
+    }
+  ]
+}
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --canvas: #f3f4ef; --paper: #fffefa; --paper-soft: #f6f7f1;
+  --ink: #202b25; --ink-soft: #46564c; --muted: #58675e;
+  --line: #d7ddd4; --field: #69776d; --brand: #234b3a; --brand-soft: #e5eee8;
+  --focus: #075eae; --radius: 14px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px; line-height: 1.6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #131a16; --paper: #1b241e; --paper-soft: #202c24;
+    --ink: #edf2ed; --ink-soft: #d0ddd2; --muted: #afc0b3;
+    --line: #39483d; --field: #9aac9e; --brand: #a4d0b3; --brand-soft: #24392c;
+    --focus: #8bbcff;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 1rem; }
+body { margin: 0; background: var(--canvas); color: var(--ink); }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+.layout { display: grid; grid-template-columns: 230px minmax(0, 760px); gap: clamp(1.5rem, 4vw, 4rem); max-width: 1200px; margin: auto; padding: 2rem clamp(1rem, 4vw, 3rem) 5rem; }
+.rail { position: sticky; top: 1rem; align-self: start; display: grid; gap: .35rem; }
+.rail strong { color: var(--brand); padding: .45rem .7rem .8rem; font-size: .95rem; }
+.rail a { text-decoration: none; color: var(--ink-soft); padding: .5rem .7rem; border-radius: 8px; }
+.rail a:hover { background: var(--paper); color: var(--ink); }
+main { min-width: 0; }
+.eyebrow { color: var(--brand); font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { max-width: 18ch; margin-bottom: .8rem; font-size: clamp(2rem, 5vw, 3.15rem); line-height: 1.08; letter-spacing: -.035em; }
+.intro { max-width: 66ch; margin-bottom: 1.4rem; color: var(--ink-soft); font-size: 1.08rem; }
+.privacy { max-width: 68ch; padding: 1rem 1.15rem; border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 10px; background: var(--paper); color: var(--ink-soft); }
+.privacy strong { color: var(--ink); }
+.section { padding-top: 3.5rem; scroll-margin-top: 1rem; }
+.section-head { margin-bottom: 1rem; }
+.section-head h2 { margin-bottom: .35rem; font-size: 1.55rem; letter-spacing: -.02em; }
+.section-head p { max-width: 64ch; color: var(--ink-soft); }
+.stack { display: grid; gap: 1rem; }
+.question { min-width: 0; padding: 1.2rem clamp(1rem, 3vw, 1.5rem); display: grid; gap: .8rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.qhead { display: flex; align-items: baseline; gap: .65rem; }
+.qhead h3 { flex: 1; margin: 0; font-size: 1.04rem; line-height: 1.45; }
+.qnum { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .82rem; }
+.help { margin: 0; color: var(--ink-soft); font-size: .92rem; }
+fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.options { display: grid; gap: .45rem; }
+.option { display: flex; align-items: flex-start; gap: .7rem; min-height: 44px; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.option:hover { border-color: var(--field); background: var(--paper-soft); }
+.option input { flex: none; width: 1.15rem; height: 1.15rem; margin: .2rem 0 0; accent-color: var(--brand); }
+input[type="text"], select, textarea { width: 100%; min-width: 0; padding: .75rem .85rem; border: 1px solid var(--field); border-radius: 9px; color: var(--ink); background: var(--paper); font: inherit; }
+textarea { min-height: 7rem; resize: vertical; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+.scale { display: flex; flex-wrap: wrap; gap: .5rem; }
+.scale label { display: grid; place-items: center; width: 48px; min-height: 48px; border: 1px solid var(--field); border-radius: 9px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.scale input { width: 1rem; height: 1rem; accent-color: var(--brand); }
+.scale-ends { display: flex; justify-content: space-between; max-width: 320px; color: var(--muted); font-size: .82rem; }
+.closing { margin-top: 3rem; padding: 1rem 1.2rem; border-radius: 10px; background: var(--brand-soft); color: var(--ink-soft); }
+@media (max-width: 760px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 1.2rem; padding-top: 1rem; }
+  .rail { position: static; display: flex; gap: .2rem; overflow-x: auto; padding-bottom: .3rem; }
+  .rail strong { display: none; }
+  .rail a { flex: none; border: 1px solid var(--line); background: var(--paper); font-size: .88rem; }
+}
+@media (max-width: 390px) { .layout { padding-right: 1rem; padding-left: 1rem; } .question { padding: 1rem; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="rail" aria-label="Questionnaire sections">
+    <strong>Personal planning</strong>
+    <a href="#focus">Choose a focus</a>
+    <a href="#next-step">Shape a next step</a>
+    <a href="#check-in">Check and adjust</a>
+  </nav>
+  <main>
+    <header>
+      <p class="eyebrow">A personal reflection</p>
+      <h1>Make room for a next step</h1>
+      <p class="intro">Use these prompts to think through something you would like to work on and shape a next step that suits you. You are in control: answer only what you want, in as much or as little detail as feels right.</p>
+      <aside class="privacy" aria-label="Privacy and answer control">
+        <strong>Share only what you choose.</strong> This reflection is not clinical advice, a diagnosis, or an assessment. Avoid names and sensitive details. Your answers save as you go, and the person hosting this reflection can review and export them. Ask your host how they will use and retain responses. If you change an answer and a follow-up disappears, that answer is retained and may reappear if it becomes relevant again; use <b>Review answers</b> to inspect or clear retained answers.
+      </aside>
+    </header>
+
+    <section class="section" id="focus" aria-labelledby="focus-title">
+      <header class="section-head"><p class="eyebrow">Part 1</p><h2 id="focus-title">Choose a focus</h2><p>Start with what has your attention, or leave the questions blank and simply explore.</p></header>
+      <div class="stack" data-kqa-question-list="focus">
+        <article class="question" data-kqa-question-id="focus-area">
+          <div class="qhead"><span class="qnum" aria-hidden="true">01</span><h3>What would you like this reflection to focus on today?</h3></div>
+          <p class="help">Choose one, or leave this unanswered. This is for your own planning, not an assessment.</p>
+          <fieldset class="options"><legend class="sr">What would you like this reflection to focus on today?</legend>
+            <label class="option"><input type="radio" name="focus-area" data-kqa="focus-area" value="everyday-routine"><span>An everyday routine or habit</span></label>
+            <label class="option"><input type="radio" name="focus-area" data-kqa="focus-area" value="learning"><span>Learning or practising something</span></label>
+            <label class="option"><input type="radio" name="focus-area" data-kqa="focus-area" value="personal-project"><span>A personal project</span></label>
+            <label class="option"><input type="radio" name="focus-area" data-kqa="focus-area" value="home-community"><span>Home, relationships, or community life</span></label>
+            <label class="option"><input type="radio" name="focus-area" data-kqa="focus-area" value="something-else"><span>Something else</span></label>
+            <label class="option"><input type="radio" name="focus-area" data-kqa="focus-area" value="prefer-not-to-say"><span>I would rather keep the focus private</span></label>
+          </fieldset>
+        </article>
+
+        <article class="question" data-kqa-question-id="focus-detail">
+          <div class="qhead"><span class="qnum" aria-hidden="true">02</span><h3>What would you like to make progress on in this area?</h3></div>
+          <p class="help">A phrase or a few sentences is enough. Leave out details you do not want to share.</p>
+          <label class="sr" for="focus-detail-field">What would you like to make progress on in this area?</label>
+          <textarea id="focus-detail-field" data-kqa="focus-detail" maxlength="1200" rows="4"></textarea>
+        </article>
+
+        <article class="question" data-kqa-question-id="planning-horizon">
+          <div class="qhead"><span class="qnum" aria-hidden="true">03</span><h3><label for="planning-horizon-field">What time horizon feels useful for thinking about this?</label></h3></div>
+          <p class="help">This is a planning preference, not a commitment.</p>
+          <select id="planning-horizon-field" data-kqa="planning-horizon">
+            <option value="">Choose one…</option>
+            <option value="today-week">Today or this week</option>
+            <option value="next-few-weeks">The next few weeks</option>
+            <option value="few-months">The next few months</option>
+            <option value="open-ended">Open-ended</option>
+            <option value="not-sure">Not sure yet</option>
+          </select>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="next-step" aria-labelledby="next-step-title">
+      <header class="section-head"><p class="eyebrow">Part 2</p><h2 id="next-step-title">Shape a next step</h2><p>A useful step can be tentative, small, or something you decide not to do right now.</p></header>
+      <div class="stack" data-kqa-question-list="next-step">
+        <article class="question" data-kqa-question-id="first-step">
+          <div class="qhead"><span class="qnum" aria-hidden="true">04</span><h3><label for="first-step-field">What is one small next step you might choose?</label></h3></div>
+          <p class="help">Keep it as small or tentative as you like. You can leave this blank or revise it later.</p>
+          <input id="first-step-field" type="text" data-kqa="first-step" maxlength="300" autocomplete="off">
+        </article>
+
+        <article class="question" data-kqa-question-id="friction">
+          <div class="qhead"><span class="qnum" aria-hidden="true">05</span><h3>What could make that step harder to take?</h3></div>
+          <p class="help">Choose up to 3, or skip. These are possible circumstances, not personal shortcomings.</p>
+          <fieldset class="options"><legend class="sr">What could make that step harder to take?</legend>
+            <label class="option"><input type="checkbox" data-kqa="friction" value="time"><span>Finding time</span></label>
+            <label class="option"><input type="checkbox" data-kqa="friction" value="energy"><span>Having enough energy</span></label>
+            <label class="option"><input type="checkbox" data-kqa="friction" value="resources"><span>Access to a resource or tool</span></label>
+            <label class="option"><input type="checkbox" data-kqa="friction" value="clarity"><span>Knowing where to begin</span></label>
+            <label class="option"><input type="checkbox" data-kqa="friction" value="other"><span>Something else</span></label>
+          </fieldset>
+        </article>
+
+        <article class="question" data-kqa-question-id="friction-other">
+          <div class="qhead"><span class="qnum" aria-hidden="true">06</span><h3><label for="friction-other-field">What other circumstance would you like to note?</label></h3></div>
+          <p class="help">Please avoid details you would prefer not to share.</p>
+          <input id="friction-other-field" type="text" data-kqa="friction-other" maxlength="300" autocomplete="off">
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="check-in" aria-labelledby="check-in-title">
+      <header class="section-head"><p class="eyebrow">Part 3</p><h2 id="check-in-title">Check and adjust</h2><p>There is no ideal answer. Use this part to adapt the plan to your circumstances.</p></header>
+      <div class="stack" data-kqa-question-list="check-in">
+        <article class="question" data-kqa-question-id="helpful-support">
+          <div class="qhead"><span class="qnum" aria-hidden="true">07</span><h3>What, if anything, might make this step easier?</h3></div>
+          <p class="help">Choose up to 3. These can be things you already have or might explore.</p>
+          <fieldset class="options"><legend class="sr">What, if anything, might make this step easier?</legend>
+            <label class="option"><input type="checkbox" data-kqa="helpful-support" value="reminder"><span>A reminder or a regular time</span></label>
+            <label class="option"><input type="checkbox" data-kqa="helpful-support" value="materials"><span>A useful material, tool, or place</span></label>
+            <label class="option"><input type="checkbox" data-kqa="helpful-support" value="another-person"><span>Time with or encouragement from another person</span></label>
+            <label class="option"><input type="checkbox" data-kqa="helpful-support" value="smaller-step"><span>Breaking it into a smaller step</span></label>
+            <label class="option"><input type="checkbox" data-kqa="helpful-support" value="other"><span>Something else</span></label>
+          </fieldset>
+        </article>
+
+        <article class="question" data-kqa-question-id="step-fit">
+          <div class="qhead"><span class="qnum" aria-hidden="true">08</span><h3>How manageable does this next step feel to you right now?</h3></div>
+          <p class="help">1 means not manageable right now; 5 means very manageable. This is a momentary planning check, not a score or judgement.</p>
+          <fieldset><legend class="sr">How manageable does this next step feel to you right now?</legend>
+            <div class="scale">
+              <label><input type="radio" name="step-fit" data-kqa="step-fit" value="1"><span>1</span></label>
+              <label><input type="radio" name="step-fit" data-kqa="step-fit" value="2"><span>2</span></label>
+              <label><input type="radio" name="step-fit" data-kqa="step-fit" value="3"><span>3</span></label>
+              <label><input type="radio" name="step-fit" data-kqa="step-fit" value="4"><span>4</span></label>
+              <label><input type="radio" name="step-fit" data-kqa="step-fit" value="5"><span>5</span></label>
+            </div>
+            <div class="scale-ends" aria-hidden="true"><span>Not manageable</span><span>Very manageable</span></div>
+          </fieldset>
+        </article>
+
+        <article class="question" data-kqa-question-id="adjustment">
+          <div class="qhead"><span class="qnum" aria-hidden="true">09</span><h3>Would you change, shrink, or set aside any part of this plan?</h3></div>
+          <p class="help">You can describe an adjustment, say it already feels right, or leave this blank.</p>
+          <label class="sr" for="adjustment-field">Would you change, shrink, or set aside any part of this plan?</label>
+          <textarea id="adjustment-field" data-kqa="adjustment" maxlength="1200" rows="4"></textarea>
+        </article>
+      </div>
+      <p class="closing">That is the reflection. You can use <b>Review answers</b> in the KQA bar to check or change anything before submitting.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>
