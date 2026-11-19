@@ -52,6 +52,149 @@ afterEach(() => {
 });
 
 describe("respondent required-answer recovery", () => {
+  it("blocks review and submission of a saved record while an invalid local draft awaits explicit discard confirmation", async () => {
+    state.api.mockResolvedValue({ ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+      questions: [{ id: "assets", type: "repeat", label: "Assets", maxRows: 3, fields: [{ id: "amount", type: "number", label: "Amount" }] }],
+      answers: {}, recordGroups: { assets: [{ id: "row1", values: { amount: 2 }, revision: 1, fieldRevisions: { amount: 1 } }] },
+    } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const post = vi.spyOn(frame.contentWindow!, "postMessage");
+    const send = (data: object) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, ...data }, origin: "null", source: frame.contentWindow }));
+    const review = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Review answers")!;
+    await act(async () => review.click());
+    const submit = Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!;
+    expect(submit.disabled).toBe(false);
+    const draft = { questionId: "assets", rowId: "row1", fieldId: "amount" };
+    await act(async () => send({ type: "record-drafts", drafts: [draft] }));
+    expect(review.disabled).toBe(true);
+    expect(submit.disabled).toBe(true);
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+    await act(async () => submit.click());
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    const discard = Array.from(host.querySelectorAll<HTMLButtonElement>(".rs-banner button")).find((button) => button.textContent === "Discard draft")!;
+    await act(async () => discard.click());
+    expect(post.mock.calls.some(([message]) => (message as any).type === "discard-record-draft" && (message as any).rowId === "row1")).toBe(true);
+    expect(submit.disabled).toBe(true);
+    await act(async () => send({ type: "record-drafts", drafts: [] }));
+    expect(submit.disabled).toBe(false);
+    const safeLeaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(safeLeaving);
+    expect(safeLeaving.defaultPrevented).toBe(false);
+  });
+
+  it("blocks guided continuation for a hidden invalid draft and directs review to the routing question", async () => {
+    state.api.mockResolvedValue({ ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study", presentation: "guided-question",
+      questions: [{ id: "route", type: "single", label: "Route", options: [{ value: "yes", label: "Yes" }] }, { id: "assets", type: "repeat", label: "Assets", maxRows: 3, fields: [{ id: "amount", type: "number", label: "Amount" }], when: { all: [{ question: "route", op: "equals", value: "yes" }] } }],
+      answers: {}, recordGroups: { assets: [{ id: "row1", values: { amount: 2 }, revision: 1, fieldRevisions: { amount: 1 } }] }, progress: { eligible: { route: true, assets: false } },
+    } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const post = vi.spyOn(frame.contentWindow!, "postMessage");
+    const send = (data: object) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, ...data }, origin: "null", source: frame.contentWindow }));
+    await act(async () => { send({ type: "hello" }); send({ type: "record-drafts", drafts: [{ questionId: "assets", rowId: "row1", fieldId: "amount" }] }); });
+    const guidedButton = host.querySelector<HTMLButtonElement>(".rs-guided-actions button.accent");
+    expect(guidedButton?.disabled).toBe(true);
+    const earlier = Array.from(host.querySelectorAll<HTMLButtonElement>(".rs-banner button")).find((button) => button.textContent === "Review earlier answer")!;
+    expect(earlier).toBeDefined();
+    await act(async () => earlier.click());
+    expect(post.mock.calls.some(([message]) => (message as any).id === "route" || (message as any).question === "route")).toBe(true);
+  });
+
+  it("ignores malformed or unauthenticated record-draft updates instead of clearing an existing warning", async () => {
+    state.api.mockResolvedValue({ ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+      questions: [{ id: "assets", type: "repeat", label: "Assets", fields: [{ id: "amount", type: "number", label: "Amount" }] }], answers: {}, recordGroups: {},
+    } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const send = (drafts: unknown, source: MessageEventSource | null = frame.contentWindow) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "record-drafts", drafts }, origin: "null", source }));
+    await act(async () => send([{ questionId: "assets", rowId: "row1", fieldId: "amount" }]));
+    const review = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Review answers")!;
+    for (const invalid of [[{ questionId: "assets", rowId: "bad/id", fieldId: "amount" }], [{ questionId: "assets", rowId: "row1", fieldId: "unknown" }], null, new Array(241).fill({})]) {
+      await act(async () => send(invalid));
+      expect(review.disabled).toBe(true);
+    }
+    await act(async () => send([], window));
+    expect(review.disabled).toBe(true);
+    await act(async () => send([]));
+    expect(review.disabled).toBe(false);
+  });
+
+  it("requires a successful record refresh after a rejected save even if its rejected draft is discarded", async () => {
+    vi.useFakeTimers();
+    const loaded = { ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+      questions: [{ id: "assets", type: "repeat", label: "Assets", maxRows: 3, fields: [] }], answers: {}, recordGroups: {},
+    } };
+    let loads = 0;
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) return Promise.resolve({ ok: false, status: 400, data: { recordErrors: [{ questionId: "assets", rowId: "row1" }] } });
+      if (url.endsWith("/submit")) return Promise.resolve({ ok: true, status: 200, data: { submittedAt: "2026-11-20T00:00:00Z" } });
+      return Promise.resolve(++loads === 2 ? { ok: false, status: 503, data: {} } : loaded);
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "record-operation", operationId: "op1", operation: { op: "add", questionId: "assets", rowId: "row1" } }, origin: "null", source: frame.contentWindow }));
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Some record changes were not saved")!.click());
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Discard draft")!.click());
+    const submit = Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!;
+    expect(submit.disabled).toBe(true);
+    await act(async () => submit.click());
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Retry loading records")!.click());
+    expect(loads).toBe(3);
+    expect(submit.disabled).toBe(false);
+  });
+  it.each([true, false])("serializes rejected-write reconciliation before queued saves and submission (refresh succeeds: %s)", async (refreshSucceeds) => {
+    vi.useFakeTimers();
+    const loaded = { ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+      version: 7, title: "Study", questions: [{ id: "answer", type: "text", label: "Answer" }], answers: {}, recordGroups: {},
+    } };
+    let resolveRefresh!: (value: unknown) => void;
+    let loads = 0;
+    let saves = 0;
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) {
+        saves++;
+        return Promise.resolve(saves === 1 ? { ok: false, status: 400, data: {} } : { ok: true, status: 200, data: { savedAt: "2026-11-20T00:00:00Z" } });
+      }
+      if (url.endsWith("/submit")) return Promise.resolve({ ok: true, status: 200, data: { submittedAt: "2026-11-20T00:00:00Z" } });
+      if (++loads === 1) return Promise.resolve(loaded);
+      return new Promise((resolve) => { resolveRefresh = resolve; });
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const set = (value: string) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value }, origin: "null", source: frame.contentWindow }));
+    await act(async () => { set("rejected"); await vi.advanceTimersByTimeAsync(650); });
+    expect(saves).toBe(1);
+    await act(async () => { set("newer"); await vi.advanceTimersByTimeAsync(650); });
+    expect(saves).toBe(1);
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!.click());
+    await act(async () => {
+      Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!.click();
+      await vi.advanceTimersByTimeAsync(6500);
+    });
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    expect(saves).toBe(1);
+    await act(async () => {
+      resolveRefresh(refreshSucceeds ? loaded : { ok: false, status: 503, data: {} });
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(saves).toBe(2);
+    const write = state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))[1];
+    expect(write?.[1]).toMatchObject({ body: { answers: { answer: { value: "newer" } } } });
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("newer");
+  });
   it("switches shell locale and direction while initializing the authored questionnaire independently", async () => {
     await act(async () => {
       root.render(createElement(RespondentShell, { token: "participant-token", initialLocale: "en-AU" }));

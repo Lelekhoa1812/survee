@@ -36,6 +36,69 @@ function operations(post: { mock: { calls: unknown[][] } }): RecordOperation[] {
 }
 
 describe("repeat group iframe bridge", () => {
+  it("reports invalid drafts until correction, explicit discard, or row removal", () => {
+    const html = '<section><template data-kqa-repeat-template="assets"><fieldset><legend>Asset</legend><input type="number" data-kqa-repeat-field="amount"></fieldset></template></section>';
+    const dom = new JSDOM(html, { runScripts: "dangerously", pretendToBeVisual: true });
+    const { window } = dom;
+    const post = vi.spyOn(window, "postMessage");
+    const send = (data: object) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, ...data }, source: window }));
+    const lastDrafts = () => post.mock.calls.map(([message]) => message as any).filter((message) => message.type === "record-drafts").at(-1).drafts;
+    const snapshot = { assets: [{ id: "row1", values: { amount: 2 }, revision: 1, fieldRevisions: { amount: 1 } }] };
+    window.eval(BRIDGE_SOURCE);
+    send({ type: "init", questions: [{ id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "amount", type: "number", label: "Amount", min: 1 }] }], answers: {}, recordGroups: snapshot });
+    expect(lastDrafts()).toEqual([]);
+    const setAmount = (value: string) => {
+      const input = window.document.querySelector<HTMLInputElement>('[data-kqa-repeat-field="amount"]')!;
+      input.value = value;
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    };
+    setAmount("0");
+    expect(lastDrafts()).toEqual([{ questionId: "assets", rowId: "row1", fieldId: "amount" }]);
+    send({ type: "record-groups", recordGroups: snapshot });
+    expect(window.document.querySelector<HTMLInputElement>('[data-kqa-repeat-field="amount"]')!.value).toBe("0");
+    send({ type: "locale", locale: "ar", messages: {} });
+    expect(lastDrafts()).toHaveLength(1);
+    send({ type: "lock", locked: true });
+    expect(lastDrafts()).toHaveLength(1);
+    send({ type: "lock", locked: false });
+    setAmount("2");
+    expect(lastDrafts()).toEqual([]);
+    setAmount("0");
+    send({ type: "discard-record-draft", questionId: "assets", rowId: "row1", fieldId: "amount" });
+    expect(lastDrafts()).toEqual([]);
+    expect(window.document.querySelector<HTMLInputElement>('[data-kqa-repeat-field="amount"]')!.value).toBe("2");
+    setAmount("0");
+    window.document.querySelector<HTMLButtonElement>('button[data-kqa-record-remove="row1"]')!.click();
+    expect(lastDrafts()).toEqual([]);
+    const messages = post.mock.calls.map(([message]) => message as any);
+    expect(messages.findLastIndex((message) => message.type === "record-operation" && message.operation.op === "remove")).toBeLessThan(messages.findLastIndex((message) => message.type === "record-drafts"));
+    window.close();
+  });
+
+  it("preserves a newer invalid draft when an earlier record operation is rejected and allows discarding it after a row disappears", () => {
+    const html = '<section><template data-kqa-repeat-template="assets"><fieldset><legend>Asset</legend><input type="number" data-kqa-repeat-field="amount"></fieldset></template></section>';
+    const dom = new JSDOM(html, { runScripts: "dangerously" });
+    const { window } = dom;
+    const post = vi.spyOn(window, "postMessage");
+    const send = (data: object) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, ...data }, source: window }));
+    const messages = () => post.mock.calls.map(([message]) => message as any);
+    const snapshot = { assets: [{ id: "row1", values: { amount: 2 }, revision: 1, fieldRevisions: { amount: 1 } }] };
+    window.eval(BRIDGE_SOURCE);
+    send({ type: "init", questions: [{ id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "amount", type: "number", label: "Amount", min: 1 }] }], answers: {}, recordGroups: snapshot });
+    const input = window.document.querySelector<HTMLInputElement>('[data-kqa-repeat-field="amount"]')!;
+    input.value = "3";
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const operationId = messages().findLast((message) => message.type === "record-operation").operationId;
+    input.value = "0";
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    send({ type: "record-rejected", rejectedOperationIds: [operationId], recordGroups: snapshot });
+    expect(window.document.querySelector<HTMLInputElement>('[data-kqa-repeat-field="amount"]')!.value).toBe("0");
+    send({ type: "record-groups", recordGroups: { assets: [] } });
+    expect(messages().filter((message) => message.type === "record-drafts").at(-1).drafts).toHaveLength(1);
+    send({ type: "discard-record-draft", questionId: "assets", rowId: "row1", fieldId: "amount" });
+    expect(messages().filter((message) => message.type === "record-drafts").at(-1).drafts).toEqual([]);
+    window.close();
+  });
   it("updates answered and not-answered routes when records are added, removed, or restored", () => {
     const html = questionnaire.replace("</body>", '<section data-kqa-question-id="has-assets"><input data-kqa="has-assets"></section><section data-kqa-question-id="no-assets"><input data-kqa="no-assets"></section></body>');
     const dom = new JSDOM(html, { runScripts: "dangerously", pretendToBeVisual: true });

@@ -22,6 +22,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   var pendingRecordOperations = [];
   var recordDrafts = {};
   var recordAnnouncements = {};
+  function reportInvalidRecordDrafts() {
+    var drafts = Object.keys(recordDrafts).map(function (key) { return recordDrafts[key]; }).filter(function (draft) { return draft.localInvalid; }).map(function (draft) {
+      return { questionId: draft.questionId, rowId: draft.rowId, fieldId: draft.fieldId };
+    });
+    post({ type: "record-drafts", drafts: drafts });
+  }
   var readyResolve;
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
 
@@ -863,6 +869,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       applyLock();
       readyResolve(snapshot());
       emit("ready", snapshot());
+      reportInvalidRecordDrafts();
       if (state.probe) setTimeout(runProbe, 60);
     } else if (m.type === "locale") {
       state.locale = typeof m.locale === "string" ? m.locale : state.locale;
@@ -893,6 +900,13 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     } else if (m.type === "record-rejected") {
       rejectRecordOperations(m);
       updateEligibility(true);
+    } else if (m.type === "discard-record-draft" && typeof m.questionId === "string" && typeof m.rowId === "string" && typeof m.fieldId === "string") {
+      var discardKey = m.questionId + "/" + m.rowId + "/" + m.fieldId;
+      if (recordDrafts[discardKey] && recordDrafts[discardKey].localInvalid) {
+        delete recordDrafts[discardKey];
+        if (q(m.questionId)) renderRecordQuestion(q(m.questionId));
+        reportInvalidRecordDrafts();
+      }
     } else if (m.type === "lock") {
       state.locked = !!m.locked;
       applyLock();
@@ -1255,7 +1269,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         var serverFieldRevision = Number(row.fieldRevisions[operation.fieldId]) || 0;
         if (serverFieldRevision > operation.expectedFieldRevision) {
           var draftKey = operation.questionId + "/" + operation.rowId + "/" + operation.fieldId;
-          recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, messageKey: "repeatConflict", messageValues: { item: itemLabel(q(operation.questionId)) } };
+          if (!recordDrafts[draftKey] || !recordDrafts[draftKey].localInvalid) recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, messageKey: "repeatConflict", messageValues: { item: itemLabel(q(operation.questionId)) } };
           var list = document.querySelector('[data-kqa-record-list="' + operation.questionId + '"]');
           var status = list && list.querySelector('[data-kqa-record-status="' + operation.questionId + '"]');
           recordAnnouncements[operation.questionId] = { key: "repeatConflict", values: { item: itemLabel(q(operation.questionId)) } };
@@ -1293,7 +1307,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (!operation.operationId || rejected.indexOf(operation.operationId) < 0) return;
       if (operation.op === "set" || operation.op === "clear") {
         var draftKey = operation.questionId + "/" + operation.rowId + "/" + operation.fieldId;
-        recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, messageKey: "repeatFieldInvalid" };
+        if (!recordDrafts[draftKey] || !recordDrafts[draftKey].localInvalid) recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, messageKey: "repeatFieldInvalid" };
       }
       recordAnnouncements[operation.questionId] = { key: "repeatConflict", values: { item: itemLabel(q(operation.questionId)) } };
     });
@@ -1328,9 +1342,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (state.locked || index < 0 || rows.length <= minRows) return;
     var row = rows[index];
     rows.splice(index, 1);
+    Object.keys(recordDrafts).forEach(function (key) {
+      var draft = recordDrafts[key];
+      if (draft.localInvalid && draft.questionId === question.id && draft.rowId === rowId) delete recordDrafts[key];
+    });
     renderRecordQuestion(question);
     updateEligibility(true);
     sendRecordOperation({ op: "remove", questionId: question.id, rowId: rowId, expectedRowRevision: row.revision });
+    reportInvalidRecordDrafts();
     var list = document.querySelector('[data-kqa-record-list="' + question.id + '"]');
     var remaining = list && list.querySelectorAll("fieldset[data-kqa-record-row]");
     var target = remaining && (remaining[Math.min(index, remaining.length - 1)] || document.querySelector('[data-kqa-record-add="' + question.id + '"]'));
@@ -1375,7 +1394,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var value = valueForRecordField(field, rowFieldControls(rowNode, fieldId));
     var draftKey = questionId + "/" + rowId + "/" + fieldId;
     if (!validateRecordValue(field, value)) {
-      recordDrafts[draftKey] = { value: value };
+      recordDrafts[draftKey] = { value: value, localInvalid: true, questionId: questionId, rowId: rowId, fieldId: fieldId };
+      reportInvalidRecordDrafts();
       showRecordFieldError(rowNode, fieldId, localized("repeatFieldInvalid"));
       var invalidList = document.querySelector('[data-kqa-record-list="' + questionId + '"]');
       var invalidStatus = invalidList && invalidList.querySelector('[data-kqa-record-status="' + questionId + '"]');
@@ -1387,16 +1407,17 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     clearRecordFieldError(rowNode, fieldId);
     var expectedFieldRevision = Number(row.fieldRevisions[fieldId]) || 0;
     if (value === null || value === "") {
-      if (!(fieldId in row.values)) return;
+      if (!(fieldId in row.values)) { reportInvalidRecordDrafts(); return; }
       delete row.values[fieldId];
       sendRecordOperation({ op: "clear", questionId: questionId, rowId: rowId, fieldId: fieldId, expectedFieldRevision: expectedFieldRevision });
     } else {
-      if (row.values[fieldId] === value) return;
+      if (row.values[fieldId] === value) { reportInvalidRecordDrafts(); return; }
       row.values[fieldId] = value;
       sendRecordOperation({ op: "set", questionId: questionId, rowId: rowId, fieldId: fieldId, expectedFieldRevision: expectedFieldRevision, value: value });
     }
     row.fieldRevisions[fieldId] = expectedFieldRevision + 1;
     row.revision++;
+    reportInvalidRecordDrafts();
   }
   document.addEventListener("input", function (ev) {
     var el = ev.target;
