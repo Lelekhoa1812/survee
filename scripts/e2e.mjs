@@ -70,8 +70,14 @@ try {
   const f2 = await (await page.waitForSelector("iframe")).contentFrame();
   await f2.waitForFunction(() => window.KQA && window.KQA.ready, { timeout: 10000 });
   await sleep(500);
-  const restored = await f2.evaluate(() => ({ p: KQA.get("priority"), c: KQA.get("channels"), co: KQA.get("company"), g: KQA.get("goal"), dom: document.querySelector('[data-kqa="company"]')?.value, radio: document.querySelector('[data-kqa="priority"][value="accuracy"]')?.checked }));
+  const restored = await f2.evaluate(() => ({
+    p: KQA.get("priority"), c: KQA.get("channels"), co: KQA.get("company"), g: KQA.get("goal"),
+    rank: KQA.get("tradeoffs"), rankDom: [...document.querySelectorAll('ol[data-kqa="tradeoffs"] li')].map((item) => item.getAttribute("data-value")),
+    dom: document.querySelector('[data-kqa="company"]')?.value,
+    radio: document.querySelector('[data-kqa="priority"][value="accuracy"]')?.checked,
+  }));
   check("answers restored after reload", restored.p === "accuracy" && restored.co === "Acme Pty Ltd" && restored.dom === "Acme Pty Ltd" && restored.radio === true && JSON.stringify(restored.c) === JSON.stringify(["email", "phone"]), JSON.stringify(restored));
+  check("complete rank order restored after reload", JSON.stringify(restored.rank) === JSON.stringify(["speed", "quality", "cost"]) && JSON.stringify(restored.rankDom) === JSON.stringify(["speed", "quality", "cost"]), JSON.stringify({ rank: restored.rank, rankDom: restored.rankDom }));
   await page.screenshot({ path: `${out}/respondent-restored.png` });
 
   // submit
