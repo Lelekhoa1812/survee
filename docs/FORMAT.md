@@ -38,7 +38,7 @@ Your file is therefore three things: a manifest, markup with bindings, and your 
 | Title | A `<title>` element |
 | Layout | Must work from 360 px wide up with no sideways scrolling. Respondents use phones. Test at 390 px |
 | Colour | Light and dark via `prefers-color-scheme` |
-| Frames and navigation | No `<iframe>`, `<object>`, `<embed>`, `<base>`, meta refresh or links that leave the page |
+| Frames and navigation | No `<iframe>`, `<object>`, `<embed>`, `<base>`, or meta refresh. KQA-supported `https:`, `mailto:`, and `tel:` links open through the host app; scripted or top-level navigation is not supported. |
 
 ### Optional markers for source-preserving MCP edits
 

@@ -298,18 +298,19 @@ describe("MCP tools", () => {
         output?: {
           fields?: string[];
           reviewEvidenceMatrix?: { required?: boolean; columns?: { name: string; required: boolean }[]; starterSamples?: string[]; instructions?: string[] };
-          questionContentReview?: { fields?: string[]; instructions?: string[] };
+          questionContentReview?: { fields?: string[]; instructions?: string[]; findingContract?: { version?: string; validOutcomes?: string[]; findingFields?: string[]; confidenceValues?: string[] } };
         };
         guardrails?: string[];
         accessibilityEvaluationMethodology?: { source?: string; status?: string; steps?: string[] };
         taskBasedUsabilityMethodology?: { status?: string; steps?: string[] };
         questionContentRubric?: { dimension: string; checks: string[] }[];
         questionContentReviewMethodology?: { probeDimensions?: { name: string; prompts: string[] }[]; recordFields?: string[]; steps?: string[] };
+        questionContentReviewFindingContract?: { version?: string; validOutcomes?: string[]; categories?: string[]; findingFields?: string[]; instructions?: string[] };
       };
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/21");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/22");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix).toMatchObject({ required: true });
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix?.columns?.map(({ name }) => name)).toContain("limitationUntestedReason");
@@ -324,6 +325,10 @@ describe("MCP tools", () => {
     ]);
     expect(body.result.structuredContent.designPlan?.questionContentReviewMethodology?.recordFields).toContain("unresolvedIssue");
     expect(body.result.structuredContent.designPlan?.output?.questionContentReview?.instructions?.join(" ")).toContain("Keep question-item cognition findings separate");
+    expect(body.result.structuredContent.designPlan?.output?.questionContentReview?.findingContract?.version).toBe("kqa-question-review/1");
+    expect(body.result.structuredContent.designPlan?.output?.questionContentReview?.findingContract?.validOutcomes).toContain("no_findings");
+    expect(body.result.structuredContent.designPlan?.output?.questionContentReview?.findingContract?.findingFields).toContain("evidence");
+    expect(body.result.structuredContent.designPlan?.output?.questionContentReview?.findingContract?.confidenceValues).toEqual(["low", "medium", "high"]);
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("observedUsabilityFindings");
     expect(body.result.structuredContent.visualProfile).toHaveProperty("questionnaire");
     expect(body.result.structuredContent.visualProfile).not.toHaveProperty("host");
@@ -355,7 +360,7 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { profileVersion?: string; policyVersion?: string; sourceFormat?: string; surface?: string; proposedMappings?: { role: string }[]; contrastChecks?: { status: string }[]; integrationProposal?: { status: string; cssOverlay: string | null } } } };
 
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/21", sourceFormat: "css", surface: "host" });
+    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/22", sourceFormat: "css", surface: "host" });
     expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
     expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
     expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });

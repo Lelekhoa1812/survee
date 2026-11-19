@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval:questionnaire-author": "node scripts/eval-questionnaire-author.mjs",
     "check": "tsx scripts/check.ts",
     "audit:tenant-migration": "tsx scripts/audit-tenant-migration.ts",
     "a11y:audit": "node scripts/a11y-audit.mjs",

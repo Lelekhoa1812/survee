@@ -131,6 +131,26 @@ const QUESTION_CONTENT_REVIEW_METHOD = {
   recordFields: ["itemIdAndVersion", "itemAndContextTested", "participantFitAndGaps", "probeDimensionAndPrompt", "observedInterpretationOrDifficulty", "severity", "revisionOrAction", "unresolvedIssue", "evidenceAndLimitations"],
 } as const;
 
+const QUESTION_CONTENT_REVIEW_FINDING_CONTRACT = {
+  version: "kqa-question-review/1",
+  validOutcomes: ["findings", "no_findings", "needs_context"],
+  findingFields: ["questionId", "category", "severity", "evidence", "rationale", "recommendation", "confidence"],
+  categories: [
+    "construct_scope", "wording_bias", "reference_period", "recall_burden", "response_options",
+    "scale_design", "answer_form_fit", "sensitivity_minimization", "flow_burden", "brief_coverage",
+    "sampling_inference", "privacy_ethics", "kqa_contract",
+  ],
+  severities: ["low", "moderate", "high", "critical"],
+  confidenceValues: ["low", "medium", "high"],
+  instructions: [
+    "Return questionId as the stable manifest id; use null only for a whole-interview omission that has no single item location.",
+    "Quote the smallest relevant wording or identify the missing brief requirement. Explain the effect on interpretation or response, then give a proportionate revision principle.",
+    "Use no_findings when review finds no supported issue. Do not invent concerns to fill the result; use needs_context for a material unresolved fact and name what the host must verify.",
+    "Separate observed evidence, reviewer inference, and proposed checks. Do not claim respondent testing, validation, legal compliance, or checker results unless performed and recorded.",
+    "Do not demand a universal answer option. Add other, not sure, not applicable, or prefer not to answer only when the construct and respondent context support it.",
+  ],
+} as const;
+
 const DESIGN_PLAN = {
   purpose: "A repeatable brief-to-build-to-review contract for the connected agent. Treat the user's stated visual direction and constraints as authoritative; ask only when a missing choice would materially change the result.",
   inputs: ["surface", "audience", "primary user task", "brand/theme references", "user-supplied CSS custom properties or token JSON when available", "content and data density", "technical and accessibility constraints"],
@@ -151,12 +171,14 @@ const DESIGN_PLAN = {
   taskBasedUsabilityMethodology: TASK_BASED_USABILITY_METHOD,
   questionContentRubric: QUESTION_CONTENT_RUBRIC,
   questionContentReviewMethodology: QUESTION_CONTENT_REVIEW_METHOD,
+  questionContentReviewFindingContract: QUESTION_CONTENT_REVIEW_FINDING_CONTRACT,
   output: {
     fields: ["briefSummary", "visualDirection", "tokenMapping", "designProfileProposalAndReview", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "questionContentReview", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
     questionContentReview: {
       requiredWhen: "New or materially changed/high-impact questions; otherwise state why not applicable.",
       statuses: ["passed", "issues found", "not tested", "not applicable"],
       fields: QUESTION_CONTENT_REVIEW_METHOD.recordFields,
+      findingContract: QUESTION_CONTENT_REVIEW_FINDING_CONTRACT,
       instructions: [
         "Use participant fit and intended respondent context, not convenience alone, to select interviewees.",
         "Keep question-item cognition findings separate from full-task usability and WCAG evaluation, even when one session supports multiple methods.",
@@ -266,7 +288,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/21",
+    policyVersion: "kqa-design/22",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

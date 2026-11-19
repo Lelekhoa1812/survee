@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/21");
+    expect(guidance.policyVersion).toBe("kqa-design/22");
     expect(guidance.principles.some((principle) => principle.id === "host-freshness")).toBe(true);
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
