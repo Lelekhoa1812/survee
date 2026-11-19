@@ -133,6 +133,16 @@
             },
             "uniqueItems": true
           },
+          "randomizeOptions": {
+            "type": "boolean"
+          },
+          "fixedOptionValues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+            }
+          },
           "note": {
             "anyOf": [
               {
@@ -428,6 +438,35 @@
                   "const": "multi"
                 }
               }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "randomizeOptions": {
+                  "const": true
+                }
+              },
+              "required": [
+                "randomizeOptions"
+              ]
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "single",
+                    "multi",
+                    "select"
+                  ]
+                },
+                "custom": {
+                  "const": false
+                }
+              },
+              "required": [
+                "options"
+              ]
             }
           },
           {

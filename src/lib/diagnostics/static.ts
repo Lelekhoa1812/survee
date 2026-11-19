@@ -45,7 +45,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
   return best;
 }
 
-const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "minSelections", "exclusiveOptions", "note", "min", "max", "step", "maxLength", "custom", "when"];
+const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "minSelections", "exclusiveOptions", "randomizeOptions", "fixedOptionValues", "note", "min", "max", "step", "maxLength", "custom", "when"];
 const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
@@ -700,6 +700,20 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
         add(ctx, "KQA221", `${p}.exclusiveOptions must be a non-empty list of unique values declared in this multi question's options.`, 'Use "exclusiveOptions" only on a multi question and list declared option values.', { offset: m.at(`${p}.exclusiveOptions`), path: `${p}.exclusiveOptions`, questionId: qid });
       }
     }
+    if (q.randomizeOptions !== undefined && typeof q.randomizeOptions !== "boolean") {
+      add(ctx, "KQA223", `${p}.randomizeOptions must be true or false.`, "Set it to true only for an unordered nominal choice list, or remove it.", { offset: m.at(`${p}.randomizeOptions`), path: `${p}.randomizeOptions`, questionId: qid });
+    }
+    if (q.fixedOptionValues !== undefined) {
+      const values = Array.isArray(q.options) ? new Set(q.options.filter(isObj).map((option) => option.value).filter((value): value is string => typeof value === "string")) : new Set<string>();
+      const fixed = Array.isArray(q.fixedOptionValues) ? q.fixedOptionValues : [];
+      const validFixed = Array.isArray(q.fixedOptionValues) && fixed.every((value) => typeof value === "string" && OPTION_VALUE_RE.test(value)) && new Set(fixed).size === fixed.length && fixed.every((value) => values.has(value));
+      if (!validFixed || q.randomizeOptions !== true) add(ctx, "KQA223", `${p}.fixedOptionValues requires randomizeOptions: true and a unique list of declared option values.`, "Mark only choices that must stay in their authored positions, such as an explicitly identified nonresponse option.", { offset: m.at(`${p}.fixedOptionValues`), path: `${p}.fixedOptionValues`, questionId: qid });
+    }
+    if (q.randomizeOptions === true) {
+      const fixed = Array.isArray(q.fixedOptionValues) ? new Set(q.fixedOptionValues.filter((value): value is string => typeof value === "string")) : new Set<string>();
+      const movableCount = Array.isArray(q.options) ? new Set(q.options.filter(isObj).map((option) => option.value).filter((value): value is string => typeof value === "string" && !fixed.has(value))).size : 0;
+      if (!["single", "multi", "select"].includes(t) || movableCount < 2) add(ctx, "KQA223", `${p}.randomizeOptions applies only to single, multi, or select questions and needs at least two movable options.`, "Use it for unordered nominal options only; keep scales, rankings and inherently ordered choices in their designed order.", { offset: m.at(`${p}.randomizeOptions`), path: `${p}.randomizeOptions`, questionId: qid });
+    }
 
     // ranges
     for (const k of ["min", "max", "step"] as const) {
@@ -908,6 +922,7 @@ function checkBindings(manifest: Manifest, b: BCtx) {
 
   for (const q of manifest.questions) {
     const list = controls.get(q.id) ?? [];
+    if (q.randomizeOptions === true && q.custom) add(ctx, "KQA223", `Question "${q.id}" cannot randomize options when it is custom.`, "Use native radio, checkbox, or select controls so KQA can apply and retain the presented order.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
     if (list.length === 0) {
       if (!q.custom) {
         const near = closest(q.id, b.dataKqa.map((f) => attr(f.el, "data-kqa") ?? ""));
@@ -929,6 +944,15 @@ function checkBindings(manifest: Manifest, b: BCtx) {
     if (note.enabled && noteEls.length === 0 && !q.custom) add(ctx, "KQA306", `Question "${q.id}" enables a note but the page has no element with data-kqa-note="${q.id}".`, `Add <textarea data-kqa-note="${q.id}" aria-label="Note for ${q.label.replace(/"/g, "'").slice(0, 60)}"></textarea>.`, { questionId: q.id, offset: b.at(`questions[${manifest.questions.indexOf(q)}]`), path: `questions[${manifest.questions.indexOf(q)}].note` });
 
     if (list.length === 0) continue;
+
+    if (q.randomizeOptions === true && (q.type === "single" || q.type === "multi")) {
+      const labelParents = list.map((found) => {
+        const labelIndex = found.ancestors.findIndex((ancestor) => ancestor.tagName === "label");
+        return labelIndex < 0 ? null : found.ancestors[labelIndex - 1] ?? null;
+      });
+      if (labelParents.some((parent) => parent === null) || labelParents.some((parent) => parent !== labelParents[0])) add(ctx, "KQA223", `Question "${q.id}" uses choice markup that KQA cannot safely reorder.`, "Wrap each radio or checkbox in a label, and place all option labels as siblings under the same parent.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
+    }
+    if (q.randomizeOptions === true && q.type === "select" && list[0] && kids(list[0].el).some((child) => isEl(child) && child.tagName !== "option")) add(ctx, "KQA223", `Select question "${q.id}" must use direct <option> children for option rotation.`, "Move options out of <optgroup> elements; an empty direct option can remain as the placeholder.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
 
     if (q.type === "rank") {
       const host = list[0]?.el;

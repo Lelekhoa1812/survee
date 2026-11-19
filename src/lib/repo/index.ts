@@ -3,6 +3,7 @@ import { ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
 import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer } from "../format/answers";
+import { orderOptions } from "../format/option-order";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
@@ -534,6 +535,13 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       }
       if (v.value === null) delete merged.value;
       else merged.value = v.value;
+      if (q.randomizeOptions && v.value !== null) {
+        merged.presentedOptionOrder = orderOptions({ options: q.options ?? [], randomizeOptions: true, fixedOptionValues: q.fixedOptionValues, participantId: ctx.participant.id, questionnaireVersion: String(ctx.version.version), questionId: q.id }).map((option) => option.value);
+        merged.optionOrderVersion = ctx.version.version;
+      } else {
+        delete merged.presentedOptionOrder;
+        delete merged.optionOrderVersion;
+      }
     }
     if ("note" in entry) {
       const cfg = noteConfig(q);

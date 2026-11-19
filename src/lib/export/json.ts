@@ -26,7 +26,7 @@ export function jsonExport(input: ExportInput): ExportFile {
     participants: sortedParticipants(input).map((p) => {
       const pr = progress(manifest, p.answers);
       const eligibility = evaluateEligibility(manifest, p.answers);
-      const answers: Record<string, { value?: unknown; display: string; note?: string; updatedAt: string }> = {};
+      const answers: Record<string, { value?: unknown; display: string; note?: string; updatedAt: string; presentedOptionOrder?: string[]; optionOrderVersion?: number }> = {};
       for (const q of manifest.questions) {
         const a = p.answers[q.id];
         if (!a) continue;
@@ -35,6 +35,8 @@ export function jsonExport(input: ExportInput): ExportFile {
           display: displayValue(q, a.value),
           note: a.note,
           updatedAt: a.updatedAt,
+          presentedOptionOrder: a.presentedOptionOrder,
+          optionOrderVersion: a.optionOrderVersion,
         };
       }
       return {

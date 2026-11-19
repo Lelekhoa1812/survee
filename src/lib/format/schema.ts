@@ -107,6 +107,10 @@ export const questionSchema = z.object({
   minSelections: z.number().int().min(1).max(LIMITS.maxOptions).optional(),
   /** Option values that cannot be selected with any other option in this multi question. */
   exclusiveOptions: z.array(z.string().regex(OPTION_VALUE_RE)).min(1).optional(),
+  /** Opt in to a stable per-participant order for nominal response categories. */
+  randomizeOptions: z.boolean().optional(),
+  /** Option values that keep their authored positions while other options rotate. */
+  fixedOptionValues: z.array(z.string().regex(OPTION_VALUE_RE)).optional(),
   note: noteSchema.optional(),
   min: z.number().finite().optional(),
   max: z.number().finite().optional(),
@@ -125,6 +129,27 @@ export const questionSchema = z.object({
     if (question.type !== "multi") ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections only applies to multi questions" });
     if (question.options && question.minSelections > question.options.length) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed the number of options" });
     if (question.maxSelections !== undefined && question.minSelections > question.maxSelections) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed maxSelections" });
+  }
+  if (question.randomizeOptions && !["single", "multi", "select"].includes(question.type)) {
+    ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions only applies to nominal single, multi, or select questions" });
+  }
+  if (question.randomizeOptions && question.custom) {
+    ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions requires native choice controls so KQA can apply and record the presented order" });
+  }
+  if (question.randomizeOptions && !question.options) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: "randomizeOptions requires at least two declared options" });
+  }
+  if (question.fixedOptionValues !== undefined) {
+    if (!question.randomizeOptions) ctx.addIssue({ code: "custom", path: ["fixedOptionValues"], message: "fixedOptionValues requires randomizeOptions" });
+    if (new Set(question.fixedOptionValues).size !== question.fixedOptionValues.length) ctx.addIssue({ code: "custom", path: ["fixedOptionValues"], message: "fixedOptionValues must not contain duplicates" });
+    const optionValues = new Set(question.options?.map((option) => option.value) ?? []);
+    question.fixedOptionValues.forEach((value, index) => {
+      if (!optionValues.has(value)) ctx.addIssue({ code: "custom", path: ["fixedOptionValues", index], message: `fixed option value "${value}" must match a declared option` });
+    });
+  }
+  if (question.randomizeOptions && question.options) {
+    const movableCount = question.options.length - new Set(question.fixedOptionValues ?? []).size;
+    if (movableCount < 2) ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions needs at least two options that are not fixed" });
   }
   if (question.exclusiveOptions !== undefined) {
     if (question.type !== "multi") ctx.addIssue({ code: "custom", path: ["exclusiveOptions"], message: "exclusiveOptions only applies to multi questions" });
@@ -164,6 +189,10 @@ export interface StoredAnswer {
   value?: AnswerValue;
   note?: string;
   updatedAt: string;
+  /** Option order presented to this respondent when the answer was saved. */
+  presentedOptionOrder?: string[];
+  /** Questionnaire version whose presentation order was shown. */
+  optionOrderVersion?: number;
 }
 export type AnswerMap = Record<string, StoredAnswer>;
 
@@ -199,6 +228,10 @@ export function manifestJsonSchema(): unknown {
       {
         if: { required: ["minSelections"] },
         then: { properties: { type: { const: "multi" } } },
+      },
+      {
+        if: { properties: { randomizeOptions: { const: true } }, required: ["randomizeOptions"] },
+        then: { properties: { type: { enum: ["single", "multi", "select"] }, custom: { const: false } }, required: ["options"] },
       },
       ...Array.from({ length: LIMITS.maxOptions }, (_, index) => {
         const minimum = index + 1;

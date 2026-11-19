@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 89 codes. Severity is **error**, **warning** or **note**.
+There are 91 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -296,6 +296,14 @@ Severity: **error**
 minSelections only applies to multi questions and must be a whole number from 1 through the option count. It cannot exceed maxSelections.
 
 **How to fix:** Set minSelections to a valid value on a multi question, keep it within the option count and maximum, and explain the requested number to respondents.
+
+### KQA223: Invalid response-option rotation
+
+Severity: **error**
+
+randomizeOptions applies only to unordered nominal single, multi, or select questions. Fixed values must be unique declared options and stay in their authored positions, leaving at least two options to rotate.
+
+**How to fix:** Use randomizeOptions only when the choices have no inherent order. Mark fixedOptionValues explicitly; keep ordinal scales, ranks, and ordered bands in their intended order, and pretest the resulting questionnaire.
 
 ### KQA220: Guided presentation needs sections
 
@@ -830,3 +838,11 @@ Severity: **warning**
 Some saved multi-select answers contain fewer choices than the new minSelections requires. KQA preserves those answers; affected respondents must add choices before submitting or clear an optional response.
 
 **How to fix:** Keep the existing minimum, choose a minimum that fits saved answers, or proceed only after reviewing the correction burden and respondent communication.
+
+### KQA708: Option presentation changed
+
+Severity: **warning**
+
+The question's option order or rotation policy changed while people have saved answers. Responses collected under different presentation designs may not be directly comparable.
+
+**How to fix:** Keep the presentation policy consistent for trend comparisons, or document the change and analyze the cohorts separately.

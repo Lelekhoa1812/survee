@@ -106,6 +106,15 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
         if (used > 0) out.push(make("KQA702", `Option "${o.value}" ("${o.label}") of "${q.id}" is not in the new version, but ${used} ${used === 1 ? "person chose" : "people chose"} it.`, undefined, q.id));
       }
     }
+    const oldValues = q.options?.map((option) => option.value) ?? [];
+    const newValues = n.options?.map((option) => option.value) ?? [];
+    const sameOptionSet = oldValues.length === newValues.length && oldValues.every((value) => newValues.includes(value));
+    const authoredOrderChanged = sameOptionSet && JSON.stringify(oldValues) !== JSON.stringify(newValues);
+    const oldFixed = [...(q.fixedOptionValues ?? [])].sort();
+    const newFixed = [...(n.fixedOptionValues ?? [])].sort();
+    if (people > 0 && n.type === q.type && ((q.randomizeOptions ?? false) !== (n.randomizeOptions ?? false) || JSON.stringify(oldFixed) !== JSON.stringify(newFixed) || authoredOrderChanged)) {
+      out.push(make("KQA708", `Question "${q.id}" changed its option presentation order or rotation policy while ${people} ${people === 1 ? "person has" : "people have"} saved an answer.`, undefined, q.id));
+    }
     if (n.type === "multi" && n.maxSelections !== undefined) {
       const peopleOverLimit = peopleOverNewSelectionLimit.get(q.id) ?? 0;
       if (peopleOverLimit > 0) {

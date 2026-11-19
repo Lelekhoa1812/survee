@@ -5,6 +5,13 @@ import { compareVersions } from "../src/lib/diagnostics/compat";
 const manifest = (questions: Manifest["questions"]): Manifest => ({ format: "kqa/1", title: "Survey", questions });
 
 describe("compareVersions", () => {
+  it("warns when option presentation changes for answered questions", () => {
+    const previous = manifest([{ id: "q", type: "single", label: "Choices", options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);
+    const next = manifest([{ id: "q", type: "single", label: "Choices", randomizeOptions: true, fixedOptionValues: ["c"], options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);
+    const diagnostics = compareVersions({ previous, next, answers: [{ status: "open", answers: { q: { value: "a", updatedAt: "now" } } }] });
+    expect(diagnostics.filter((item) => item.code === "KQA708")).toHaveLength(1);
+  });
+
   it("warns when newly exclusive options conflict with retained answers", () => {
     const previous = manifest([{ id: "q", type: "multi", label: "Choices", options: ["none", "one", "two"].map((value) => ({ value, label: value })) }]);
     const next = manifest([{ id: "q", type: "multi", label: "Choices", exclusiveOptions: ["none"], options: ["none", "one", "two"].map((value) => ({ value, label: value })) }]);

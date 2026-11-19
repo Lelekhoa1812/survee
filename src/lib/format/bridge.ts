@@ -743,6 +743,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.questions = m.questions || [];
       state.qmap = {};
       state.questions.forEach(function (x) { state.qmap[x.id] = x; });
+      reorderResponseOptions();
       state.participant = m.participant || null;
       state.probe = !!m.probe;
       state.preview = !!m.preview;
@@ -788,6 +789,36 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   });
 
   function snapshot() { return { answers: answersCopy(), locked: state.locked, questions: state.questions.slice(), participant: state.participant }; }
+
+  /** Match native controls to the stable option order supplied by the respondent API. */
+  function reorderResponseOptions() {
+    state.questions.forEach(function (question) {
+      if (!question.randomizeOptions || !question.options || !question.options.length) return;
+      var controls = controlsForQuestion(question.id);
+      if (!controls.length) return;
+      if (question.type === "select" && controls[0].tagName === "SELECT") {
+        var select = controls[0];
+        var optionByValue = {};
+        Array.prototype.slice.call(select.options).forEach(function (option) { if (option.value) optionByValue[option.value] = option; });
+        question.options.forEach(function (option) { if (optionByValue[option.value]) select.appendChild(optionByValue[option.value]); });
+        return;
+      }
+      var rows = [];
+      controls.forEach(function (control) {
+        var input = control;
+        var label = input.closest("label");
+        if (label) rows.push({ value: input.value, label: label });
+      });
+      if (!rows.length || rows.some(function (row) { return row.label.parentElement !== rows[0].label.parentElement; })) return;
+      var parent = rows[0].label.parentElement;
+      if (!parent) return;
+      question.options.forEach(function (option) {
+        var row = rows.find(function (item) { return item.value === option.value; });
+        if (row) parent.appendChild(row.label);
+      });
+    });
+  }
+  function controlsForQuestion(id) { return controls(id); }
   function answersCopy() {
     var out = {};
     Object.keys(state.answers).forEach(function (id) { out[id] = { value: state.answers[id].value, note: state.answers[id].note }; });

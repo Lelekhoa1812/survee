@@ -190,6 +190,8 @@ describe("long table", () => {
       "Current eligibility",
       "Answer",
       "Answer value",
+      "Presented option order",
+      "Option order version",
       "Note",
       "Updated at",
     ]);
@@ -218,7 +220,7 @@ describe("long table", () => {
 
   it("keeps the note with its line break on the long row", () => {
     const row = longTable(input).rows.find((r) => r[0] === "Ben Okafor" && r[3] === "satisfaction")!;
-    expect(row[9]).toBe(benNote);
+    expect(row[11]).toBe(benNote);
   });
 });
 

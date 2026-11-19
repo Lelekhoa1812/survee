@@ -1,4 +1,5 @@
 import { progress } from "@/lib/format/answers";
+import { orderOptions } from "@/lib/format/option-order";
 import { fail, json } from "@/lib/http";
 import { loadByToken } from "@/lib/repo";
 import { looksLikeToken } from "@/lib/tokens";
@@ -14,6 +15,9 @@ export async function GET(req: Request, { params }: Ctx) {
   const ctx = await loadByToken(token, { touch: shouldRecordVisit(req) });
   if (!ctx) return fail(404, "This link is not valid.");
   const { manifest } = ctx.version;
+  const questions = manifest.questions.map((question) => question.randomizeOptions
+    ? { ...question, options: orderOptions({ options: question.options ?? [], randomizeOptions: true, fixedOptionValues: question.fixedOptionValues, participantId: ctx.participant.id, questionnaireVersion: String(ctx.version.version), questionId: question.id }) }
+    : question);
   return json({
     ok: true,
     participant: { name: ctx.participant.name, status: ctx.participant.status, revision: ctx.participant.revision, submittedAt: ctx.participant.submittedAt },
@@ -22,7 +26,7 @@ export async function GET(req: Request, { params }: Ctx) {
     title: manifest.title,
     presentation: manifest.presentation ?? "all",
     sections: manifest.sections ?? [],
-    questions: manifest.questions,
+    questions,
     answers: ctx.participant.answers,
     progress: progress(manifest, ctx.participant.answers),
   });

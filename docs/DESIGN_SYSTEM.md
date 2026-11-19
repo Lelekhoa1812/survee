@@ -52,6 +52,7 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 - For live interview status, can a manager refresh the participant progress snapshot, and is it clear that updates are manual rather than real time?
 - Does each question ask one clear thing, use neutral wording, and state an appropriate reference period?
 - Are closed options distinct and sufficient for reasonable answers, and are scale labels and option ordering intentional?
+- If nominal option rotation is enabled, is there a defensible reason to expect position effects, are ordered scales/categories excluded, are fixed choices explicitly configured by value, and will the presented order be retained and considered in analysis? Rotation distributes position effects; it does not remove them. Pretest the behavior with intended respondents.
 - Were new or high-impact questions pretested with people like the intended respondents where feasible?
 - Do cognitive pretest notes show who was represented, which items/context were tested, the probe dimension, findings, revisions, and unresolved issues? Is usability evidence kept distinct?
 - For new or materially changed flows, did representative users attempt realistic end-to-end tasks? Record task success, hesitation, errors, recovery, misunderstandings, participant context, and limitations; mark usability untested if no sessions were run. This is separate from item pretesting and WCAG evaluation.

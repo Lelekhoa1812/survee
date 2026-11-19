@@ -10,7 +10,7 @@ export interface Table {
 
 export interface WideColumn {
   header: string;
-  kind: "fixed" | "answer" | "note" | "eligibility";
+  kind: "fixed" | "answer" | "note" | "eligibility" | "presentation-order";
   cell: (p: ExportParticipant) => string;
 }
 
@@ -51,6 +51,7 @@ export function wideColumns(manifest: Manifest): WideColumn[] {
   for (const q of manifest.questions) {
     cols.push({ header: `${q.id} | eligibility`, kind: "eligibility", cell: (p) => currentEligibility(p, q.id) ? "eligible" : "inactive" });
     cols.push({ header: `${q.id} | ${q.label}`, kind: "answer", cell: (p) => answerDisplay(q, p) });
+    if (q.randomizeOptions) cols.push({ header: `${q.id} | presented option order`, kind: "presentation-order", cell: (p) => p.answers[q.id]?.presentedOptionOrder?.join(";") ?? "" });
     if (noteConfig(q).enabled) {
       cols.push({ header: `${q.id} | note`, kind: "note", cell: (p) => p.answers[q.id]?.note ?? "" });
     }
@@ -77,6 +78,8 @@ export const LONG_HEADER = [
   "Current eligibility",
   "Answer",
   "Answer value",
+  "Presented option order",
+  "Option order version",
   "Note",
   "Updated at",
 ];
@@ -111,6 +114,8 @@ export function longTable(input: ExportInput): Table {
         eligible ? "eligible" : "inactive",
         answered ? displayValue(q, a?.value) : "",
         answered ? rawValue(a?.value) : "",
+        a?.presentedOptionOrder?.join(";") ?? "",
+        a?.optionOrderVersion === undefined ? "" : String(a.optionOrderVersion),
         note,
         a?.updatedAt ?? "",
       ]);
