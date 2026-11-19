@@ -36,6 +36,38 @@ function operations(post: { mock: { calls: unknown[][] } }): RecordOperation[] {
 }
 
 describe("repeat group iframe bridge", () => {
+  it("updates answered and not-answered routes when records are added, removed, or restored", () => {
+    const html = questionnaire.replace("</body>", '<section data-kqa-question-id="has-assets"><input data-kqa="has-assets"></section><section data-kqa-question-id="no-assets"><input data-kqa="no-assets"></section></body>');
+    const dom = new JSDOM(html, { runScripts: "dangerously", pretendToBeVisual: true });
+    const { window } = dom;
+    const post = vi.spyOn(window, "postMessage");
+    window.eval(BRIDGE_SOURCE);
+    const questions = [
+      { id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "name", type: "text", label: "Name" }] },
+      { id: "has-assets", type: "text", label: "Has assets", when: { all: [{ question: "assets", operator: "answered" }] } },
+      { id: "no-assets", type: "text", label: "No assets", when: { all: [{ question: "assets", operator: "notAnswered" }] } },
+    ];
+    const send = (data: object) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, ...data }, source: window }));
+    const visible = (id: string) => !window.document.querySelector<HTMLElement>(`[data-kqa-question-id="${id}"]`)!.hidden;
+    send({ type: "init", questions, answers: {}, recordGroups: {} });
+    expect([visible("has-assets"), visible("no-assets")]).toEqual([false, true]);
+    expect(window.KQA.isAnswered("assets")).toBe(false);
+    window.document.querySelector<HTMLButtonElement>("[data-kqa-record-add=assets]")!.click();
+    expect([visible("has-assets"), visible("no-assets")]).toEqual([true, false]);
+    expect(window.KQA.isAnswered("assets")).toBe(true);
+    expect(window.KQA.progress()).toEqual({ answered: 1, total: 2 });
+    expect(post.mock.calls.map(([message]) => message as any).some((message) => message.type === "eligibility" && message.eligible["has-assets"])).toBe(true);
+    const rowId = operations(post)[0].rowId!;
+    window.document.querySelector<HTMLButtonElement>(`button[data-kqa-record-remove="${rowId}"]`)!.click();
+    expect([visible("has-assets"), visible("no-assets")]).toEqual([false, true]);
+    expect(window.KQA.isAnswered("assets")).toBe(false);
+    send({ type: "record-groups", recordGroups: { assets: [{ id: "saved", values: {}, revision: 0, fieldRevisions: {} }] } });
+    expect([visible("has-assets"), visible("no-assets")]).toEqual([true, false]);
+    send({ type: "record-groups", recordGroups: { assets: [] } });
+    expect([visible("has-assets"), visible("no-assets")]).toEqual([false, true]);
+    window.close();
+  });
+
   it("adds a stable row, captures typed edits, and sends revision-fenced operations", () => {
     const page = start();
     page.window.document.querySelector<HTMLButtonElement>("[data-kqa-record-add=assets]")!.click();

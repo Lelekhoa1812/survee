@@ -57,10 +57,12 @@ describe("guided question respondent flow", () => {
 
     await act(async () => findButton("Continue").click());
     expect(host.querySelector(".rs-guided-count")?.textContent).toBe("Question 2 of 3");
+    expect(host.querySelector(".rs-guided")?.textContent).toContain("Goals");
     expect(postMessage.mock.calls.map(([message]) => message as any).some((message) => message.type === "guided" && message.question === "two")).toBe(true);
 
     await act(async () => findButton("Back").click());
     expect(host.querySelector(".rs-guided-count")?.textContent).toBe("Question 1 of 3");
+    expect(host.querySelector(".rs-guided")?.textContent).toContain("Work");
   });
 
   it("blocks the current under-minimum answer after advancing past an optional blank question", async () => {

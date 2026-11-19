@@ -60,9 +60,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function q(id) { return state.qmap[id]; }
   function answerOf(id) { return state.answers[id] || {}; }
   function isAnswered(id) {
+    var question = q(id);
+    if (question && question.type === "repeat") return (state.recordGroups[id] || []).some(function (row) { return !row.deletedAt; });
     var v = answerOf(id).value;
     if (v === undefined || v === null) return false;
-    var question = q(id);
     if (question && question.type === "rank") {
       var allowed = (question.options || []).map(function (option) { return option.value; });
       return Array.isArray(v) && v.length > 0 && v.length === allowed.length && new Set(v).size === allowed.length && v.every(function (value) { return allowed.indexOf(value) !== -1; });
@@ -563,8 +564,11 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   // clears its answer; the answer can become eligible again if its parent changes.
   function conditionMatches(condition, eligible) {
     if (!condition || typeof condition.question !== "string" || !eligible[condition.question]) return false;
+    var sourceQuestion = q(condition.question);
     var actual = answerOf(condition.question).value;
-    var answered = actual !== undefined && actual !== null && (Array.isArray(actual) ? actual.length > 0 : typeof actual === "string" ? actual.trim() !== "" : true);
+    var answered = sourceQuestion && sourceQuestion.type === "repeat"
+      ? isAnswered(condition.question)
+      : actual !== undefined && actual !== null && (Array.isArray(actual) ? actual.length > 0 : typeof actual === "string" ? actual.trim() !== "" : true);
     if (condition.operator === "answered") return answered;
     if (condition.operator === "notAnswered") return !answered;
     if (actual === undefined || actual === null) return false;
@@ -885,8 +889,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.questions.forEach(function (x) { emit("change", { id: x.id, value: answerOf(x.id).value, note: answerOf(x.id).note, source: "app" }); });
     } else if (m.type === "record-groups") {
       applyRecordGroups(m.recordGroups, m.ackOperationIds);
+      updateEligibility(true);
     } else if (m.type === "record-rejected") {
       rejectRecordOperations(m);
+      updateEligibility(true);
     } else if (m.type === "lock") {
       state.locked = !!m.locked;
       applyLock();
@@ -1303,6 +1309,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var row = { id: uniqueRecordId(), values: {}, revision: 0, fieldRevisions: {} };
     rows.push(row);
     renderRecordQuestion(question);
+    updateEligibility(true);
     sendRecordOperation({ op: "add", questionId: question.id, rowId: row.id });
     var list = document.querySelector('[data-kqa-record-list="' + question.id + '"]');
     var first = list && list.querySelector('[data-kqa-repeat-row="' + row.id + '"]');
@@ -1318,6 +1325,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var row = rows[index];
     rows.splice(index, 1);
     renderRecordQuestion(question);
+    updateEligibility(true);
     sendRecordOperation({ op: "remove", questionId: question.id, rowId: rowId, expectedRowRevision: row.revision });
     var list = document.querySelector('[data-kqa-record-list="' + question.id + '"]');
     var remaining = list && list.querySelectorAll("fieldset[data-kqa-record-row]");

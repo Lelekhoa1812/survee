@@ -278,9 +278,9 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       const first = questionsInPresentationOrder(questions.current, data.questionOrder).find((question) => eligibility.current[question.id] !== false);
       if (first && !guidedQuestionId) {
         setGuidedQuestionId(first.id);
+        setGuidedSectionId(first.section ?? "__unsectioned");
         setGuidedQuestionAnnouncement({ index: 1, total: questionsInPresentationOrder(questions.current, data.questionOrder).filter((question) => eligibility.current[question.id] !== false).length, label: first.label, message: "questionAnnouncement" });
       }
-      if (first) setGuidedSectionId(first.section ?? "__unsectioned");
       setGuidedMode(true);
       return;
     }
