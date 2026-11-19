@@ -131,6 +131,7 @@ describe("agent documentation bundle", () => {
     expect(skill).toContain("references/FORMAT.md");
     expect(skill).toContain("install each item at its supplied relative path");
     expect(skill).toContain("references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
+    expect(skill).toContain("references/PACKAGE_DRAFT_BENCHMARK.md");
     expect(skill).toContain("references/QUESTION_BLUEPRINT.md");
     const references = [
       ["FORMAT.md", "FORMAT.md"],
@@ -140,6 +141,7 @@ describe("agent documentation bundle", () => {
       ["QUESTION_BLUEPRINT.md", "QUESTION_BLUEPRINT.md"],
       ["MCP.md", "MCP.md"],
       ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
+      ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
       ["starter.kqa.html", "template/starter.kqa.html"],
       ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
       ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
@@ -152,12 +154,18 @@ describe("agent documentation bundle", () => {
 
   it("publishes the questionnaire evaluation benchmark and its labeled development corpus", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-authoring-benchmark" && doc.file === "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md")).toBe(true);
+    expect(DOCS.some((doc) => doc.slug === "package-draft-benchmark" && doc.file === "evals/PACKAGE_DRAFT_BENCHMARK.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
+    expect(bundle).toContain("PACKAGE_DRAFT_BENCHMARK.md");
     expect(bundle).toContain("scores are not validation or respondent evidence");
     const corpus = await readAsset("evals/questionnaire-authoring-cases.json");
     expect(corpus?.type).toBe("application/json; charset=utf-8");
     expect(JSON.parse(corpus!.body).benchmarkVersion).toBe("kqa-questionnaire-review/1");
+    const draftCases = await readAsset("evals/package-draft-cases.json");
+    const resultSchema = await readAsset("evals/package-draft-results.schema.json");
+    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/1");
+    expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
   });
 
   it("publishes the live MCP operating guide as a named doc and in the agent bundle", async () => {

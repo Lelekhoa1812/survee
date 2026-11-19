@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "eval:questionnaire-author": "node scripts/eval-questionnaire-author.mjs",
     "eval:package-selection": "node scripts/eval-package-selection.mjs",
+    "eval:package-draft": "tsx scripts/eval-package-draft.ts",
     "check": "tsx scripts/check.ts",
     "audit:tenant-migration": "tsx scripts/audit-tenant-migration.ts",
     "a11y:audit": "node scripts/a11y-audit.mjs",

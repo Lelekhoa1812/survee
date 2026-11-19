@@ -9,6 +9,7 @@ export const DOCS = [
   { slug: "question-blueprint", file: "QUESTION_BLUEPRINT.md", title: "Question blueprint", blurb: "Reusable record connecting a question's purpose, interpretation, routing, risks and testing." },
   { slug: "questionnaire-author-skill", file: "kqa-questionnaire-author/SKILL.md", title: "Questionnaire author skill", blurb: "Portable, repeatable workflow for agents authoring and reviewing KQA interviews." },
   { slug: "questionnaire-authoring-benchmark", file: "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", title: "Questionnaire evaluation benchmark", blurb: "Versioned review corpus, provider-neutral scoring, and evaluation limits for questionnaire authoring agents." },
+  { slug: "package-draft-benchmark", file: "evals/PACKAGE_DRAFT_BENCHMARK.md", title: "Package draft benchmark", blurb: "Expert content review rubric and separate functional, accessibility, respondent-pretest and format evidence lanes." },
   { slug: "mcp", file: "MCP.md", title: "KQA MCP server", blurb: "Connection, permissions and operating procedures for live interviews." },
   { slug: "diagnostics", file: "DIAGNOSTICS.md", title: "Checker codes", blurb: "What each error and warning means and how to fix it." },
 ] as const;
@@ -34,6 +35,8 @@ export async function readAsset(rel: string): Promise<{ body: string; type: stri
     "examples/personal-planning.review.md": "text/markdown; charset=utf-8",
     "kqa-manifest.schema.json": "application/json; charset=utf-8",
     "evals/questionnaire-authoring-cases.json": "application/json; charset=utf-8",
+    "evals/package-draft-cases.json": "application/json; charset=utf-8",
+    "evals/package-draft-results.schema.json": "application/json; charset=utf-8",
   };
   const type = allowed[rel];
   if (!type) return null;

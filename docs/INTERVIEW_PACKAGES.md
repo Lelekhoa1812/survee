@@ -10,6 +10,8 @@ For complete but deliberately illustrative flows, see the runnable [service-impr
 
 The hosted assets are also served as [service-improvement HTML](/api/docs/examples/service-improvement.kqa.html), [service-improvement review](/api/docs/examples/service-improvement.review.md), [personal-planning HTML](/api/docs/examples/personal-planning.kqa.html), and [personal-planning review](/api/docs/examples/personal-planning.review.md).
 
+For a defined method to review complete package-based drafts, see the [package-draft evaluation benchmark](evals/PACKAGE_DRAFT_BENCHMARK.md). It keeps expert content review, KQA format checks, functional verification, accessibility assessment, and respondent pretesting as separate evidence lanes. Packages and examples are starting points, not validated instruments.
+
 KQA hosts self-completed HTML questionnaires. It does not provide a live moderator, interviewer probes, or a qualitative interview guide. If the host means a synchronous moderated interview, use these packages only as source material and create a separate moderator guide and recording process.
 
 ## Common operating procedure

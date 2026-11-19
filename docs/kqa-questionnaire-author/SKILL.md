@@ -50,4 +50,4 @@ Return the complete HTML file and a concise review record containing:
 
 Use plain language and distinguish observed evidence from interpretation. A passing checker is not a finding that the questionnaire is suitable, accessible in every context, legally compliant, or ready to launch.
 
-For agent critique evaluation, see [`references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md). Its public corpus is a development set, not validation or respondent evidence.
+For agent critique evaluation, see [`references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md). Its public corpus is a development set, not validation or respondent evidence. For blinded expert review of complete package-based drafts, see [`references/PACKAGE_DRAFT_BENCHMARK.md`](references/PACKAGE_DRAFT_BENCHMARK.md); treat its content ratings, KQA format checks, functional/accessibility checks, and respondent evidence as separate lanes.
