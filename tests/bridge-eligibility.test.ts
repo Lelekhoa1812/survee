@@ -142,12 +142,24 @@ describe("questionnaire bridge conditional eligibility", () => {
     page.window.close();
   });
 
-  it("ignores respondent clear actions after submission has locked the answers", () => {
-    const page = start({ mode: { value: "other" } });
-    page.send({ type: "lock", locked: true });
-    page.send({ type: "clear-answer", id: "mode" });
+  it("clears a respondent note independently through the normal save event", () => {
+    const page = start({ mode: { value: "other", note: "Remove this note" } });
+    page.send({ type: "clear-note", id: "mode" });
 
     expect(page.window.KQA.get("mode")).toBe("other");
+    expect(page.window.KQA.getNote("mode")).toBeUndefined();
+    expect(page.post.mock.calls.some(([message]) => message.type === "set" && message.id === "mode" && message.note === null)).toBe(true);
+    page.window.close();
+  });
+
+  it("ignores respondent clear actions after submission has locked the answers", () => {
+    const page = start({ mode: { value: "other", note: "Keep this note" } });
+    page.send({ type: "lock", locked: true });
+    page.send({ type: "clear-answer", id: "mode" });
+    page.send({ type: "clear-note", id: "mode" });
+
+    expect(page.window.KQA.get("mode")).toBe("other");
+    expect(page.window.KQA.getNote("mode")).toBe("Keep this note");
     expect(page.window.document.querySelector<HTMLInputElement>('[data-kqa="mode"]')!.checked).toBe(true);
     page.window.close();
   });

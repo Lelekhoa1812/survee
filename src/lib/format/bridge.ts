@@ -578,6 +578,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (state.ready && !state.locked) setHtmlState(m.offline ? "offline" : "ready");
     } else if (m.type === "clear-answer" && typeof m.id === "string") {
       commit(m.id, { value: null }, "script");
+    } else if (m.type === "clear-note" && typeof m.id === "string") {
+      commit(m.id, { note: null }, "script");
     } else if (m.type === "guided") {
       state.guided = !!m.enabled;
       state.guidedSection = typeof m.section === "string" ? m.section : null;

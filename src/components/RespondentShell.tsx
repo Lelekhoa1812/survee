@@ -375,6 +375,9 @@ export function RespondentShell({ token }: { token: string }) {
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
+  const retainedAnswers = questions.current.filter((question) => eligibility.current[question.id] === false && (
+    hasValue(answers.current[question.id]?.value) || Boolean(answers.current[question.id]?.note)
+  ));
   const currentQuestionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
   const answeredInNavigation = reviewQuestions.filter((question) => hasValue(answers.current[question.id]?.value)).length;
 
@@ -564,7 +567,33 @@ export function RespondentShell({ token }: { token: string }) {
                 );
               })}
             </div>
-            <p className="muted review-retention">Questions hidden by your current answers are not listed here. Any earlier answers to them are retained and may reappear if the question becomes eligible.</p>
+            {hiddenQuestionCount > 0 && (
+              <details className="review-retained">
+                <summary>Previously answered hidden questions ({retainedAnswers.length})</summary>
+                <p className="muted review-retention">These saved values are not part of your current answers. They may reappear if the question becomes eligible. You can clear a value or note here; clearing one does not change the answer that controls routing.</p>
+                {retainedAnswers.length ? (
+                  <div className="review-list review-retained-list">
+                    {retainedAnswers.map((question) => {
+                      const answer = answers.current[question.id];
+                      const answered = hasValue(answer?.value);
+                      return (
+                        <section className="review-entry" key={question.id}>
+                          <div className="review-entry-copy">
+                            <h3>{question.label}</h3>
+                            {answered && <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{displayValue(question, answer?.value)}</p>}
+                            {answer?.note && <p className="review-note"><strong>Note:</strong> {answer.note}</p>}
+                          </div>
+                          <div className="review-entry-actions">
+                            {answered && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={`Clear saved answer to ${question.label}`} onClick={() => post({ type: "clear-answer", id: question.id })}>Clear answer</button>}
+                            {answer?.note && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={`Clear saved note for ${question.label}`} onClick={() => post({ type: "clear-note", id: question.id })}>Clear note</button>}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : <p className="muted">No answers or notes are currently saved for hidden questions.</p>}
+              </details>
+            )}
           </div>
         </Modal>
       )}

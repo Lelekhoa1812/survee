@@ -492,6 +492,10 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .review-problems, .review-problem { color: var(--danger); font-weight: 600; }
 .review-note { font-size: 13px; }
 .review-retention { font-size: 12px; }
+.review-retained { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.review-retained > summary { cursor: pointer; font-weight: 600; }
+.review-retained[open] > summary { margin-bottom: 10px; }
+.review-retained-list { margin-top: 12px; }
 .modal.review-modal > .actions { position: sticky; bottom: 0; padding-top: 12px; border-top: 1px solid var(--line); background: var(--surface); }
 @media (max-width: 520px) { .modal.review-modal { padding: 18px; } .review-entry { gap: 10px; } .review-entry-actions { max-width: 140px; } .review-entry-actions > .btn { flex-shrink: 0; } }
 .modal.key-permission-modal { grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }

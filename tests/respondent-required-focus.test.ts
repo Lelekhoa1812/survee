@@ -199,7 +199,7 @@ describe("respondent required-answer recovery", () => {
     expect(postMessage).toHaveBeenCalledWith({ kqa: 1, type: "focus-question", id: "first-required" }, "*");
   });
 
-  it("shows readable saved answers and notes while omitting currently inactive questions", async () => {
+  it("keeps hidden retained answers collapsed and lets respondents clear their saved value or note", async () => {
     state.api.mockResolvedValueOnce({
       ok: true, status: 200, data: {
         ok: true,
@@ -211,13 +211,13 @@ describe("respondent required-answer recovery", () => {
           { id: "choice", type: "single", label: "Choose one", options: [{ value: "yes", label: "Yes, please" }, { value: "no", label: "No" }] },
           { id: "channels", type: "multi", label: "Which channels?", options: [{ value: "email", label: "Email" }, { value: "phone", label: "Phone" }] },
           { id: "reason", type: "text", label: "Any context?", note: true },
-          { id: "hidden", type: "text", label: "Hidden follow-up" },
+          { id: "hidden", type: "text", label: "Hidden follow-up", note: true },
         ],
         answers: {
           choice: { value: "yes", updatedAt: "now" },
           channels: { value: ["email", "phone"], updatedAt: "now" },
           reason: { value: "Useful context", note: "For the host", updatedAt: "now" },
-          hidden: { value: "Retained answer", updatedAt: "now" },
+          hidden: { value: "Retained answer", note: "Retained note", updatedAt: "now" },
         },
         progress: { eligible: { choice: true, channels: true, reason: true, hidden: false } },
       },
@@ -229,13 +229,30 @@ describe("respondent required-answer recovery", () => {
     const submit = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!;
     await act(async () => submit.click());
     const review = host.querySelector("[role=dialog]")!;
+    const retained = review.querySelector<HTMLDetailsElement>(".review-retained")!;
+    expect(retained.open).toBe(false);
     expect(review.textContent).toContain("Yes, please");
     expect(review.textContent).toContain("Email; Phone");
     expect(review.textContent).toContain("Useful context");
     expect(review.textContent).toContain("For the host");
-    expect(review.textContent).toContain("Questions hidden by your current answers are not listed here");
-    expect(review.textContent).not.toContain("Hidden follow-up");
-    expect(review.textContent).not.toContain("Retained answer");
+    expect(retained.textContent).toContain("Hidden follow-up");
+    expect(retained.textContent).toContain("Retained answer");
+    expect(retained.textContent).toContain("Retained note");
+    expect(retained.textContent).toContain("clearing one does not change the answer that controls routing");
+    const frame = host.querySelector("iframe")!;
+    const postMessage = vi.spyOn(frame.contentWindow!, "postMessage");
+    await act(async () => { retained.querySelector("summary")!.click(); });
+    const clearValue = retained.querySelector<HTMLButtonElement>('[aria-label="Clear saved answer to Hidden follow-up"]')!;
+    const clearNote = retained.querySelector<HTMLButtonElement>('[aria-label="Clear saved note for Hidden follow-up"]')!;
+    expect(clearValue.disabled).toBe(true);
+    expect(clearNote.disabled).toBe(true);
+    await act(async () => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "hello" }, origin: "null", source: frame.contentWindow })));
+    expect(clearValue.disabled).toBe(false);
+    expect(clearNote.disabled).toBe(false);
+    await act(async () => clearValue.click());
+    await act(async () => clearNote.click());
+    expect(postMessage).toHaveBeenCalledWith({ kqa: 1, type: "clear-answer", id: "hidden" }, "*");
+    expect(postMessage).toHaveBeenCalledWith({ kqa: 1, type: "clear-note", id: "hidden" }, "*");
   });
 
   it("navigates eligible questions by section and focuses the chosen question", async () => {
