@@ -486,7 +486,11 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   }
 
   // ---- page quality
-  if (htmlEl && !attr(htmlEl, "lang")) add(ctx, "KQA501", "<html> has no lang attribute.", undefined, { offset: htmlEl.sourceCodeLocation?.startOffset });
+  const htmlLang = htmlEl ? attr(htmlEl, "lang")?.trim() : undefined;
+  if (htmlEl && !htmlLang) add(ctx, "KQA501", "<html> has no non-empty lang value.", undefined, { offset: htmlEl.sourceCodeLocation?.startOffset });
+  else if (htmlLang && !/^en(?:-|$)/i.test(htmlLang)) {
+    add(ctx, "KQA505", `The questionnaire declares lang=\"${htmlLang}\". This sets the language of the questionnaire document, but KQA's shell and built-in respondent controls remain in English; check the mixed-language experience.`, undefined, { offset: htmlEl?.sourceCodeLocation?.startOffset });
+  }
   if (!hasViewport) add(ctx, "KQA502", "No <meta name=\"viewport\"> was found.", undefined);
   if (!hasTitle) add(ctx, "KQA503", "No <title> was found.", undefined);
   if (!hasH1 || !hasMain) add(ctx, "KQA504", `${!hasH1 ? "No <h1>" : "No <main>"} was found.`, undefined);

@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 84 codes. Severity is **error**, **warning** or **note**.
+There are 85 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -635,13 +635,21 @@ A relative image path points at a file that is not part of the saved questionnai
 
 ## Quality notes
 
-### KQA501: Missing lang attribute
+### KQA501: Missing or empty language declaration
 
 Severity: **note**
 
-Screen readers and spell-check use <html lang> to pick a language.
+Screen readers and spell-check use <html lang> to identify the language of the questionnaire content.
 
-**How to fix:** Use <html lang="en-AU">.
+**How to fix:** Set <html lang> to a valid BCP 47 tag that matches the questionnaire, such as "en-AU", "fr-CA" or "vi".
+
+### KQA505: Questionnaire language differs from KQA's English interface
+
+Severity: **warning**
+
+The <html lang> value identifies the questionnaire document for assistive technology, but KQA's respondent shell and built-in controls remain in English. A translated questionnaire therefore has a mixed-language respondent experience.
+
+**How to fix:** Use a valid BCP 47 language tag for the questionnaire. Mark passages in another language with their own lang attribute (and dir="rtl" when appropriate), then have a qualified reviewer check the translated experience with intended-language respondents. Do not describe KQA's interface as translated.
 
 ### KQA502: Missing viewport meta
 

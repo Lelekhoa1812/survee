@@ -34,11 +34,13 @@ Your file is therefore three things: a manifest, markup with bindings, and your 
 | Size | Up to 3 MB. Do not embed large base64 images or fonts |
 | Structure | A full document: `<!doctype html>`, `<html lang="en-AU">`, `<head>`, `<body>` |
 | Viewport | `<meta name="viewport" content="width=device-width, initial-scale=1">` |
-| Language | `lang` on `<html>` (use `en-AU` unless told otherwise) |
+| Language | `lang` on `<html>` must match the questionnaire language; use `en-AU` for Australian English |
 | Title | A `<title>` element |
 | Layout | Must work from 360 px wide up with no sideways scrolling. Respondents use phones. Test at 390 px |
 | Colour | Light and dark via `prefers-color-scheme` |
 | Frames and navigation | No `<iframe>`, `<object>`, `<embed>`, `<base>`, or meta refresh. KQA-supported `https:`, `mailto:`, and `tel:` links open through the host app; scripted or top-level navigation is not supported. |
+
+The questionnaire is a separate HTML document inside KQA's respondent experience. Set its root `lang` to the questionnaire's actual language using a valid BCP 47 tag (for example, `fr-CA`, `vi`, or `en-AU`); this helps assistive technology identify and pronounce its content. This does not translate KQA's English shell or built-in controls such as save status, navigation, validation, and answer review. For another primary language, plan for this mixed-language experience and check it with intended-language respondents. Mark passages in another language with `lang` on the smallest appropriate element. For a right-to-left questionnaire, use semantic `dir="rtl"` on `<html>` and test reading order, controls, entered text, and layout; KQA's outer shell remains English and left-to-right. See the [HTML language attribute](https://html.spec.whatwg.org/multipage/dom.html#the-lang-and-xml:lang-attributes), [WCAG language-of-page guidance](https://www.w3.org/WAI/WCAG22/Understanding/language-of-page.html), [language-of-parts guidance](https://www.w3.org/WAI/WCAG22/Understanding/language-of-parts.html), and [W3C bidirectional-text practices](https://www.w3.org/International/docs/bp-html-bidi/). The checker reports KQA505 for non-English questionnaire `lang` values; it is a review reminder, not a block or translation-quality test.
 
 ### Question and section markers
 

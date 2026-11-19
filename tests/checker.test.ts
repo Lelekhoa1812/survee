@@ -49,6 +49,21 @@ describe("file level", () => {
   it("warns when the doctype is missing", () => expect(codes(checkHtml(swap(STARTER, "<!doctype html>", "")))).toContain("KQA103"));
 });
 
+describe("questionnaire language metadata", () => {
+  it("explains the English KQA shell for non-English questionnaires without treating it as an error", () => {
+    const report = checkHtml(STARTER.replace('<html lang="en-AU">', '<html lang="vi-VN">'));
+    const diagnostic = find(report, "KQA505");
+    expect(diagnostic?.severity).toBe("warning");
+    expect(diagnostic?.message).toContain("KQA's shell and built-in respondent controls remain in English");
+    expect(report.ok).toBe(true);
+  });
+
+  it("does not warn for English tags and treats an empty lang attribute as missing", () => {
+    expect(codes(checkHtml(STARTER.replace('<html lang="en-AU">', '<html lang="en-US">')))).not.toContain("KQA505");
+    expect(codes(checkHtml(STARTER.replace('<html lang="en-AU">', '<html lang="">')))).toContain("KQA501");
+  });
+});
+
 describe("manifest syntax", () => {
   it("points at a trailing comma with line and column", () => {
     const r = checkHtml(swap(STARTER, '"label": "What is your company called?"\n    },', '"label": "What is your company called?",\n    },'));
