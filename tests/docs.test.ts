@@ -13,6 +13,9 @@ describe("agent documentation bundle", () => {
     ["MCP.md", "MCP.md"],
     ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
     ["questionnaire-authoring-cases.json", "evals/questionnaire-authoring-cases.json"],
+    ["PACKAGE_SELECTION_BENCHMARK.md", "evals/PACKAGE_SELECTION_BENCHMARK.md"],
+    ["package-selection-cases.json", "evals/package-selection-cases.json"],
+    ["package-selection.schema.json", "evals/package-selection.schema.json"],
     ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
     ["package-draft-cases.json", "evals/package-draft-cases.json"],
     ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
@@ -190,10 +193,12 @@ describe("agent documentation bundle", () => {
   it("publishes the questionnaire evaluation benchmark and its labeled development corpus", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-authoring-benchmark" && doc.file === "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md")).toBe(true);
     expect(DOCS.some((doc) => doc.slug === "package-draft-benchmark" && doc.file === "evals/PACKAGE_DRAFT_BENCHMARK.md")).toBe(true);
+    expect(DOCS.some((doc) => doc.slug === "package-selection-benchmark" && doc.file === "evals/PACKAGE_SELECTION_BENCHMARK.md")).toBe(true);
     expect(DOCS.some((doc) => doc.slug === "authoring-trust-boundary-eval" && doc.file === "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
     expect(bundle).toContain("PACKAGE_DRAFT_BENCHMARK.md");
+    expect(bundle).toContain("PACKAGE_SELECTION_BENCHMARK.md");
     expect(bundle).toContain("AUTHORING_TRUST_BOUNDARY_EVAL.md");
     expect(bundle).toContain("eval:authoring-trust-boundary");
     expect(bundle).toContain("scores are not validation or respondent evidence");
@@ -206,6 +211,10 @@ describe("agent documentation bundle", () => {
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
     expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/1");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
+    const selectionCases = await readAsset("evals/package-selection-cases.json");
+    const selectionSchema = await readAsset("evals/package-selection.schema.json");
+    expect(JSON.parse(selectionCases!.body).benchmarkVersion).toBe("kqa-package-selection/4");
+    expect(JSON.parse(selectionSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(selectionCases!.body).benchmarkVersion);
     const trustCases = await readAsset("evals/authoring-trust-boundary-cases.json");
     expect(trustCases?.type).toBe("application/json; charset=utf-8");
     const trustBenchmark = JSON.parse(trustCases!.body);

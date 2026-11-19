@@ -9,6 +9,7 @@ export const DOCS = [
   { slug: "question-blueprint", file: "QUESTION_BLUEPRINT.md", title: "Question blueprint", blurb: "Reusable record connecting a question's purpose, interpretation, routing, risks and testing." },
   { slug: "questionnaire-author-skill", file: "kqa-questionnaire-author/SKILL.md", title: "Questionnaire author skill", blurb: "Portable, repeatable workflow for agents authoring and reviewing KQA interviews." },
   { slug: "questionnaire-authoring-benchmark", file: "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", title: "Questionnaire evaluation benchmark", blurb: "Versioned review corpus, provider-neutral scoring, and evaluation limits for questionnaire authoring agents." },
+  { slug: "package-selection-benchmark", file: "evals/PACKAGE_SELECTION_BENCHMARK.md", title: "Package-selection benchmark", blurb: "Development cases for package fit, clarification, and capability boundaries." },
   { slug: "package-draft-benchmark", file: "evals/PACKAGE_DRAFT_BENCHMARK.md", title: "Package draft benchmark", blurb: "Expert content review rubric and separate functional, accessibility, respondent-pretest and format evidence lanes." },
   { slug: "authoring-trust-boundary-eval", file: "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md", title: "Authoring trust-boundary evaluation", blurb: "Seed cases and a trace evaluator for agent prompt-injection, tool-scope, authorization, and approval behavior." },
   { slug: "mcp", file: "MCP.md", title: "KQA MCP server", blurb: "Connection, permissions and operating procedures for live interviews." },
@@ -38,6 +39,8 @@ export async function readAsset(rel: string): Promise<{ body: string; type: stri
     "evals/questionnaire-authoring-cases.json": "application/json; charset=utf-8",
     "evals/package-draft-cases.json": "application/json; charset=utf-8",
     "evals/package-draft-results.schema.json": "application/json; charset=utf-8",
+    "evals/package-selection-cases.json": "application/json; charset=utf-8",
+    "evals/package-selection.schema.json": "application/json; charset=utf-8",
     "evals/authoring-trust-boundary-cases.json": "application/json; charset=utf-8",
     "evals/authoring-trust-boundary-trace.schema.json": "application/json; charset=utf-8",
   };

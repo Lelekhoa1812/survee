@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-package-selection/3",
+  "benchmarkVersion": "kqa-package-selection/4",
   "track": "package-selection",
   "status": "public-development-fixture",
-  "description": "Small public development fixture for package fit, clarification, and boundary handling, including post-change/MOC, caregiver/validated-measure, workforce anonymity, and financial-scoring boundaries. Labels are provisional and are not a validated benchmark or universal quality oracle.",
+  "description": "Public development cases for package fit, clarification, and capability boundaries, including workforce safety and privacy, validated instruments, digital-only coverage, and live adaptive-interview requests. Labels are provisional and are not a validated benchmark or universal quality oracle.",
   "allowedActions": [
     "recommend",
     "clarify",
@@ -20,7 +20,9 @@
     "moc-boundary",
     "validated-instrument-boundary",
     "scoring-boundary",
-    "financial-data-minimization"
+    "financial-data-minimization",
+    "coverage-limit",
+    "interaction-capability-boundary"
   ],
   "cases": [
     {
@@ -283,9 +285,13 @@
       "gold": {
         "action": "recommend",
         "packageId": "industrial-operations",
-        "acceptablePackageIds": ["industrial-operations"],
+        "acceptablePackageIds": [
+          "industrial-operations"
+        ],
         "clarificationSlots": [],
-        "requiredGates": ["privacy-review"]
+        "requiredGates": [
+          "privacy-review"
+        ]
       }
     },
     {
@@ -296,7 +302,9 @@
         "packageId": null,
         "acceptablePackageIds": [],
         "clarificationSlots": [],
-        "requiredGates": ["moc-boundary"]
+        "requiredGates": [
+          "moc-boundary"
+        ]
       }
     },
     {
@@ -305,9 +313,14 @@
       "gold": {
         "action": "recommend",
         "packageId": "health-service-experience",
-        "acceptablePackageIds": ["health-service-experience"],
+        "acceptablePackageIds": [
+          "health-service-experience"
+        ],
         "clarificationSlots": [],
-        "requiredGates": ["health-data-minimization", "privacy-review"]
+        "requiredGates": [
+          "health-data-minimization",
+          "privacy-review"
+        ]
       }
     },
     {
@@ -318,7 +331,11 @@
         "packageId": null,
         "acceptablePackageIds": [],
         "clarificationSlots": [],
-        "requiredGates": ["validated-instrument-boundary", "scoring-boundary", "health-data-minimization"]
+        "requiredGates": [
+          "validated-instrument-boundary",
+          "scoring-boundary",
+          "health-data-minimization"
+        ]
       }
     },
     {
@@ -329,7 +346,10 @@
         "packageId": null,
         "acceptablePackageIds": [],
         "clarificationSlots": [],
-        "requiredGates": ["anonymity-limit", "privacy-review"]
+        "requiredGates": [
+          "anonymity-limit",
+          "privacy-review"
+        ]
       }
     },
     {
@@ -340,7 +360,40 @@
         "packageId": null,
         "acceptablePackageIds": [],
         "clarificationSlots": [],
-        "requiredGates": ["financial-data-minimization", "validated-instrument-boundary", "scoring-boundary", "privacy-review"]
+        "requiredGates": [
+          "financial-data-minimization",
+          "validated-instrument-boundary",
+          "scoring-boundary",
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "digital-only-population-representativeness",
+      "brief": "A regional health service wants KQA to produce a representative estimate of access barriers for every patient, including people with limited internet access, limited English, or assistive-technology needs. The service can distribute only one QR-code questionnaire and will not provide assisted, paper, phone, or other participation routes. It plans to publish the results as representative of the whole patient population.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "mode-mismatch",
+          "coverage-limit"
+        ]
+      }
+    },
+    {
+      "id": "live-adaptive-longitudinal-interview",
+      "brief": "An industrial maintenance group wants an AI agent to conduct a live conversational interview, invent follow-up probes from each answer, remember each worker’s prior conversations, and follow the same people every month for six months. It requires a responsive interviewer rather than a fixed, self-completed questionnaire.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "mode-mismatch",
+          "interaction-capability-boundary"
+        ]
       }
     }
   ],

@@ -1,0 +1,420 @@
+{
+  "benchmarkVersion": "kqa-package-selection/4",
+  "track": "package-selection",
+  "status": "public-development-fixture",
+  "description": "Public development cases for package fit, clarification, and capability boundaries, including workforce safety and privacy, validated instruments, digital-only coverage, and live adaptive-interview requests. Labels are provisional and are not a validated benchmark or universal quality oracle.",
+  "allowedActions": [
+    "recommend",
+    "clarify",
+    "out_of_scope"
+  ],
+  "allowedGates": [
+    "minor-privacy-consent",
+    "health-data-minimization",
+    "privacy-review",
+    "employment-consequential-use",
+    "safety-reporting-route",
+    "mode-mismatch",
+    "anonymity-limit",
+    "certification-boundary",
+    "moc-boundary",
+    "validated-instrument-boundary",
+    "scoring-boundary",
+    "financial-data-minimization",
+    "coverage-limit",
+    "interaction-capability-boundary"
+  ],
+  "cases": [
+    {
+      "id": "saas-unmet-need",
+      "brief": "A SaaS team wants to understand recent workarounds and unmet needs before choosing what to build.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "product-discovery",
+        "acceptablePackageIds": [
+          "product-discovery"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "account-progress-or-friction",
+      "brief": "A provider says it wants to check account progress, but examples focus on a frustrating support interaction; it is unclear whether the goal is agreed-outcome progress or service friction.",
+      "gold": {
+        "action": "clarify",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "candidatePackageIds": [
+          "customer-success",
+          "service-improvement"
+        ],
+        "clarificationSlots": [
+          "decision_focus"
+        ],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "shift-handoff",
+      "brief": "Operations wants to improve a specific handoff between shifts, including information gaps and blockers.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "workplace-process",
+        "acceptablePackageIds": [
+          "workplace-process"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "project-dependencies-funding",
+      "brief": "A sponsor is exploring project outcomes, dependencies, and constraints before deciding whether to fund discovery; this is not a funding-eligibility assessment.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "project-discovery",
+        "acceptablePackageIds": [
+          "project-discovery"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "course-feedback-minors",
+      "brief": "A school wants feedback on access and experience in a course, not grades or learner ability. Some respondents are minors.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "education-learning",
+        "acceptablePackageIds": [
+          "education-learning"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "minor-privacy-consent"
+        ]
+      }
+    },
+    {
+      "id": "patient-access-communication",
+      "brief": "A clinic wants local feedback on appointment access and communication only, avoiding diagnosis and clinical outcomes.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "health-service-experience",
+        "acceptablePackageIds": [
+          "health-service-experience"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "health-data-minimization",
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "personal-planning-or-wellbeing",
+      "brief": "A person wants a private reflection tool, but the host has not established whether they want practical goal planning or a broader wellbeing reflection.",
+      "gold": {
+        "action": "clarify",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "candidatePackageIds": [
+          "personal-planning",
+          "personal-wellbeing-reflection"
+        ],
+        "clarificationSlots": [
+          "desired_outcome",
+          "support_boundary"
+        ],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "candidate-process-feedback",
+      "brief": "A hiring team wants candidates' feedback on clarity and access after a completed hiring process, and confirms answers cannot affect selection.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "candidate-experience",
+        "acceptablePackageIds": [
+          "candidate-experience"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "employment-consequential-use"
+        ]
+      }
+    },
+    {
+      "id": "applicant-ranking",
+      "brief": "A hiring manager wants applicants to answer a questionnaire so the team can rank and advance candidates.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "employment-consequential-use"
+        ]
+      }
+    },
+    {
+      "id": "day-30-onboarding",
+      "brief": "At day 30, a team wants to identify whether new employees have role clarity, tools, and practical support; responses will not assess performance.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "employee-onboarding",
+        "acceptablePackageIds": [
+          "employee-onboarding"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "employment-consequential-use"
+        ]
+      }
+    },
+    {
+      "id": "supplier-milestone-review",
+      "brief": "A delivery team and supplier want to review a named milestone against agreed requirements to improve coordination, not make procurement or contract-award decisions.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "supplier-partner-review",
+        "acceptablePackageIds": [
+          "supplier-partner-review"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "certification-boundary"
+        ]
+      }
+    },
+    {
+      "id": "near-miss-learning",
+      "brief": "A safety team wants non-punitive learning about conditions around a past near miss. A separate monitored channel handles active hazards and statutory reporting.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "safety-quality-learning",
+        "acceptablePackageIds": [
+          "safety-quality-learning"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "safety-reporting-route"
+        ]
+      }
+    },
+    {
+      "id": "active-hazard-reporting",
+      "brief": "A worker wants to use this questionnaire to report a currently active hazard and expects the host to respond or escalate it.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "safety-reporting-route"
+        ]
+      }
+    },
+    {
+      "id": "audit-readiness",
+      "brief": "A team wants to collect evidence gaps and preparation needs ahead of an auditor; it does not ask KQA to certify compliance or determine a person's status.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "audit-readiness",
+        "acceptablePackageIds": [
+          "audit-readiness"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "certification-boundary"
+        ]
+      }
+    },
+    {
+      "id": "program-outcomes-or-priorities",
+      "brief": "A nonprofit asks for an evaluation of program outcomes but also wants to learn what local residents prioritize; the target decision and respondent group are not clear.",
+      "gold": {
+        "action": "clarify",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "candidatePackageIds": [
+          "program-evaluation",
+          "community-consultation"
+        ],
+        "clarificationSlots": [
+          "decision_focus",
+          "respondent_group"
+        ],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "moderated-anonymous-event",
+      "brief": "An event organizer wants a live moderated interview guide and promises responses will be anonymous, although KQA stores responses under person-linked private links and hosts can view them.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "mode-mismatch",
+          "anonymity-limit"
+        ]
+      }
+    },
+    {
+      "id": "industrial-process-improvement",
+      "brief": "A plant wants a short, person-linked questionnaire about recurring production delays and routine operations-maintenance coordination over the last month. The host will use responses only for team-level process improvements, explains who can see answers, avoids small-group reporting, and directs current hazards and incidents to existing monitored procedures.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "industrial-operations",
+        "acceptablePackageIds": [
+          "industrial-operations"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "safety-reporting-route",
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "post-change-process-learning",
+      "brief": "After a plant's approved maintenance workflow change has been implemented, operations and maintenance want a short follow-up about adoption barriers and recurring coordination friction. They will use responses for team-level improvement only, not to approve the change, assess hazards, or judge individual workers.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "industrial-operations",
+        "acceptablePackageIds": [
+          "industrial-operations"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "formal-moc-approval",
+      "brief": "A process-safety owner wants KQA to collect hazard-review answers, approve a proposed equipment change, and confirm that the process is cleared for startup under the site's management-of-change procedure.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "moc-boundary"
+        ]
+      }
+    },
+    {
+      "id": "caregiver-service-feedback",
+      "brief": "A home-care provider wants family caregivers to describe access and communication problems in a recent, non-clinical service interaction so the provider can improve its local service. It does not seek a clinical outcome measure or a standardized score.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "health-service-experience",
+        "acceptablePackageIds": [
+          "health-service-experience"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "health-data-minimization",
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "caregiver-validated-measure",
+      "brief": "A hospice provider wants KQA to reproduce the CAHPS Hospice Survey for family caregivers, calculate its standardized measures, and compare the results with published benchmarks.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "validated-instrument-boundary",
+          "scoring-boundary",
+          "health-data-minimization"
+        ]
+      }
+    },
+    {
+      "id": "anonymous-workforce-climate",
+      "brief": "An employer wants an anonymous workforce pulse about workload, stress, and team climate, including small-team breakdowns. The employer requires that responses cannot be linked to individual participants.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "anonymity-limit",
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "financial-wellbeing-scored-measure",
+      "brief": "A nonprofit wants to administer the CFPB Financial Well-Being Scale in KQA, calculate each participant's score, and compare scores before and after financial coaching. The host has not selected another scoring system or privacy method.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "financial-data-minimization",
+          "validated-instrument-boundary",
+          "scoring-boundary",
+          "privacy-review"
+        ]
+      }
+    },
+    {
+      "id": "digital-only-population-representativeness",
+      "brief": "A regional health service wants KQA to produce a representative estimate of access barriers for every patient, including people with limited internet access, limited English, or assistive-technology needs. The service can distribute only one QR-code questionnaire and will not provide assisted, paper, phone, or other participation routes. It plans to publish the results as representative of the whole patient population.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "mode-mismatch",
+          "coverage-limit"
+        ]
+      }
+    },
+    {
+      "id": "live-adaptive-longitudinal-interview",
+      "brief": "An industrial maintenance group wants an AI agent to conduct a live conversational interview, invent follow-up probes from each answer, remember each worker’s prior conversations, and follow the same people every month for six months. It requires a responsive interviewer rather than a fixed, self-completed questionnaire.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "mode-mismatch",
+          "interaction-capability-boundary"
+        ]
+      }
+    }
+  ],
+  "packageIds": [
+    "product-discovery",
+    "service-improvement",
+    "workplace-process",
+    "project-discovery",
+    "education-learning",
+    "health-service-experience",
+    "personal-planning",
+    "candidate-experience",
+    "employee-onboarding",
+    "customer-success",
+    "supplier-partner-review",
+    "safety-quality-learning",
+    "audit-readiness",
+    "program-evaluation",
+    "community-consultation",
+    "event-feedback",
+    "personal-wellbeing-reflection",
+    "industrial-operations"
+  ]
+}

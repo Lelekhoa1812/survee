@@ -31,6 +31,7 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/examples/`](docs/examples) | Runnable feature examples plus clearly labeled, illustrative service-improvement and personal-planning questionnaires with review records; examples are not validated instruments |
 | [`docs/MCP.md`](docs/MCP.md) | How an agent operates a live interview (not how to write the HTML) |
 | [`docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | Reproducible review cases, scoring contract and evidence limits |
+| [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification, and capability-boundary evaluation |
 | [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification and boundary evaluation |
 | [`docs/evals/PACKAGE_DRAFT_BENCHMARK.md`](docs/evals/PACKAGE_DRAFT_BENCHMARK.md) | Independent expert review of complete package-based questionnaire drafts, with separate evidence lanes |
 | [`docs/evals/AUTHORING_TRUST_BOUNDARY_EVAL.md`](docs/evals/AUTHORING_TRUST_BOUNDARY_EVAL.md) | Seeded agent/MCP tool-trace safety evaluation and its limits |
