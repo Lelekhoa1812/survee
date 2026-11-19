@@ -16,6 +16,7 @@ interface Loaded {
   questions: Question[];
   answers: AnswerMap;
   progress: { eligible?: Record<string, boolean> };
+  presentation?: "all" | "guided";
 }
 type Patch = Record<string, { value?: unknown; note?: unknown }>;
 
@@ -56,9 +57,14 @@ export function RespondentShell({ token }: { token: string }) {
   const [frameReady, setFrameReady] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [questionNavOpen, setQuestionNavOpen] = useState(false);
+  const [guidedMode, setGuidedMode] = useState(false);
+  const [guidedSectionId, setGuidedSectionId] = useState<string | null>(null);
+  const [guidedError, setGuidedError] = useState(false);
+  const [guidedAnnouncement, setGuidedAnnouncement] = useState("");
 
   const frame = useRef<HTMLIFrameElement>(null);
   const questionNavTrigger = useRef<HTMLButtonElement>(null);
+  const guidedErrorRef = useRef<HTMLDivElement>(null);
   const answers = useRef<AnswerMap>({});
   const version = useRef(0);
   const refreshRequiredRef = useRef(false);
@@ -93,12 +99,58 @@ export function RespondentShell({ token }: { token: string }) {
 
   const post = useCallback((msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ kqa: 1, ...msg }, "*"), []);
 
+  const questionGroups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current);
+  const activeGuidedGroup = questionGroups.find((group) => group.id === guidedSectionId) ?? null;
+  const activeGuidedIndex = activeGuidedGroup ? questionGroups.findIndex((group) => group.id === activeGuidedGroup.id) : -1;
+  const guidedStepIssues = activeGuidedGroup
+    ? counts.needsAttention.filter((item) => activeGuidedGroup.questions.some((question) => question.id === item.question.id))
+    : [];
+
+  const goToGuidedGroup = useCallback((id: string, focusId?: string) => {
+    const groups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current);
+    const group = groups.find((item) => item.id === id);
+    if (!group) return;
+    setGuidedSectionId(group.id);
+    setGuidedError(false);
+    setGuidedAnnouncement(`Section ${groups.findIndex((item) => item.id === id) + 1} of ${groups.length}: ${group.title}`);
+    post({ type: "guided", enabled: true, section: group.id });
+    const target = focusId ?? group.questions[0]?.id;
+    if (target) post({ type: "focus-question", id: target });
+  }, [data?.sections, post]);
+
+  useEffect(() => {
+    if (data?.presentation !== "guided") return;
+    const first = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current)[0];
+    if (first && !guidedSectionId) setGuidedSectionId(first.id);
+    setGuidedMode(true);
+  }, [data, guidedSectionId]);
+
+  useEffect(() => {
+    if (!guidedMode || !data) return;
+    const groups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
+    if (!groups.length) return;
+    if (!groups.some((group) => group.id === guidedSectionId)) {
+      const next = groups[0];
+      setGuidedSectionId(next.id);
+      setGuidedError(false);
+      setGuidedAnnouncement(`The available questions changed. Now showing ${next.title}.`);
+      if (frameReady) post({ type: "guided", enabled: true, section: next.id });
+    }
+  }, [counts, data, frameReady, guidedMode, guidedSectionId, post]);
+
+  useEffect(() => {
+    if (!guidedMode || !activeGuidedGroup) return;
+    post({ type: "guided", enabled: true, section: activeGuidedGroup.id });
+  }, [activeGuidedGroup?.id, frameReady, guidedMode, post]);
+
   useEffect(() => {
     if (confirming || !focusQuestionAfterClose.current) return;
     const id = focusQuestionAfterClose.current;
     focusQuestionAfterClose.current = null;
-    post({ type: "focus-question", id });
-  }, [confirming, post]);
+    const targetQuestion = questions.current.find((question) => question.id === id);
+    if (guidedMode && targetQuestion?.section) goToGuidedGroup(targetQuestion.section, id);
+    else post({ type: "focus-question", id });
+  }, [confirming, goToGuidedGroup, guidedMode, post]);
 
   const applyLock = useCallback((v: boolean) => { lockedRef.current = v; setLocked(v); post({ type: "lock", locked: v }); }, [post]);
 
@@ -208,7 +260,7 @@ export function RespondentShell({ token }: { token: string }) {
       if (m.type === "open" && typeof m.url === "string" && /^(https?:|mailto:|tel:)/i.test(m.url)) {
         window.open(m.url, "_blank", "noopener,noreferrer");
       } else if (m.type === "hello") {
-        post({ type: "init", questions: questions.current, answers: answers.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false });
+        post({ type: "init", questions: questions.current, answers: answers.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided", guidedSection: guidedSectionId });
         setFrameReady(true);
       } else if (m.type === "set" && typeof m.id === "string") {
         const part: { value?: unknown; note?: unknown } = {};
@@ -224,7 +276,7 @@ export function RespondentShell({ token }: { token: string }) {
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [data, post, queue, recount]);
+  }, [data, guidedSectionId, post, queue, recount]);
 
   // ---- connectivity and leaving the page
   useEffect(() => {
@@ -292,6 +344,18 @@ export function RespondentShell({ token }: { token: string }) {
     }
   }
 
+  function continueGuided() {
+    if (!activeGuidedGroup) return;
+    if (guidedStepIssues.length) {
+      setGuidedError(true);
+      window.setTimeout(() => guidedErrorRef.current?.focus(), 0);
+      return;
+    }
+    setGuidedError(false);
+    if (activeGuidedIndex >= questionGroups.length - 1) setConfirming(true);
+    else goToGuidedGroup(questionGroups[activeGuidedIndex + 1].id);
+  }
+
   // ---- states other than the questionnaire
   if (phase === "loading") return <div className="center-page"><div className="row muted"><Spinner /> Opening your questionnaire…</div></div>;
   if (phase === "invalid") {
@@ -311,7 +375,7 @@ export function RespondentShell({ token }: { token: string }) {
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
-  const questionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
+  const currentQuestionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
   const answeredInNavigation = reviewQuestions.filter((question) => hasValue(answers.current[question.id]?.value)).length;
 
   return (
@@ -365,7 +429,7 @@ export function RespondentShell({ token }: { token: string }) {
                       : "Choose a question to go to it. Your answers will not change."}
                   </p>
                   <div className="rs-question-nav-groups">
-                    {questionGroups.map((group) => {
+                    {currentQuestionGroups.map((group) => {
                       const answered = group.questions.filter((question) => hasValue(answers.current[question.id]?.value)).length;
                       return (
                         <section className="rs-question-nav-group" key={group.id} aria-labelledby={`rs-nav-section-${group.id}`}>
@@ -384,7 +448,8 @@ export function RespondentShell({ token }: { token: string }) {
                                     className="rs-question-nav-item"
                                     onClick={() => {
                                       setQuestionNavOpen(false);
-                                      post({ type: "focus-question", id: question.id });
+                                      if (guidedMode) goToGuidedGroup(group.id, question.id);
+                                      else post({ type: "focus-question", id: question.id });
                                     }}
                                   >
                                     <span>{question.label}</span>
@@ -412,6 +477,31 @@ export function RespondentShell({ token }: { token: string }) {
         {submitted && <><Icon name="check" size={16} /> Submitted. Your answers are locked, and your host can reopen them if you need a change.</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> This interview is closed, so answers can no longer be changed.</>}
       </div>
+
+      {guidedMode && activeGuidedGroup && (
+        <section className="rs-guided" aria-label="Questionnaire sections">
+          <div className="rs-guided-step">
+            <div>
+              <p className="rs-guided-count" aria-current="step">Section {activeGuidedIndex + 1} of {questionGroups.length}</p>
+              <h1>{activeGuidedGroup.title}</h1>
+              {activeGuidedGroup.description && <p>{activeGuidedGroup.description}</p>}
+            </div>
+            <div className="rs-guided-actions">
+              <button className="btn" type="button" disabled={activeGuidedIndex <= 0 || locked} onClick={() => goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>Back</button>
+              <button className="btn accent" type="button" disabled={locked || !frameReady} onClick={continueGuided}>{activeGuidedIndex === questionGroups.length - 1 ? "Review answers" : "Continue"}</button>
+              <button className="btn" type="button" disabled={locked} onClick={() => { setGuidedMode(false); setGuidedError(false); post({ type: "guided", enabled: false }); }}>Show all questions</button>
+            </div>
+          </div>
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{guidedAnnouncement}</p>
+          {guidedError && guidedStepIssues.length > 0 && (
+            <div className="rs-guided-error" ref={guidedErrorRef} role="alert" tabIndex={-1} aria-labelledby="rs-guided-error-title">
+              <h2 id="rs-guided-error-title">Check this section</h2>
+              <p>Resolve these answers before continuing:</p>
+              <ul>{guidedStepIssues.map(({ question, reason }) => <li key={question.id}><button type="button" onClick={() => post({ type: "focus-question", id: question.id })}>{question.label}: {reason}</button></li>)}</ul>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="rs-frame">
         {!frameReady && <div className="rs-loading"><span className="row"><Spinner /> Loading the questions…</span></div>}

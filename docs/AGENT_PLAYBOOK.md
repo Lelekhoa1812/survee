@@ -44,7 +44,7 @@ Write the manifest before any markup. For each question decide:
 4. **`options`**: values are stable machine keys (`very-likely`), labels are human text ("Very likely"). Do not use the label as the value.
 5. **`required`**, **`note`**, **`help`**, **`section`** as needed.
 
-Group questions into sections of about 5 to 8. Give each section an `id`, `title` and a one-line `description`.
+Group questions into sections of about 5 to 8. Give each section an `id`, `title` and a one-line `description`. Set `presentation` to `"guided"` only when a section-by-section journey suits the task; otherwise leave it out (the default is `"all"`). Guided mode requires every question to have a section and each question block to use the markers in `FORMAT.md`.
 
 ### Review the question content
 
@@ -87,7 +87,7 @@ For every conditional branch, keep a small route test matrix in the review recor
 2. Replace the manifest with yours.
 3. For each question, copy the matching pattern from the starter and change the id, label and values. Every card follows the same shape:
 
-Keep `data-kqa-question-id="QUESTION_ID"` on each question block and `data-kqa-question-list="SECTION_ID"` on its containing list when you want agents to make source-preserving edits through MCP. For unsectioned questions, the list marker value is empty. These optional markers are described in [`FORMAT.md`](FORMAT.md).
+Keep `data-kqa-question-id="QUESTION_ID"` on each question block and `data-kqa-question-list="SECTION_ID"` on its containing list when you want agents to make source-preserving edits through MCP. These markers are also required by guided mode: each marked question wrapper must be a direct child of the matching section list. For unsectioned questions in the default mode, the list marker value may be empty. See [`FORMAT.md`](FORMAT.md).
 
 Single choice (`single`). Help text is "Pick one." Nothing is pre-checked.
 
@@ -138,6 +138,7 @@ Dropdown, number, scale, and date use the same card. Copy those patterns from `t
 4. Update the contents rail (`.kq-rail`) so each link points at a section `id`.
 5. Do not add anything the sandbox blocks (FORMAT.md section 2).
 6. Keep the content and controls semantic HTML. KQA's injected runtime is required for saving, progress, locking, and conditional routing; the page is not an offline or no-JavaScript questionnaire. Page-authored scripts should add presentation or custom-control behavior only and must use the KQA API for answers.
+7. In guided mode, use the KQA section controls rather than building a competing pager in questionnaire HTML. Test every routing path: a conditional section can disappear or reappear, and its saved answers are retained. Continue validates the current step; final submission still uses the standard review and server validation.
 
 ## Step 4. Self-check before you reply
 

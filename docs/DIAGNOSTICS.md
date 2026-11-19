@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 82 codes. Severity is **error**, **warning** or **note**.
+There are 84 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -281,7 +281,23 @@ maxSelections only applies to multi questions and must be a whole number no grea
 
 **How to fix:** Use maxSelections on a multi question and set it from 1 through the number of declared options.
 
+### KQA220: Guided presentation needs sections
+
+Severity: **error**
+
+Guided presentation needs declared sections and assigns every question to one of them.
+
+**How to fix:** Add sections and assign every question to a declared section, or use presentation "all".
+
 ## Controls and bindings (KQA3xx, KQA4xx)
+
+### KQA321: Guided section markup is incomplete
+
+Severity: **error**
+
+Guided presentation hides inactive sections and needs one stable wrapper for every question, inside the matching section list. Without those markers KQA cannot safely switch sections.
+
+**How to fix:** Mark each section container with data-kqa-question-list="<section-id>" and each complete question wrapper with data-kqa-question-id="<question-id>" as a direct child.
 
 ### KQA300: Question has no control in the page
 

@@ -13,6 +13,7 @@ function swap(html: string, from: string | RegExp, to: string): string {
 }
 const codes = (r: Report) => r.diagnostics.map((d) => d.code);
 const find = (r: Report, code: string) => r.diagnostics.find((d) => d.code === code);
+const GUIDED = `<!doctype html><html lang="en"><head><title>Test</title><script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Test","presentation":"guided","sections":[{"id":"start","title":"Getting started"}],"questions":[{"id":"name","type":"text","section":"start","label":"Your name"}]}</script></head><body><main><div data-kqa-question-list="start"><section data-kqa-question-id="name"><label>Your name<input type="text" data-kqa="name"></label></section></div></main></body></html>`;
 
 describe("starter template", () => {
   it("passes with no errors", () => {
@@ -74,6 +75,14 @@ describe("manifest syntax", () => {
 });
 
 describe("manifest rules", () => {
+  it("accepts guided presentation only with section and question block markers", () => {
+    expect(codes(checkHtml(GUIDED))).not.toContain("KQA220");
+    expect(codes(checkHtml(GUIDED))).not.toContain("KQA321");
+    expect(codes(checkHtml(GUIDED.replace('"presentation":"guided",', '')))).not.toContain("KQA220");
+    expect(codes(checkHtml(GUIDED.replace(',"sections":[{"id":"start","title":"Getting started"}],', ',')))).toContain("KQA220");
+    expect(codes(checkHtml(GUIDED.replace(' data-kqa-question-id="name"', '')))).toContain("KQA321");
+    expect(codes(checkHtml(GUIDED.replace('data-kqa-question-list="start"', 'data-kqa-question-list="unknown"')))).toContain("KQA321");
+  });
   it("rejects a wrong format version", () => expect(codes(checkHtml(swap(STARTER, '"format": "kqa/1"', '"format": "kqa/2"')))).toContain("KQA204"));
   it("suggests a type for a common mistake", () => {
     const d = find(checkHtml(swap(STARTER, '"id": "priority", "type": "single"', '"id": "priority", "type": "radio"')), "KQA208");

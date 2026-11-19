@@ -46,7 +46,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
 }
 
 const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "note", "min", "max", "step", "maxLength", "custom", "when"];
-const ROOT_KEYS = ["format", "title", "description", "sections", "questions"];
+const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
 const NOTE_KEYS = ["label", "placeholder", "maxLength"];
@@ -316,6 +316,8 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   const scripts: { el: El; text: string; startLine: number; src?: string; type?: string }[] = [];
   const manifestScripts: El[] = [];
   const dataKqa: Found[] = [];
+  const questionBlocks: Found[] = [];
+  const questionLists: Found[] = [];
   const dataNote: Found[] = [];
   const dataStatus: El[] = [];
   const labelsFor = new Map<string, number>();
@@ -418,6 +420,8 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
     }
     // bindings
     if (hasAttr(el, "data-kqa")) dataKqa.push({ el, ancestors });
+    if (hasAttr(el, "data-kqa-question-id")) questionBlocks.push({ el, ancestors });
+    if (hasAttr(el, "data-kqa-question-list")) questionLists.push({ el, ancestors });
     if (hasAttr(el, "data-kqa-note")) dataNote.push({ el, ancestors });
     if (hasAttr(el, "data-kqa-status")) dataStatus.push(el);
   });
@@ -518,7 +522,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   const keyAt = (path: string): number => mBase + (parsed.keyStarts.get(path) ?? parsed.starts.get(path) ?? 0);
 
   const manifest = validateManifest(parsed.value, { ctx, at, keyAt, stats });
-  const bound = manifest ? checkBindings(manifest, { ctx, dataKqa, dataNote, dataStatus, labelsFor, scriptSetsAnswers, stats, unbound, at }) : undefined;
+  const bound = manifest ? checkBindings(manifest, { ctx, dataKqa, questionBlocks, questionLists, dataNote, dataStatus, labelsFor, scriptSetsAnswers, stats, unbound, at }) : undefined;
   void bound;
   return finish(manifest);
 }
@@ -572,6 +576,12 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
   }
   str(raw.title, "title", m, { max: LIMITS.maxTitle, label: '"title"' });
   if (raw.description !== undefined) str(raw.description, "description", m, { max: LIMITS.maxDescription, label: '"description"', optional: true });
+  if (raw.presentation !== undefined && raw.presentation !== "all" && raw.presentation !== "guided") {
+    add(ctx, "KQA203", '"presentation" must be "all" or "guided".', undefined, { offset: m.at("presentation"), path: "presentation" });
+  }
+  if (raw.presentation === "guided" && (!Array.isArray(raw.sections) || raw.sections.length === 0)) {
+    add(ctx, "KQA220", '"presentation": "guided" requires at least one declared section.', 'Add sections and assign every question to one of them, or use "presentation": "all".', { offset: m.at("presentation"), path: "presentation" });
+  }
 
   // sections
   const sectionIds = new Set<string>();
@@ -632,6 +642,9 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       if (typeof q.section !== "string" || !sectionIds.has(q.section)) {
         add(ctx, "KQA211", `${p}${qid ? ` (${qid})` : ""} uses section ${JSON.stringify(q.section)}, but ${sectionIds.size ? `the declared sections are: ${[...sectionIds].join(", ")}` : `"sections" is empty or missing`}.`, undefined, { offset: m.at(`${p}.section`), path: `${p}.section`, questionId: qid });
       } else usedSections.add(q.section);
+    }
+    if (raw.presentation === "guided" && (typeof q.section !== "string" || !sectionIds.has(q.section))) {
+      add(ctx, "KQA220", `Question "${qid ?? `questions[${i}]`}" must belong to a declared section in guided presentation.`, 'Set "section" to a declared section id, or use "presentation": "all".', { offset: q.section === undefined ? m.at(p) : m.at(`${p}.section`), path: `${p}.section`, questionId: qid });
     }
     if (q.required !== undefined && typeof q.required !== "boolean") add(ctx, "KQA203", `${p}.required must be true or false, found ${JSON.stringify(q.required)}.`, undefined, { offset: m.at(`${p}.required`), path: `${p}.required`, questionId: qid });
     if (q.required === true) m.stats.requiredQuestions++;
@@ -767,6 +780,8 @@ function slug(s: string): string {
 interface BCtx {
   ctx: Ctx;
   dataKqa: Found[];
+  questionBlocks: Found[];
+  questionLists: Found[];
   dataNote: Found[];
   dataStatus: El[];
   labelsFor: Map<string, number>;
@@ -809,6 +824,34 @@ function checkBindings(manifest: Manifest, b: BCtx) {
     const loc = el.sourceCodeLocation?.startTag;
     return loc ? ctx.html.slice(loc.startOffset, loc.endOffset).replace(/\s+/g, " ") : `<${el.tagName}>`;
   };
+
+  if (manifest.presentation === "guided") {
+    const blockCounts = new Map<string, number>();
+    for (const list of b.questionLists) {
+      const sectionId = attr(list.el, "data-kqa-question-list") ?? "";
+      if (!(manifest.sections ?? []).some((section) => section.id === sectionId)) {
+        add(ctx, "KQA321", `data-kqa-question-list="${sectionId}" does not name a declared section.`, undefined, { offset: startOf(list.el), snippet: tagSrc(list.el) });
+      }
+    }
+    for (const block of b.questionBlocks) {
+      const id = attr(block.el, "data-kqa-question-id") ?? "";
+      const question = byId.get(id);
+      if (!question) {
+        add(ctx, "KQA321", `data-kqa-question-id="${id}" does not name a manifest question.`, undefined, { offset: startOf(block.el), snippet: tagSrc(block.el) });
+        continue;
+      }
+      blockCounts.set(id, (blockCounts.get(id) ?? 0) + 1);
+      const parent = block.ancestors[block.ancestors.length - 1];
+      const parentListId = parent ? attr(parent, "data-kqa-question-list") : undefined;
+      if (parentListId !== question.section) {
+        add(ctx, "KQA321", `Question block "${id}" must be a direct child of data-kqa-question-list="${question.section}".`, `Wrap the question blocks for section "${question.section}" in one element marked data-kqa-question-list="${question.section}".`, { offset: startOf(block.el), snippet: tagSrc(block.el), questionId: id });
+      }
+    }
+    for (const question of manifest.questions) {
+      const count = blockCounts.get(question.id) ?? 0;
+      if (count !== 1) add(ctx, "KQA321", `Guided question "${question.id}" needs exactly one data-kqa-question-id wrapper; found ${count}.`, `Add one whole-question wrapper marked data-kqa-question-id="${question.id}".`, { path: `questions[${manifest.questions.indexOf(question)}]`, questionId: question.id, offset: b.at(`questions[${manifest.questions.indexOf(question)}]`) });
+    }
+  }
 
   for (const f of b.dataKqa) {
     const id = attr(f.el, "data-kqa") ?? "";

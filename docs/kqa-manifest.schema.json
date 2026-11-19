@@ -15,6 +15,13 @@
       "type": "string",
       "maxLength": 500
     },
+    "presentation": {
+      "type": "string",
+      "enum": [
+        "all",
+        "guided"
+      ]
+    },
     "sections": {
       "maxItems": 50,
       "type": "array",

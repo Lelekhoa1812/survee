@@ -83,7 +83,8 @@ describe("agent documentation bundle", () => {
     expect(format).toContain("clears the value and keeps any optional note");
     expect(format).toContain("clear-answer");
     expect(format).toContain("announces how many questions are shown or hidden");
-    expect(format?.match(/KQA respondent shell adds \*\*Questions\*\* navigation/g)).toHaveLength(1);
+    expect(format).toContain('With the default `presentation: "all"`, the respondent shell adds **Questions** navigation');
+    expect(format).toContain('With `presentation: "guided"`, KQA shows one currently eligible section at a time');
   });
 
   it("keeps authoring and README quality claims bounded to verified evidence", async () => {

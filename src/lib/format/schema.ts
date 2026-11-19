@@ -94,6 +94,8 @@ export const manifestSchema = z.object({
   format: z.literal(FORMAT_ID),
   title: z.string().min(1).max(LIMITS.maxTitle),
   description: z.string().max(LIMITS.maxDescription).optional(),
+  /** Opt-in step presentation. Omitted manifests retain the full-page experience. */
+  presentation: z.enum(["all", "guided"]).optional(),
   sections: z.array(sectionSchema).max(LIMITS.maxSections).optional(),
   questions: z.array(questionSchema).min(1).max(LIMITS.maxQuestions),
 });

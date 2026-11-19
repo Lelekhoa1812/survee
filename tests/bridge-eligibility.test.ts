@@ -30,6 +30,33 @@ function start(answers: Record<string, { value: unknown; note?: string }> = {}) 
 }
 
 describe("questionnaire bridge conditional eligibility", () => {
+  it("switches guided sections while preserving conditional visibility and stored answers", () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <div data-kqa-question-list="a"><section data-kqa-question-id="mode"><input type="radio" data-kqa="mode" name="mode" value="other"></section></div>
+      <div data-kqa-question-list="b"><section data-kqa-question-id="details"><input data-kqa="details"></section></div>
+    </body></html>`, { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    const send = (data: Record<string, unknown>) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, ...data }, source: window }));
+    send({ type: "init", guided: true, guidedSection: "a", questions: [
+      { id: "mode", type: "single", label: "Mode", section: "a", options: [{ value: "other", label: "Other" }, { value: "standard", label: "Standard" }] },
+      { id: "details", type: "text", label: "Details", section: "b", when: { all: [{ question: "mode", operator: "equals", value: "other" }] } },
+    ], answers: { mode: { value: "other" }, details: { value: "Saved" } } });
+
+    const mode = window.document.querySelector<HTMLElement>('[data-kqa-question-id="mode"]')!;
+    const details = window.document.querySelector<HTMLElement>('[data-kqa-question-id="details"]')!;
+    expect(mode.hidden).toBe(false);
+    expect(details.hidden).toBe(true);
+    send({ type: "guided", enabled: true, section: "b" });
+    expect(mode.hidden).toBe(true);
+    expect(details.hidden).toBe(false);
+    expect(window.KQA.get("details")).toBe("Saved");
+    send({ type: "guided", enabled: false });
+    expect(mode.hidden).toBe(false);
+    expect(details.hidden).toBe(false);
+    window.close();
+  });
+
   it("restores answers before evaluating conditions, hides ineligible blocks and reports eligibility", () => {
     const page = start({ mode: { value: "other" }, details: { value: "why here" }, nested: { value: "saved" } });
     expect(page.window.KQA.eligibility()).toEqual({ mode: true, details: true, nested: true });

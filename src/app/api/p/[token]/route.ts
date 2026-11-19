@@ -20,6 +20,7 @@ export async function GET(req: Request, { params }: Ctx) {
     interview: { name: ctx.interview.name, status: ctx.interview.status },
     version: ctx.version.version,
     title: manifest.title,
+    presentation: manifest.presentation ?? "all",
     sections: manifest.sections ?? [],
     questions: manifest.questions,
     answers: ctx.participant.answers,
