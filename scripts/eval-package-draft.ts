@@ -28,7 +28,7 @@ function unique(values: unknown, label: string): asserts values is string[] {
 }
 
 export function validateBenchmark(benchmark: any) {
-  assert(benchmark?.benchmarkVersion === "kqa-package-draft/9", "Unsupported package-draft benchmark version.");
+  assert(benchmark?.benchmarkVersion === "kqa-package-draft/10", "Unsupported package-draft benchmark version.");
   assert(benchmark.track === "package-draft-review", "Benchmark track must be package-draft-review.");
   assert(benchmark.packageLibraryVersion === INTERVIEW_PACKAGE_VERSION, "Benchmark package-library version does not match the current catalog.");
   unique(benchmark.dimensions, "dimensions");
@@ -297,6 +297,16 @@ export function scoreResults(benchmark: any, results: any, artifactChecks: any[]
   };
 }
 
+/** Release-mode gates for unresolved hard-gate findings and KQA static-format errors only. */
+export function strictReleaseGateFailures(report: any): string[] {
+  const failures: string[] = [];
+  const unresolved = report?.hardGateReview?.unresolvedFlagCount ?? 0;
+  if (unresolved > 0) failures.push(`${unresolved} unresolved hard-gate finding(s)`);
+  const formatErrors = (report?.staticFormatChecks ?? []).filter((check: any) => check.staticFormat?.hasErrors);
+  if (formatErrors.length > 0) failures.push(`static format errors in ${formatErrors.map((check: any) => check.caseId).join(", ")}`);
+  return failures;
+}
+
 export async function auditArtifacts(benchmark: any, results: any, cwd = process.cwd()) {
   validateBenchmark(benchmark);
   const validated = validateResults(benchmark, results);
@@ -328,14 +338,22 @@ export async function auditArtifacts(benchmark: any, results: any, cwd = process
 async function main() {
   const args = process.argv.slice(2);
   const index = args.indexOf("--results");
-  assert(index >= 0 && args[index + 1] && !args[index + 1].startsWith("--"), "Usage: npm run eval:package-draft -- --results path/to/results.json [--benchmark path]");
+  assert(index >= 0 && args[index + 1] && !args[index + 1].startsWith("--"), "Usage: npm run eval:package-draft -- --results path/to/results.json [--benchmark path] [--strict]");
   const benchmarkIndex = args.indexOf("--benchmark");
   const benchmarkPath = benchmarkIndex >= 0 ? args[benchmarkIndex + 1] : "docs/evals/package-draft-cases.json";
   assert(NONEMPTY(benchmarkPath), "--benchmark needs a path.");
   const [benchmark, results] = await Promise.all([benchmarkPath, args[index + 1]].map(async (file) => JSON.parse(await readFile(file, "utf8"))));
   validateBenchmark(benchmark);
   const staticChecks = await auditArtifacts(benchmark, results);
-  process.stdout.write(`${JSON.stringify(scoreResults(benchmark, results, staticChecks), null, 2)}\n`);
+  const report = scoreResults(benchmark, results, staticChecks);
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  if (args.includes("--strict")) {
+    const failures = strictReleaseGateFailures(report);
+    if (failures.length > 0) {
+      process.stderr.write(`Strict release gates failed: ${failures.join("; ")}\n`);
+      process.exitCode = 1;
+    }
+  }
 }
 
 if (process.argv[1]?.endsWith("eval-package-draft.ts")) {

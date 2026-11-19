@@ -2,7 +2,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promi
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { auditArtifacts, scoreResults, validateBenchmark, validateResults } from "../scripts/eval-package-draft";
+import { auditArtifacts, scoreResults, strictReleaseGateFailures, validateBenchmark, validateResults } from "../scripts/eval-package-draft";
 import { INTERVIEW_PACKAGES } from "../src/lib/interview-packages";
 
 const benchmark = JSON.parse(await readFile(new URL("../docs/evals/package-draft-cases.json", import.meta.url), "utf8"));
@@ -216,5 +216,23 @@ describe("package draft development benchmark", () => {
     expect(() => validateResults(benchmark, noEvidence)).toThrow("explain why this evidence lane is not applicable");
     noEvidence.evidenceStatus[0].respondentPretest = { status: "not_tested" };
     expect(() => validateResults(benchmark, noEvidence)).toThrow("explain why this lane was not tested");
+  });
+
+  it("strict mode blocks unresolved hard gates and static format errors, but accepts cleared findings", () => {
+    const clean = scoreResults(benchmark, resultsFor(), []);
+    expect(strictReleaseGateFailures(clean)).toEqual([]);
+
+    const flagged: any = resultsFor();
+    const item = benchmark.cases[0];
+    const gateId = item.hardGates[0].id;
+    flagged.ratings[0].hardGateFindings = [{ gateId, evidence: "The draft makes an unsupported claim." }];
+    const blockedByFinding = scoreResults(benchmark, flagged, []);
+    expect(strictReleaseGateFailures(blockedByFinding)).toContain("1 unresolved hard-gate finding(s)");
+
+    flagged.adjudications = [{ caseId: item.id, gateId, outcome: "cleared", adjudicatorId: "panel-1", evidence: "Independent review confirmed the draft does not make the claim." }];
+    expect(strictReleaseGateFailures(scoreResults(benchmark, flagged, []))).toEqual([]);
+
+    const blockedByFormat = scoreResults(benchmark, resultsFor(), [{ caseId: item.id, staticFormat: { hasErrors: true } }]);
+    expect(strictReleaseGateFailures(blockedByFormat)).toEqual([`static format errors in ${item.id}`]);
   });
 });

@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-package-selection/4",
+  "benchmarkVersion": "kqa-package-selection/5",
   "track": "package-selection",
   "status": "public-development-fixture",
-  "description": "Public development cases for package fit, clarification, and capability boundaries, including workforce safety and privacy, validated instruments, digital-only coverage, and live adaptive-interview requests. Labels are provisional and are not a validated benchmark or universal quality oracle.",
+  "description": "Public development cases for package fit, clarification, and capability boundaries, including workforce safety and privacy, resource-efficiency discovery, validated instruments, digital-only coverage, and live adaptive-interview requests. Labels are provisional and are not a validated benchmark or universal quality oracle.",
   "allowedActions": [
     "recommend",
     "clarify",
@@ -22,7 +22,8 @@
     "scoring-boundary",
     "financial-data-minimization",
     "coverage-limit",
-    "interaction-capability-boundary"
+    "interaction-capability-boundary",
+    "resource-measurement-boundary"
   ],
   "cases": [
     {
@@ -394,6 +395,17 @@
           "mode-mismatch",
           "interaction-capability-boundary"
         ]
+      }
+    },
+    {
+      "id": "frontline-resource-efficiency-discovery",
+      "brief": "A food-processing site wants operators to describe recent conditions where energy, water, material use, or waste might be improved, so its qualified energy and operations team can investigate. The host does not want respondents to estimate savings or emissions, authorize changes, or report hazards through this questionnaire. It will preserve a separately monitored safety route and review suggestions without individual performance scoring.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "industrial-operations",
+        "acceptablePackageIds": ["industrial-operations"],
+        "clarificationSlots": [],
+        "requiredGates": ["resource-measurement-boundary", "safety-reporting-route"]
       }
     }
   ],

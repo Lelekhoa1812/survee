@@ -3,7 +3,7 @@ import { getInterviewPackage, INTERVIEW_PACKAGES, INTERVIEW_PACKAGE_VERSION } fr
 
 describe("addressable interview package modules", () => {
   it("returns the exact detailed module for every stable catalog ID", async () => {
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/9");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/10");
     for (const item of INTERVIEW_PACKAGES) {
       const result = await getInterviewPackage(item.id);
       expect(result?.packageId, item.id).toBe(item.id);
@@ -33,5 +33,17 @@ describe("addressable interview package modules", () => {
     expect(result?.packages).toContain("readiness, engagement, sentiment, adoption, or manager score");
     expect(result?.packages).toContain("how workers will hear what changed");
     expect(result?.packages).toContain("KQA does not collect or escalate them");
+  });
+
+  it("routes frontline resource observations to qualified investigation without claiming measured savings", async () => {
+    const result = await getInterviewPackage("industrial-operations");
+    expect(result?.packages).toContain("Frontline resource-efficiency discovery module");
+    expect(result?.packages).toContain("never as measured performance");
+    expect(result?.packages).toContain("qualified operations and energy/resource specialists");
+    expect(result?.packages).toContain("Do not infer savings, emissions reductions");
+    expect(result?.packageCatalog.find((item) => item.id === "industrial-operations")).toMatchObject({
+      decisionFocus: expect.stringContaining("resource-efficiency opportunities"),
+      notFor: expect.stringContaining("verified savings estimates"),
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { readDoc } from "./docs";
 
-export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/9" as const;
+export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/10" as const;
 
 export const INTERVIEW_PACKAGES = [
   {
@@ -29,10 +29,10 @@ export const INTERVIEW_PACKAGES = [
   },
   {
     id: "industrial-operations", title: "Industrial operations", level: 2,
-    decisionFocus: "Improve recurring production and maintenance workflows with input from the people doing the work.",
+    decisionFocus: "Improve recurring production and maintenance workflows and surface worker-observed resource-efficiency opportunities for qualified investigation.",
     respondents: "Operators, maintenance and planning staff, supervisors, and process partners with recent experience.",
     useWhen: "The host has defined the workflow, reference period, improvement owner, and monitored route for urgent concerns.",
-    notFor: "Live shift handover, hazard or incident reports, safety investigations, compliance certification, or individual performance review.",
+    notFor: "Live shift handover, hazard or incident reports, safety investigations, energy audits or verified savings estimates, compliance certification, or individual performance review.",
     riskFlags: ["workforce power imbalance and identifiability", "operational confidentiality", "safety-reporting boundary"], relatedPackages: ["workplace-process", "safety-quality-learning", "supplier-partner-review", "audit-readiness"],
   },
   {

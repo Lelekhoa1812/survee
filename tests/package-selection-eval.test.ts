@@ -10,20 +10,20 @@ const decision = (action: string, packageId: string | null, overrides: Record<st
 });
 const resultsFor = (fn: (c: any) => any) => ({
   benchmarkVersion: benchmark.benchmarkVersion, model: "test/model", runDate: "2026-11-19",
-  promptVersion: "test-prompt", packageLibraryVersion: "kqa-interview-packages/9",
+  promptVersion: "test-prompt", packageLibraryVersion: "kqa-interview-packages/10",
   cases: benchmark.cases.map((c: any) => ({ caseId: c.id, decision: fn(c) })),
 });
 
 describe("package selection development benchmark", () => {
   it("validates the audit scenarios with distinct fit, clarification, and boundary decisions", () => {
-    expect(validateBenchmark(benchmark).cases).toHaveLength(25);
+    expect(validateBenchmark(benchmark).cases).toHaveLength(26);
     expect(new Set(benchmark.packageIds)).toEqual(new Set(INTERVIEW_PACKAGES.map((p) => p.id)));
     expect(benchmark.cases.filter((c: any) => c.gold.action === "clarify")).toHaveLength(3);
     expect(benchmark.cases.filter((c: any) => c.gold.action === "out_of_scope")).toHaveLength(9);
     expect(benchmark.cases.map((c: any) => c.id)).toEqual(expect.arrayContaining([
       "post-change-process-learning", "formal-moc-approval", "caregiver-service-feedback",
       "caregiver-validated-measure", "anonymous-workforce-climate", "financial-wellbeing-scored-measure",
-      "digital-only-population-representativeness", "live-adaptive-longitudinal-interview",
+      "digital-only-population-representativeness", "live-adaptive-longitudinal-interview", "frontline-resource-efficiency-discovery",
     ]));
     const requiredGates = Object.fromEntries(benchmark.cases.map((c: any) => [c.id, c.gold.requiredGates]));
     expect(requiredGates["formal-moc-approval"]).toContain("moc-boundary");
@@ -32,6 +32,7 @@ describe("package selection development benchmark", () => {
     expect(requiredGates["financial-wellbeing-scored-measure"]).toEqual(expect.arrayContaining(["financial-data-minimization", "validated-instrument-boundary", "scoring-boundary"]));
     expect(requiredGates["digital-only-population-representativeness"]).toEqual(expect.arrayContaining(["mode-mismatch", "coverage-limit"]));
     expect(requiredGates["live-adaptive-longitudinal-interview"]).toEqual(expect.arrayContaining(["mode-mismatch", "interaction-capability-boundary"]));
+    expect(requiredGates["frontline-resource-efficiency-discovery"]).toEqual(expect.arrayContaining(["resource-measurement-boundary", "safety-reporting-route"]));
   });
 
   it("scores an all-gold synthetic run and keeps the development-only caveat", () => {

@@ -99,8 +99,8 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/9");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/9");
+    expect(packages).toContain("kqa-interview-packages/10");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/10");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {
@@ -225,13 +225,13 @@ describe("agent documentation bundle", () => {
     expect(JSON.parse(corpus!.body).benchmarkVersion).toBe("kqa-questionnaire-review/1");
     const draftCases = await readAsset("evals/package-draft-cases.json");
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
-    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/9");
+    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/10");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
     expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/2");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
     const selectionCases = await readAsset("evals/package-selection-cases.json");
     const selectionSchema = await readAsset("evals/package-selection.schema.json");
-    expect(JSON.parse(selectionCases!.body).benchmarkVersion).toBe("kqa-package-selection/4");
+    expect(JSON.parse(selectionCases!.body).benchmarkVersion).toBe("kqa-package-selection/5");
     expect(JSON.parse(selectionSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(selectionCases!.body).benchmarkVersion);
     const trustCases = await readAsset("evals/authoring-trust-boundary-cases.json");
     expect(trustCases?.type).toBe("application/json; charset=utf-8");
