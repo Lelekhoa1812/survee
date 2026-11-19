@@ -99,4 +99,21 @@ describe("guided respondent sections", () => {
     expect(host.querySelector(".rs-guided-step")?.textContent).toContain("About you");
     expect(host.querySelector(".rs-guided-error")?.textContent).toContain("Choose at least 2 options, or leave this question blank.");
   });
+
+  it("blocks guided progress while a pasted over-limit text draft is unsaved and lets the respondent return to it", async () => {
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const iframe = host.querySelector("iframe")!;
+    await act(async () => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "hello" }, origin: "null", source: iframe.contentWindow })));
+    await act(async () => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "length-draft", id: "name", valid: false, count: 501, max: 500 }, origin: "null", source: iframe.contentWindow })));
+    expect(host.querySelector(".rs-banner.warn")?.textContent).toContain("has not been saved");
+    expect(Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Continue")?.disabled).toBe(true);
+    const leave = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leave);
+    expect(leave.defaultPrevented).toBe(true);
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".rs-banner.warn button").item(0).click());
+    expect(host.querySelector(".rs-guided-step")?.textContent).toContain("About you");
+    await act(async () => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "length-draft", id: "name", valid: true }, origin: "null", source: iframe.contentWindow })));
+    expect(host.querySelector(".rs-banner.warn")).toBeNull();
+    expect(Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Continue")?.disabled).toBe(false);
+  });
 });

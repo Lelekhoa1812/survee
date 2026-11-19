@@ -17,6 +17,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   var errors = [];
   var consoleErrors = [];
   var routingStatusNode = null;
+  var lengthDrafts = {};
+  var lengthDraftValues = {};
   var readyResolve;
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
 
@@ -116,6 +118,31 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     }
     return typeof question.maxLength === "number" ? question.maxLength : (question.type === "text" ? 500 : 20000);
   }
+  function retainLengthDraft(id, isNote, el, invalid) {
+    var key = id + (isNote ? ":note" : ":answer");
+    var previous = !!lengthDraftValues[key];
+    if (invalid) lengthDraftValues[key] = { element: el, value: el.value };
+    else delete lengthDraftValues[key];
+    if (!lengthDrafts[id]) lengthDrafts[id] = { answer: false, note: false };
+    lengthDrafts[id][isNote ? "note" : "answer"] = invalid;
+    if (!lengthDrafts[id].answer && !lengthDrafts[id].note) delete lengthDrafts[id];
+    if (previous !== invalid) {
+      var otherKey = id + (isNote ? ":answer" : ":note");
+      var remaining = lengthDraftValues[otherKey];
+      var otherIsNote = !isNote;
+      post({ type: "length-draft", id: id, valid: !lengthDrafts[id], count: invalid ? el.value.length : remaining ? remaining.value.length : undefined, max: invalid ? lengthLimit(q(id), isNote) : remaining ? lengthLimit(q(id), otherIsNote) : undefined });
+    }
+  }
+  function restoreLengthDrafts() {
+    Object.keys(lengthDraftValues).forEach(function (key) {
+      var draft = lengthDraftValues[key];
+      if (draft.element && draft.element.isConnected) {
+        draft.element.value = draft.value;
+        var id = key.slice(0, key.lastIndexOf(":"));
+        updateLengthFeedback(id, false);
+      }
+    });
+  }
   function appendDescription(el, id, include) {
     var ids = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
     var index = ids.indexOf(id);
@@ -164,7 +191,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (statusNode) {
       var previous = statusNode.getAttribute("data-stage") || "below";
       if (announce && stage !== previous && (stage === "approaching" || stage === "limit" || stage === "over")) {
-        statusNode.textContent = stage === "approaching" ? "Character limit approaching." : stage === "limit" ? "Character limit reached." : "Character limit exceeded.";
+        statusNode.textContent = stage === "approaching" ? "Character limit approaching." : stage === "limit" ? "Character limit reached." : "Character limit exceeded. This text has not been saved; shorten it to the limit.";
       } else if (stage === "below") statusNode.textContent = "";
       statusNode.setAttribute("data-stage", stage);
     }
@@ -646,6 +673,11 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (id !== null && q(id)) {
       var question = q(id);
       updateLengthFeedback(id, true);
+      var nativeTextQuestion = (question.type === "text" || question.type === "longtext") && typeof el.value === "string";
+      if (nativeTextQuestion && el.value.length > lengthLimit(question, false)) {
+        retainLengthDraft(id, false, el, true);
+        return;
+      }
       var exclusiveAnnouncement = "";
       if (question.type === "multi" && el.type === "checkbox" && el.checked && (question.exclusiveOptions || []).length) {
         var exclusive = question.exclusiveOptions.indexOf(el.value) !== -1;
@@ -658,7 +690,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
           exclusiveAnnouncement = exclusive ? "Exclusive option selected; other choices cleared." : "Exclusive choice cleared.";
         }
       }
-      commit(id, { value: readDom(id) }, "dom");
+      var accepted = commit(id, { value: readDom(id) }, "dom");
+      if (accepted && nativeTextQuestion) retainLengthDraft(id, false, el, false);
       if (exclusiveAnnouncement) {
         var statusEls = controls(id);
         var host = statusEls[0] && statusEls[0].closest ? statusEls[0].closest("fieldset") : null;
@@ -668,7 +701,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       return;
     }
     var nid = el.getAttribute("data-kqa-note");
-    if (nid !== null && q(nid)) { updateLengthFeedback(nid, true); commit(nid, { note: el.value }, "dom"); }
+    if (nid !== null && q(nid)) {
+      updateLengthFeedback(nid, true);
+      if (el.value.length > lengthLimit(q(nid), true)) { retainLengthDraft(nid, true, el, true); return; }
+      var acceptedNote = commit(nid, { note: el.value }, "dom");
+      if (acceptedNote) retainLengthDraft(nid, true, el, false);
+    }
   }
   document.addEventListener("input", onControl, true);
   document.addEventListener("change", onControl, true);
@@ -744,6 +782,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.qmap = {};
       state.questions.forEach(function (x) { state.qmap[x.id] = x; });
       reorderResponseOptions();
+      state.questions.forEach(function (question) {
+        if (question.type === "text" || question.type === "longtext") controls(question.id).forEach(function (control) { control.removeAttribute("maxlength"); });
+        noteControls(question.id).forEach(function (control) { control.removeAttribute("maxlength"); });
+      });
       state.participant = m.participant || null;
       state.probe = !!m.probe;
       state.preview = !!m.preview;
@@ -762,6 +804,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (state.probe) setTimeout(runProbe, 60);
     } else if (m.type === "answers") {
       applyAnswers(m.answers);
+      restoreLengthDrafts();
       updateEligibility(true);
       state.questions.forEach(function (x) { emit("change", { id: x.id, value: answerOf(x.id).value, note: answerOf(x.id).note, source: "app" }); });
     } else if (m.type === "lock") {

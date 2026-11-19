@@ -15,7 +15,7 @@ const questions = [
 
 function start(answers: Record<string, { value?: unknown; note?: string }> = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>
-    <label for="summary">Summary</label><input id="summary" type="text" data-kqa="summary" aria-describedby="summary-help">
+    <label for="summary">Summary</label><input id="summary" type="text" maxlength="10" data-kqa="summary" aria-describedby="summary-help">
     <p id="summary-help">Keep it brief.</p>
     <textarea data-kqa-note="summary" aria-describedby="note-help"></textarea><p id="note-help">Optional context.</p>
     <textarea data-kqa="details"></textarea>
@@ -29,6 +29,28 @@ function start(answers: Record<string, { value?: unknown; note?: string }> = {})
 }
 
 describe("native text length feedback", () => {
+  it("preserves over-limit pasted text, keeps it unsaved through refreshes, and releases the draft when corrected", () => {
+    const page = start({ summary: { value: "saved", note: "" } });
+    const input = page.window.document.querySelector<HTMLInputElement>("#summary")!;
+    // The bridge removes the browser clamp after validating the authored markup.
+    expect(input.hasAttribute("maxlength")).toBe(false);
+    input.value = "12345678901";
+    input.dispatchEvent(new page.window.InputEvent("input", { bubbles: true, inputType: "insertFromPaste" }));
+    expect(input.value).toBe("12345678901");
+    expect(page.post.mock.calls.some(([message]) => message.type === "length-draft" && message.id === "summary" && message.valid === false && message.count === 11 && message.max === 10)).toBe(true);
+    expect(page.post.mock.calls.some(([message]) => message.type === "set" && message.id === "summary")).toBe(false);
+
+    page.window.dispatchEvent(new page.window.MessageEvent("message", { data: { kqa: 1, type: "answers", answers: { summary: { value: "saved" } } }, source: page.window }));
+    expect(input.value).toBe("12345678901");
+    expect(page.window.document.querySelector('[data-kqa-length-counter="kqa-length-summary-answer"]')?.textContent).toBe("11 of 10 characters used — over the limit");
+    input.value = "short";
+    input.dispatchEvent(new page.window.Event("input", { bubbles: true }));
+    expect(input.value).toBe("short");
+    expect(page.post.mock.calls.some(([message]) => message.type === "length-draft" && message.id === "summary" && message.valid === true)).toBe(true);
+    expect(page.post.mock.calls.some(([message]) => message.type === "set" && message.id === "summary" && message.value === "short")).toBe(true);
+    page.window.close();
+  });
+
   it("appears at 80%, retains authored descriptions, and announces only threshold transitions", () => {
     const page = start();
     const input = page.window.document.querySelector<HTMLInputElement>("#summary")!;

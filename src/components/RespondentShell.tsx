@@ -69,6 +69,7 @@ export function RespondentShell({ token }: { token: string }) {
   const [guidedSectionId, setGuidedSectionId] = useState<string | null>(null);
   const [guidedError, setGuidedError] = useState(false);
   const [guidedAnnouncement, setGuidedAnnouncement] = useState("");
+  const [lengthDrafts, setLengthDrafts] = useState<Record<string, { question: Question; count: number; max: number }>>({});
 
   const frame = useRef<HTMLIFrameElement>(null);
   const questionNavTrigger = useRef<HTMLButtonElement>(null);
@@ -299,6 +300,10 @@ export function RespondentShell({ token }: { token: string }) {
         if ("value" in m) part.value = m.value;
         if ("note" in m) part.note = m.note;
         queue(m.id, part);
+      } else if (m.type === "length-draft" && typeof m.id === "string") {
+        const question = questions.current.find((item) => item.id === m.id);
+        if (m.valid === true) setLengthDrafts((current) => { if (!(m.id in current)) return current; const next = { ...current }; delete next[m.id]; return next; });
+        else if (question && Number.isInteger(m.count) && Number.isInteger(m.max)) setLengthDrafts((current) => ({ ...current, [m.id]: { question, count: m.count as number, max: m.max as number } }));
       } else if (m.type === "eligibility" && m.eligible && typeof m.eligible === "object" && !Array.isArray(m.eligible)) {
         const next: Record<string, boolean> = {};
         for (const question of questions.current) next[question.id] = (m.eligible as Record<string, unknown>)[question.id] !== false;
@@ -357,13 +362,14 @@ export function RespondentShell({ token }: { token: string }) {
   }, [applyLock, flush, handleVersionConflict, post, token, toast]);
 
   useEffect(() => {
-    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || inflight.current || staleDraftRef.current.length) { e.preventDefault(); e.returnValue = ""; } };
+    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || inflight.current || staleDraftRef.current.length || Object.keys(lengthDrafts).length) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, []);
+  }, [lengthDrafts]);
 
   // ---- submit
   async function submit() {
+    if (Object.keys(lengthDrafts).length) return;
     setSubmitting(true);
     clearTimeout(timer.current);
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
@@ -421,6 +427,7 @@ export function RespondentShell({ token }: { token: string }) {
 
   function continueGuided() {
     if (!activeGuidedGroup) return;
+    if (Object.keys(lengthDrafts).length) return;
     if (guidedStepIssues.length) {
       setGuidedError(true);
       window.setTimeout(() => guidedErrorRef.current?.focus(), 0);
@@ -447,6 +454,16 @@ export function RespondentShell({ token }: { token: string }) {
   const submitted = data.participant.status === "submitted";
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
   const hasUnsavedChanges = Object.keys(pending.current).length > 0;
+  const firstLengthDraft = Object.values(lengthDrafts)[0];
+  const lengthDraftHidden = firstLengthDraft ? eligibility.current[firstLengthDraft.question.id] === false : false;
+  const lengthDraftSourceId = firstLengthDraft?.question.when?.all?.[0]?.question ?? firstLengthDraft?.question.when?.any?.[0]?.question;
+  const lengthDraftFocusId = lengthDraftHidden && lengthDraftSourceId ? lengthDraftSourceId : firstLengthDraft?.question.id;
+  const focusLengthDraft = () => {
+    if (!firstLengthDraft || !lengthDraftFocusId) return;
+    const target = questions.current.find((question) => question.id === lengthDraftFocusId);
+    if (guidedMode && target?.section) goToGuidedGroup(target.section, target.id);
+    else post({ type: "focus-question", id: lengthDraftFocusId });
+  };
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", failed: "Not saved", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
@@ -544,8 +561,8 @@ export function RespondentShell({ token }: { token: string }) {
                 </nav>
               )}
             </div>
-            <span className={`save-state ${save}`} role="status" aria-live="polite" title={hasUnsavedChanges ? "These changes have not reached KQA. Keep this page open and check the save status before leaving." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
-            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>
+            <span className={`save-state ${firstLengthDraft ? "failed" : save}`} role="status" aria-live="polite" title={firstLengthDraft ? "This over-limit text is only on this page and has not been saved." : hasUnsavedChanges ? "These changes have not reached KQA. Keep this page open and check the save status before leaving." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{firstLengthDraft ? "Text not saved" : SAVE_LABEL[save]}</span></span>
+            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || Object.keys(lengthDrafts).length > 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>
           </div>
         </div>
       </div>
@@ -555,6 +572,7 @@ export function RespondentShell({ token }: { token: string }) {
         {submitted && <><Icon name="check" size={16} /> Submitted. Your answers are locked, and your host can reopen them if you need a change.</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> This interview is closed, so answers can no longer be changed.</>}
       </div>
+      {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {lengthDraftHidden ? `“${firstLengthDraft.question.label}” is currently hidden. Its ${firstLengthDraft.count}-character draft is unsaved; change an earlier answer to show it, then shorten it to ${firstLengthDraft.max} characters before reviewing or submitting.` : `The response to “${firstLengthDraft.question.label}” has ${firstLengthDraft.count} characters; the limit is ${firstLengthDraft.max}. It has not been saved. Shorten it before reviewing or submitting.`} <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? "Review earlier answer" : "Edit response"}</button></div>}
 
       {guidedMode && activeGuidedGroup && (
         <section className="rs-guided" aria-label="Questionnaire sections">
@@ -566,7 +584,7 @@ export function RespondentShell({ token }: { token: string }) {
             </div>
             <div className="rs-guided-actions">
               <button className="btn" type="button" disabled={activeGuidedIndex <= 0 || locked} onClick={() => goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>Back</button>
-              <button className="btn accent" type="button" disabled={locked || !frameReady} onClick={continueGuided}>{activeGuidedIndex === questionGroups.length - 1 ? "Review answers" : "Continue"}</button>
+              <button className="btn accent" type="button" disabled={locked || !frameReady || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{activeGuidedIndex === questionGroups.length - 1 ? "Review answers" : "Continue"}</button>
               <button className="btn" type="button" disabled={locked} onClick={() => { setGuidedMode(false); setGuidedError(false); post({ type: "guided", enabled: false }); }}>Show all questions</button>
             </div>
           </div>
@@ -611,11 +629,12 @@ export function RespondentShell({ token }: { token: string }) {
           actions={
             <>
               <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>Keep editing</button>
-              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting} onClick={submit}>{submitting && <Spinner />} Submit answers</button>}
+              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || Object.keys(lengthDrafts).length > 0} onClick={submit}>{submitting && <Spinner />} Submit answers</button>}
             </>
           }
         >
           <div className="review-content">
+            {firstLengthDraft && <div className="rs-guided-error" role="alert">The response to “{firstLengthDraft.question.label}” exceeds its {firstLengthDraft.max} character limit and has not been saved. <button type="button" onClick={focusLengthDraft}>Edit response</button></div>}
             <p className="muted">Check the answers below. You can clear an answer here; any optional note stays saved. After submission, your answers are locked; your host can reopen them if you need a change.</p>
             {counts.needsAttention.length || submitError ? (
               <p className="review-problems" role="alert">{submitError || "Resolve the marked answers before submitting."} Choose Answer or Edit to return to that question.</p>
