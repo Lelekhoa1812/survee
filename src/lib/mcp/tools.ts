@@ -306,12 +306,12 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_questionnaire_authoring_skill",
-    description: "Return an installable KQA Agent Skill bundle with SKILL.md, version-matched references, a starter questionnaire, a routing example, and illustrative package-based questionnaire examples with review records. Preserve the supplied relative paths when installing; examples are not validated instruments, and this bundle is workflow guidance rather than human review.",
+    description: "Return an installable KQA Agent Skill bundle with SKILL.md, version-matched references, a starter questionnaire, a routing example, illustrative package-based questionnaire examples, and separate content-review and tool-safety evaluation guides. Preserve the supplied relative paths when installing; examples are not validated instruments, and this bundle is workflow guidance rather than human review.",
     inputSchema: obj({}),
     async run() {
       const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
       if (!skill) return err("The questionnaire authoring skill is unavailable.", "docs_unavailable");
-      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "PACKAGE_DRAFT_BENCHMARK.md", "starter.kqa.html", "routed-follow-up.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
+      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "PACKAGE_DRAFT_BENCHMARK.md", "AUTHORING_TRUST_BOUNDARY_EVAL.md", "AUTHORING_TRUST_BOUNDARY_CASES.json", "starter.kqa.html", "routed-follow-up.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
       const references = await Promise.all(referenceNames.map(async (name) => ({ path: `references/${name}`, content: await readDoc(`kqa-questionnaire-author/references/${name}`) })));
       if (references.some((reference) => reference.content === null)) return err("The questionnaire authoring skill references are incomplete.", "docs_unavailable");
       return ok({ source: "docs/kqa-questionnaire-author/SKILL.md", skill, files: [{ path: "SKILL.md", content: skill }, ...references] });

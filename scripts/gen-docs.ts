@@ -22,6 +22,8 @@ const skillReferences: Record<string, string> = {
   "MCP.md": "MCP.md",
   "QUESTIONNAIRE_AUTHORING_BENCHMARK.md": "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md",
   "PACKAGE_DRAFT_BENCHMARK.md": "evals/PACKAGE_DRAFT_BENCHMARK.md",
+  "AUTHORING_TRUST_BOUNDARY_EVAL.md": "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md",
+  "AUTHORING_TRUST_BOUNDARY_CASES.json": "evals/authoring-trust-boundary-cases.json",
   "starter.kqa.html": "template/starter.kqa.html",
   "routed-follow-up.kqa.html": "examples/routed-follow-up.kqa.html",
   "service-improvement.kqa.html": "examples/service-improvement.kqa.html",

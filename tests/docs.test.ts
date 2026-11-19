@@ -67,8 +67,8 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/3");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/3");
+    expect(packages).toContain("kqa-interview-packages/4");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/4");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {
@@ -132,6 +132,7 @@ describe("agent documentation bundle", () => {
     expect(skill).toContain("install each item at its supplied relative path");
     expect(skill).toContain("references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
     expect(skill).toContain("references/PACKAGE_DRAFT_BENCHMARK.md");
+    expect(skill).toContain("references/AUTHORING_TRUST_BOUNDARY_EVAL.md");
     expect(skill).toContain("references/QUESTION_BLUEPRINT.md");
     const references = [
       ["FORMAT.md", "FORMAT.md"],
@@ -142,6 +143,7 @@ describe("agent documentation bundle", () => {
       ["MCP.md", "MCP.md"],
       ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
       ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
+      ["AUTHORING_TRUST_BOUNDARY_EVAL.md", "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md"],
       ["starter.kqa.html", "template/starter.kqa.html"],
       ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
       ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
@@ -155,9 +157,11 @@ describe("agent documentation bundle", () => {
   it("publishes the questionnaire evaluation benchmark and its labeled development corpus", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-authoring-benchmark" && doc.file === "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md")).toBe(true);
     expect(DOCS.some((doc) => doc.slug === "package-draft-benchmark" && doc.file === "evals/PACKAGE_DRAFT_BENCHMARK.md")).toBe(true);
+    expect(DOCS.some((doc) => doc.slug === "authoring-trust-boundary-eval" && doc.file === "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
     expect(bundle).toContain("PACKAGE_DRAFT_BENCHMARK.md");
+    expect(bundle).toContain("AUTHORING_TRUST_BOUNDARY_EVAL.md");
     expect(bundle).toContain("scores are not validation or respondent evidence");
     const corpus = await readAsset("evals/questionnaire-authoring-cases.json");
     expect(corpus?.type).toBe("application/json; charset=utf-8");
@@ -166,6 +170,12 @@ describe("agent documentation bundle", () => {
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
     expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/1");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
+    const trustCases = await readAsset("evals/authoring-trust-boundary-cases.json");
+    expect(trustCases?.type).toBe("application/json; charset=utf-8");
+    const trustBenchmark = JSON.parse(trustCases!.body);
+    expect(trustBenchmark.benchmarkVersion).toBe("kqa-authoring-trust-boundary/1");
+    expect(new Set(trustBenchmark.cases.map((item: { id: string }) => item.id)).size).toBe(6);
+    expect(trustBenchmark.cases.find((item: { id: string }) => item.id === "explicit-approval-positive-control").requiredTools).toContain("create_interview");
   });
 
   it("publishes the live MCP operating guide as a named doc and in the agent bundle", async () => {
