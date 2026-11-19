@@ -123,6 +123,17 @@ describe("respondent version fence", () => {
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
   });
 
+  it("saves full rank permutations in respondent order and rejects partial orders", async () => {
+    const options = ["a", "b", "c"].map((value) => ({ value, label: value.toUpperCase() }));
+    mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "rank", label: "Order options", required: true, options }] };
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: ["c", "a"] } }))).toMatchObject({ ok: false, status: 400 });
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: ["c", "a", "b"] } }))).toMatchObject({ ok: true });
+    const savedSet = mocks.participantUpdate.mock.calls.at(-1)?.[1].$set;
+    expect(savedSet["answers.q1"].value).toEqual(["c", "a", "b"]);
+    mocks.participant.answers = { q1: savedSet["answers.q1"] };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true, submittedAt: expect.any(String) });
+  });
+
   it("rejects a save when publication wins before the transaction fence", async () => {
     mocks.publishBeforeTransaction = true;
 

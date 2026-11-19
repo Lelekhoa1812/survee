@@ -657,6 +657,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
         add(ctx, "KQA209", `${p}${qid ? ` (${qid})` : ""} is a "${t}" question but ${q.options === undefined ? "has no" : Array.isArray(q.options) ? `has only ${q.options.length}` : "has an invalid"} "options" list. It needs at least two.`, undefined, { offset: q.options === undefined ? m.at(p) : m.at(`${p}.options`), path: `${p}.options`, questionId: qid });
       } else {
         if (q.options.length > LIMITS.maxOptions) add(ctx, "KQA209", `${p}.options has ${q.options.length} entries; the maximum is ${LIMITS.maxOptions}.`, undefined, { offset: m.at(`${p}.options`), path: `${p}.options`, questionId: qid });
+        if (t === "rank" && q.options.length > LIMITS.maxRankOptions) add(ctx, "KQA209", `${p}.options has ${q.options.length} entries; ranking supports at most ${LIMITS.maxRankOptions}.`, undefined, { offset: m.at(`${p}.options`), path: `${p}.options`, questionId: qid });
         const vals = new Map<string, number>();
         q.options.forEach((o, j) => {
           const op = `${p}.options[${j}]`;
@@ -752,7 +753,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
             if (source && choiceOp) {
               const multiOp = op === "contains" || op === "notContains";
               if (multiOp ? source.type !== "multi" : source.type !== "single" && source.type !== "select") {
-                add(ctx, "KQA218", `${cp} uses "${op}" with ${source.type}; contains operators require a multi question, and equals operators require single or select.`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
+                add(ctx, "KQA218", `${cp} uses "${op}" with ${source.type}; contains operators require a multi question, and equals operators require single or select. Ranked choices support answer-state conditions only.`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
               }
               if (typeof value === "string" && !source.values.has(value)) {
                 add(ctx, "KQA218", `${cp}.value "${value}" is not an option of earlier question "${ref}".`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
@@ -889,6 +890,27 @@ function checkBindings(manifest: Manifest, b: BCtx) {
 
     if (list.length === 0) continue;
 
+    if (q.type === "rank") {
+      const host = list[0]?.el;
+      if (list.length !== 1 || host?.tagName !== "ol") {
+        add(ctx, "KQA309", `Rank question "${q.id}" needs one <ol data-kqa="${q.id}"> containing its options in the starting order.`, undefined, { offset: host ? startOf(host) : undefined, questionId: q.id });
+        continue;
+      }
+      if (!hasLabel(host, list[0].ancestors, b.labelsFor) && !hasGroupLabel(list[0].ancestors)) add(ctx, "KQA308", `Rank list "${q.id}" has no accessible question label.`, `Place it in a labelled fieldset or add aria-label/aria-labelledby.`, { offset: startOf(host), snippet: tagSrc(host), questionId: q.id });
+      const options = q.options ?? [];
+      const items = kids(host).filter(isEl);
+      const seen = new Set<string>();
+      if (items.length !== options.length || items.some((item) => item.tagName !== "li")) add(ctx, "KQA304", `Rank list "${q.id}" must contain one direct <li data-value="…"> for every manifest option and no other direct elements.`, undefined, { offset: startOf(host), snippet: tagSrc(host), questionId: q.id });
+      items.filter((item) => item.tagName === "li").forEach((item) => {
+        const value = attr(item, "data-value");
+        if (!value || !options.some((option) => option.value === value) || seen.has(value)) add(ctx, "KQA304", `Rank list "${q.id}" has a missing, unknown or duplicate data-value ${JSON.stringify(value)}.`, undefined, { offset: startOf(item), snippet: tagSrc(item), questionId: q.id });
+        if (value) seen.add(value);
+        if (!textOf(item).trim()) add(ctx, "KQA308", `Rank option "${value ?? ""}" in "${q.id}" has no visible label.`, undefined, { offset: startOf(item), snippet: tagSrc(item), questionId: q.id });
+      });
+      for (const option of options) if (!seen.has(option.value)) add(ctx, "KQA304", `Rank list "${q.id}" is missing option "${option.value}".`, undefined, { offset: startOf(host), snippet: tagSrc(host), questionId: q.id });
+      continue;
+    }
+
     // element compatibility
     const kinds = list.map((f) => elementKind(f.el));
     const ok = (k: string): boolean => {
@@ -896,6 +918,7 @@ function checkBindings(manifest: Manifest, b: BCtx) {
         case "single": return k === "input:radio";
         case "multi": return k === "input:checkbox";
         case "select": return k === "select";
+        case "rank": return k === "ol";
         case "text": return k.startsWith("input:") && TEXT_INPUT_TYPES.has(k.slice(6) === "text" ? "text" : k.slice(6));
         case "longtext": return k === "textarea";
         case "number": return k === "input:number";
@@ -904,7 +927,7 @@ function checkBindings(manifest: Manifest, b: BCtx) {
       }
     };
     const expectedText: Record<string, string> = {
-      single: "radio buttons (<input type=\"radio\">)", multi: "checkboxes (<input type=\"checkbox\">)", select: "a <select>", text: "<input type=\"text\"> (or email, url, tel, search)",
+      single: "radio buttons (<input type=\"radio\">)", multi: "checkboxes (<input type=\"checkbox\">)", select: "a <select>", rank: "an ordered list (<ol>)", text: "<input type=\"text\"> (or email, url, tel, search)",
       longtext: "a <textarea>", number: "<input type=\"number\">", scale: "<input type=\"range\"> or numbered radio buttons", date: "<input type=\"date\">",
     };
     let mismatched = false;

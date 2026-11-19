@@ -66,6 +66,7 @@
               "single",
               "multi",
               "select",
+              "rank",
               "text",
               "longtext",
               "number",
@@ -289,7 +290,31 @@
           "type",
           "label"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "rank"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "maxItems": 8
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          }
+        ]
       }
     }
   },

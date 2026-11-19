@@ -185,9 +185,9 @@ Two questions share an id, so their answers would overwrite each other.
 
 Severity: **error**
 
-The type is not one of single, multi, select, text, longtext, number, scale, date.
+The type is not one of single, multi, select, rank, text, longtext, number, scale or date.
 
-**How to fix:** Use a supported type. Radio buttons are "single", checkboxes are "multi", a dropdown is "select", a one-line input is "text", a textarea is "longtext", a rating is "scale".
+**How to fix:** Use a supported type. Radio buttons are "single", checkboxes are "multi", a dropdown is "select", a full-order ranking is "rank", a one-line input is "text", a textarea is "longtext", a rating is "scale".
 
 Wrong:
 
@@ -205,9 +205,9 @@ Right:
 
 Severity: **error**
 
-single, multi and select questions need an "options" list of at least two { value, label } entries; other types must not have one.
+single, multi and select questions need an "options" list of at least two { value, label } entries; rank needs 2 to 8; other types must not have options.
 
-**How to fix:** Add "options" to choice questions and remove it from the others.
+**How to fix:** Add "options" to choice questions, limit rank to 8 options, and remove options from other types.
 
 ### KQA210: Duplicate or invalid option value
 
@@ -333,7 +333,7 @@ Severity: **error**
 
 The element cannot hold an answer of this question's type. For example a checkbox bound to a single-choice question lets people tick several options.
 
-**How to fix:** Use the element listed for this type in docs/FORMAT.md (single: radio, multi: checkbox, select: <select>, text: input, longtext: textarea, number: input type=number, scale: input type=range or numbered radios, date: input type=date).
+**How to fix:** Use the element listed for this type in docs/FORMAT.md (single: radio, multi: checkbox, select: <select>, rank: ordered <ol>, text: input, longtext: textarea, number: input type=number, scale: input type=range or numbered radios, date: input type=date).
 
 ### KQA303: Option value in the page is not in the manifest
 

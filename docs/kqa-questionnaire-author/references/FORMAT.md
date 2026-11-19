@@ -174,7 +174,7 @@ A matrix such as "rate each of these five items" is **five questions**, one per 
 
 ## 4. Binding controls
 
-Bind a control to a question by giving it `data-kqa="<question id>"`. The runtime listens for `input` and `change` events on bound controls.
+Bind a control to a question by giving it `data-kqa="<question id>"`. The runtime listens for `input` and `change` events on bound controls and handles its own Move up/Move down clicks for native `rank` lists.
 
 | Type | Markup | Stored value |
 |---|---|---|
@@ -194,7 +194,7 @@ Rules the checker enforces:
 * **Every `data-kqa` must name a manifest question** (KQA301). A typo here means the answer is never saved.
 * **The control type must match the question type** (KQA302). A `single` question cannot be a text box. For `rank`, bind one ordered list whose list items map one-to-one to the manifest options.
 * **Every option value in the page must exist in the manifest, and every manifest option must have a control** (KQA303, KQA304). Compare them character for character, including case.
-* For `rank`, the bound `<ol>` contains one `<li data-value="OPTION">` for each manifest option. Values are unique, labels correspond to those values, and the initial list order is the starting order. The runtime decorates the list with accessible Move up/Move down buttons; do not add drag-only behavior or authored rank buttons. The answer is saved as the full ordered array.
+* For `rank`, the bound `<ol>` contains one `<li data-value="OPTION">` for each manifest option. Values are unique, labels correspond to those values, and the initial list order is the starting order. The runtime decorates the list with accessible Move up/Move down buttons and a **Use this order** confirmation, so a respondent can accept the starting order without moving anything. Moving an item saves the full ordered array; an untouched optional rank stays unanswered. Do not add drag-only behavior or authored rank buttons.
 * Radios of one question share one `name`, and radios of different questions never share a name (KQA307, KQA319).
 * Radio and checkbox controls that carry `data-kqa` need a `value` attribute (KQA312). Unbound inputs (a filter toggle, a presentation-only slider) are ignored by the checker and may be used freely, but they save nothing.
 * `data-kqa` goes on `input`, `select` or `textarea`, not on a `div` or `label` (KQA309), except that a native `rank` question binds its `<ol>` as specified above.

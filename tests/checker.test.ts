@@ -14,14 +14,15 @@ function swap(html: string, from: string | RegExp, to: string): string {
 const codes = (r: Report) => r.diagnostics.map((d) => d.code);
 const find = (r: Report, code: string) => r.diagnostics.find((d) => d.code === code);
 const GUIDED = `<!doctype html><html lang="en"><head><title>Test</title><script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Test","presentation":"guided","sections":[{"id":"start","title":"Getting started"}],"questions":[{"id":"name","type":"text","section":"start","label":"Your name"}]}</script></head><body><main><div data-kqa-question-list="start"><section data-kqa-question-id="name"><label>Your name<input type="text" data-kqa="name"></label></section></div></main></body></html>`;
+const RANK = `<!doctype html><html lang="en"><head><title>Test</title><script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Test","questions":[{"id":"priority","type":"rank","label":"Order these","options":[{"value":"cost","label":"Cost"},{"value":"speed","label":"Speed"},{"value":"quality","label":"Quality"}]}]}</script></head><body><fieldset><legend>Order these</legend><ol data-kqa="priority"><li data-value="cost">Cost</li><li data-value="speed">Speed</li><li data-value="quality">Quality</li></ol></fieldset></body></html>`;
 
 describe("starter template", () => {
   it("passes with no errors", () => {
     const r = checkHtml(STARTER, { fileName: "starter.kqa.html" });
     expect(r.diagnostics.filter((d) => d.severity === "error").map((d) => `${d.code} ${d.message}`)).toEqual([]);
     expect(r.ok).toBe(true);
-    expect(r.manifest?.questions).toHaveLength(9);
-    expect(r.stats.boundQuestions).toBe(8);
+    expect(r.manifest?.questions).toHaveLength(10);
+    expect(r.stats.boundQuestions).toBe(9);
     expect(r.stats.customQuestions).toBe(1);
   });
   it("has no warnings either, so it is a safe model to copy", () => {
@@ -75,6 +76,12 @@ describe("manifest syntax", () => {
 });
 
 describe("manifest rules", () => {
+  it("accepts full-order rank markup and rejects missing or duplicate option bindings", () => {
+    expect(checkHtml(RANK).ok).toBe(true);
+    expect(codes(checkHtml(RANK.replace('<li data-value="quality">Quality</li>', "")))).toContain("KQA304");
+    expect(codes(checkHtml(RANK.replace('data-value="quality"', 'data-value="speed"')))).toContain("KQA304");
+    expect(codes(checkHtml(RANK.replace(',"options":[{"value":"cost","label":"Cost"},{"value":"speed","label":"Speed"},{"value":"quality","label":"Quality"}]', "")))).toContain("KQA209");
+  });
   it("accepts guided presentation only with section and question block markers", () => {
     expect(codes(checkHtml(GUIDED))).not.toContain("KQA220");
     expect(codes(checkHtml(GUIDED))).not.toContain("KQA321");

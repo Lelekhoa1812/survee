@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eligibilityQuestionIds, evaluateEligibility, isAnswered, progress, validateAnswer } from "../src/lib/format/answers";
+import { displayValue, eligibilityQuestionIds, evaluateEligibility, isAnswered, progress, validateAnswer } from "../src/lib/format/answers";
 import type { Manifest, Question } from "../src/lib/format/schema";
 
 const checkbox: Question = {
@@ -30,6 +30,19 @@ describe("answered, without scores", () => {
     expect(validateAnswer(capped, [])).toEqual({ ok: true, value: null });
     expect(validateAnswer(checkbox, ["email", "phone"])).toEqual({ ok: true, value: ["email", "phone"] });
     expect(validateAnswer(capped, ["email", "phone", "email", "phone"], { allowOverLimit: true })).toEqual({ ok: true, value: ["email", "phone"] });
+  });
+
+  it("validates a complete rank permutation while preserving respondent order", () => {
+    const rank: Question = { id: "priorities", type: "rank", label: "Order these", options: [
+      { value: "cost", label: "Cost" }, { value: "speed", label: "Speed" }, { value: "quality", label: "Quality" },
+    ] };
+    expect(validateAnswer(rank, ["quality", "cost", "speed"])).toEqual({ ok: true, value: ["quality", "cost", "speed"] });
+    expect(validateAnswer(rank, [])).toEqual({ ok: true, value: null });
+    expect(validateAnswer(rank, ["quality", "cost"]).ok).toBe(false);
+    expect(validateAnswer(rank, ["quality", "quality", "speed"]).ok).toBe(false);
+    expect(validateAnswer(rank, ["quality", "cost", "other"]).ok).toBe(false);
+    expect(isAnswered(rank, { priorities: { value: ["quality", "cost", "speed"], updatedAt: "" } })).toBe(true);
+    expect(displayValue(rank, ["quality", "cost", "speed"])).toBe("1. Quality; 2. Cost; 3. Speed");
   });
 
   it("blocks progress for an eligible saved answer above a newly lowered cap", () => {

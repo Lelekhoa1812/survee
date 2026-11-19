@@ -116,6 +116,9 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       els.forEach(function (el) { if (el.checked) vals.push(el.value); });
       return vals;
     }
+    if (t === "rank") {
+      return Array.prototype.filter.call(els[0].children, function (item) { return item.tagName === "LI"; }).map(function (item) { return item.getAttribute("data-value"); });
+    }
     if (t === "single" || (t === "scale" && els[0].type === "radio")) {
       for (var i = 0; i < els.length; i++) if (els[i].checked) return t === "scale" ? Number(els[i].value) : els[i].value;
       return null;
@@ -132,6 +135,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var v = answerOf(id).value;
     if (question && els.length) {
       var t = question.type;
+      if (t === "rank" && Array.isArray(v)) {
+        var rankList = els[0];
+        var rankItems = Array.prototype.slice.call(rankList.children).filter(function (item) { return item.tagName === "LI"; });
+        var rankByValue = Object.create(null);
+        rankItems.forEach(function (item) { rankByValue[item.getAttribute("data-value")] = item; });
+        v.forEach(function (value) { if (rankByValue[value]) rankList.appendChild(rankByValue[value]); });
+        refreshRankControls(id);
+      }
       els.forEach(function (el) {
         if (el.type === "radio") el.checked = v !== undefined && v !== null && String(v) === el.value;
         else if (el.type === "checkbox") el.checked = Array.isArray(v) && v.indexOf(el.value) !== -1;
@@ -144,6 +155,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     noteControls(id).forEach(function (el) { if (el.value !== note) el.value = note; });
     var statuses = document.querySelectorAll("[data-kqa-status]");
     for (var i = 0; i < statuses.length; i++) if (statuses[i].getAttribute("data-kqa-status") === id) statuses[i].setAttribute("data-state", isAnswered(id) ? "answered" : "empty");
+    updateRankConfirmation(id);
   }
   function writeAll() { state.questions.forEach(function (x) { writeDom(x.id); }); }
 
@@ -188,6 +200,73 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       } else host.insertBefore(hint, els[0]);
     });
   }
+  function rankItems(id) {
+    var els = controls(id);
+    if (!els.length) return [];
+    return Array.prototype.filter.call(els[0].children, function (item) { return item.tagName === "LI"; });
+  }
+  function refreshRankControls(id) {
+    var items = rankItems(id);
+    items.forEach(function (item, index) {
+      var label = item.getAttribute("data-kqa-rank-label") || item.textContent.trim();
+      item.setAttribute("data-kqa-rank-label", label);
+      var buttons = item.querySelectorAll("button[data-kqa-rank-move]");
+      for (var i = 0; i < buttons.length; i++) {
+        var direction = buttons[i].getAttribute("data-kqa-rank-move");
+        buttons[i].disabled = direction === "up" ? index === 0 : index === items.length - 1;
+        buttons[i].setAttribute("aria-label", "Move " + label + " " + direction + ". Currently position " + (index + 1) + " of " + items.length + ".");
+      }
+    });
+  }
+  function updateRankConfirmation(id) {
+    var els = controls(id);
+    if (!els.length) return;
+    var confirm = els[0].parentElement.querySelector('[data-kqa-rank-confirm="' + id + '"]');
+    if (confirm) confirm.hidden = isAnswered(id);
+  }
+  function applyRankControls() {
+    state.questions.forEach(function (question) {
+      if (question.type !== "rank") return;
+      var lists = controls(question.id);
+      if (!lists.length) return;
+      rankItems(question.id).forEach(function (item) {
+        var label = item.getAttribute("data-kqa-rank-label") || item.textContent.trim();
+        item.setAttribute("data-kqa-rank-label", label);
+        if (item.querySelector("button[data-kqa-rank-move]")) return;
+        ["up", "down"].forEach(function (direction) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.setAttribute("data-kqa-rank-move", direction);
+          button.textContent = direction === "up" ? "Move up" : "Move down";
+          button.setAttribute("aria-label", "Move " + label + " " + direction);
+          item.appendChild(button);
+        });
+      });
+      var tools = lists[0].parentElement.querySelector('[data-kqa-rank-tools="' + question.id + '"]');
+      if (!tools) {
+        tools = document.createElement("div");
+        tools.setAttribute("data-kqa-rank-tools", question.id);
+        tools.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px";
+        var confirm = document.createElement("button");
+        confirm.type = "button";
+        confirm.setAttribute("data-kqa-rank-confirm", question.id);
+        confirm.textContent = "Use this order";
+        confirm.setAttribute("aria-label", "Use this order for " + question.label);
+        confirm.style.cssText = "min-height:44px;padding:8px 12px;border:1px solid #8794a5;border-radius:6px;background:transparent;font:inherit;cursor:pointer";
+        tools.appendChild(confirm);
+        var status = document.createElement("span");
+        status.setAttribute("data-kqa-rank-status", question.id);
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        status.setAttribute("aria-atomic", "true");
+        status.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+        tools.appendChild(status);
+        lists[0].parentElement.insertBefore(tools, lists[0].nextSibling);
+      }
+      refreshRankControls(question.id);
+      updateRankConfirmation(question.id);
+    });
+  }
 
   function applyLock() {
     var els = document.querySelectorAll("[data-kqa], [data-kqa-note]");
@@ -198,6 +277,20 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var baseline = el.getAttribute("data-kqa-condition-disabled") === "1";
       el.disabled = state.locked || baseline || !!(state.eligibility && state.eligibility[id] === false);
     }
+    var rankButtons = document.querySelectorAll("button[data-kqa-rank-move]");
+    for (var j = 0; j < rankButtons.length; j++) {
+      var rankList = rankButtons[j].closest("ol[data-kqa]");
+      var rankId = rankList && rankList.getAttribute("data-kqa");
+      var rankItem = rankButtons[j].parentElement;
+      var rankIndex = rankItems(rankId).indexOf(rankItem);
+      var boundary = rankButtons[j].getAttribute("data-kqa-rank-move") === "up" ? rankIndex === 0 : rankIndex === rankItems(rankId).length - 1;
+      rankButtons[j].disabled = state.locked || !!(state.eligibility && state.eligibility[rankId] === false) || boundary;
+    }
+    var rankConfirmButtons = document.querySelectorAll("button[data-kqa-rank-confirm]");
+    for (var k = 0; k < rankConfirmButtons.length; k++) {
+      var confirmId = rankConfirmButtons[k].getAttribute("data-kqa-rank-confirm");
+      rankConfirmButtons[k].disabled = state.locked || !!(state.eligibility && state.eligibility[confirmId] === false);
+    }
     setHtmlState(state.ready ? (state.locked ? "locked" : "ready") : "loading");
   }
 
@@ -205,7 +298,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function normalise(question, value) {
     if (value === undefined || value === null) return null;
     var t = question.type;
-    if (t === "multi") { var arr = Array.isArray(value) ? value.map(String) : [String(value)]; return arr.length ? arr : null; }
+    if (t === "multi" || t === "rank") { var arr = Array.isArray(value) ? value.map(String) : [String(value)]; return arr.length ? arr : null; }
     if (t === "number" || t === "scale") { var n = Number(value); return isNaN(n) ? null : n; }
     return String(value);
   }
@@ -218,6 +311,19 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var changed = false;
     if ("value" in patch) {
       var nv = normalise(question, patch.value);
+      if (question.type === "rank" && nv !== null) {
+        var rankOptions = (question.options || []).map(function (option) { return option.value; });
+        var validRank = Array.isArray(nv) && nv.length === rankOptions.length && new Set(nv).size === rankOptions.length && nv.every(function (value) { return rankOptions.indexOf(value) !== -1; });
+        if (!validRank) {
+          var rankMessage = "Rank every option exactly once to continue.";
+          if (source === "dom") writeDom(id);
+          var rankLists = controls(id);
+          var rankLive = rankLists.length && rankLists[0].parentElement.querySelector('[data-kqa-rank-status="' + id + '"]');
+          if (rankLive) rankLive.textContent = rankMessage;
+          emit("validation", { id: id, valid: false, message: rankMessage });
+          return false;
+        }
+      }
       var selected = Array.isArray(nv) ? new Set(nv).size : 0;
       if (question.type === "multi" && question.maxSelections !== undefined && selected > question.maxSelections) {
         var previousSelected = Array.isArray(cur.value) ? new Set(cur.value).size : 0;
@@ -254,6 +360,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function writeStatus(id) {
     var statuses = document.querySelectorAll("[data-kqa-status]");
     for (var i = 0; i < statuses.length; i++) if (statuses[i].getAttribute("data-kqa-status") === id) statuses[i].setAttribute("data-state", isAnswered(id) ? "answered" : "empty");
+    updateRankConfirmation(id);
   }
 
   // Conditional questions depend on earlier answers. Hiding a block never
@@ -385,6 +492,38 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   document.addEventListener("input", onControl, true);
   document.addEventListener("change", onControl, true);
+  document.addEventListener("click", function (ev) {
+    var confirm = ev.target && ev.target.closest ? ev.target.closest("button[data-kqa-rank-confirm]") : null;
+    if (confirm) {
+      var confirmId = confirm.getAttribute("data-kqa-rank-confirm");
+      if (!q(confirmId) || q(confirmId).type !== "rank" || state.locked) return;
+      ev.preventDefault();
+      if (commit(confirmId, { value: readDom(confirmId) }, "dom")) {
+        var listForFocus = controls(confirmId)[0];
+        var nextFocus = listForFocus && listForFocus.querySelector('button[data-kqa-rank-move="down"]');
+        if (nextFocus) nextFocus.focus();
+      }
+      return;
+    }
+    var button = ev.target && ev.target.closest ? ev.target.closest("button[data-kqa-rank-move]") : null;
+    if (!button) return;
+    var list = button.closest("ol[data-kqa]");
+    var id = list && list.getAttribute("data-kqa");
+    var question = id && q(id);
+    if (!question || question.type !== "rank" || state.locked) return;
+    ev.preventDefault();
+    var item = button.parentElement;
+    var direction = button.getAttribute("data-kqa-rank-move");
+    var sibling = direction === "up" ? item.previousElementSibling : item.nextElementSibling;
+    if (!sibling || sibling.tagName !== "LI") return;
+    if (direction === "up") list.insertBefore(item, sibling); else list.insertBefore(sibling, item);
+    refreshRankControls(id);
+    var rankStatus = list.parentElement.querySelector('[data-kqa-rank-status="' + id + '"]');
+    var position = rankItems(id).indexOf(item) + 1;
+    if (rankStatus) rankStatus.textContent = item.getAttribute("data-kqa-rank-label") + " moved to position " + position + " of " + rankItems(id).length + ".";
+    commit(id, { value: readDom(id) }, "dom");
+    button.focus();
+  }, true);
 
   // ---- messages from the app
   function applyAnswers(map) {
@@ -420,6 +559,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.ready = true;
       ensureRoutingStatus();
       applySelectionLimitGuidance();
+      applyRankControls();
       applyAnswers(m.answers);
       updateEligibility(true);
       applyLock();
@@ -545,6 +685,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var els = controls(question.id);
     if (!els.length) return false;
     var t = question.type;
+    if (t === "rank") {
+      var items = rankItems(question.id);
+      var byValue = Object.create(null);
+      items.forEach(function (item) { byValue[item.getAttribute("data-value")] = item; });
+      value.forEach(function (optionValue) { if (byValue[optionValue]) els[0].appendChild(byValue[optionValue]); });
+      fire(els[0], "change");
+      return true;
+    }
     if (t === "single" || (t === "scale" && els[0].type === "radio") || t === "multi") {
       var want = t === "multi" ? value : [value];
       els.forEach(function (el) {

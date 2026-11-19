@@ -32,6 +32,7 @@ const TYPE_LABELS: Record<QuestionType, string> = {
   single: "Single choice",
   multi: "Checkboxes",
   select: "Dropdown",
+  rank: "Rank all options",
   text: "Short text",
   longtext: "Paragraph",
   number: "Number",
@@ -207,7 +208,9 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
         <p className="question-stats">{summary.scaleMedianRange.lower === summary.scaleMedianRange.upper ? "Median category" : "Median categories"}: {formatScaleMedianRange(summary.scaleMedianRange)} · valid n={summary.distributionDenominator}. These are observed ordinal categories; codes are not averaged and no mean is calculated.</p>
       )}
       {!hasDistribution && question.type !== "number" && (
-        <p className="analysis-text-note">Response count only. Text and date values are not included in this analysis; review individual answers in the Answers tab.</p>
+        <p className="analysis-text-note">{question.type === "rank"
+          ? "Response count only. KQA preserves each full order in individual answers and exports; it does not calculate a ranking score."
+          : "Response count only. Text and date values are not included in this analysis; review individual answers in the Answers tab."}</p>
       )}
       {summary.unmappedResponseCount > 0 && (
         <p className="question-warning">{summary.unmappedResponseCount} stored {summary.unmappedResponseCount === 1 ? "answer does" : "answers do"} not match this version&apos;s options or range and {summary.unmappedResponseCount === 1 ? "is" : "are"} excluded from the summary.</p>
@@ -389,10 +392,11 @@ export function ComparisonQuestion({ question, summaries, showHeading = true, di
       </div>}
       <p className="analysis-text-note">{responseCounts}</p>
       <ComparisonDisclosureNote summaries={summaries} />
+      {question.type === "rank" && <p className="analysis-text-note">Full answer order is preserved in individual answers and exports. KQA reports counts only and does not calculate a ranking score.</p>}
       {display === "table" ? <ComparisonTable question={question} summaries={summaries} /> : <>
         {distributionQuestion && <ComparisonDistributionChart question={question} summaries={summaries} />}
         {numericQuestion && <ComparisonNumericChart summaries={summaries} />}
-        {!distributionQuestion && !numericQuestion && <p className="analysis-text-note">There is no comparison chart for this question type. Use the data table for counts; text and date values are not aggregated.</p>}
+        {!distributionQuestion && !numericQuestion && question.type !== "rank" && <p className="analysis-text-note">There is no comparison chart for this question type. Use the data table for counts; text and date values are not aggregated.</p>}
         <details className="analysis-compare-table-details">
           <summary>Show data table</summary>
           <ComparisonTable question={question} summaries={summaries} />

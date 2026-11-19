@@ -88,7 +88,7 @@ const requiredChanges = {
 };
 const questionnaireQuestion = obj({
   id: str,
-  type: { type: "string", enum: ["single", "multi", "select", "text", "longtext", "number", "scale", "date"] },
+  type: { type: "string", enum: ["single", "multi", "select", "rank", "text", "longtext", "number", "scale", "date"] },
   label: str,
   help: str,
   section: str,

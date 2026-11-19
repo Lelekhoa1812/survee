@@ -29,6 +29,16 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
       unique.sort((a, b) => order.indexOf(a) - order.indexOf(b));
       return { ok: true, value: unique.length ? unique : null };
     }
+    case "rank": {
+      if (!Array.isArray(raw) || raw.some((x) => typeof x !== "string")) return { ok: false, reason: `expected an ordered array of option values, got ${describe(raw)}` };
+      if (raw.length === 0) return { ok: true, value: null };
+      const allowed = (q.options ?? []).map((option) => option.value);
+      if (raw.length !== allowed.length) return { ok: false, reason: `rank every option exactly once (expected ${allowed.length}, got ${raw.length})` };
+      if (new Set(raw).size !== raw.length) return { ok: false, reason: "each option must appear exactly once" };
+      const invalid = raw.filter((value) => !allowed.includes(value));
+      if (invalid.length) return { ok: false, reason: `not option values: ${invalid.map((value) => `"${value}"`).join(", ")}` };
+      return { ok: true, value: [...raw] };
+    }
     case "text":
     case "longtext": {
       if (typeof raw !== "string") return { ok: false, reason: `expected text (string), got ${describe(raw)}` };
@@ -161,7 +171,9 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
 export function displayValue(q: Question, value: AnswerValue | undefined): string {
   if (value === undefined || value === null) return "";
   const label = (v: string) => q.options?.find((o) => o.value === v)?.label ?? v;
-  if (Array.isArray(value)) return value.map(label).join("; ");
+  if (Array.isArray(value)) return q.type === "rank"
+    ? value.map((item, index) => `${index + 1}. ${label(item)}`).join("; ")
+    : value.map(label).join("; ");
   if (typeof value === "string") return q.type === "single" || q.type === "select" ? label(value) : value;
   return String(value);
 }

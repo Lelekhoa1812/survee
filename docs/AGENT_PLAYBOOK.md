@@ -4,7 +4,7 @@ You are an AI agent asked to produce an HTML questionnaire for the KQA app. This
 
 ## The one-paragraph version
 
-Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. The format includes eight answer types and bounded declarative routing; it does not score answers. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
+Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. The format includes nine answer types and bounded declarative routing; it does not score answers or rank people. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
 
 This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
 
@@ -135,7 +135,7 @@ Free text. `text` is one line (a name, a company). `longtext` is a paragraph. Wh
 </article>
 ```
 
-Dropdown, number, scale, date, and rank use the same card. Copy those patterns from `template/starter.kqa.html`. For `rank`, provide an `<ol data-kqa="ID">` containing one `<li data-value="OPTION">OPTION LABEL</li>` for each manifest option. The runtime supplies accessible Move up/Move down buttons; retain a semantic ordered list, avoid drag-only interaction, and explain that respondents must order every option.
+Dropdown, number, scale, date, and rank use the same card. Copy those patterns from `template/starter.kqa.html`. For `rank`, provide an `<ol data-kqa="ID">` containing one `<li data-value="OPTION">OPTION LABEL</li>` for each manifest option. The runtime supplies accessible Move up/Move down buttons and a Use this order confirmation; retain a semantic ordered list, avoid drag-only interaction, and explain that respondents must order every option.
 
 4. Update the contents rail (`.kq-rail`) so each link points at a section `id`.
 5. Do not add anything the sandbox blocks (FORMAT.md section 2).

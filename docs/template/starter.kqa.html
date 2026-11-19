@@ -14,7 +14,7 @@
   "description": "One question of every type, in the standard KQA look. Copy this file and replace the content.",
   "sections": [
     { "id": "choices", "title": "Choices", "description": "Radio buttons, checkboxes and a dropdown." },
-    { "id": "writing", "title": "Writing and numbers", "description": "Text, long text, numbers, scales and dates." }
+    { "id": "writing", "title": "Writing, numbers and ranking", "description": "Text, long text, numbers, scales, dates and a full-order ranking." }
   ],
   "questions": [
     {
@@ -72,6 +72,16 @@
     {
       "id": "start-date", "type": "date", "section": "writing",
       "label": "When would you like to start?"
+    },
+    {
+      "id": "tradeoffs", "type": "rank", "section": "writing",
+      "label": "Order these project priorities from highest to lowest",
+      "help": "Move every option into the order that best reflects your priorities.",
+      "options": [
+        { "value": "quality", "label": "Quality" },
+        { "value": "speed", "label": "Speed" },
+        { "value": "cost", "label": "Cost" }
+      ]
     },
     {
       "id": "stars", "type": "scale", "section": "writing", "min": 1, "max": 5, "custom": true,
@@ -158,6 +168,10 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
 .kq-scale label:has(input:checked) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .kq-scale label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
 .kq-scale-ends { display: flex; justify-content: space-between; max-width: 420px; color: var(--muted); font-size: .8rem; }
+.kq-rank { padding-left: 2rem; display: grid; gap: 8px; }
+.kq-rank li { padding-left: 4px; }
+.kq-rank li button { min-height: 44px; margin-left: 8px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.kq-rank li button:disabled { opacity: .5; cursor: not-allowed; }
 
 /* notes */
 .kq-note summary { list-style: none; cursor: pointer; display: inline-block; font-size: .84rem; color: var(--muted); border-radius: 4px; }
@@ -235,7 +249,7 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
     </section>
 
     <section class="kq-section" id="writing" aria-labelledby="writing-h">
-      <div class="kq-section-head"><span class="kq-kicker">Part 2</span><h2 id="writing-h">Writing and numbers</h2><p>Text, long text, numbers, scales and dates.</p></div>
+      <div class="kq-section-head"><span class="kq-kicker">Part 2</span><h2 id="writing-h">Writing, numbers and ranking</h2><p>Text, long text, numbers, scales, dates and a full-order ranking.</p></div>
       <div class="kq-stack" data-kqa-question-list="writing">
 
         <article class="kq-q" id="q-company" data-kqa-question-id="company">
@@ -276,9 +290,20 @@ input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-al
           <input type="date" id="f-start" data-kqa="start-date" style="max-width: 220px">
         </article>
 
+        <!-- rank: the runtime adds accessible Move up / Move down buttons; rank every option. -->
+        <article class="kq-q" id="q-tradeoffs" data-kqa-question-id="tradeoffs">
+          <div class="kq-q-head"><span class="kq-n">9</span><h3 id="tradeoffs-h">Order these project priorities from highest to lowest</h3><span class="kq-tick" data-kqa-status="tradeoffs" aria-hidden="true"></span></div>
+          <p class="kq-help">Move every option into the order that best reflects your priorities.</p>
+          <ol class="kq-rank" data-kqa="tradeoffs" aria-labelledby="tradeoffs-h">
+            <li data-value="quality">Quality</li>
+            <li data-value="speed">Speed</li>
+            <li data-value="cost">Cost</li>
+          </ol>
+        </article>
+
         <!-- custom: no data-kqa control. The page calls KQA.set() and listens for KQA.on("change"). -->
         <article class="kq-q" id="q-stars" data-kqa-question-id="stars">
-          <div class="kq-q-head"><span class="kq-n">9</span><h3 id="stars-h">Rate this form</h3><span class="kq-tick" data-kqa-status="stars" aria-hidden="true"></span></div>
+          <div class="kq-q-head"><span class="kq-n">10</span><h3 id="stars-h">Rate this form</h3><span class="kq-tick" data-kqa-status="stars" aria-hidden="true"></span></div>
           <p class="kq-help">Built with script, using KQA.set. Shows how a custom control talks to the app.</p>
           <div id="stars" role="radiogroup" aria-labelledby="stars-h" style="display:flex; gap:6px"></div>
         </article>

@@ -12,7 +12,7 @@ import { z } from "zod";
 
 export const FORMAT_ID = "kqa/1" as const;
 
-export const QUESTION_TYPES = ["single", "multi", "select", "text", "longtext", "number", "scale", "date"] as const;
+export const QUESTION_TYPES = ["single", "multi", "select", "rank", "text", "longtext", "number", "scale", "date"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 /** Question and section ids. Lowercase, so they are safe in URLs, CSV headers and JSON keys. */
@@ -25,6 +25,7 @@ export const LIMITS = {
   maxQuestions: 500,
   maxSections: 50,
   maxOptions: 50,
+  maxRankOptions: 8,
   maxLabel: 300,
   maxHelp: 1000,
   maxTitle: 120,
@@ -94,6 +95,11 @@ export const questionSchema = z.object({
   custom: z.boolean().optional(),
   /** Show this question only when its bounded conditions match earlier answers. */
   when: whenSchema.optional(),
+}).superRefine((question, ctx) => {
+  if (question.type === "rank") {
+    if ((question.options?.length ?? 0) < 2) ctx.addIssue({ code: "custom", path: ["options"], message: "rank questions need at least two options" });
+    if ((question.options?.length ?? 0) > LIMITS.maxRankOptions) ctx.addIssue({ code: "custom", path: ["options"], message: `rank questions support at most ${LIMITS.maxRankOptions} options` });
+  }
 });
 
 export const manifestSchema = z.object({
@@ -113,7 +119,7 @@ export type Option = z.infer<typeof optionSchema>;
 export type Condition = z.infer<typeof conditionSchema>;
 
 /** Types that must carry an `options` list. */
-export const OPTION_TYPES: readonly QuestionType[] = ["single", "multi", "select"];
+export const OPTION_TYPES: readonly QuestionType[] = ["single", "multi", "select", "rank"];
 /** Types whose `min` / `max` apply. */
 export const RANGE_TYPES: readonly QuestionType[] = ["number", "scale"];
 
@@ -140,5 +146,15 @@ export function noteConfig(q: Question): { enabled: boolean; label: string; plac
 
 /** JSON Schema for the manifest, derived from the zod schema so the two can never drift. */
 export function manifestJsonSchema(): unknown {
-  return z.toJSONSchema(manifestSchema, { target: "draft-2020-12" });
+  const schema = z.toJSONSchema(manifestSchema, { target: "draft-2020-12" }) as {
+    properties?: { questions?: { items?: Record<string, unknown> } };
+  };
+  const item = schema.properties?.questions?.items;
+  if (item) {
+    item.allOf = [{
+      if: { properties: { type: { const: "rank" } }, required: ["type"] },
+      then: { properties: { options: { maxItems: LIMITS.maxRankOptions } }, required: ["options"] },
+    }];
+  }
+  return schema;
 }
