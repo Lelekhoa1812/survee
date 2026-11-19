@@ -500,7 +500,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var before = state.answers[question.id];
       simulate(question, sample);
       var got = answerOf(question.id).value;
-      if (!equal(got, sample)) results.push({ code: "KQA601", questionId: question.id, message: "Changed the control for \"" + question.id + "\" to " + JSON.stringify(sample) + " but the app recorded " + JSON.stringify(got === undefined ? null : got) + "." });
+      if (!equal(got, sample)) results.push({ code: "KQA601", questionId: question.id, message: "Set the bound control for \"" + question.id + "\" to sample value " + JSON.stringify(sample) + " but the runtime recorded " + JSON.stringify(got === undefined ? null : got) + "." });
       void before;
     });
     // Custom controls have nothing to simulate. Set a sample value through the runtime and watch whether the page reacts.

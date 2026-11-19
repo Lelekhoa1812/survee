@@ -665,9 +665,9 @@ A script threw an exception while the page was running in the real frame. Parts 
 
 Severity: **error**
 
-The probe changed this control the way a person would, but the app did not receive the expected answer. Typical cause: the page replaces or clones the element after load, or stops the input/change event.
+The live check set this bound control to a sample value, but the runtime did not receive the expected answer. This programmatic smoke check is not a real respondent interaction. Typical causes include replacing or cloning the bound element after load, or stopping its input/change event.
 
-**How to fix:** Do not call stopPropagation() on input/change events, and do not remove bound controls after load. If the control is built by script, set "custom": true and call KQA.set().
+**How to fix:** Do not call stopPropagation() on input/change events, and do not remove bound controls after load. If the control is built by script without a bound native control, set "custom": true and call KQA.set().
 
 ### KQA602: Saved answer was not shown again
 
