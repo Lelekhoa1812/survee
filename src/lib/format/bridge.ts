@@ -634,7 +634,13 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var position = rankItems(id).indexOf(item) + 1;
     if (rankStatus) rankStatus.textContent = item.getAttribute("data-kqa-rank-label") + " moved to position " + position + " of " + rankItems(id).length + ".";
     commit(id, { value: readDom(id) }, "dom");
-    button.focus();
+    var focusTarget = button;
+    if (focusTarget.disabled) {
+      var opposite = direction === "up" ? "down" : "up";
+      var fallback = item.querySelector('button[data-kqa-rank-move="' + opposite + '"]');
+      if (fallback && !fallback.disabled) focusTarget = fallback;
+    }
+    focusTarget.focus();
   }, true);
 
   // ---- messages from the app

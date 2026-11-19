@@ -48,6 +48,32 @@ describe("rank answer bridge", () => {
     page.window.close();
   });
 
+  it("keeps focus on the moved option when moving it to the first position disables Move up", () => {
+    const page = start();
+    const item = page.window.document.querySelector<HTMLLIElement>('li[data-value="speed"]')!;
+    const up = item.querySelector<HTMLButtonElement>('button[data-kqa-rank-move="up"]')!;
+    up.click();
+    const down = item.querySelector<HTMLButtonElement>('button[data-kqa-rank-move="down"]')!;
+    expect(up.disabled).toBe(true);
+    expect(down.disabled).toBe(false);
+    expect(page.window.document.activeElement).toBe(down);
+    expect(page.window.document.querySelector('[data-kqa-rank-status="priority"]')?.textContent).toContain("Speed moved to position 1 of 3");
+    page.window.close();
+  });
+
+  it("keeps focus on the moved option when moving it to the last position disables Move down", () => {
+    const page = start();
+    const item = page.window.document.querySelector<HTMLLIElement>('li[data-value="speed"]')!;
+    const down = item.querySelector<HTMLButtonElement>('button[data-kqa-rank-move="down"]')!;
+    down.click();
+    const up = item.querySelector<HTMLButtonElement>('button[data-kqa-rank-move="up"]')!;
+    expect(down.disabled).toBe(true);
+    expect(up.disabled).toBe(false);
+    expect(page.window.document.activeElement).toBe(up);
+    expect(page.window.document.querySelector('[data-kqa-rank-status="priority"]')?.textContent).toContain("Speed moved to position 3 of 3");
+    page.window.close();
+  });
+
   it("lets a respondent confirm the starting order without moving anything", () => {
     const page = start();
     const confirm = page.window.document.querySelector<HTMLButtonElement>('[data-kqa-rank-confirm="priority"]')!;
