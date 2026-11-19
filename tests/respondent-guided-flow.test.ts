@@ -55,4 +55,23 @@ describe("guided respondent sections", () => {
     await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Show all questions")!.click());
     expect(host.querySelector(".rs-guided")).toBeNull();
   });
+
+  it("offers answer review when routing leaves no eligible sections", async () => {
+    state.api.mockResolvedValueOnce({ ok: true, status: 200, data: {
+      ok: true,
+      participant: { name: "Ada", status: "in_progress" },
+      interview: { name: "Study", status: "open" },
+      version: 1,
+      title: "Study questions",
+      presentation: "guided",
+      sections: [{ id: "next", title: "Next step" }],
+      questions: [{ id: "next-question", type: "text", section: "next", label: "Next question" }],
+      answers: {},
+      progress: { eligible: { "next-question": false } },
+    } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    expect(host.querySelector(".rs-guided-empty")?.textContent).toContain("no sections to complete");
+    await act(async () => host.querySelector<HTMLButtonElement>(".rs-guided-empty .btn")!.click());
+    expect(host.querySelector("[role=dialog]")).not.toBeNull();
+  });
 });

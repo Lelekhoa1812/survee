@@ -659,6 +659,9 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .rs-banner.none { display: none; }
 .rs-guided { flex: none; padding: 16px clamp(16px, 4vw, 44px); border-bottom: 1px solid var(--line); background: var(--surface); }
 .rs-guided-step { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.rs-guided-empty > div { max-width: 1160px; width: 100%; margin: 0 auto; display: grid; justify-items: start; gap: 8px; }
+.rs-guided-empty h1 { font-size: 19px; }
+.rs-guided-empty p { color: var(--muted); font-size: 13px; }
 .rs-guided-count { margin: 0 0 3px; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .rs-guided-step h1 { margin: 0; font-size: clamp(18px, 2vw, 22px); line-height: 1.25; }
 .rs-guided-step > div:first-child > p:last-child:not(.rs-guided-count) { margin: 5px 0 0; color: var(--muted); font-size: 13px; }

@@ -502,6 +502,17 @@ export function RespondentShell({ token }: { token: string }) {
           )}
         </section>
       )}
+      {guidedMode && questionGroups.length === 0 && (
+        <section className="rs-guided rs-guided-empty" aria-labelledby="rs-guided-empty-title">
+          <div>
+            <h1 id="rs-guided-empty-title">No questions are available</h1>
+            <p>Your current answers leave no sections to complete. Open the review to finish.</p>
+            <div className="rs-guided-actions">
+              <button className="btn accent" type="button" onClick={() => setConfirming(true)}>Review answers</button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="rs-frame">
         {!frameReady && <div className="rs-loading"><span className="row"><Spinner /> Loading the questions…</span></div>}
