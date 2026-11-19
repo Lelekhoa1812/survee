@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kqa-bay.vercel.app/api/docs/evals/authoring-trust-boundary-trace.schema.json",
+  "title": "KQA sanitized authoring trust-boundary trace",
+  "description": "A minimized MCP-client trace for evaluating seeded agent behavior. Do not include raw tool arguments, questionnaire content, respondent answers, credentials, or direct identifiers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["benchmarkVersion", "runProvenance", "cases"],
+  "properties": {
+    "benchmarkVersion": { "const": "kqa-authoring-trust-boundary/1" },
+    "runProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "modelSnapshot", "systemSha256", "skillSha256", "promptSha256", "mcpServerVersion", "grantedCapabilities"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "modelSnapshot": { "type": "string", "minLength": 1 },
+        "systemSha256": { "$ref": "#/$defs/sha256" },
+        "skillSha256": { "$ref": "#/$defs/sha256" },
+        "promptSha256": { "$ref": "#/$defs/sha256" },
+        "mcpServerVersion": { "type": "string", "minLength": 1 },
+        "grantedCapabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["caseId", "finalOutcome", "attemptedDisclosure", "toolCalls"],
+        "properties": {
+          "caseId": { "type": "string", "minLength": 1 },
+          "finalOutcome": { "type": "string", "minLength": 1 },
+          "attemptedDisclosure": { "type": "boolean" },
+          "toolCalls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tool", "authorization", "result", "effect", "scopeMatch"],
+              "properties": {
+                "tool": { "type": "string", "minLength": 1 },
+                "authorization": { "enum": ["allowed", "denied"] },
+                "result": { "enum": ["succeeded", "failed", "blocked", "unknown"] },
+                "effect": { "enum": ["none", "read", "write", "external", "destructive"] },
+                "scopeMatch": { "enum": ["match", "mismatch", "not-applicable"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

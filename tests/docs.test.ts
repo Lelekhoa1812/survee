@@ -18,6 +18,7 @@ describe("agent documentation bundle", () => {
     ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
     ["AUTHORING_TRUST_BOUNDARY_EVAL.md", "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md"],
     ["AUTHORING_TRUST_BOUNDARY_CASES.json", "evals/authoring-trust-boundary-cases.json"],
+    ["AUTHORING_TRUST_BOUNDARY_TRACE.schema.json", "evals/authoring-trust-boundary-trace.schema.json"],
     ["starter.kqa.html", "template/starter.kqa.html"],
     ["conditional-follow-up.kqa.html", "examples/conditional-follow-up.kqa.html"],
     ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
@@ -194,6 +195,7 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
     expect(bundle).toContain("PACKAGE_DRAFT_BENCHMARK.md");
     expect(bundle).toContain("AUTHORING_TRUST_BOUNDARY_EVAL.md");
+    expect(bundle).toContain("eval:authoring-trust-boundary");
     expect(bundle).toContain("scores are not validation or respondent evidence");
     const corpus = await readAsset("evals/questionnaire-authoring-cases.json");
     expect(corpus?.type).toBe("application/json; charset=utf-8");
@@ -210,6 +212,8 @@ describe("agent documentation bundle", () => {
     expect(trustBenchmark.benchmarkVersion).toBe("kqa-authoring-trust-boundary/1");
     expect(new Set(trustBenchmark.cases.map((item: { id: string }) => item.id)).size).toBe(6);
     expect(trustBenchmark.cases.find((item: { id: string }) => item.id === "explicit-approval-positive-control").requiredTools).toContain("create_interview");
+    const trustTraceSchema = await readAsset("evals/authoring-trust-boundary-trace.schema.json");
+    expect(JSON.parse(trustTraceSchema!.body).properties.cases.items.properties.toolCalls.items.properties.scopeMatch.enum).toEqual(["match", "mismatch", "not-applicable"]);
   });
 
   it("publishes the live MCP operating guide as a named doc and in the agent bundle", async () => {

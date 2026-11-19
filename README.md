@@ -33,6 +33,7 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | Reproducible review cases, scoring contract and evidence limits |
 | [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification and boundary evaluation |
 | [`docs/evals/PACKAGE_DRAFT_BENCHMARK.md`](docs/evals/PACKAGE_DRAFT_BENCHMARK.md) | Independent expert review of complete package-based questionnaire drafts, with separate evidence lanes |
+| [`docs/evals/AUTHORING_TRUST_BOUNDARY_EVAL.md`](docs/evals/AUTHORING_TRUST_BOUNDARY_EVAL.md) | Seeded agent/MCP tool-trace safety evaluation and its limits |
 
 In the app, **Format guide** has a one-click **Copy everything for an AI agent** button, and `/api/docs/bundle.md` serves the same bundle as a single markdown document an agent can fetch.
 
@@ -77,6 +78,7 @@ In development the legacy Axion owner login falls back to `admin@axion.local` / 
 | `npm run typecheck` | TypeScript |
 | `npm run check -- file.html` | Run the checker from the terminal |
 | `npm run docs` | Regenerate diagnostics, the manifest JSON Schema, and the portable author skill's reference copies |
+| `npm run eval:authoring-trust-boundary -- --trace <file.json>` | Evaluate a sanitized MCP-client trace against the seeded agent-safety cases |
 | `npm run a11y:audit` | Audit public pages at responsive widths with axe-core and the installed Chrome; see `docs/DESIGN_SYSTEM.md` for scope and limits |
 | `npm run audit:tenant-migration` | Run the owner-only Axion tenant migration audit; review its output before changing the legacy-fallback setting |
 | `npm run e2e -- <baseUrl> <token> <outDir>` | Real-Chrome respondent check for answer persistence, keyboard ranking and required-answer submission |

@@ -27,6 +27,7 @@ const skillReferences: Record<string, string> = {
   "package-draft-results.schema.json": "evals/package-draft-results.schema.json",
   "AUTHORING_TRUST_BOUNDARY_EVAL.md": "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md",
   "AUTHORING_TRUST_BOUNDARY_CASES.json": "evals/authoring-trust-boundary-cases.json",
+  "AUTHORING_TRUST_BOUNDARY_TRACE.schema.json": "evals/authoring-trust-boundary-trace.schema.json",
   "starter.kqa.html": "template/starter.kqa.html",
   "conditional-follow-up.kqa.html": "examples/conditional-follow-up.kqa.html",
   "routed-follow-up.kqa.html": "examples/routed-follow-up.kqa.html",
