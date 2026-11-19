@@ -1,6 +1,6 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/25` · reviewed 19 November 2026
+Version: `kqa-design/26` · reviewed 19 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
@@ -17,6 +17,7 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 - There is no in-app question builder and no scoring. Keep authoring as questionnaire HTML plus the checker; keep answer analysis descriptive.
 - Preserve question and option ids when revising a live interview. Run the checker and inspect compatibility findings before creating a new immutable survey version.
 - Keep private respondent links and individual answers out of unrelated views, logs, and aggregate analytics.
+- Treat language access as an end-to-end respondent journey. Inventory language and direction for invitations, notices, questions, help, navigation, save and validation states, review, submission, completion, and support. Test realistic tasks and error recovery in every intended language. Do not infer localization, accessibility, equivalence, or field readiness from translated questionnaire HTML or its `lang` attribute; require a verified in-language journey or a host-approved accessible alternative. Block fielding where respondents cannot reliably operate essential steps.
 
 ## Design principles
 

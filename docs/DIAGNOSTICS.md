@@ -671,9 +671,9 @@ Screen readers and spell-check use <html lang> to identify the language of the q
 
 Severity: **warning**
 
-The <html lang> value identifies the questionnaire document for assistive technology, but KQA's respondent shell and built-in controls remain in English. A translated questionnaire therefore has a mixed-language respondent experience.
+The <html lang> value identifies the questionnaire document for assistive technology, but KQA's respondent shell and built-in controls remain in English. Translated questions alone therefore leave a mixed-language respondent journey and do not establish language access or field readiness.
 
-**How to fix:** Use a valid BCP 47 language tag for the questionnaire. Mark passages in another language with their own lang attribute (and dir="rtl" when appropriate), then have a qualified reviewer check the translated experience with intended-language respondents. Do not describe KQA's interface as translated.
+**How to fix:** Use a valid BCP 47 language tag for the questionnaire and mark passages in another language with their own lang attribute (and dir="rtl" when appropriate). Review invitations, notices, help, navigation, save and error states, review, submission, completion, and support. Test realistic tasks and error recovery in the intended language. Require a verified in-language journey or host-approved accessible alternative; block fielding when respondents cannot operate essential steps. Do not describe KQA's interface as translated.
 
 ### KQA502: Missing viewport meta
 

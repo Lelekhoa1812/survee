@@ -359,7 +359,7 @@ describe("MCP tools", () => {
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/25");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/26");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix).toMatchObject({ required: true });
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix?.columns?.map(({ name }) => name)).toContain("limitationUntestedReason");
@@ -409,7 +409,7 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { profileVersion?: string; policyVersion?: string; sourceFormat?: string; surface?: string; proposedMappings?: { role: string }[]; contrastChecks?: { status: string }[]; integrationProposal?: { status: string; cssOverlay: string | null } } } };
 
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/25", sourceFormat: "css", surface: "host" });
+    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/26", sourceFormat: "css", surface: "host" });
     expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
     expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
     expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });

@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/25");
+    expect(guidance.policyVersion).toBe("kqa-design/26");
     expect(guidance.principles.some((principle) => principle.id === "host-freshness")).toBe(true);
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
@@ -14,6 +14,9 @@ describe("design guidance package", () => {
     expect(guidance.designPlan.output.questionBlueprint.reference).toBe("docs/QUESTION_BLUEPRINT.md");
     expect(guidance.designPlan.output.questionBlueprint.fields).toContain("dataUserNeedOrDecision");
     expect(guidance.principles.some((principle) => principle.id === "language-adaptation")).toBe(true);
+    const language = guidance.principles.find((principle) => principle.id === "language-adaptation")!;
+    expect(language.guidance).toContain("end-to-end respondent journey");
+    expect(language.guidance).toContain("block fielding");
     expect(guidance.designPlan.output.reviewEvidenceMatrix.required).toBe(true);
     expect(guidance.designPlan.output.reviewEvidenceMatrix.columns.map((column) => column.name)).toEqual([
       "surfaceRoute", "stateTheme", "viewportInputMethod", "criterion", "methodTool", "observedResult", "evidenceReference", "limitationUntestedReason",
