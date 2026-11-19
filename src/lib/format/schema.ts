@@ -42,12 +42,18 @@ export const optionSchema = z.object({
   label: z.string().min(1).max(LIMITS.maxLabel),
 });
 
-/** A deliberately shallow, bounded predicate over an earlier choice answer. */
-export const conditionSchema = z.object({
-  question: idString,
-  operator: z.enum(["equals", "notEquals", "contains", "notContains"]),
-  value: z.string().regex(OPTION_VALUE_RE),
-});
+/** Bounded predicates over an earlier choice answer or whether any typed value exists. */
+export const conditionSchema = z.discriminatedUnion("operator", [
+  z.object({
+    question: idString,
+    operator: z.enum(["equals", "notEquals", "contains", "notContains"]),
+    value: z.string().regex(OPTION_VALUE_RE),
+  }),
+  z.object({
+    question: idString,
+    operator: z.enum(["answered", "notAnswered"]),
+  }),
+]);
 
 export const whenSchema = z.object({
   all: z.array(conditionSchema).max(20).optional(),

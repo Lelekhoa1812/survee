@@ -261,6 +261,9 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function conditionMatches(condition, eligible) {
     if (!condition || typeof condition.question !== "string" || !eligible[condition.question]) return false;
     var actual = answerOf(condition.question).value;
+    var answered = actual !== undefined && actual !== null && (Array.isArray(actual) ? actual.length > 0 : typeof actual === "string" ? actual.trim() !== "" : true);
+    if (condition.operator === "answered") return answered;
+    if (condition.operator === "notAnswered") return !answered;
     if (actual === undefined || actual === null) return false;
     var expected = condition.value;
     switch (condition.operator) {

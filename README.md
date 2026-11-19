@@ -1,6 +1,6 @@
 # KQA
 
-Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, a dropdown, a number, a scale, or a date; supported choice questions can drive declarative conditional follow-ups. KQA does not score answers.
+Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file can ask a single choice, checkboxes, a short line, a paragraph, a dropdown, a number, a scale, or a date; choice answers and whether an answer is present can drive declarative conditional follow-ups. KQA does not score answers.
 
 | Portal | Address | For |
 |---|---|---|

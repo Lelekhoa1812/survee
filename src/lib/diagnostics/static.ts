@@ -738,14 +738,18 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
             } else if (!earlierQuestions.has(ref)) {
               add(ctx, "KQA218", `${cp} refers to "${ref}", which must be declared before this question.`, undefined, { offset: m.at(`${cp}.question`), path: `${cp}.question`, questionId: qid });
             }
-            if (typeof op !== "string" || !["equals", "notEquals", "contains", "notContains"].includes(op)) {
-              add(ctx, "KQA218", `${cp}.operator must be "equals", "notEquals", "contains" or "notContains".`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
+            const answerStateOp = op === "answered" || op === "notAnswered";
+            const choiceOp = op === "equals" || op === "notEquals" || op === "contains" || op === "notContains";
+            if (!answerStateOp && !choiceOp) {
+              add(ctx, "KQA218", `${cp}.operator must be "equals", "notEquals", "contains", "notContains", "answered" or "notAnswered".`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
             }
-            if (typeof value !== "string" || !OPTION_VALUE_RE.test(value)) {
+            if (answerStateOp && value !== undefined) {
+              add(ctx, "KQA218", `${cp}.value is not used with "${op}".`, `Remove the value property from this answer-state condition.`, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+            } else if (choiceOp && (typeof value !== "string" || !OPTION_VALUE_RE.test(value))) {
               add(ctx, "KQA218", `${cp}.value must be a valid option value.`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
             }
             const source = ref ? earlierQuestions.get(ref) : undefined;
-            if (source && typeof op === "string") {
+            if (source && choiceOp) {
               const multiOp = op === "contains" || op === "notContains";
               if (multiOp ? source.type !== "multi" : source.type !== "single" && source.type !== "select") {
                 add(ctx, "KQA218", `${cp} uses "${op}" with ${source.type}; contains operators require a multi question, and equals operators require single or select.`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });

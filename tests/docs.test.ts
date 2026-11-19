@@ -107,6 +107,24 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("does not simulate respondent input");
   });
 
+  it("ships version-matched references for the standalone questionnaire author skill", async () => {
+    const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
+    expect(skill).toContain("references/FORMAT.md");
+    expect(skill).toContain("install each item at its supplied relative path");
+    expect(skill).toContain("references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
+    const references = [
+      ["FORMAT.md", "FORMAT.md"],
+      ["AGENT_PLAYBOOK.md", "AGENT_PLAYBOOK.md"],
+      ["DESIGN_SYSTEM.md", "DESIGN_SYSTEM.md"],
+      ["INTERVIEW_PACKAGES.md", "INTERVIEW_PACKAGES.md"],
+      ["MCP.md", "MCP.md"],
+      ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
+      ["starter.kqa.html", "template/starter.kqa.html"],
+      ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
+    ];
+    for (const [copy, source] of references) expect(await readDoc(`kqa-questionnaire-author/references/${copy}`)).toBe(await readDoc(source));
+  });
+
   it("publishes the questionnaire evaluation benchmark and its labeled development corpus", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-authoring-benchmark" && doc.file === "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");

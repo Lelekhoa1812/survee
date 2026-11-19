@@ -60,7 +60,7 @@ The page runs in an iframe with `sandbox="allow-scripts allow-forms"` and a stri
 * **No browser storage.** `localStorage`, `sessionStorage`, cookies and IndexedDB are unavailable because the frame has an opaque origin. Do not use them. Use `KQA.set` / `KQA.get`.
 * **No modal dialogs.** `alert`, `confirm`, `prompt` do not work in a sandboxed frame. Build inline UI.
 * **No file inputs, downloads, printing, clipboard access or `window.open`.** Copy-to-clipboard buttons do not work, so leave them out.
-* **Links:** a link to `https://`, `mailto:` or `tel:` opens in a new window through the app (with no connection back to the page), so ordinary `<a href="https://…">` links work. Links to other files do not, and `#section` links scroll within the page. Do not navigate the page with script (`location`, `history`).
+* **Links:** a link to `https://`, `mailto:` or `tel:` opens in a new window through the app (with no connection back to the page), so ordinary `<a href="https://…">` links work. Links to other files do not. In `presentation: "all"`, `#section` links scroll within the page; in guided mode, links cannot reveal a different section, so use the shell's Back/Continue controls instead. Do not navigate the page with script (`location`, `history`).
 
 The checker reports each of these before upload (codes KQA4xx).
 
@@ -132,13 +132,13 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `step` | no | `number`, `scale` | Positive number |
 | `maxLength` | no | `text`, `longtext` | Default 500 for `text`, 20000 for `longtext` |
 | `custom` | no | all | `true` when the answer is set from script with `KQA.set()` and has no `data-kqa` control |
-| `when` | no | all | Bounded visibility rule. Use `all` and/or `any`, each with 1 to 20 conditions. Conditions compare an earlier `single`/`select` answer using `equals` or `notEquals`, or an earlier `multi` answer using `contains` or `notContains` |
+| `when` | no | all | Bounded visibility rule. Use `all` and/or `any`, each with 1 to 20 conditions. Conditions can test whether any earlier answer type is `answered`/`notAnswered`, compare an earlier `single`/`select` answer using `equals`/`notEquals`, or test earlier `multi` membership using `contains`/`notContains` |
 
 Option `value` rules: starts with a letter or digit, then letters, digits, `.`, `_`, `:` or `-`, up to 64 characters (`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`). Values are what is stored. Labels are what people see in the host's views and exports. Keep values short, lowercase and stable.
 
-Routing conditions are intentionally declarative: they cannot contain scripts, nested expressions, or comparisons to free text, numbers, dates or scales. Every referenced question must appear earlier in the manifest and the compared value must be one of its declared option values. When both lists are present, every `all` condition and at least one `any` condition must match; when only one list is present, that list determines visibility. A missing or ineligible source answer does not match. When a parent answer changes, KQA recomputes downstream eligibility in manifest order. The respondent runtime hides, makes inert, and disables controls in an ineligible question block; therefore wrap each routed question in one whole-question element with `data-kqa-question-id="QUESTION_ID"`. Do not put multiple questions in the same marked block. Hidden questions remain in the interview's data model; their answers are retained if a condition later changes. Requiredness and progress apply only while a question is eligible. The server rejects new non-empty values or notes for currently inactive questions, while allowing a respondent to clear a retained value.
+Routing conditions are intentionally declarative: they cannot contain scripts, nested expressions, or value comparisons to free text, numbers, dates or scales. `answered` and `notAnswered` check whether an earlier question has a non-empty value; whitespace-only text and an empty checkbox array count as unanswered, and an optional note alone does not count. All condition sources must appear earlier in the manifest and must themselves be eligible. Choice comparisons use the source's declared option values. When both lists are present, every `all` condition and at least one `any` condition must match; when only one list is present, that list determines visibility. A missing or ineligible source makes either answer-state condition false. When a parent answer changes, KQA recomputes downstream eligibility in manifest order. The respondent runtime hides, makes inert, and disables controls in an ineligible question block; therefore wrap each routed question in one whole-question element with `data-kqa-question-id="QUESTION_ID"`. Do not put multiple questions in the same marked block. Hidden questions remain in the interview's data model; their answers are retained if a condition later changes. Requiredness and progress apply only while a question is eligible. The server rejects new non-empty values or notes for currently inactive questions, while allowing a respondent to clear a retained value.
 
-For example, after a `priority` single-choice question, a follow-up can use `{ "when": { "all": [{ "question": "priority", "operator": "equals", "value": "accuracy" }] } }`. A multi-choice source uses `contains` or `notContains` instead. Keep each condition list to 20 items or fewer.
+For example, after an optional `details` question, a follow-up can use `{ "when": { "all": [{ "question": "details", "operator": "answered" }] } }` to appear only when the person entered a value. Use `notAnswered` to target an unanswered earlier item; use `equals` with `value` for a `single`/`select` choice or `contains` with `value` for a `multi` choice. Keep each condition list to 20 items or fewer.
 
 See the complete [`routed-follow-up.kqa.html`](examples/routed-follow-up.kqa.html) example for an eligible required follow-up, respondent disclosure, and stable saved-answer behavior.
 
@@ -301,8 +301,11 @@ You never need this to write a questionnaire. It is documented so developers can
 | frame → app | `error` | `{ message, line?, column?, stack? }` |
 | frame → app | `open` | `{ url }` when a link to `https:`, `mailto:` or `tel:` is clicked. The app opens it in a new window with `noopener` |
 | frame → app | `probe-result` | results of the live check |
-| app → frame | `init` | `{ questions, answers, participant, locked, probe, preview }` |
+| app → frame | `init` | `{ questions, answers, participant, locked, probe, preview, guided?, guidedSection? }` |
 | app → frame | `answers` | `{ answers }` replace all answers |
+| frame → app | `eligibility` | `{ eligible }` current routing map after initialization or a route change |
+| app → frame | `guided` | `{ enabled, section? }` show one marked section in guided mode or reveal all currently eligible question blocks |
+| app → frame | `focus-question` | `{ id }` focus a question; in guided mode the frame reveals its section before focusing it |
 | app → frame | `clear-answer` | `{ id }` clear one answer through the normal validation and save path; notes are preserved |
 | app → frame | `lock` | `{ locked }` |
 | app → frame | `offline` | `{ offline }` |

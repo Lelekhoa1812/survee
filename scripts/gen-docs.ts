@@ -2,15 +2,30 @@
  * Regenerates the parts of the documentation that must never drift from the code:
  *   docs/DIAGNOSTICS.md           from src/lib/diagnostics/catalog.ts
  *   docs/kqa-manifest.schema.json from the zod manifest schema
+ *   docs/kqa-questionnaire-author/references/ from canonical docs and examples
  * Run with `npm run docs`. A test fails if the committed files are out of date.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { CATALOG, type Category } from "../src/lib/diagnostics/catalog";
 import { manifestJsonSchema } from "../src/lib/format/schema";
 
 const root = path.join(__dirname, "..", "docs");
 mkdirSync(root, { recursive: true });
+
+const skillReferences: Record<string, string> = {
+  "FORMAT.md": "FORMAT.md",
+  "AGENT_PLAYBOOK.md": "AGENT_PLAYBOOK.md",
+  "DESIGN_SYSTEM.md": "DESIGN_SYSTEM.md",
+  "INTERVIEW_PACKAGES.md": "INTERVIEW_PACKAGES.md",
+  "MCP.md": "MCP.md",
+  "QUESTIONNAIRE_AUTHORING_BENCHMARK.md": "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md",
+  "starter.kqa.html": "template/starter.kqa.html",
+  "routed-follow-up.kqa.html": "examples/routed-follow-up.kqa.html",
+};
+const referencesDir = path.join(root, "kqa-questionnaire-author", "references");
+mkdirSync(referencesDir, { recursive: true });
+for (const [name, source] of Object.entries(skillReferences)) copyFileSync(path.join(root, source), path.join(referencesDir, name));
 
 const TITLES: Record<Category, string> = {
   file: "The file itself (KQA1xx)",

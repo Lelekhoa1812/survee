@@ -57,6 +57,27 @@ describe("questionnaire bridge conditional eligibility", () => {
     window.close();
   });
 
+  it("routes any answer type by non-empty answer state and reacts immediately to edits", () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <section data-kqa-question-id="details"><input type="text" data-kqa="details"></section>
+      <section data-kqa-question-id="follow-up"><textarea data-kqa="follow-up"></textarea></section>
+    </body></html>`, { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type: "init", questions: [
+      { id: "details", type: "text", label: "Details" },
+      { id: "follow-up", type: "longtext", label: "More detail", when: { all: [{ question: "details", operator: "answered" }] } },
+    ], answers: { details: { note: "A note alone" } } }, source: window }));
+    const followUp = window.document.querySelector<HTMLElement>('[data-kqa-question-id="follow-up"]')!;
+    expect(followUp.hidden).toBe(true);
+    window.KQA.set("details", "Some detail");
+    expect(followUp.hidden).toBe(false);
+    window.KQA.set("details", "   ");
+    expect(followUp.hidden).toBe(true);
+    expect(window.KQA.getNote("details")).toBe("A note alone");
+    window.close();
+  });
+
   it("restores answers before evaluating conditions, hides ineligible blocks and reports eligibility", () => {
     const page = start({ mode: { value: "other" }, details: { value: "why here" }, nested: { value: "saved" } });
     expect(page.window.KQA.eligibility()).toEqual({ mode: true, details: true, nested: true });

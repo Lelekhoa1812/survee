@@ -83,6 +83,12 @@ describe("manifest rules", () => {
     expect(codes(checkHtml(GUIDED.replace(' data-kqa-question-id="name"', '')))).toContain("KQA321");
     expect(codes(checkHtml(GUIDED.replace('data-kqa-question-list="start"', 'data-kqa-question-list="unknown"')))).toContain("KQA321");
   });
+  it("accepts answered-state routing for free text and rejects an unnecessary value", () => {
+    const html = `<!doctype html><html><head><script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Answer routing","questions":[{"id":"details","type":"text","label":"Details"},{"id":"follow-up","type":"text","label":"More detail","when":{"all":[{"question":"details","operator":"answered"}]}}]}</script></head><body><label>Details<input type="text" data-kqa="details"></label><label>More detail<input type="text" data-kqa="follow-up"></label></body></html>`;
+    expect(codes(checkHtml(html))).not.toContain("KQA218");
+    expect(codes(checkHtml(html.replace('"operator":"answered"', '"operator":"answered","value":"yes"')))).toContain("KQA218");
+    expect(codes(checkHtml(html.replace('"operator":"answered"', '"operator":"greaterThan"')))).toContain("KQA218");
+  });
   it("rejects a wrong format version", () => expect(codes(checkHtml(swap(STARTER, '"format": "kqa/1"', '"format": "kqa/2"')))).toContain("KQA204"));
   it("suggests a type for a common mistake", () => {
     const d = find(checkHtml(swap(STARTER, '"id": "priority", "type": "single"', '"id": "priority", "type": "radio"')), "KQA208");

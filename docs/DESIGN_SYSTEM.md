@@ -13,7 +13,7 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 ## Product constraints
 
 - Questionnaires are self-contained HTML files rendered in a sandboxed frame. Follow [`FORMAT.md`](FORMAT.md) for allowed controls, runtime behavior, and network restrictions.
-- Use declarative `when` rules for supported choice-based reveals. Mark each whole question block so KQA can hide and disable it; explain that an inactive answer is retained and excluded from current-rule progress and analysis. Do not imply current eligibility proves the question was displayed at an earlier time.
+- Use declarative `when` rules for supported choice comparisons or to check whether an earlier answer is present. Mark each whole question block so KQA can hide and disable it; explain that an inactive answer is retained and excluded from current-rule progress and analysis. Do not imply current eligibility proves the question was displayed at an earlier time.
 - There is no in-app question builder and no scoring. Keep authoring as questionnaire HTML plus the checker; keep answer analysis descriptive.
 - Preserve question and option ids when revising a live interview. Run the checker and inspect compatibility findings before creating a new immutable survey version.
 - Keep private respondent links and individual answers out of unrelated views, logs, and aggregate analytics.

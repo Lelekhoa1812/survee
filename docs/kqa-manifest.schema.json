@@ -170,64 +170,114 @@
                 "maxItems": 20,
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "question": {
-                      "type": "string",
-                      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "equals",
+                            "notEquals",
+                            "contains",
+                            "notContains"
+                          ]
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "operator",
+                        "value"
+                      ],
+                      "additionalProperties": false
                     },
-                    "operator": {
-                      "type": "string",
-                      "enum": [
-                        "equals",
-                        "notEquals",
-                        "contains",
-                        "notContains"
-                      ]
-                    },
-                    "value": {
-                      "type": "string",
-                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+                    {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "answered",
+                            "notAnswered"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "operator"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "question",
-                    "operator",
-                    "value"
-                  ],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "any": {
                 "maxItems": 20,
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "question": {
-                      "type": "string",
-                      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "equals",
+                            "notEquals",
+                            "contains",
+                            "notContains"
+                          ]
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "operator",
+                        "value"
+                      ],
+                      "additionalProperties": false
                     },
-                    "operator": {
-                      "type": "string",
-                      "enum": [
-                        "equals",
-                        "notEquals",
-                        "contains",
-                        "notContains"
-                      ]
-                    },
-                    "value": {
-                      "type": "string",
-                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+                    {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "answered",
+                            "notAnswered"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "operator"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "question",
-                    "operator",
-                    "value"
-                  ],
-                  "additionalProperties": false
+                  ]
                 }
               }
             },

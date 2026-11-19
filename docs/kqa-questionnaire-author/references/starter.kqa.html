@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KQA starter questionnaire</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<!-- 1. THE MANIFEST. The app reads the questions from here. Every question the page asks must be listed. -->
+<script type="application/json" id="kqa-manifest">
+{
+  "format": "kqa/1",
+  "title": "Starter questionnaire",
+  "description": "One question of every type, in the standard KQA look. Copy this file and replace the content.",
+  "sections": [
+    { "id": "choices", "title": "Choices", "description": "Radio buttons, checkboxes and a dropdown." },
+    { "id": "writing", "title": "Writing and numbers", "description": "Text, long text, numbers, scales and dates." }
+  ],
+  "questions": [
+    {
+      "id": "priority", "type": "single", "section": "choices", "required": true,
+      "label": "Which area should we start with?",
+      "help": "Pick one. You can change it any time before you submit.",
+      "options": [
+        { "value": "accuracy", "label": "Accuracy of the ratings" },
+        { "value": "speed", "label": "Speed of each run" },
+        { "value": "cost", "label": "Cost per lead" }
+      ],
+      "note": true
+    },
+    {
+      "id": "channels", "type": "multi", "section": "choices",
+      "label": "Which channels do you use today?",
+      "help": "Choose up to 3 channels that apply.",
+      "maxSelections": 3,
+      "options": [
+        { "value": "email", "label": "Email" },
+        { "value": "linkedin", "label": "LinkedIn" },
+        { "value": "phone", "label": "Phone" },
+        { "value": "events", "label": "Events" }
+      ]
+    },
+    {
+      "id": "region", "type": "select", "section": "choices",
+      "label": "Where is your main market?",
+      "options": [
+        { "value": "sg", "label": "Singapore" },
+        { "value": "seasia", "label": "South-East Asia" },
+        { "value": "anz", "label": "Australia and New Zealand" },
+        { "value": "other", "label": "Somewhere else" }
+      ]
+    },
+    {
+      "id": "company", "type": "text", "section": "writing", "required": true, "maxLength": 120,
+      "label": "What is your company called?"
+    },
+    {
+      "id": "goal", "type": "longtext", "section": "writing",
+      "label": "What would a great result look like in three months?",
+      "help": "A few sentences is plenty.",
+      "maxLength": 2000
+    },
+    {
+      "id": "team-size", "type": "number", "section": "writing", "min": 1, "max": 5000,
+      "label": "How many people are in your team?"
+    },
+    {
+      "id": "confidence", "type": "scale", "section": "writing", "min": 1, "max": 5,
+      "label": "How confident are you in your current process?",
+      "help": "1 is not at all, 5 is completely."
+    },
+    {
+      "id": "start-date", "type": "date", "section": "writing",
+      "label": "When would you like to start?"
+    },
+    {
+      "id": "stars", "type": "scale", "section": "writing", "min": 1, "max": 5, "custom": true,
+      "label": "Rate this form (built with script, using KQA.set)",
+      "help": "Shows how a custom control talks to the app."
+    }
+  ]
+}
+</script>
+
+<!-- 2. THE LOOK. Copy this block unchanged to get the standard KQA design, then add your own rules below it. -->
+<style>
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --surface-2: #f8fafc; --ink: #0e1b2a; --ink-2: #37465a; --muted: #5f7084;
+  --line: #e2e7ee; --line-2: #cdd6e0; --field: #8794a5; --brand: #0b2a42; --accent: #087960; --accent-soft: #e5f3ee; --accent-ink: #ffffff;
+  --focus: #1f6feb; --danger: #b4261c; --r: 10px; --r-sm: 6px; --shadow: 0 1px 2px rgba(14, 27, 42, .05);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1622; --surface: #101f2e; --surface-2: #142536; --ink: #e8eef5; --ink-2: #b9c6d4; --muted: #8fa1b3;
+    --line: #213548; --line-2: #2f465c; --field: #5f7790; --brand: #07121d; --accent: #2bb58f; --accent-soft: #123428; --accent-ink: #04130e;
+    --focus: #6aa3ff; --danger: #f59a92; --shadow: none; color-scheme: dark;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; line-height: 1.25; font-weight: 600; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.kq-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* page: a contents rail on wide screens, one reading column everywhere */
+.kq-shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+.kq-rail { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--brand); color: #cfdbe6; padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
+.kq-rail strong { color: #fff; font-weight: 600; font-size: .95rem; padding: 0 8px 12px; }
+.kq-rail a { color: inherit; text-decoration: none; font-size: .9rem; padding: 7px 8px; border-radius: 6px; }
+.kq-rail a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.kq-page { width: 100%; max-width: 860px; margin: 0 auto; padding: 44px max(32px, env(safe-area-inset-right)) 96px max(32px, env(safe-area-inset-left)); }
+.kq-kicker { font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.kq-title h1 { font-size: 1.9rem; letter-spacing: -.01em; margin-top: 6px; }
+.kq-lede { color: var(--ink-2); max-width: 64ch; margin-top: 12px; font-size: 1.02rem; }
+.kq-locked-note { display: none; margin-top: 20px; padding: 12px 16px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--r); color: var(--ink); font-size: .92rem; }
+html[data-kqa-state="locked"] .kq-locked-note { display: block; }
+
+/* sections and question cards */
+.kq-section { padding-top: 52px; scroll-margin-top: 12px; }
+.kq-section-head { display: grid; gap: 6px; margin-bottom: 18px; }
+.kq-section-head h2 { font-size: 1.35rem; }
+.kq-section-head p { color: var(--ink-2); max-width: 64ch; }
+.kq-stack { display: grid; gap: 14px; }
+.kq-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 12px; }
+.kq-q-head { display: flex; align-items: baseline; gap: 10px; }
+.kq-q-head h3 { font-size: 1rem; flex: 1; }
+.kq-n { font: 500 .76rem var(--mono); color: var(--muted); }
+.kq-help { color: var(--ink-2); font-size: .9rem; max-width: 68ch; }
+.kq-tick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-2); flex: none; align-self: center; }
+.kq-tick[data-state="answered"] { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; border-color: var(--accent); }
+
+/* choices */
+.kq-options { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; min-width: 0; }
+.kq-opt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-size: .92rem; transition: border-color .15s, background .15s; }
+.kq-opt:hover { border-color: var(--field); }
+.kq-opt input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.kq-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.kq-opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.kq-opt input:focus-visible { outline: none; }
+
+/* inputs */
+.kq-field { display: grid; gap: 6px; }
+input[type="text"], input[type="number"], input[type="date"], input[type="email"], select, textarea { width: 100%; font: inherit; font-size: .95rem; color: var(--ink); background: var(--surface); border: 1px solid var(--field); border-radius: 8px; padding: 9px 11px; }
+textarea { resize: vertical; min-height: 84px; }
+::placeholder { color: var(--muted); opacity: 1; }
+input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-allowed; }
+
+/* scales: numbered radio buttons, or an input[type=range] */
+.kq-scale { display: flex; flex-wrap: wrap; gap: 6px; max-width: 520px; }
+.kq-scale label { flex: 1 0 44px; min-width: 44px; display: grid; place-items: center; height: 44px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; font-weight: 500; font-variant-numeric: tabular-nums; }
+.kq-scale label:hover { border-color: var(--field); }
+.kq-scale input { position: absolute; opacity: 0; pointer-events: none; }
+.kq-scale label:has(input:checked) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.kq-scale label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.kq-scale-ends { display: flex; justify-content: space-between; max-width: 420px; color: var(--muted); font-size: .8rem; }
+
+/* notes */
+.kq-note summary { list-style: none; cursor: pointer; display: inline-block; font-size: .84rem; color: var(--muted); border-radius: 4px; }
+.kq-note summary::-webkit-details-marker { display: none; }
+.kq-note summary:hover { color: var(--ink); }
+.kq-note[open] summary { margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .kq-shell { grid-template-columns: minmax(0, 1fr); }
+  .kq-rail { display: none; }
+  .kq-page { padding: 28px max(16px, env(safe-area-inset-right)) 72px max(16px, env(safe-area-inset-left)); }
+  .kq-q { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="kq-shell">
+  <nav class="kq-rail" aria-label="Contents">
+    <strong>Starter questionnaire</strong>
+    <a href="#choices">Choices</a>
+    <a href="#writing">Writing and numbers</a>
+  </nav>
+
+  <main class="kq-page">
+    <header class="kq-title">
+      <span class="kq-kicker">Questionnaire</span>
+      <h1>Starter questionnaire</h1>
+      <p class="kq-lede">One question of every type, in the standard KQA look. Your answers save as you go, so you can close this page and come back to the same link.</p>
+      <p class="kq-locked-note" role="status">You have submitted your answers. They are now read-only. Your host can reopen them if you need to change anything.</p>
+    </header>
+
+    <section class="kq-section" id="choices" aria-labelledby="choices-h">
+      <div class="kq-section-head"><span class="kq-kicker">Part 1</span><h2 id="choices-h">Choices</h2><p>Radio buttons, checkboxes and a dropdown.</p></div>
+      <div class="kq-stack" data-kqa-question-list="choices">
+
+        <!-- single: radio buttons. All radios share data-kqa, name and differ by value. Wrap in fieldset + legend. -->
+        <article class="kq-q" id="q-priority" data-kqa-question-id="priority">
+          <div class="kq-q-head"><span class="kq-n">1</span><h3>Which area should we start with?</h3><span class="kq-tick" data-kqa-status="priority" aria-hidden="true"></span></div>
+          <p class="kq-help">Pick one. You can change it any time before you submit.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">Which area should we start with?</legend>
+            <label class="kq-opt"><input type="radio" name="priority" data-kqa="priority" value="accuracy"><span>Accuracy of the ratings</span></label>
+            <label class="kq-opt"><input type="radio" name="priority" data-kqa="priority" value="speed"><span>Speed of each run</span></label>
+            <label class="kq-opt"><input type="radio" name="priority" data-kqa="priority" value="cost"><span>Cost per lead</span></label>
+          </fieldset>
+          <details class="kq-note"><summary>Add a note</summary><textarea data-kqa-note="priority" rows="2" placeholder="Optional" aria-label="Note for: Which area should we start with?"></textarea></details>
+        </article>
+
+        <!-- multi: checkboxes. Same rules, type="checkbox". -->
+        <article class="kq-q" id="q-channels" data-kqa-question-id="channels">
+          <div class="kq-q-head"><span class="kq-n">2</span><h3>Which channels do you use today?</h3><span class="kq-tick" data-kqa-status="channels" aria-hidden="true"></span></div>
+          <p class="kq-help">Tick every channel that applies.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">Which channels do you use today?</legend>
+            <label class="kq-opt"><input type="checkbox" data-kqa="channels" value="email"><span>Email</span></label>
+            <label class="kq-opt"><input type="checkbox" data-kqa="channels" value="linkedin"><span>LinkedIn</span></label>
+            <label class="kq-opt"><input type="checkbox" data-kqa="channels" value="phone"><span>Phone</span></label>
+            <label class="kq-opt"><input type="checkbox" data-kqa="channels" value="events"><span>Events</span></label>
+          </fieldset>
+        </article>
+
+        <!-- select: one <select>; keep an empty first option as the placeholder. -->
+        <article class="kq-q" id="q-region" data-kqa-question-id="region">
+          <div class="kq-q-head"><span class="kq-n">3</span><h3><label for="f-region">Where is your main market?</label></h3><span class="kq-tick" data-kqa-status="region" aria-hidden="true"></span></div>
+          <select id="f-region" data-kqa="region">
+            <option value="">Choose one…</option>
+            <option value="sg">Singapore</option>
+            <option value="seasia">South-East Asia</option>
+            <option value="anz">Australia and New Zealand</option>
+            <option value="other">Somewhere else</option>
+          </select>
+        </article>
+      </div>
+    </section>
+
+    <section class="kq-section" id="writing" aria-labelledby="writing-h">
+      <div class="kq-section-head"><span class="kq-kicker">Part 2</span><h2 id="writing-h">Writing and numbers</h2><p>Text, long text, numbers, scales and dates.</p></div>
+      <div class="kq-stack" data-kqa-question-list="writing">
+
+        <article class="kq-q" id="q-company" data-kqa-question-id="company">
+          <div class="kq-q-head"><span class="kq-n">4</span><h3><label for="f-company">What is your company called?</label></h3><span class="kq-tick" data-kqa-status="company" aria-hidden="true"></span></div>
+          <input type="text" id="f-company" data-kqa="company" maxlength="120" autocomplete="organization">
+        </article>
+
+        <article class="kq-q" id="q-goal" data-kqa-question-id="goal">
+          <div class="kq-q-head"><span class="kq-n">5</span><h3><label for="f-goal">What would a great result look like in three months?</label></h3><span class="kq-tick" data-kqa-status="goal" aria-hidden="true"></span></div>
+          <p class="kq-help">A few sentences is plenty.</p>
+          <textarea id="f-goal" data-kqa="goal" rows="4" maxlength="2000"></textarea>
+        </article>
+
+        <article class="kq-q" id="q-team-size" data-kqa-question-id="team-size">
+          <div class="kq-q-head"><span class="kq-n">6</span><h3><label for="f-team">How many people are in your team?</label></h3><span class="kq-tick" data-kqa-status="team-size" aria-hidden="true"></span></div>
+          <input type="number" id="f-team" data-kqa="team-size" min="1" max="5000" inputmode="numeric" style="max-width: 200px">
+        </article>
+
+        <!-- scale: numbered radios (shown) or <input type="range" min max step> -->
+        <article class="kq-q" id="q-confidence" data-kqa-question-id="confidence">
+          <div class="kq-q-head"><span class="kq-n">7</span><h3>How confident are you in your current process?</h3><span class="kq-tick" data-kqa-status="confidence" aria-hidden="true"></span></div>
+          <p class="kq-help">1 is not at all, 5 is completely.</p>
+          <fieldset class="kq-options">
+            <legend class="kq-sr">How confident are you in your current process? 1 is not at all, 5 is completely.</legend>
+            <div class="kq-scale">
+              <label><input type="radio" name="confidence" data-kqa="confidence" value="1">1</label>
+              <label><input type="radio" name="confidence" data-kqa="confidence" value="2">2</label>
+              <label><input type="radio" name="confidence" data-kqa="confidence" value="3">3</label>
+              <label><input type="radio" name="confidence" data-kqa="confidence" value="4">4</label>
+              <label><input type="radio" name="confidence" data-kqa="confidence" value="5">5</label>
+            </div>
+            <div class="kq-scale-ends" aria-hidden="true"><span>Not at all</span><span>Completely</span></div>
+          </fieldset>
+        </article>
+
+        <article class="kq-q" id="q-start-date" data-kqa-question-id="start-date">
+          <div class="kq-q-head"><span class="kq-n">8</span><h3><label for="f-start">When would you like to start?</label></h3><span class="kq-tick" data-kqa-status="start-date" aria-hidden="true"></span></div>
+          <input type="date" id="f-start" data-kqa="start-date" style="max-width: 220px">
+        </article>
+
+        <!-- custom: no data-kqa control. The page calls KQA.set() and listens for KQA.on("change"). -->
+        <article class="kq-q" id="q-stars" data-kqa-question-id="stars">
+          <div class="kq-q-head"><span class="kq-n">9</span><h3 id="stars-h">Rate this form</h3><span class="kq-tick" data-kqa-status="stars" aria-hidden="true"></span></div>
+          <p class="kq-help">Built with script, using KQA.set. Shows how a custom control talks to the app.</p>
+          <div id="stars" role="radiogroup" aria-labelledby="stars-h" style="display:flex; gap:6px"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  // A custom control: five buttons that read and write the "stars" answer through the KQA runtime.
+  (function () {
+    var host = document.getElementById("stars");
+    var buttons = [];
+    for (var n = 1; n <= 5; n++) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = String(n);
+      b.setAttribute("role", "radio");
+      b.style.cssText = "width:42px;height:42px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font:500 1rem var(--sans);cursor:pointer";
+      (function (value) { b.addEventListener("click", function () { KQA.set("stars", value); }); })(n);
+      host.appendChild(b);
+      buttons.push(b);
+    }
+    function paint() {
+      var current = KQA.get("stars");
+      buttons.forEach(function (b, i) {
+        var on = current === i + 1;
+        b.setAttribute("aria-checked", on ? "true" : "false");
+        b.style.background = on ? "var(--accent)" : "var(--surface)";
+        b.style.color = on ? "var(--accent-ink)" : "var(--ink)";
+        b.style.borderColor = on ? "var(--accent)" : "var(--line-2)";
+        b.disabled = KQA.locked;
+      });
+    }
+    KQA.on("ready", paint);
+    KQA.on("change", paint);
+    KQA.on("lock", paint);
+  })();
+</script>
+</body>
+</html>

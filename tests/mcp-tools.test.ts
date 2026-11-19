@@ -186,10 +186,12 @@ describe("MCP tools", () => {
 
   it("returns the portable questionnaire author skill to interview readers", async () => {
     const res = await call("get_questionnaire_authoring_skill", {});
-    const body = await res.json() as { result: { structuredContent: { source: string; skill: string } } };
+    const body = await res.json() as { result: { structuredContent: { source: string; skill: string; files: { path: string; content: string }[] } } };
     expect(body.result.structuredContent.source).toBe("docs/kqa-questionnaire-author/SKILL.md");
     expect(body.result.structuredContent.skill).toContain("name: kqa-questionnaire-author");
     expect(body.result.structuredContent.skill).toContain("Do not use it for an unapproved draft");
+    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/starter.kqa.html", "references/routed-follow-up.kqa.html"]));
+    expect(body.result.structuredContent.files.find((file) => file.path === "references/FORMAT.md")?.content).toContain('"presentation": "guided"');
     expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_questionnaire_authoring_skill");
     expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_questionnaire_authoring_skill");
   });

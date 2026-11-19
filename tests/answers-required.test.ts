@@ -86,6 +86,19 @@ describe("answered, without scores", () => {
     expect(evaluateEligibility(manifest, {})).toEqual({ channels: true, "email-only": false, "no-email": false });
   });
 
+  it("routes text and other answer types by answered state, excluding blank values and notes", () => {
+    const manifest: Manifest = {
+      format: "kqa/1", title: "Answer-state routing", questions: [
+        { id: "details", type: "text", label: "Optional details" },
+        { id: "follow-up", type: "longtext", label: "More detail", when: { all: [{ question: "details", operator: "answered" }] } },
+        { id: "skip", type: "text", label: "No details", when: { any: [{ question: "details", operator: "notAnswered" }] } },
+      ],
+    };
+    expect(evaluateEligibility(manifest, {})).toEqual({ details: true, "follow-up": false, skip: true });
+    expect(evaluateEligibility(manifest, { details: { value: "  ", note: "A note alone", updatedAt: "" } })).toEqual({ details: true, "follow-up": false, skip: true });
+    expect(evaluateEligibility(manifest, { details: { value: "Some context", updatedAt: "" } })).toEqual({ details: true, "follow-up": true, skip: false });
+  });
+
   it("projects transitive routing dependencies in manifest order for selected analysis questions", () => {
     const manifest: Manifest = {
       format: "kqa/1", title: "Routing", questions: [

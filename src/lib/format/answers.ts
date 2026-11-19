@@ -90,7 +90,10 @@ export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Rec
     const matches = (condition: NonNullable<typeof when.all>[number]): boolean => {
       if (!eligible[condition.question]) return false;
       const value = answers[condition.question]?.value;
-      if (value === undefined || value === null) return false;
+      const answered = value !== undefined && value !== null && (Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim() !== "" : true);
+      if (condition.operator === "answered") return answered;
+      if (condition.operator === "notAnswered") return !answered;
+      if (!answered || !("value" in condition)) return false;
       const has = Array.isArray(value) ? value.includes(condition.value) : value === condition.value;
       return condition.operator === "equals" || condition.operator === "contains" ? has : !has;
     };

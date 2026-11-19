@@ -269,9 +269,9 @@ A section is declared but no question belongs to it.
 
 Severity: **error**
 
-A question's when condition must use bounded all/any lists of comparisons against declared options on earlier choice questions. Invalid routing can hide questions unexpectedly or make the interview impossible to complete.
+A question's when condition must use bounded all/any lists of answer-state checks or comparisons against declared options on earlier eligible questions. Invalid routing can hide questions unexpectedly or make the interview impossible to complete.
 
-**How to fix:** Use a non-empty all and/or any list. Refer only to earlier single, select or multi questions and use an option value that question declares. Use equals/notEquals for single or select, and contains/notContains for multi.
+**How to fix:** Use a non-empty all and/or any list. Conditions may use answered/notAnswered with any earlier question; choice comparisons must reference a declared option and use equals/notEquals for single or select, or contains/notContains for multi.
 
 ### KQA219: Invalid multi-select limit
 

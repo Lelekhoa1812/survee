@@ -4,7 +4,7 @@ You are an AI agent asked to produce an HTML questionnaire for the KQA app. This
 
 ## The one-paragraph version
 
-Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. The format includes eight answer types and bounded choice-based `when` routing; it does not score answers. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
+Output **one complete HTML file** that (1) declares every question in a JSON manifest, (2) marks each answer control with `data-kqa="<question id>"`, (3) uses no storage, network, dialogs, frames or file inputs, and (4) follows the [KQA design system](DESIGN_SYSTEM.md) and works well on a phone. The format includes eight answer types and bounded declarative routing; it does not score answers. Start from `template/starter.kqa.html`. Never rename an id or option value that has already been used. Then run the checker and fix everything it reports.
 
 This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, and paragraphs, plus dropdown, number, scale, and date. It does not score, and it does not send email.
 
@@ -18,7 +18,7 @@ Before writing, make sure you know:
 |---|---|
 | Who answers, and what the questionnaire is for | Ask once, briefly. Do not invent a purpose |
 | The questions, in order, with answer choices | If given as prose, list them back as a numbered table and proceed |
-| Which questions are mandatory and when they apply | Default to optional. Mark a question `required` only when the host cannot proceed without it, and use supported `when` rules when requiredness depends on an earlier choice |
+| Which questions are mandatory and when they apply | Default to optional. Mark a question `required` only when the host cannot proceed without it, and use supported `when` rules for earlier choice answers or whether an earlier answer is present |
 | Target completion time and collection window | Record the target and intended field period; say when either is unknown |
 | Respondent notice: purpose, access, use, retention, contact | Require host-verified facts and approval. Material unresolved privacy facts block fielding; do not invent consent or anonymity claims |
 | Existing ids and option values, if this replaces an earlier file | Reuse them exactly. See "Updating an existing questionnaire" |
@@ -73,7 +73,7 @@ Before fielding, include a host-approved respondent notice covering purpose, acc
 | NPS (0 to 10) | `scale`, `min: 0`, `max: 10` |
 | Matrix: rate items A, B, C | One question per row, same options. Ids like `fit-speed`, `fit-cost`, `fit-quality` |
 | Ranking | KQA has no native ranking type. Separate ratings permit ties and are not a ranking. If a strict order is essential, a custom text answer can encode it, but the author must build an accessible interaction and validate its ordering; the server does not enforce a permutation. Otherwise ask a different question and explain the tradeoff. |
-| Conditional follow-up | Prefer manifest `when` rules for supported choice-based routing. A required routed question is required only while eligible. Eligibility is inferred from current answers and rules, not a record of what was actually displayed. Inactive answers are retained, excluded from progress and analysis, and labelled inactive in exports. Disclose this behavior, test the route changes and restored answers, and keep reveals simple. |
+| Conditional follow-up | Prefer manifest `when` rules for supported choice comparisons or `answered`/`notAnswered` checks. A required routed question is required only while eligible. Eligibility is inferred from current answers and rules, not a record of what was actually displayed. Inactive answers are retained, excluded from progress and analysis, and labelled inactive in exports. Disclose this behavior, test the route changes and restored answers, and keep reveals simple. |
 | A "comments" box at the end | `longtext` with an id like `anything-else` |
 | Respondent details (name, company) | `text` questions. The app already knows the respondent's name, so only ask for what you actually need |
 

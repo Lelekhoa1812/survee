@@ -1,0 +1,316 @@
+# Interview packages for KQA agents
+
+These packages are starting points for designing an interview, not validated instruments or ready-made legal, clinical, hiring, financial, or safety assessments. Choose one for the decision and audience; combine modules only where they serve the same purpose. Adapt the language, options, reference periods and length with the host. Do not present a package as certified or compliant. The host remains responsible for professional, legal and local review where needed.
+
+Read [FORMAT.md](FORMAT.md), [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), and [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) before producing the complete HTML. The packages do not add question types, scoring or automated decisions to KQA. Supported bounded routing includes choice comparisons and checks for whether an earlier answer is present; FORMAT.md defines its limits. A sample question below is a candidate, not a mandatory item; choose only those whose answers inform the stated decision. Give each selected question a stable, distinct ID and make it self-contained in exports.
+
+The package library is versioned as `kqa-interview-packages/1`. Its 17 stable IDs are listed in the catalog below and are accepted by the MCP `get_interview_packages` tool. Omit `packageId` to retrieve the complete library; pass one ID to retrieve the catalog, common operating and risk safeguards, sampling guidance, and only that package's detailed module. Record the package ID and library version in the review record so later revisions remain traceable.
+
+## Common operating procedure
+
+1. Establish the decision, intended respondents, context and timeframe, target completion time, owner, and how answers will be used. Ask for missing facts when they are essential; state reasonable assumptions otherwise. The accountable host must approve a respondent-facing notice covering purpose, who will see identifiable answers, how answers will be used, retention or deletion expectations, and a contact route. Include only facts the host has supplied and verified; do not invent a privacy promise or treat this notice as legal consent.
+2. Select one package and draft a small set of neutral questions. Start with low-effort context, move to experience and evidence, then end with priorities and an optional comment. Ask one thing at a time and distinguish facts, perceptions and proposals. Give relevant non-applicability or uncertainty options where appropriate. Do not require an answer merely to increase completion.
+3. Collect the least sensitive detail needed for the decision. Avoid names of third parties and identifying, health, financial or other sensitive details unless necessary and approved for the context. Provide an optional way to decline sensitive items. A collection question is not, by itself, a consent or privacy process.
+4. Use native KQA controls and declarative `when` rules where possible. Use `maxSelections` only when a real upper bound serves the decision, and state that same limit in the checkbox help; it is a maximum, not a minimum. A cap does not make choices exclusive, so a “none” option still needs a separate question or a tested custom interaction. An eligible routed follow-up may be required; its requirement is suspended while inactive. Inactive answers are retained. Avoid implying that an answer triggers a live service, diagnosis, escalation or notification. Host actions use the MCP endpoint described in [MCP.md](MCP.md).
+5. Keep a review record that maps each decision to the information needed, the question that collects it, the expected analysis, and an accountable owner. Mark assumptions, sensitive fields, branching rules, and any question that could affect an individual's access, employment, safety, money, or care. Do not turn descriptive answers into a score or automated decision.
+6. For work that touches employment, education access, health, safety, public benefits, finances, or other consequential outcomes, involve a qualified domain owner and the appropriate legal, privacy, accessibility, and methodology reviewers before collection. Keep experience research separate from eligibility, performance, diagnosis, compliance certification, and incident reporting; a separately governed process does not make KQA itself a decision instrument for those uses.
+7. Pretest wording with representative respondents using cognitive interviews, then test the complete flow with representative users. These methods may share a moderated session where practical, but retain separate findings. Review accessibility, small screens and keyboard operation; run the static checker and, where possible, the in-app live check. Record what was actually tested, issues and unresolved limitations. For consequential uses, obtain an appropriate subject-matter review before release.
+8. Apply the [risk-based release gate](#risk-based-release-gate) before fielding. A clean checker result is only a technical check; it does not establish that the method, content, accessibility, privacy, or use is suitable.
+
+## Risk-based release gate
+
+Before drafting, ask the accountable host to classify the intended use and identify the owner who can approve fielding. The agent can flag risks and propose a classification, but must not certify it. Classify by the highest applicable use:
+
+- **Routine learning or service feedback:** answers inform general research or service improvement and are not used to decide an individual's eligibility, employment, care, safety, money, discipline, or legal status.
+- **Sensitive or regulated collection:** the questionnaire collects sensitive, regulated, or otherwise high-impact personal information, even if answers are not used to make individual decisions.
+- **Consequential individual use:** answers would make or materially support a decision about a person's access, employment, education, care, safety, finances, benefits, discipline, or legal status; diagnose a condition; certify compliance; or replace an incident or emergency reporting route.
+
+For every use, keep a release record with separate evidence for technical behavior, method fit and sampling, question pretesting, task-based usability, accessibility, privacy, and any relevant domain/legal review. Mark each area **passed**, **issues found**, **not tested**, or **not applicable**; state the scope, evidence, reviewer, limitations, and unresolved actions. Give a reason and accountable reviewer for each not-applicable item. A proposed test plan is not test evidence. Do not combine areas into an average score or let one passing check waive another.
+
+For routine use, field only after the accountable owner reviews the purpose, population, privacy facts, technical checks, and remaining limitations. For sensitive or regulated collection, also require documented review by the appropriate privacy and domain owners, plus legal or ethics review when the context requires it. Unresolved issues in a required review block fielding until the accountable reviewer records a disposition.
+
+### Respondent notice, privacy, and ethics
+
+Before invitations go out, show a host-approved notice in the questionnaire or invitation that explains the purpose, what participation involves, who can access identifiable answers, how answers will be used, retention/deletion expectations, and how to contact the responsible host. State whether responses are identifiable or confidential only when the host verifies the actual access and data flow; small groups and free-text answers can identify people even without a name field. KQA does not provide consent management, guarantee anonymity, set retention, or determine whether research ethics review is required.
+
+Record each notice item as confirmed, not applicable with a reason, or unresolved. A material unresolved purpose, access, use, retention, or contact fact blocks fielding until the accountable owner resolves it or records why it does not apply. If an activity may be human-subjects research, ask the host to obtain a determination from its responsible ethics/HRPP/IRB office; the agent must not make that determination. Obtain any required consent or ethics materials through the host's approved process rather than inventing them in questionnaire copy.
+
+### Field monitoring and respondent burden
+
+Set a target completion time before testing. Record observed completion time (range or median, with method and participant context) when it is measured; do not present a prediction as observed evidence. If timing or drop-off cannot be measured, say so. KQA does not collect item display telemetry, automatically monitor completion, or notify a host when answers arrive. The host's field plan should name the collection window, review owner and cadence, available completion/disposition checks, anomaly or safety escalation route, and stop/extend criteria. Use only evidence available from KQA's manual progress refresh and approved external processes; do not imply a live monitor exists.
+
+If AI assisted drafting, review, translation, or synthetic testing, record its role, model/provider and prompt/version when known, the human reviewer and decision, what validation occurred, and the number and type of human versus synthetic test participants. Synthetic responses can test code paths or surface candidate questions; they are not respondent evidence and must not be counted as human completes or used to estimate real response patterns.
+
+Do not use a KQA questionnaire as the decision instrument for consequential individual decisions, diagnosis, compliance certification, or incident/emergency reporting. Stop and direct the host to a separately governed, professionally reviewed process. If an otherwise approved program uses KQA only to collect non-decisional experience feedback, keep that purpose, access, and reporting boundary explicit and independently reviewed.
+
+Keep the evaluations distinct: expert or method review does not replace pretesting questions with in-scope respondents; cognitive pretesting does not show that people can complete the full flow; automated accessibility checks do not establish accessibility conformance. For appropriate projects, use staged discovery, alpha review, limited beta, live monitoring, and retirement gates; KQA does not recruit testers, monitor respondents, or set retention policy.
+
+## Package selection
+
+| Package or module | Type | Decision supported | Respondents | Typical modules | Stable ID |
+| --- | --- | --- | --- | --- | --- |
+| Product discovery | Full package | What problem should a team investigate? | Customers or users | Recent experience, workaround, unmet need | `product-discovery` |
+| Service improvement | Full package | Where should a service improve? | Service users | Journey, friction, recovery | `service-improvement` |
+| Workplace process | Full package | Which process change deserves investigation? | Staff or process participants | Work context, handoffs, barriers | `workplace-process` |
+| Project discovery | Full package | What needs clarification before planning? | Sponsors and delivery stakeholders | Outcomes, constraints, dependencies | `project-discovery` |
+| Education and learning | Full package | What support could improve a learning experience? | Learners or educators | Goals, access, feedback | `education-learning` |
+| Health service experience | Full package | How can a service improve communication or access? | Patients or carers | Access, understanding, improvement | `health-service-experience` |
+| Personal planning | Full package | What matters to a person when planning a change? | An individual or household | Goals, resources, next steps | `personal-planning` |
+| Candidate experience | Sector module | How can a hiring process improve for applicants? | Candidates | Clarity, access, communication | `candidate-experience` |
+| Employee onboarding | Sector module | Where can a new starter's first weeks improve? | New employees | Access, role clarity, support | `employee-onboarding` |
+| Customer success | Sector module | What helps a customer reach an agreed outcome? | Customers or account contacts | Goals, use, blockers, support | `customer-success` |
+| Supplier and partner review | Sector module | Which working relationship or delivery issue needs attention? | Suppliers, partners, internal owners | Delivery, coordination, risks | `supplier-partner-review` |
+| Safety learning | Sector module | What conditions can help prevent recurrence? | Staff or service participants | Context, barriers, learning | `safety-quality-learning` |
+| Audit readiness | Sector module | What evidence or process gaps need follow-up? | Process owners | Control awareness, evidence location, owner | `audit-readiness` |
+| Program evaluation | Sector module | How did a defined program work for participants? | Participants and delivery partners | Reach, experience, outcomes | `program-evaluation` |
+| Community consultation | Sector module | What local priorities should inform a decision? | Residents or community groups | Needs, impacts, trade-offs | `community-consultation` |
+| Event feedback | Sector module | What should organizers keep or change? | Attendees, speakers, staff | Access, experience, logistics | `event-feedback` |
+| Personal wellbeing reflection | Sector module | What support or next step would a person choose? | An individual | Self-defined needs, preferences, next step | `personal-wellbeing-reflection` |
+
+Full packages have complete decision-oriented question examples below. Sector modules are shorter patterns and need the same purpose, respondent, timeframe, privacy, method-fit and review decisions established in the common operating procedure. The table is a routing aid, not a claim that a package is validated for a population or outcome.
+
+Before drafting, confirm the decision and accountable owner, intended population and recruitment, response use and audience, timeframe, reporting and retention facts, and accessibility or sensitivity needs. Ask about critical unknowns or mark them as assumptions; do not invent them.
+
+## Sampling and reporting plan
+
+For each interview, add a short sample plan to the review record before drafting:
+
+- **Purpose and unit:** state whether the goal is qualitative discovery, service feedback, a census of a defined group, or a population estimate; name the target population and unit of response.
+- **Frame and recruitment:** name the list, panel, community, service or open channel used to reach people. Label the selection method accurately as probability-based, purposive, quota, convenience, opt-in/open invite, or another described method. Do not call an invitation to all known contacts a population census unless the frame covers the full target population and response is complete.
+- **Coverage and eligibility:** state who could be missed or unable to participate, inclusion/exclusion rules, eligibility checks, any quotas or oversampling, and how partial, duplicate, or ineligible submissions will be handled if known.
+- **Collection:** state mode, language(s), field dates, and relevant accessibility or administration conditions. If estimating a population quantity, document the sampling frame, selection probabilities, nonresponse treatment, weighting, estimator, and qualified methodology review before fielding.
+
+Choose sampling that fits the purpose. Purposive, convenience, and open/opt-in samples can be useful for exploration, usability learning, and local service improvement. Their respondent counts describe who answered; without a defensible design they do not establish representativeness, population estimates, or a conventional margin of sampling error. A larger non-probability sample does not by itself remove selection or nonresponse bias. Do not present self-selected results as the views of a wider population.
+
+When reporting results, include a compact methods record alongside findings:
+
+- Questionnaire version and exact question wording and response options.
+- Question order, relevant preceding instructions/questions, section context, and the routing/display conditions under which each result was collected.
+- Target population and unit, frame or source, selection/recruitment method, eligibility, quotas, collection mode/language(s), and field dates.
+- Target completion time and observed range/median when measured, with measurement method and participant context; otherwise mark timing unmeasured.
+- Invitations, known eligible contacts, starts, submitted and partial responses, exclusions, and disposition or response rates only when the needed denominator is available and defined.
+- Per-question valid n and missing/no-answer counts; weighting and estimation method if used, with the assumptions and reviewer.
+- Findings separated from interpretation, plus who was not represented, nonresponse/coverage limits, and other material uncertainty.
+- Respondent notice version and any AI role/model/prompt details and human oversight relevant to the work; separate synthetic checks from human responses.
+
+Do not invent sample or response counts. If the design does not support population inference, label results as feedback or exploratory evidence from participants and do not report a conventional margin of error or claim representativeness.
+
+## Additional sector modules
+
+Use these as narrowly scoped modules within a package. They are prompts for an interview, not a validated assessment, audit, incident channel, or professional service.
+
+### Candidate experience
+
+**Use for:** improving application and interview steps, not ranking candidates or deciding who should be hired.
+
+- Clarity (`scale`): “How clear were the next steps in the [stage] process?” Label both ends and include “not applicable” if some candidates did not reach that stage.
+- Access (`longtext`): “Was there anything that made it difficult to take part in the process?”
+- Communication (`single`): “When did you receive an update?” Use time ranges that match the actual process, plus “I did not receive an update”.
+- Improvement (`longtext`): “What is one change that would make the process clearer or easier to take part in?”
+
+**Review:** collect no protected attributes or unnecessary employment history. Keep this feedback separate from selection records and do not use it to rank or select applicants. If the host intends any selection use, stop and obtain qualified, jurisdiction-specific assessment and legal review; this package does not establish job-related validity or fairness.
+
+### Employee onboarding and workplace experience
+
+**Use for:** finding changes to onboarding, tools, role clarity, or team processes.
+
+- Access (`single` then conditional `multi`): “Were the tools or resources you needed ready?” If yes, ask “Which ones were ready?” Use actual resources in the checkbox list. KQA does not enforce mutually exclusive checkbox choices, so do not combine a “none” option with selectable resources in one `multi` question.
+- Role clarity (`scale`): “How clear are your current responsibilities?” State the reference period.
+- Support (`longtext`): “What would have helped you do your work in your first month?”
+- Process (`longtext`): “Which handoff or step should we improve?”
+
+**Review:** state who can see identifiable answers and how they will be used. Do not promise anonymity when roles or small teams make people identifiable. Do not use experience feedback as a proxy for performance.
+
+### Customer success and account review
+
+**Use for:** checking whether an agreed service or product is helping with a stated customer goal.
+
+- Goal (`longtext`): “What outcome were you hoping to achieve with [service]?”
+- Progress (`scale`): “How much progress have you made toward that outcome?” Define scale endpoints and timeframe.
+- Blocker (`longtext`): “What, if anything, is getting in the way?”
+- Next step (`single`): “Which next step would be most useful?” Offer only options the team can actually provide.
+
+**Review:** do not ask for passwords, payment details, confidential account data, or details already available to the account team. Do not imply a response creates a support ticket unless the host has configured that workflow.
+
+### Supplier and partner review
+
+**Use for:** identifying delivery, coordination, and relationship issues for a defined contract or period.
+
+- Delivery (`scale`): “How consistently did [deliverable] meet the agreed schedule during [period]?”
+- Quality (`longtext`): “Where did the delivered work meet or miss the agreed requirements?”
+- Coordination (`single`): “How well did the teams coordinate decisions?” Use balanced, labelled options.
+- Risk (`longtext`): “What should the teams resolve before the next milestone?”
+
+**Review:** identify the scope and parties, avoid collecting commercially sensitive detail beyond the need, and keep the questionnaire separate from formal contract notices and procurement decisions.
+
+### Safety and quality learning
+
+**Use for:** understanding conditions, barriers, and possible prevention actions after a defined activity.
+
+- Context (`longtext`): “What was happening immediately before the issue or near miss?”
+- Conditions (`multi`): “Which conditions may have contributed?” Include “not sure” separately from selectable factors.
+- Barrier (`longtext`): “What made the safer or expected process difficult to follow?”
+- Learning (`longtext`): “What change could reduce the chance of this happening again?”
+
+**Review:** this is not an emergency, statutory incident, hazard-reporting, or clinical channel. State the monitored reporting route and its response time separately; do not ask for unnecessary names or blame individuals.
+
+### Audit and compliance readiness
+
+**Use for:** locating process gaps and owners before an authorized review; not certifying compliance.
+
+- Process (`select`): “Which process are you responsible for?” Populate with the actual approved process list.
+- Evidence (`single`): “Can the current evidence be located?” Use “yes”, “partly”, “no”, and “not applicable”.
+- Gap (`longtext`): “What prevents the evidence or control from being available?”
+- Owner (`text`): “Which role should follow up?” Ask for a role where possible, not a personal name.
+
+**Review:** do not collect credentials, secrets, regulated records, or evidence files in free-text answers. Use the authorized evidence system; have a qualified owner interpret requirements and approve conclusions.
+
+### Program evaluation
+
+**Use for:** learning whether a defined service, grant, or initiative reached its intended participants, how it was delivered, and what outcomes merit further evaluation. Start from the program logic or theory of change. Define the population, period, intended use, and whether questions concern implementation/reach, participant experience, or outcomes. Map each question to an indicator and credible evidence source with the evaluation owner.
+
+- Participation (`single`): “Which activities did you take part in?” Use a checkbox if multiple activities are possible.
+- Access (`longtext`): “What made it easier or harder to take part?”
+- Experience (`scale`): “How well did the activity meet the need you came with?” State the audience and timeframe.
+- Priority (`multi`): “Which changes should be considered next?” Avoid presenting the result as representative unless the sampling method supports that claim.
+
+**Review:** self-report can inform an evaluation but does not by itself establish representativeness, a counterfactual, impact, or causal attribution. Distinguish implementation and participant experience from outcomes, document the evaluation design and limitations, and get domain review for outcome measures.
+
+### Community consultation
+
+**Use for:** gathering community perspectives on a specific decision while options are still open. Name the decision-maker, decision window, affected population, who is invited, the participation method (open/opt-in, targeted, sampled, or deliberative), how input will be weighed, and when participants will hear what happened.
+
+- Place (`select`): “Which area or community do you live, work, or spend time in?” Offer only categories needed for analysis and a skip option where appropriate.
+- Impact (`longtext`): “How could [proposal] affect you or your community?”
+- Trade-off (`multi`): “Which considerations should decision-makers weigh?” Include a balanced set grounded in the proposal and allow an unlisted response if useful.
+- Priority (`longtext`): “What should decision-makers consider before deciding?”
+
+**Review:** use accessible participation routes; identify groups not reached. Do not describe voluntary responses as representative unless recruitment and sampling support that claim. Explain how input will be analyzed and reported back, including disagreement and minority views. Consultation informs a decision; it is not a vote or a promise that every suggestion will be adopted.
+
+### Event feedback
+
+**Use for:** improving a specific event's access, schedule, content, or logistics.
+
+- Attendance (`select`): “Which part of [event] did you attend?”
+- Access (`longtext`): “Was there anything that made it difficult to participate?”
+- Value (`scale`): “How useful was [session or event] for your stated purpose?”
+- Change (`longtext`): “What should organizers keep, change, or remove next time?”
+
+**Review:** provide an alternative route for access requests that need action, and do not imply the survey itself will arrange accommodations or reply to a complaint.
+
+### Personal reflection and wellbeing
+
+**Use for:** helping a person describe a goal or preference and choose a self-directed next step.
+
+- Priority (`multi`): “Which areas would you like to focus on?”
+- Importance (`longtext`): “What makes this matter to you now?”
+- Confidence (`scale`): “How confident do you feel about taking a next step this week?”
+- Choice (`longtext`): “What is one small step you would like to try?”
+
+**Review:** let the person skip sensitive questions, avoid collecting diagnoses or detailed financial and relationship information, and do not present responses as clinical screening, therapy, financial advice, or crisis support.
+
+## Product discovery
+
+**Use for:** understanding a real problem, not validating a solution by asking respondents to predict purchases. Agree on the product area and a meaningful recent period first.
+
+- Recent experience (`longtext`): “Thinking about the last time you [did the activity], what were you trying to accomplish?”
+- Friction (`longtext`): “What, if anything, made that experience difficult?”
+- Current approach (`longtext`): “How did you handle that difficulty, if it occurred?”
+- Priority (`single`): “Which of these areas would be most useful to improve?” Use host-specific, distinct choices and an appropriate “none” or “not sure”.
+
+**Review:** Avoid leading respondents toward a proposed feature, asking about hypothetical future behaviour as if it were evidence, or collecting customer account data without a need.
+
+## Service improvement
+
+**Use for:** mapping a defined service interaction. Identify which service and reference period the respondent can reasonably recall.
+
+- Contact reason (`single` or `longtext`): “What was the main reason you contacted [service] during [period]?”
+- Ease (`scale`): “How easy or difficult was it to complete what you needed?” Label both ends and make direction explicit.
+- Barrier (`longtext`): “What, if anything, got in your way?”
+- Improvement (`longtext`): “What one change would most improve this experience for you?”
+
+**Review:** Do not ask people to repeat a sensitive incident unnecessarily. Do not represent an answer as a complaint, request for assistance or emergency report unless the host has an actual monitored process.
+
+## Workplace process
+
+**Use for:** understanding work and handoffs, not ranking individuals. Agree with the host on how responses will be used and who will see them.
+
+- Context (`longtext`): “What is your role in [process]?”
+- Handoff (`longtext`): “Where does work pass between people or teams in this process?”
+- Obstacle (`longtext`): “During [period], what made this process harder to complete?”
+- Change (`longtext`): “What change would make this process easier or more reliable?”
+
+**Review:** Avoid requests to identify colleagues or attribute blame. Be explicit about whether responses are identifiable; do not promise anonymity. If decisions may affect employment, seek relevant professional review and do not use the questionnaire as an automated selection tool.
+
+## Project discovery
+
+**Use for:** finding agreement and gaps before committing to delivery. Ask stakeholders separately when their perspectives differ.
+
+- Outcome (`longtext`): “What outcome should this project achieve for [audience]?”
+- Evidence (`longtext`): “What evidence would show that outcome has been achieved?”
+- Constraint (`longtext`): “What constraints should the team account for when planning?”
+- Dependency (`longtext`): “What other work or decision does this project depend on?”
+- Decision (`longtext`): “What decision needs to be made next, and by whom?”
+
+**Review:** Separate goals from proposed solutions, assumptions from confirmed constraints, and targets from measured baselines. Avoid soliciting credentials, secrets or contractual documents in free text.
+
+## Education and learning
+
+**Use for:** improving an identified learning experience or support. Adapt to age, setting and respondent role; involve a responsible adult or institution where appropriate.
+
+- Goal (`longtext`): “What would you like to be able to do after [learning activity]?”
+- Access (`multi`): “Which formats help you take part?” Supply formats actually available and “other” as applicable. If offering “none of these”, prevent it from being selected alongside other options and test that behaviour, or use a separate question.
+- Difficulty (`longtext`): “What, if anything, made it difficult to take part in [activity]?”
+- Support (`longtext`): “What support would help you next time?”
+
+**Review:** Do not infer ability, disability or achievement from a preference. Do not solicit unnecessary information about a child. Tailor language and consent arrangements to the participants and setting.
+
+## Health service experience
+
+**Use for:** improving access and communication about a service, not assessing symptoms or making clinical decisions.
+
+- Access (`longtext`): “What, if anything, made it difficult to access [service]?”
+- Understanding (`single`): “After your visit, how clear were the next steps explained to you?” Use balanced choices and “no next steps were discussed” where relevant.
+- Questions (`longtext`): “What questions, if any, were left unanswered?”
+- Improvement (`longtext`): “What could the service do differently to make communication clearer?”
+
+**Review:** Use plain language and do not request diagnoses or medical histories unless necessary and separately reviewed. Do not suggest that answers are monitored for urgent needs. Get appropriate clinical and privacy review before collecting health information.
+
+## Personal planning
+
+**Use for:** an individual choosing a practical next step. Let the person define the scope; avoid prescriptive recommendations.
+
+- Goal (`longtext`): “What would you like to be different by [timeframe]?”
+- Importance (`longtext`): “Why does that matter to you?”
+- Support (`longtext`): “What resources or support could help?”
+- Next step (`longtext`): “What is one step you might take next?”
+
+**Review:** Keep personal disclosures optional and avoid collecting detailed finances, health information or information about other people without a clear need. Do not frame the result as professional advice or a crisis service.
+
+## Reusable agent brief
+
+> Read the KQA format, playbook, design system and interview packages. Use the [package] package for [decision], for [respondents], about [scope and timeframe]. The host will use responses to [purpose]. Work within [target completion time and other constraints]. Adapt examples rather than assuming all are needed. Before drafting, map each decision to the evidence needed and each question to a clear construct; identify assumptions, excluded respondents, sensitive data, host-approved respondent notice and retention facts, and any consequential use. Specify the target population, unit, sample frame/source, recruitment and selection method, who may be missed, eligibility, collection mode/language, and whether the purpose is qualitative learning or population estimation; state assumptions when details are unavailable. Ask one concise batch of essential questions if critical facts are missing; otherwise state reasonable assumptions. Propose neutral, self-contained questions and balanced response options; use routing only where it changes applicability and disclose retained inactive answers. Do not invent consent, anonymity, a monitored response process, certification, scoring, or an automated decision. Produce one complete KQA HTML file plus a review record with the decision-to-question map, sample and host-run field-monitoring plans, respondent notice/ethics dispositions, AI role and human oversight if applicable, question-content pretest evidence, rendered/accessibility checks, observed burden when measured, sampling/reporting limits, and untested aspects. Preserve existing IDs and option values when revising a live questionnaire.
+
+## Evidence and further reading
+
+- The [CDC cognitive interviewing guide](https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html) describes testing how respondents comprehend and answer survey questions. Cognitive testing complements, rather than replaces, an end-to-end usability session.
+- The US Census Bureau's [Statistical Quality Standard A2](https://www.census.gov/about/policies/quality/standards/standarda2.html) and [Appendix A2](https://www.census.gov/about/policies/quality/standards/appendixa2.html) distinguish respondent pretesting from expert review and call for functional verification and documentation. Apply the standard in its own federal context; use it here as a methods reference.
+- The Australian Bureau of Statistics [Forms Design Standards](https://www.abs.gov.au/statistics/standards/abs-forms-design-standards/2023) combine survey research and practical advice on question development, respondent burden, visual design, and testing. They are a strong Australian reference; their standard wording and examples do not automatically fit every KQA use case.
+- The UK Government Analysis Function's [Questionnaire Design Guidance](https://analysisfunction.civilservice.gov.uk/policy-store/questionnaire-design-guidance/) and [Survey Development Toolkit](https://analysisfunction.civilservice.gov.uk/policy-store/survey-development-toolkit/) describe respondent-centred discovery, alpha/beta/live phases, question pretesting, and the difference between cognitive and usability testing. Adapt their methods to the host's context and resources.
+- W3C guidance covers [form labels](https://www.w3.org/WAI/tutorials/forms/labels/) and [instructions](https://www.w3.org/WAI/tutorials/forms/instructions/). Test the actual controls and interaction states, not just the presence of labels in a draft.
+- The UK ICO's [purpose limitation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/purpose-limitation/) and [data minimisation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/) guidance illustrates the relationship between a stated purpose and what data is needed. Applicable obligations depend on jurisdiction and context.
+- The Australian OAIC's [APP 3 guidance](https://www.oaic.gov.au/privacy/australian-privacy-principles/australian-privacy-principles-guidelines/chapter-3-app-3-collection-of-solicited-personal-information) explains Australian Privacy Principle collection limits, including reasonable necessity and data minimisation; its application depends on the organisation and context. OAIC's [Privacy by Design guidance](https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design) recommends identifying information flows and privacy risks early and revisiting them as a project changes.
+- The OAIC's [guide to privacy impact assessments](https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/guide-to-undertaking-privacy-impact-assessments) describes proportionate assessment of information flows and privacy impacts. Applicable duties depend on jurisdiction and organisation.
+- AHRQ provides [plain-language communication guidance](https://www.ahrq.gov/health-literacy/improve/precautions/tool4.html) for health settings. Adapt terminology to the intended audience.
+- The [CDC Program Evaluation Framework, 2024](https://www.cdc.gov/mmwr/volumes/73/rr/rr7306a1.htm) emphasizes context, collaborative engagement, credible evidence, and use of findings. It is a framework, not a plug-in questionnaire.
+- The [OECD Guidelines for Citizen Participation Processes](https://www.oecd.org/en/publications/oecd-guidelines-for-citizen-participation-processes_f765caf6-en.html) cover defining the policy question, participant selection, methods, and feedback to participants. Adapt to local public-sector and community context.
+- [AAPOR's disclosure standards](https://aapor.org/standards-and-ethics/disclosure-standards/) explain the information needed to assess survey methods and findings, including population, sampling, collection mode, field dates, and response disposition. Report only what the host can substantiate.
+- The [AAPOR Responsible AI Integration in Survey Research report (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf) recommends human oversight, documenting AI's role and validation, and distinguishing synthetic testing from human respondent evidence. KQA does not log off-platform agent model or prompt details, so the accountable team must retain those in its review record.
+- The U.S. HHS [OHRP guide to IRB review](https://www.hhs.gov/ohrp/education-and-outreach/online-education/human-research-protection-training/lesson-4-irb-review-of-research/index.html) explains the role of the responsible human-research protection program/IRB. KQA agents should route possible determinations to that office, not make them.
+- The ICO's [DPIA guidance](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/accountability-and-governance/data-protection-impact-assessments-dpias/how-do-we-do-a-dpia/) provides a jurisdiction-specific model for documenting data flows, purpose, retention, and risk; apply local law and accountable privacy review.
+- The ABS [sample design guide](https://www.abs.gov.au/websitedbs/d3310114.nsf/home/Basic%2BSurvey%2BDesign%2B-%2BSample%2BDesign) explains fit-for-purpose probability and non-probability designs, and why non-probability samples do not support ordinary population precision claims. It also notes that increasing sample size does not remove nonresponse bias.
+- [AAPOR's Transparency Initiative](https://aapor.org/standards-and-ethics/transparency-initiative/) details disclosures about the population/frame, recruitment and eligibility, mode and language, dates, sample dispositions, weighting, and inference limits.
+- AAPOR [condemns presenting a self-selected poll as legitimate general research](https://aapor.org/standards-and-ethics/condemned-survey-practices/); opt-in results should be reported within their actual sample limits.
+- [AAPOR's best practices](https://aapor.org/standards-and-ethics/best-practices/) describe quality review across the survey lifecycle, including pretesting with people like the target population and transparent reporting. They inform the evidence separation above; KQA's risk classes and release blocks are product policy.
+- For employment-related work, [OPM structured interview guidance](https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/) and the [EEOC employment test guidance](https://www.eeoc.gov/laws/guidance/employment-tests-and-selection-procedures) distinguish structured selection methods and consequential assessment from experience research. KQA packages do not validate hiring assessments.
+- For safety learning, [OSHA worker participation guidance](https://www.osha.gov/safety-management/worker-participation) emphasizes worker involvement and reporting pathways. A KQA questionnaire is not an emergency or statutory reporting channel.
