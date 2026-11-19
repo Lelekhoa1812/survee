@@ -39,6 +39,8 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("name: kqa-questionnaire-author");
     expect(bundle).toContain("## Workflow");
     expect(bundle).toContain("create_interview` operation immediately creates an open interview");
+    expect(bundle).toContain("KQA's pre-submit **Check your answers** review");
+    expect(bundle).toContain("does not simulate respondent input");
   });
 
   it("publishes the live MCP operating guide as a named doc and in the agent bundle", async () => {
