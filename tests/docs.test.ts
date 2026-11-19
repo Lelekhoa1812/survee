@@ -69,8 +69,8 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/7");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/7");
+    expect(packages).toContain("kqa-interview-packages/8");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/8");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {
@@ -170,7 +170,7 @@ describe("agent documentation bundle", () => {
     expect(JSON.parse(corpus!.body).benchmarkVersion).toBe("kqa-questionnaire-review/1");
     const draftCases = await readAsset("evals/package-draft-cases.json");
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
-    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/2");
+    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/3");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
     const trustCases = await readAsset("evals/authoring-trust-boundary-cases.json");

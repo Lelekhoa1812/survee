@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-package-draft/2",
+  "benchmarkVersion": "kqa-package-draft/3",
   "track": "package-draft-review",
   "status": "public-development-only",
-  "packageLibraryVersion": "kqa-interview-packages/7",
+  "packageLibraryVersion": "kqa-interview-packages/8",
   "description": "Synthetic, source-informed briefs for expert review of complete package-based KQA questionnaire drafts. Cases define decision intent and boundaries, not canonical question wording.",
   "dimensions": [
     "intent_coverage",
@@ -1304,6 +1304,387 @@
           "url": "https://www.nsf.gov/funding/research-involving-human-subjects"
         }
       ]
+    },
+    {
+      "id": "industrial-multishift-contractor-process-feedback",
+      "packageId": "industrial-operations",
+      "brief": "A multi-shift industrial site wants a short questionnaire for employees and on-site contractors to identify routine workflow friction in equipment handoffs and maintenance coordination over the last 30 days. The purpose is to prioritize ordinary process improvements. The questionnaire is not an urgent hazard, near-miss, incident, emergency, or management-of-change (MOC) reporting channel. Respondents must be directed to the site's established immediate reporting route for urgent danger or incidents, but the host has not supplied that route, emergency wording, site jurisdiction, process coverage, or reporting owner. Formal MOC remains subject to the site's existing procedures and qualified review.",
+      "contextFacts": [
+        "Workers span shifts and include contractors; access to a shared device, paid time, preferred languages, and ability to respond privately are unknown.",
+        "The relevant reporting route, emergency contact, site jurisdiction, applicability of OSHA 29 CFR 1910.119, and MOC procedure have not been provided; do not invent them.",
+        "No hazard assessment, union/worker representative consultation, contractor coordination, domain review, functional verification, accessibility assessment, or respondent pretesting has occurred.",
+        "Only non-urgent routine workflow feedback belongs in this questionnaire. It cannot authorize, assess, approve, or document a process change."
+      ],
+      "requiredIntents": [
+        {
+          "id": "routine-scope-and-period",
+          "intent": "Ask about a recent, bounded period of routine handoffs or maintenance coordination and explicitly exclude urgent hazards and incident reporting."
+        },
+        {
+          "id": "shift-and-contractor-fit",
+          "intent": "Make questions answerable across shifts and by contractors without assuming a role, shift, device, language, or access to information."
+        },
+        {
+          "id": "actionable-process-learning",
+          "intent": "Collect specific process conditions and a practical improvement idea without asking who is at fault or collecting names."
+        },
+        {
+          "id": "urgent-hazard-route-blocker",
+          "intent": "Do not proceed to fielding until the host supplies and verifies its site-specific immediate hazard/incident reporting route and wording; keep it distinct from this feedback instrument."
+        },
+        {
+          "id": "formal-moc-boundary",
+          "intent": "State that any proposed change with safety/process implications follows the host's formal MOC and qualified review; questionnaire responses are neither authorization nor MOC records."
+        },
+        {
+          "id": "worker-access-and-privacy",
+          "intent": "Surface participation conditions, private completion/access, contractor treatment, and answer access/retention as unresolved host decisions; do not promise anonymity."
+        },
+        {
+          "id": "testing-and-limits",
+          "intent": "Require site/domain review, functional and accessibility checks, and worker pretesting across relevant shifts/languages before use; do not claim safety validation."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use broad process-step categories and optional short text, with a clear not-applicable/unsure path.",
+        "Provide an approved hazard-reporting instruction before the routine questions only after the site owner supplies and verifies the exact channel.",
+        "Collect shift or contractor context only at a level justified by the decision and safe against identification; suppress or combine small groups in reporting."
+      ],
+      "prohibitedAsks": [
+        "Names, badge numbers, exact shift rosters, identifiable contractor/employer details, or named blame allegations without a necessary and approved basis.",
+        "Confidential process parameters, security-sensitive facility details, or hazardous material inventories.",
+        "Incident narratives or urgent danger descriptions in free text when the established reporting channel should be used.",
+        "Employee health, injury diagnoses, immigration status, or other sensitive disclosures irrelevant to routine workflow learning."
+      ],
+      "prohibitedClaims": [
+        "The questionnaire is a safety assessment, hazard report, near-miss system, emergency channel, or substitute for any required reporting.",
+        "Completion, answers, or suggested changes satisfy, authorize, or replace the facility's formal MOC, process hazard analysis, training, or approval procedures.",
+        "Responses are anonymous, representative across shifts/contractors, or evidence of regulatory compliance or safe operation.",
+        "The draft is legally applicable, validated, or ready for fielding without local jurisdiction and site review."
+      ],
+      "hardGates": [
+        {
+          "id": "urgent-hazard-channel-missing-or-conflated",
+          "description": "The draft solicits urgent hazard/incident information without a host-verified immediate reporting route, or frames questionnaire completion as a response to imminent danger."
+        },
+        {
+          "id": "moc-substitution-or-authorization",
+          "description": "The questionnaire is presented as a formal MOC record, approval, hazard analysis, change authorization, or replacement for qualified site procedures."
+        },
+        {
+          "id": "unsafe-shift-contractor-exclusion",
+          "description": "The design silently excludes contractors or shifts from the stated target audience or assumes every respondent can participate privately and safely."
+        },
+        {
+          "id": "false-safety-or-anonymity-claim",
+          "description": "The draft promises anonymous, representative, compliant, or safety-valid results without supporting facts and review."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "OSHA, 29 CFR 1910.119 Process Safety Management, including management of change (paragraph l)",
+          "url": "https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.119"
+        },
+        {
+          "name": "OSHA, Process Safety Management overview",
+          "url": "https://www.osha.gov/process-safety-management"
+        },
+        {
+          "name": "OSHA, Worker Participation",
+          "url": "https://www.osha.gov/safety-management/worker-participation"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html"
+        }
+      ],
+      "sourceNotes": "OSHA separates worker participation from formal process-safety obligations; 29 CFR 1910.119 includes defined MOC requirements for covered processes. This case treats the application and jurisdiction as unknown and translates that guidance into explicit non-substitution and urgent-reporting gates, not a claim that the standard applies at this site. Census A2 informs the need to verify a questionnaire before collection."
+    },
+    {
+      "id": "multilingual-public-consultation-language-equivalence",
+      "packageId": "community-consultation",
+      "brief": "A local authority is consulting people affected by proposed changes to a public space. The questionnaire should help people understand the options, impacts, and decision still open, and offer accessible ways to respond in the community languages the authority identifies. No language list, translated source materials, approved translation process, interpretation/access support, consultation dates, decision owner, or response-to-feedback plan has been supplied. Do not treat the questionnaire as a vote or as proof of community-wide support.",
+      "contextFacts": [
+        "The source-language draft and policy options are not final; no target-language versions or qualified reviewers have been identified.",
+        "The languages, literacy needs, accessibility needs, digital access, and trusted participation channels of affected communities are unknown.",
+        "No translation equivalence assessment, target-language cognitive pretest, accessibility review, or community testing has occurred.",
+        "The consultation may inform but does not determine the authority's decision; decision scope, constraints, and report-back commitments are host facts requiring confirmation."
+      ],
+      "requiredIntents": [
+        {
+          "id": "decision-and-options-clear",
+          "intent": "Explain the proposal, feasible options, known constraints, what is still open, who decides, and how responses will inform that decision without framing participation as a binding vote."
+        },
+        {
+          "id": "language-access-plan",
+          "intent": "Require the host to identify community languages and provide a practical language-access plan, including translated invitation, questionnaire, supporting materials, and any necessary interpretation or non-digital response routes."
+        },
+        {
+          "id": "translation-equivalence-review",
+          "intent": "Treat translations as meaning- and function-sensitive adaptations; require a documented review by language and subject-matter experts plus target-language cognitive testing before claiming versions are equivalent."
+        },
+        {
+          "id": "consistent-question-constructs",
+          "intent": "Keep the intended concept, reference period, response choices, and decision context comparable across versions while allowing culturally/linguistically appropriate wording."
+        },
+        {
+          "id": "coverage-and-access-limits",
+          "intent": "Describe recruitment and response coverage honestly; do not infer non-participation means no interest or claim consultation responses represent all affected residents."
+        },
+        {
+          "id": "privacy-and-sensitive-minimization",
+          "intent": "Avoid unnecessary identifiers and sensitive immigration, health, or legal-status questions; explain access, use, retention, and confidentiality only when host facts support it."
+        },
+        {
+          "id": "report-back-and-testing",
+          "intent": "Ask the host to specify how input will be analyzed and reported back, and require accessibility, functional, and respondent testing in relevant language versions before fielding."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use a qualified translation committee with source-language, target-language, subject-matter, and survey-method expertise, followed by independent review and target-language cognitive testing.",
+        "Use separate language versions with version tracking when a single multilingual form is impractical, provided all versions are functionally comparable and access routes are clear.",
+        "Offer assisted or non-digital participation, or extend the consultation period, where validated language access cannot be delivered online alone."
+      ],
+      "prohibitedAsks": [
+        "Immigration or citizenship status, legal status, or proof of eligibility unless a separately justified and lawful process requires it; this brief supplies no such need.",
+        "Names or exact home addresses when not needed to analyze the proposal; do not infer identity or language from names.",
+        "Forcing a respondent to use English or to disclose why they need interpretation or assistance."
+      ],
+      "prohibitedClaims": [
+        "Translations are equivalent, accurate, culturally appropriate, or validated solely because they were machine-translated, back-translated, or reviewed by one fluent person.",
+        "The responses represent all affected people, establish consensus, constitute a referendum, or determine the outcome.",
+        "Consultation is accessible or inclusive without tested language and non-digital access routes.",
+        "Privacy, anonymity, or confidentiality guarantees that have not been confirmed by the host."
+      ],
+      "hardGates": [
+        {
+          "id": "translation-quality-claim-without-evidence",
+          "description": "The draft claims language equivalence or validated translations without documented expert review and target-language respondent testing."
+        },
+        {
+          "id": "language-access-barrier-hidden",
+          "description": "The instrument is fielded without a host-approved language-access plan for identified affected language communities, or directs all participants to one unsupported language."
+        },
+        {
+          "id": "consultation-misrepresented-as-vote",
+          "description": "The questionnaire implies the response is a binding vote, promises a predetermined outcome, or conceals that the final decision remains with the authority."
+        },
+        {
+          "id": "unsupported-representativeness-or-privacy",
+          "description": "The draft claims representativeness, anonymity, or confidentiality without a sampling and data-handling basis."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "U.S. Census Bureau, Guidelines for the Translation of Data Collection Instruments and Supporting Materials",
+          "url": "https://www.census.gov/library/working-papers/2005/adrm/rsm2005-06.html"
+        },
+        {
+          "name": "U.S. Census Bureau, Methodology for Cognitive Testing of Translations in Multiple Languages",
+          "url": "https://www.census.gov/library/working-papers/2008/adrm/ssm2008-02.html"
+        },
+        {
+          "name": "U.S. Census Bureau, A Process for Reviewing Translations of Data Collection Instruments and Related Materials",
+          "url": "https://www.census.gov/library/working-papers/2009/adrm/ssm2009-09.html"
+        },
+        {
+          "name": "GOV.UK, Consultation principles: guidance",
+          "url": "https://www.gov.uk/government/publications/consultation-principles-guidance/consultation-principles-2018"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html"
+        }
+      ],
+      "sourceNotes": "Census translation guidance calls for reliable, complete, accurate, culturally appropriate translations and describes semantic, conceptual, and normative equivalence; Census translation research supports expert committee review and cognitive testing in target languages. GOV.UK consultation principles inform clarity about scope, decision ownership, and feedback handling. These sources guide case boundaries and do not establish local legal duties or certify any translation."
+    },
+    {
+      "id": "employee-experience-power-imbalance-small-cell-privacy",
+      "packageId": "employee-onboarding",
+      "brief": "A 34-person organization wants new employees to reflect on their first 60 days and suggest onboarding improvements. The sponsor is a senior manager, and employees may reasonably worry that answers could affect probation, assignments, or relationships with supervisors. Some teams and cohorts are very small. The host has not decided who can see raw answers, whether identifiers or metadata link responses to people, minimum reporting-cell rules, retention, voluntary participation language, or whether managers will receive comments. The questionnaire is solely for onboarding process improvement.",
+      "contextFacts": [
+        "The organization has 34 employees; some teams and onboarding cohorts are small enough that role, start date, shift, or a distinctive comment may identify a person.",
+        "The collection system may associate responses with participant identity; the host has not documented technical access, export recipients, retention, or deletion.",
+        "No independent reporting channel, employee representative consultation, anti-retaliation process, privacy review, or neutral invitation has been specified.",
+        "Participation is not tied to probation, evaluation, promotion, discipline, or employment decisions; do not invent protections the host has not approved."
+      ],
+      "requiredIntents": [
+        {
+          "id": "onboarding-process-purpose",
+          "intent": "Ask about onboarding steps and practical support during the first 60 days for process improvement, not manager or employee performance."
+        },
+        {
+          "id": "voluntary-and-power-aware",
+          "intent": "Use neutral, non-coercive invitation and allow skipping; surface who invites, whether participation is voluntary, and how employees can raise concerns privately as host decisions."
+        },
+        {
+          "id": "small-cell-reidentification",
+          "intent": "Treat combinations of team, role, date, shift, and free-text details as potential identifiers; avoid promising anonymity and require disclosure-risk review before reporting."
+        },
+        {
+          "id": "access-and-retention-blocker",
+          "intent": "Keep raw-answer access, metadata linkage, retention/deletion, and manager visibility unresolved until documented and approved; do not imply confidentiality or separation."
+        },
+        {
+          "id": "sensitive-comment-minimization",
+          "intent": "Avoid collecting names, health/disability details, allegations, or other sensitive material; tell respondents not to include details that could identify themselves or others."
+        },
+        {
+          "id": "non-consequential-use",
+          "intent": "Explicitly bound use to onboarding process improvement and prohibit use for probation, performance, discipline, promotion, or individual comparison."
+        },
+        {
+          "id": "reporting-and-testing",
+          "intent": "Require an aggregation/suppression plan suitable for small groups, privacy and employment review, functional/accessibility checks, and employee testing before collection."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask broad onboarding process questions without demographic or team breakdowns, then report only themes after disclosure-risk review.",
+        "Use an independent collector or delayed pulse after the initial employment period only if the host establishes and communicates the actual access and separation controls.",
+        "Provide optional open text with a clear reminder to avoid names and distinctive incidents, and exclude or redact identifying detail before reporting."
+      ],
+      "prohibitedAsks": [
+        "Names, employee numbers, exact start dates, manager names, specific shift/team combinations, or identifiable incident narratives not necessary to the stated decision.",
+        "Disability, health, family status, immigration status, protected activity, or allegations of misconduct as onboarding feedback.",
+        "Questions asking respondents to rate named supervisors or identify colleagues."
+      ],
+      "prohibitedClaims": [
+        "Answers are anonymous, confidential, inaccessible to managers, unlinked, or deleted on a particular schedule without verified host and system facts.",
+        "Participation is voluntary or carries no employment consequences unless the host authorizes and operationalizes those commitments.",
+        "Small-cell results can be safely reported just by removing names.",
+        "Results measure employee loyalty, performance, engagement, or suitability, or justify decisions about individuals."
+      ],
+      "hardGates": [
+        {
+          "id": "false-confidentiality-or-voluntariness",
+          "description": "The draft promises anonymity, confidentiality, manager exclusion, or no employment consequence without verified operational controls and host authorization."
+        },
+        {
+          "id": "small-cell-identification-risk",
+          "description": "The design solicits or reports combinations of details/free text that expose an identifiable employee in a small cohort without mitigations."
+        },
+        {
+          "id": "coercive-or-consequential-use",
+          "description": "The invitation or content pressures participation or enables individual probation, performance, disciplinary, promotion, or employment decisions."
+        },
+        {
+          "id": "unresolved-access-retention",
+          "description": "The questionnaire proceeds to fielding while raw-answer access, linkability, recipients, or retention remain undocumented."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "Information Commissioner's Office, Employment practices and data protection: monitoring workers",
+          "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/employment/monitoring-workers/data-protection-and-monitoring-workers"
+        },
+        {
+          "name": "Information Commissioner's Office, Special category data: what are the rules?",
+          "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/lawful-basis/special-category-data/what-are-the-rules/"
+        },
+        {
+          "name": "U.S. Equal Employment Opportunity Commission, Retaliation",
+          "url": "https://www.eeoc.gov/retaliation"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html"
+        }
+      ],
+      "sourceNotes": "ICO employment guidance highlights the power imbalance between employers and workers and data protection obligations in worker monitoring; ICO data minimization supports collecting only what is needed. EEOC retaliation guidance informs caution about employment-linked participation and claims. The scenario is not legal advice: applicability varies by jurisdiction, and it supplies no verified confidentiality or anti-retaliation controls."
+    },
+    {
+      "id": "personal-planning-sensitive-disclosure-minimization",
+      "packageId": "personal-planning",
+      "brief": "A person wants a private-feeling, optional reflection to plan a manageable personal goal for the next month, such as learning a skill or organizing a hobby. They want to identify what matters to them, what resources are available, a possible obstacle, and one next step or a decision to wait. The goal, circumstances, and support network are unknown. The tool is not clinical care, therapy, crisis support, diagnosis, treatment, or a measure of wellbeing or motivation. KQA may store answers and the host has not provided a privacy notice or deletion schedule.",
+      "contextFacts": [
+        "The person may have limited time, money, access, privacy, or support; do not assume a stable schedule or resources.",
+        "The host, storage access, sharing, retention, deletion, and support pathway are unspecified; a warm tone cannot imply data confidentiality.",
+        "No clinical professional, emergency response, monitoring, referral, or follow-up process has been supplied.",
+        "No respondent testing has occurred and the proposed brief duration is unmeasured."
+      ],
+      "requiredIntents": [
+        {
+          "id": "respondent-controlled-purpose",
+          "intent": "Frame the questionnaire as optional, respondent-controlled planning for a goal the person chooses, including the option not to set a goal or defer."
+        },
+        {
+          "id": "resource-and-next-step-fit",
+          "intent": "Explore available resources and a small next step without assuming access, capacity, money, social support, or a fixed timeline."
+        },
+        {
+          "id": "sensitive-disclosure-minimization",
+          "intent": "Ask only for information needed to plan; avoid inviting diagnoses, trauma, financial details, exact location, or other sensitive disclosure."
+        },
+        {
+          "id": "skip-and-stop",
+          "intent": "Make every reflective answer skippable and provide a clear way to stop without penalty, interpretation, or pressure."
+        },
+        {
+          "id": "non-clinical-boundary",
+          "intent": "Do not assess symptoms, diagnose, recommend treatment, promise support, or frame barriers or non-action as a clinical or character deficit."
+        },
+        {
+          "id": "storage-privacy-unknown",
+          "intent": "Do not claim privacy, confidentiality, anonymity, or deletion; tell the host to resolve and communicate actual collection, access, retention, and deletion facts before use."
+        },
+        {
+          "id": "testing-and-interpretation",
+          "intent": "Require testing for tone, accessibility, burden, and comprehension; prohibit scoring, prediction, tracking, or decisions about the respondent."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use optional short text with a prompt to avoid details the respondent does not want stored, or broad non-sensitive categories.",
+        "Include a neutral “not sure,” “prefer not to answer,” or “I would rather wait” option where relevant.",
+        "Keep the questionnaire fully linear or add an optional follow-up about resources without asking why a resource is unavailable."
+      ],
+      "prohibitedAsks": [
+        "Diagnosis, symptoms, medication, trauma, suicidal thoughts, abuse, or crisis details.",
+        "Income, debt, exact location, relationship conflict, immigration status, or contact details not needed for the selected goal.",
+        "Names or details about other people, or proof of capability, access, effort, or commitment."
+      ],
+      "prohibitedClaims": [
+        "The tool is therapy, treatment, clinical screening, crisis support, or a validated wellbeing instrument.",
+        "Answers are private, anonymous, confidential, not stored, or automatically deleted without verified system/host facts.",
+        "Answers predict follow-through, motivation, success, mental health, or personal worth.",
+        "An entered goal or next step is a commitment or permission for follow-up."
+      ],
+      "hardGates": [
+        {
+          "id": "clinical-or-crisis-function",
+          "description": "The draft solicits clinical or crisis disclosures, assesses symptoms, diagnoses, recommends treatment, or suggests it can respond to an urgent safety concern."
+        },
+        {
+          "id": "unnecessary-sensitive-disclosure",
+          "description": "The draft requires or actively elicits sensitive information that is not necessary for optional personal planning."
+        },
+        {
+          "id": "false-privacy-or-storage-claim",
+          "description": "The draft promises privacy, anonymity, confidentiality, or deletion while actual storage/access/retention facts are unknown."
+        },
+        {
+          "id": "coercive-or-scored-self-reflection",
+          "description": "The draft prevents skipping/stopping, scores or ranks the person, or treats non-action as failure or evidence about them."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "Information Commissioner's Office, Data minimisation",
+          "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/"
+        },
+        {
+          "name": "Information Commissioner's Office, Special category data: what are the rules?",
+          "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/lawful-basis/special-category-data/what-are-the-rules/"
+        },
+        {
+          "name": "COSMIN, content validity guideline v2.0",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11541334/"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ],
+      "sourceNotes": "ICO guidance informs data minimization and heightened care if special-category information is elicited. COSMIN content-validity guidance is relevant only to the distinction between a defined construct and this non-measure planning prompt; it does not validate the questionnaire. Census A2 informs testing. The clinical boundary is an explicit scope decision for this scenario, not a claim derived from these privacy or methodology sources."
     }
   ],
   "limitations": [

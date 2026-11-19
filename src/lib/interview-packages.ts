@@ -1,6 +1,6 @@
 import { readDoc } from "./docs";
 
-export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/7" as const;
+export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/8" as const;
 
 export const INTERVIEW_PACKAGES = [
   {
@@ -54,10 +54,10 @@ export const INTERVIEW_PACKAGES = [
   {
     id: "health-service-experience", title: "Health service experience", level: 2,
     decisionFocus: "Improve access to or communication from a specific health service.",
-    respondents: "Patients or carers with recent experience of the named service.",
-    useWhen: "The host needs local, non-clinical feedback about service access or communication.",
-    notFor: "Symptom screening, diagnosis, clinical outcomes, urgent needs, or a substitute for a tested instrument.",
-    riskFlags: ["health-data minimization", "clinical and privacy review"], relatedPackages: ["service-improvement", "program-evaluation"],
+    respondents: "Patients or carers with recent experience of the named service, including family or unpaid carers where relevant.",
+    useWhen: "The host needs local, non-clinical feedback about service access or communication, including a bounded module about carers' experience accessing support services.",
+    notFor: "Symptom screening, diagnosis, clinical outcomes, urgent needs, caregiver needs assessment, eligibility, care planning, or a substitute for a tested instrument.",
+    riskFlags: ["health-data minimization", "third-party care-recipient data", "clinical and privacy review"], relatedPackages: ["service-improvement", "program-evaluation"],
   },
   {
     id: "personal-planning", title: "Personal planning", level: 2,
@@ -173,7 +173,7 @@ export async function getInterviewPackage(packageId?: InterviewPackageId, option
   const packageCatalog = INTERVIEW_PACKAGES.map(({ id, title, decisionFocus, respondents, useWhen, notFor, riskFlags, relatedPackages }) => ({
     id, title, decisionFocus, respondents, useWhen, notFor, riskFlags, relatedPackages,
   }));
-  const selectionGuidance = "Choose by the decision to be informed, respondent group, and collection context—not industry label alone. These are KQA self-completed questionnaire starting points, not moderated interview guides. Compare related packages when a brief overlaps. If purpose, audience, modality, or risk boundary is unclear, return the candidates and ask a concise clarifying question; do not invent a fit score or imply that a package is validated.";
+  const selectionGuidance = "Choose by the decision to be informed, respondent group, and collection context—not industry label alone. These are KQA self-completed questionnaire starting points, not moderated interview guides. Compare related packages when a brief overlaps. Carer support-service feedback can fit health-service experience; formal caregiver needs assessment, eligibility, safeguarding, and care planning remain outside scope. If purpose, audience, modality, or risk boundary is unclear, return the candidates and ask a concise clarifying question; do not invent a fit score or imply that a package is validated.";
   if (options.catalogOnly) {
     if (packageId) return null;
     return { packageId: null, packageVersion: INTERVIEW_PACKAGE_VERSION, packageCatalog, selectionGuidance, catalogOnly: true };

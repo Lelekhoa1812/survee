@@ -36,7 +36,7 @@ const resultsFor = () => ({
 
 describe("package draft development benchmark", () => {
   it("loads the versioned corpus against the current catalog and preserves public-development limits", () => {
-    expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length);
+    expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length + 4);
     const report = scoreResults(benchmark, resultsFor());
     expect(report.developmentOnly).toBe(true);
     expect(report.hardGateReview.flaggedCaseCount).toBe(0);
@@ -47,7 +47,11 @@ describe("package draft development benchmark", () => {
 
 
   it("covers each current package with a source-noted brief and explicit boundaries", () => {
-    expect(new Set(benchmark.cases.map((item: any) => item.packageId)).size).toBe(INTERVIEW_PACKAGES.length);
+    expect(new Set(benchmark.cases.map((item: any) => item.packageId))).toEqual(new Set(INTERVIEW_PACKAGES.map((item) => item.id)));
+    expect(benchmark.cases).toHaveLength(INTERVIEW_PACKAGES.length + 4);
+    for (const id of ["industrial-multishift-contractor-process-feedback", "multilingual-public-consultation-language-equivalence", "employee-experience-power-imbalance-small-cell-privacy", "personal-planning-sensitive-disclosure-minimization"]) {
+      expect(benchmark.cases.some((item: any) => item.id === id)).toBe(true);
+    }
     for (const item of benchmark.cases) {
       expect(item.sourceNotes).toBeTruthy();
       expect(item.methodologySources.length).toBeGreaterThan(0);
