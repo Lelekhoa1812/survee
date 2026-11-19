@@ -79,7 +79,7 @@ In development the legacy Axion owner login falls back to `admin@axion.local` / 
 | `npm run docs` | Regenerate diagnostics, the manifest JSON Schema, and the portable author skill's reference copies |
 | `npm run a11y:audit` | Audit public pages at responsive widths with axe-core and the installed Chrome; see `docs/DESIGN_SYSTEM.md` for scope and limits |
 | `npm run audit:tenant-migration` | Run the owner-only Axion tenant migration audit; review its output before changing the legacy-fallback setting |
-| `npm run e2e -- <baseUrl> <token> <outDir>` | Real-Chrome end-to-end run of a respondent link |
+| `npm run e2e -- <baseUrl> <token> <outDir>` | Real-Chrome respondent check for answer persistence, keyboard ranking and required-answer submission |
 | `npm run e2e:offline -- <baseUrl> <token>` | Offline, refusal, concurrency-window and submit checks against a disposable respondent |
 | `npm run e2e:concurrency -- <baseUrl> <token>` | Concurrent answer-write check against a disposable respondent |
 | `npm run e2e:security -- <baseUrl> [email] [password]` | Black-box auth, origin and request-size checks; add `--throttle` only on a disposable local account |

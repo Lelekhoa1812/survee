@@ -33,14 +33,36 @@ try {
     click('[data-kqa="priority"][value="accuracy"]');
     click('[data-kqa="channels"][value="email"]');
     click('[data-kqa="channels"][value="phone"]');
-    const set = (sel, v) => { const el = document.querySelector(sel); if (!el) return; el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); };
-    set('[data-kqa="company"]', "Acme Pty Ltd");
-    set('[data-kqa="goal"]', "Ship it");
   });
+  await frame.focus('[data-kqa="company"]');
+  await page.keyboard.type("Acme Pty Ltd");
+  await frame.focus('[data-kqa="goal"]');
+  await page.keyboard.type("Ship it");
+
+  // Exercise the real browser keyboard path for ranking, including focus after moving an item.
+  const rankMoveDown = 'ol[data-kqa="tradeoffs"] li:first-child button[data-kqa-rank-move="down"]';
+  await frame.waitForSelector(rankMoveDown);
+  await frame.focus(rankMoveDown);
+  await page.keyboard.press("Enter");
+  const ranked = await frame.evaluate(() => ({
+    order: [...document.querySelectorAll('ol[data-kqa="tradeoffs"] li')].map((item) => item.getAttribute("data-value")),
+    focused: document.activeElement?.getAttribute("data-kqa-rank-move"),
+    focusedItem: document.activeElement?.closest("li")?.getAttribute("data-value"),
+  }));
+  check("rank can be reordered with the keyboard and retains useful focus", JSON.stringify(ranked.order) === JSON.stringify(["speed", "quality", "cost"]) && ranked.focused === "up" && ranked.focusedItem === "quality", JSON.stringify(ranked));
+
   await page.waitForFunction(() => /Saved/.test(document.querySelector(".save-state")?.textContent ?? ""), { timeout: 8000 });
   check("autosave reports Saved", true);
   const counted = await page.$eval(".rs-progress small", (e) => e.textContent);
   check("progress counter updates", /^[1-9]\d* of/.test(counted ?? ""), counted);
+  await page.waitForFunction(async (t) => {
+    const response = await fetch(`/api/p/${t}`);
+    if (!response.ok) return false;
+    const payload = await response.json();
+    return JSON.stringify(payload.answers.tradeoffs?.value) === JSON.stringify(["speed", "quality", "cost"]);
+  }, { timeout: 8000 }, token);
+  const savedRank = await page.evaluate(async (t) => (await (await fetch(`/api/p/${t}`)).json()).answers.tradeoffs?.value, token);
+  check("rank order is persisted", JSON.stringify(savedRank) === JSON.stringify(["speed", "quality", "cost"]), JSON.stringify(savedRank));
   await page.screenshot({ path: `${out}/respondent-answered.png` });
 
   // reload: answers must come back
@@ -58,6 +80,7 @@ try {
   await page.screenshot({ path: `${out}/respondent-confirm.png` });
   const title = await page.$eval(".modal h2", (e) => e.textContent);
   log("INFO  confirm dialog:", title);
+  check("required answers reach the submit confirmation", /Submit your answers/.test(title), title);
   if (/Submit your answers/.test(title)) {
     await page.click(".modal .btn.accent");
     await page.waitForSelector(".rs-banner.ok", { timeout: 8000 });
@@ -68,9 +91,6 @@ try {
     await page.reload({ waitUntil: "networkidle2" });
     await page.waitForSelector(".rs-banner.ok");
     check("locked state survives reload", true);
-  } else {
-    await page.click(".modal .btn.primary");
-    log("INFO  required answers missing, submit blocked as designed");
   }
   check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } finally {
