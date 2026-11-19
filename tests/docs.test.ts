@@ -10,6 +10,7 @@ describe("agent documentation bundle", () => {
     ["DESIGN_SYSTEM.md", "DESIGN_SYSTEM.md"],
     ["INTERVIEW_PACKAGES.md", "INTERVIEW_PACKAGES.md"],
     ["QUESTION_BLUEPRINT.md", "QUESTION_BLUEPRINT.md"],
+    ["REPEATABLE_RECORDS_DESIGN.md", "kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md"],
     ["MCP.md", "MCP.md"],
     ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
     ["questionnaire-authoring-cases.json", "evals/questionnaire-authoring-cases.json"],
@@ -142,6 +143,7 @@ describe("agent documentation bundle", () => {
 
   it("publishes the portable questionnaire author skill and includes it in the bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-author-skill" && doc.file === "kqa-questionnaire-author/SKILL.md")).toBe(true);
+    expect(DOCS.some((doc) => doc.slug === "repeatable-records-design" && doc.file === "kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md")).toBe(true);
     expect(DOCS.some((doc) => doc.slug === "question-blueprint" && doc.file === "QUESTION_BLUEPRINT.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("name: kqa-questionnaire-author");
@@ -154,6 +156,8 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("pre-submit **Check your answers** review");
     expect(bundle).toContain("does not simulate respondent input");
     expect(bundle).toContain("<!-- QUESTION_BLUEPRINT.md -->");
+    expect(bundle).toContain("<!-- kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md -->");
+    expect(bundle).toContain("The proposal is not a shipped KQA capability");
   });
 
   it("ships version-matched references for the standalone questionnaire author skill", async () => {
@@ -164,6 +168,7 @@ describe("agent documentation bundle", () => {
     expect(skill).toContain("references/PACKAGE_DRAFT_BENCHMARK.md");
     expect(skill).toContain("references/AUTHORING_TRUST_BOUNDARY_EVAL.md");
     expect(skill).toContain("references/QUESTION_BLUEPRINT.md");
+    expect(skill).toContain("references/REPEATABLE_RECORDS_DESIGN.md");
     const ignoreLinkTargets = (markdown: string) => markdown.replace(/(\]\()(<[^>]+>|[^)\s]+)(?=[\s)])/g, "$1LINK");
     for (const [copy, source] of skillReferences) {
       expect(ignoreLinkTargets(await readDoc(`kqa-questionnaire-author/references/${copy}`) ?? "")).toBe(ignoreLinkTargets(await readDoc(source) ?? ""));
