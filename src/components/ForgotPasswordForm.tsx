@@ -29,7 +29,7 @@ export function ForgotPasswordForm() {
     <form className="card auth-card" onSubmit={submit}>
       <div className="stack" style={{ gap: 10 }}>
         <BrandMark size={40} wordmark />
-        <div><h1>Forgot your password?</h1><p className="muted" style={{ marginTop: 4 }}>We’ll email a password reset link if this address belongs to a verified KQA account. It expires after 30 minutes and works once.</p></div>
+        <div><h1>Forgot your password?</h1><p className="muted" style={{ marginTop: 4 }}>We’ll email a password reset link if this address belongs to a verified survee account. It expires after 30 minutes and works once.</p></div>
       </div>
       <div className="field">
         <label htmlFor="reset-email">Email</label>

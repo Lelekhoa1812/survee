@@ -38,7 +38,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         <div className="card empty">
           <div className="ico"><Icon name="users" size={24} /></div>
           <h3>No people yet</h3>
-          <p>Add each person who will answer. KQA creates a private link, and you can email it from here or copy it.</p>
+          <p>Add each person who will answer. survee creates a private link, and you can email it from here or copy it.</p>
           <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>
         </div>
       ) : (

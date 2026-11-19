@@ -1,6 +1,6 @@
 # Service improvement example review
 
-**Status:** Illustrative example only; **NOT validated and NOT ready to field**. This questionnaire was drafted from package `service-improvement` in `kqa-interview-packages/7`; that version label records the source library at the time and predates the current `kqa-interview-packages/12` guidance. The KQA static checker passing establishes markup and manifest consistency only. No respondent pretest, task-based usability test, live interaction test, accessibility audit, or domain review has been performed.
+**Status:** Illustrative example only; **NOT validated and NOT ready to field**. This questionnaire was drafted from package `service-improvement` in `kqa-interview-packages/7`; that version label records the source library at the time and predates the current `kqa-interview-packages/12` guidance. The survee static checker passing establishes markup and manifest consistency only. No respondent pretest, task-based usability test, live interaction test, accessibility audit, or domain review has been performed.
 
 ## Scope and assumptions
 
@@ -9,7 +9,7 @@
 - **Audience/unit:** Assumed service users who personally experienced the defined service in the reference period; one respondent describing one most-recent interaction. Confirm age, eligibility, proxy responses, language, disability/access needs, and exclusions with the service owner. Do not assume all users are represented by the invite list.
 - **Purpose and risk class:** Intended as routine, non-decisional service feedback. The accountable host must confirm this classification. If feedback is used for an individual decision or collects sensitive/regulated material, stop and use the appropriate separately governed process and reviews.
 - **Collection design:** Qualitative/local service-improvement learning is assumed, not population estimation. No frame, recruitment channel, selection method, collection window, or reporting plan has been supplied. Do not claim representativeness or a margin of sampling error.
-- **Format:** Seven optional items in three sections. Native KQA controls and declarative routing are used. There is no score, ranked respondent, service ticket, live alert, or promised individual response.
+- **Format:** Seven optional items in three sections. Native survee controls and declarative routing are used. There is no score, ranked respondent, service ticket, live alert, or promised individual response.
 - **Burden:** Target completion time: `[host-set target]`. **Observed completion time: unmeasured.** Do not present an estimate as measured evidence.
 
 ## Decision-to-question map
@@ -23,7 +23,7 @@
 
 ### Routing and retained-answer review
 
-`barrier` is eligible only when `completion` is `partly` or `no`. It is optional while eligible. If completion changes to `yes` or `unsure`, `barrier` becomes inactive; any earlier value is retained, excluded from current eligible-question progress and current-rule analysis, and may reappear if the answer changes back. The page discloses this behavior, and respondents can inspect and clear retained answers in KQA's pre-submit answer review.
+`barrier` is eligible only when `completion` is `partly` or `no`. It is optional while eligible. If completion changes to `yes` or `unsure`, `barrier` becomes inactive; any earlier value is retained, excluded from current eligible-question progress and current-rule analysis, and may reappear if the answer changes back. The page discloses this behavior, and respondents can inspect and clear retained answers in survee's pre-submit answer review.
 
 | `completion` answer | Expected eligible questions | Required while eligible | Progress contribution | Review/export interpretation |
 |---|---|---|---|---|
@@ -44,7 +44,7 @@ Before fielding, test each route, a change from `partly`/`no` to `yes` or `unsur
 - **Collection mode/language:** `[KQA private-link setup, languages, accessible alternatives, and relevant administration conditions]`
 - **Field dates:** `[start and end date]`
 - **Target completion time:** `[set before testing]`; **observed time:** unmeasured until timed with intended respondents.
-- **Monitoring:** `[named host owner, review cadence, available manual completion/disposition checks, anomaly/urgent-report route, and stop/extend criteria]`. KQA does not provide live response notifications, item-display telemetry, or a monitored request/incident pathway.
+- **Monitoring:** `[named host owner, review cadence, available manual completion/disposition checks, anomaly/urgent-report route, and stop/extend criteria]`. survee does not provide live response notifications, item-display telemetry, or a monitored request/incident pathway.
 - **Analysis/reporting:** `[name analyst and intended audience; define suppression/privacy rules for small groups and free-text handling; describe how results and limitations will be reported back]`. Do not treat opt-in response counts as representative estimates.
 
 ## Respondent notice, privacy and accountable owners
@@ -60,13 +60,13 @@ Replace the visible notice placeholder with a host-approved, accurate notice bef
 - **Accountable service owner / fielding approval:** `[name or role / date]`
 - **Methodology, accessibility and domain reviewers as applicable:** `[names or roles / disposition / date]`
 
-KQA answers are associated with participant records and hosts may review person-level responses; this example makes no anonymity promise. Confirm whether an ethics/HRPP/IRB determination is needed for the planned activity. The authoring agent does not determine that. Any unresolved material purpose, access, use, retention or contact fact blocks fielding.
+survee answers are associated with participant records and hosts may review person-level responses; this example makes no anonymity promise. Confirm whether an ethics/HRPP/IRB determination is needed for the planned activity. The authoring agent does not determine that. Any unresolved material purpose, access, use, retention or contact fact blocks fielding.
 
 ## Pre-field validation checklist
 
 Every item below is **not yet tested** unless evidence and reviewer are added. This example remains illustrative and **NOT validated** until required reviews and tests are completed.
 
-- [x] Static KQA checker: passed with 0 errors, 0 warnings, 0 notes (`npm run check -- docs/examples/service-improvement.kqa.html --agent`). This is structural validation only.
+- [x] Static survee checker: passed with 0 errors, 0 warnings, 0 notes (`npm run check -- docs/examples/service-improvement.kqa.html --agent`). This is structural validation only.
 - [ ] Replace all `[bracketed placeholders]`; host-approved notice and actual service-specific labels match throughout.
 - [ ] Accountable host confirms routine-learning classification and use boundary; no individual decisions, incident reporting, or urgent response uses.
 - [ ] Sample frame, selection method, eligibility, coverage gaps, languages, collection dates, analysis audience, and field monitoring plan completed.
@@ -75,6 +75,6 @@ Every item below is **not yet tested** unless evidence and reviewer are added. T
 - [ ] Cognitive pretest with in-scope service users covers comprehension, recall, judgment and response selection; findings, severity, revisions, and unresolved issues recorded.
 - [ ] End-to-end task sessions with intended users record completion, hesitation, errors, recovery and misunderstanding; results kept separate from cognitive-pretest evidence.
 - [ ] Keyboard-only and screen-reader review, focus visibility, labels, zoom/reflow at 360–390 px, dark mode, and reduced-motion behavior checked by an appropriate reviewer. No accessibility conformance claim is made from this checklist.
-- [ ] Test every routing row and route change above in KQA, including answer restore, hidden-answer inspection and independent clearing, progress, review, and export behavior.
+- [ ] Test every routing row and route change above in survee, including answer restore, hidden-answer inspection and independent clearing, progress, review, and export behavior.
 - [ ] Review text for local service fit, translation/language needs, response option coverage, sensitive-data minimization, and analysis/reporting limits.
 - [ ] Host records fielding decision, remaining limitations, reviewer identities/roles, dates, and dispositions. A checker pass alone is not approval to field.

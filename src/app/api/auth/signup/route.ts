@@ -7,7 +7,7 @@ import { createPendingSignup, removePendingSignup } from "@/lib/repo/accounts";
 import { consumeRateLimit } from "@/lib/repo";
 import { headers } from "next/headers";
 
-const GENERIC = "If this address is eligible for a KQA workspace, check its inbox for next steps.";
+const GENERIC = "If this address is eligible for a survee workspace, check its inbox for next steps.";
 
 function clientIp(h: Headers): string {
   // Vercel supplies this independently of proxy-overwritable x-forwarded-for.
@@ -20,7 +20,7 @@ function escapeHtml(value: string): string {
 }
 
 export async function POST(req: Request) {
-  if (!(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
+  if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ email?: unknown; password?: unknown; tenantName?: unknown }>(req, 8 * 1024);
   if (!body.ok) return body.res;
   const emailRaw = str(body.data.email, 254) ?? "";
@@ -62,15 +62,15 @@ export async function POST(req: Request) {
         const verifyUrl = new URL("/verify", base.origin);
         verifyUrl.hash = new URLSearchParams({ token }).toString();
         return {
-          subject: "Verify your KQA account",
-          text: `Verify your KQA account and create the ${tenantName} workspace: ${verifyUrl.toString()}\n\nThis link expires in 30 minutes. If you did not request this, you can ignore this message.`,
-          html: `<p>Verify your KQA account and create the <strong>${escapeHtml(tenantName)}</strong> workspace.</p><p><a href="${escapeHtml(verifyUrl.toString())}">Verify email address</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this message.</p>`,
+          subject: "Verify your survee account",
+          text: `Verify your survee account and create the ${tenantName} workspace: ${verifyUrl.toString()}\n\nThis link expires in 30 minutes. If you did not request this, you can ignore this message.`,
+          html: `<p>Verify your survee account and create the <strong>${escapeHtml(tenantName)}</strong> workspace.</p><p><a href="${escapeHtml(verifyUrl.toString())}">Verify email address</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this message.</p>`,
         };
       })()
     : {
-        subject: "A KQA account sign-in was requested",
-        text: `Someone tried to create a KQA workspace with this email address, but an account is already associated with it. If this was you, sign in at ${base.origin}/admin/login or reset your password at ${base.origin}/forgot-password. If you did not request this, you can ignore this message.`,
-        html: `<p>Someone tried to create a KQA workspace with this email address, but an account is already associated with it.</p><p>If this was you, <a href="${escapeHtml(`${base.origin}/admin/login`)}">sign in</a> or <a href="${escapeHtml(`${base.origin}/forgot-password`)}">reset your password</a>.</p><p>If you did not request this, you can ignore this message.</p>`,
+        subject: "A survee account sign-in was requested",
+        text: `Someone tried to create a survee workspace with this email address, but an account is already associated with it. If this was you, sign in at ${base.origin}/admin/login or reset your password at ${base.origin}/forgot-password. If you did not request this, you can ignore this message.`,
+        html: `<p>Someone tried to create a survee workspace with this email address, but an account is already associated with it.</p><p>If this was you, <a href="${escapeHtml(`${base.origin}/admin/login`)}">sign in</a> or <a href="${escapeHtml(`${base.origin}/forgot-password`)}">reset your password</a>.</p><p>If you did not request this, you can ignore this message.</p>`,
       };
   try {
     await sendSmtp({
@@ -81,6 +81,6 @@ export async function POST(req: Request) {
     return generic();
   } catch {
     if (pending.ok) await removePendingSignup(pending.id).catch(() => {});
-    return fail(503, "We could not send the KQA message. Try again later.");
+    return fail(503, "We could not send the survee message. Try again later.");
   }
 }

@@ -33,7 +33,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug?: st
       <div className="page-head">
         <div>
           <h1>Guide</h1>
-          <p>Versioned format rules, workflow, design guidance, packages and examples for building a KQA questionnaire. Run the checker and complete the appropriate human, accessibility, respondent and domain reviews before use.</p>
+          <p>Versioned format rules, workflow, design guidance, packages and examples for building a survee questionnaire. Run the checker and complete the appropriate human, accessibility, respondent and domain reviews before use.</p>
         </div>
         <div className="right row wrap">
           <CopyBundle text={bundle} />

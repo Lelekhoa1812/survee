@@ -3,7 +3,7 @@ import { JoinWorkspacePanel } from "@/components/JoinWorkspacePanel";
 import { adminSession } from "@/lib/http";
 import { getWorkspaceInvitation } from "@/lib/repo/workspaces";
 
-export const metadata = { title: "Join a KQA workspace" };
+export const metadata = { title: "Join a survee workspace" };
 export const dynamic = "force-dynamic";
 
 export default async function JoinWorkspacePage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {

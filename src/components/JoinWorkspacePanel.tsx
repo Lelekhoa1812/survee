@@ -90,7 +90,7 @@ export function JoinWorkspacePanel({ token, tenantName, email, role, expiresAt, 
         </div>
       ) : (
         <form className="stack" onSubmit={createAccount}>
-          <div className="callout">This invitation link verifies access to {email}. Choose a password to create your KQA account and join {tenantName}.</div>
+          <div className="callout">This invitation link verifies access to {email}. Choose a password to create your survee account and join {tenantName}.</div>
           <div className="field"><label htmlFor="join-email">Invited email</label><input id="join-email" className="input" value={email} readOnly /></div>
           <div className="field"><label htmlFor="join-password">Password</label><PasswordInput id="join-password" className="input" autoComplete="new-password" minLength={8} maxLength={200} value={password} onChange={(event) => setPassword(event.target.value)} required /><span className="hint">Use at least 8 characters.</span></div>
           <div className="field"><label htmlFor="join-confirm">Confirm password</label><PasswordInput id="join-confirm" className="input" autoComplete="new-password" minLength={8} maxLength={200} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></div>

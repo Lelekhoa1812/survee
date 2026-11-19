@@ -19,7 +19,7 @@ export default async function Dashboard() {
         <div>
           <h1>Interviews</h1>
           <p>{interviews.length === 0
-            ? "Turn a questionnaire file into a hosted interview. KQA saves answers as people respond and gives you one place to review and export them."
+            ? "Turn a questionnaire file into a hosted interview. survee saves answers as people respond and gives you one place to review and export them."
             : canManage ? "Each interview is one questionnaire. Email each person their private link, or copy it, and review what they answer." : "Review interview setup and aggregate response analysis for your workspace."}</p>
         </div>
         {canManage && interviews.length > 0 && <Link href="/admin/new" className="btn primary right"><Icon name="plus" size={16} /> New interview</Link>}
@@ -45,7 +45,7 @@ export default async function Dashboard() {
           <div className="first-run-intro">
             <div className="eyebrow">Your first interview</div>
             <h2 id="first-run-title">Start with a questionnaire file</h2>
-            <p>KQA hosts your HTML questionnaire, checks it before use, and gives each respondent a private link. Answers save as they go.</p>
+            <p>survee hosts your HTML questionnaire, checks it before use, and gives each respondent a private link. Answers save as they go.</p>
           </div>
           <ol className="first-run-steps">
             <li className="first-run-step">
@@ -53,7 +53,7 @@ export default async function Dashboard() {
                 <span className="first-run-number" aria-hidden="true">1</span>
                 <h3>Get a questionnaire</h3>
               </div>
-              <p>Already have a KQA HTML file? Check it in the next step. To make one, use the starter template or give the Format guide bundle to an AI agent.</p>
+              <p>Already have a survee HTML file? Check it in the next step. To make one, use the starter template or give the Format guide bundle to an AI agent.</p>
               <div className="first-run-links">
                 <Link href="/admin/docs" className="btn sm first-run-action">Format guide and AI agent bundle</Link>
                 <a className="first-run-text-link" href="/api/docs/template/starter.kqa.html" download>Download starter template</a>

@@ -51,10 +51,10 @@ export async function POST(req: Request) {
   try {
     await sendSmtp({
       to: parsed.email,
-      subject: "Verify your KQA account email",
+      subject: "Verify your survee account email",
       messageId: newMessageId(smtp.user),
-      text: `Verify this email address for your KQA account: ${url.toString()}\n\nThis link expires in 30 minutes. If you did not request this, you can ignore this message.`,
-      html: `<p>Verify this email address for your KQA account.</p><p><a href="${escapeHtml(url.toString())}">Verify email address</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this message.</p>`,
+      text: `Verify this email address for your survee account: ${url.toString()}\n\nThis link expires in 30 minutes. If you did not request this, you can ignore this message.`,
+      html: `<p>Verify this email address for your survee account.</p><p><a href="${escapeHtml(url.toString())}">Verify email address</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this message.</p>`,
     });
     return json({ ok: true, message: "We sent a verification link to the new address. Your current sign-in stays active until it is verified." });
   } catch {

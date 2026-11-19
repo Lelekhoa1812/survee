@@ -1,6 +1,8 @@
-# KQA documentation map and maintenance
+# survee documentation map and maintenance
 
-The docs are part of KQA's authoring and operating interface. Keep the source code, host UI, MCP tool schemas, help pages, and exported agent bundle consistent when behavior changes. The root [README](../README.md) is the setup and deployment guide; this page is for contributors maintaining project documentation.
+survee was previously called KQA. Existing KQA format markers, APIs, configuration keys, and skill paths remain supported for compatibility.
+
+The docs are part of survee's authoring and operating interface. Keep the source code, host UI, MCP tool schemas, help pages, and exported agent bundle consistent when behavior changes. The root [README](../README.md) is the setup and deployment guide; this page is for contributors maintaining project documentation.
 
 ## Current source of truth
 

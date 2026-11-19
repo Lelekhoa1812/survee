@@ -23,7 +23,7 @@ function where(d: Diagnostic): string {
 export function toAgentMarkdown(r: Report): string {
   const lines: string[] = [];
   const name = r.fileName ?? "questionnaire.html";
-  lines.push(`# KQA checker report for ${name}`);
+  lines.push(`# survee checker report for ${name}`);
   lines.push("");
   lines.push(`Checker ${r.checkerVersion} · format ${r.formatVersion} · checked ${r.checkedAt}`);
   lines.push(`**Result: ${summaryLine(r)}**`);
@@ -31,7 +31,7 @@ export function toAgentMarkdown(r: Report): string {
   lines.push("## Instructions for the agent that wrote this file");
   lines.push("");
   if (!r.ok) {
-    lines.push("You produced an HTML questionnaire for the KQA app. The checker found blocking errors. Work through the findings below and return a corrected file.");
+    lines.push("You produced an HTML questionnaire for the survee app. The checker found blocking errors. Work through the findings below and return a corrected file.");
   } else if (r.counts.warning > 0) {
     lines.push("This file passes the blocking checks, but has warnings to review before it is shared. Work through the findings below and return a corrected file if you make changes.");
   } else {

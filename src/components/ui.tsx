@@ -41,25 +41,18 @@ export function Icon({ name, size = 18, className }: { name: keyof typeof PATHS 
 }
 
 export function BrandMark({ size = 28, wordmark = false }: { size?: number; wordmark?: boolean }) {
-  const clipId = `kqa-leg-${useId().replace(/:/g, "")}`;
   const mark = (
     <svg className="brand-mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <defs>
-        <clipPath id={clipId}><rect x="10.2" y="0" width="22" height="32" /></clipPath>
-      </defs>
       <rect width="32" height="32" rx="8" fill="currentColor" />
-      <g fill="none" strokeWidth="3.85" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M11.15 15.25 22.15 7.75" stroke="var(--mark-ink)" />
-        <path d="M6.2 11.4 22.85 24.35" stroke="var(--mark-leg)" clipPath={`url(#${clipId})`} />
-        <path d="M11.15 7.35v17.3" stroke="var(--mark-ink)" />
-      </g>
+      <path d="M8 9.5h16v10H15l-4.5 3v-3H8z" fill="none" stroke="var(--mark-ink)" strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="m12 14.5 2.5 2.5 5.5-5.5" fill="none" stroke="var(--mark-leg)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
   if (!wordmark) return mark;
   return (
     <span className="brand-lockup" style={{ fontSize: Math.round(size * 0.56), gap: Math.round(size * 0.28) }}>
       {mark}
-      <span className="brand-word">KQA</span>
+      <span className="brand-word">survee</span>
     </span>
   );
 }

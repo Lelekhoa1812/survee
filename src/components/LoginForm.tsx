@@ -52,7 +52,7 @@ export function LoginForm({ next }: { next: string }) {
         <Link href="/forgot-password" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Forgot your password?</Link>
       </p>
       <p className="muted" style={{ margin: 0, textAlign: "center", fontSize: 13.5 }}>
-        New to KQA? <Link href="/signup" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Create a workspace</Link>
+        New to survee? <Link href="/signup" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 3 }}>Create a workspace</Link>
       </p>
     </form>
   );

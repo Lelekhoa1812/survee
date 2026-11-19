@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   try {
     await sendSmtp({
       to: parsed.email,
-      subject: `Join ${session.tenantName} on KQA`,
+      subject: `Join ${session.tenantName} on survee`,
       text: `You have been invited to join ${session.tenantName} as a workspace ${role}. Accept the invitation: ${joinUrl.toString()}\n\nThis link expires in 7 days. If you did not expect this invitation, you can ignore this message.`,
       html: `<p>You have been invited to join <strong>${escapeHtml(session.tenantName)}</strong> as a workspace ${role}.</p><p><a href="${escapedUrl}">Accept the invitation</a></p><p>This link expires in 7 days. If you did not expect this invitation, you can ignore this message.</p>`,
       messageId: newMessageId(smtp.user),

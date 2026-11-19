@@ -1,6 +1,8 @@
-# KQA
+# survee
 
-Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file supports single choice, checkboxes, short and long text, dropdown, number, scale, date, full-order ranking of 2–8 options, and bounded repeatable records; choice answers and whether an answer is present can drive declarative conditional follow-ups. Repeated rows remain part of one respondent and are excluded from default aggregate summaries. KQA does not score answers or rank people.
+survee was previously known as KQA. Existing KQA format markers, integration identifiers and configuration names continue to work.
+
+Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file supports single choice, checkboxes, short and long text, dropdown, number, scale, date, full-order ranking of 2–8 options, and bounded repeatable records; choice answers and whether an answer is present can drive declarative conditional follow-ups. Repeated rows remain part of one respondent and are excluded from default aggregate summaries. survee does not score answers or rank people.
 
 | Portal | Address | For |
 |---|---|---|
@@ -9,11 +11,11 @@ Host-run interviews. Upload an HTML questionnaire with optional reusable workspa
 
 ## Why it exists
 
-Interactive HTML questionnaires are great to design but lose answers when they keep state in the browser. KQA keeps the design and moves the state to a database. KQA renders the authored questionnaire in a sandboxed frame, subject to the format's documented sandbox limits; a small runtime binds its controls to the answer store.
+Interactive HTML questionnaires are great to design but lose answers when they keep state in the browser. survee keeps the design and moves the state to a database. survee renders the authored questionnaire in a sandboxed frame, subject to the format's documented sandbox limits; a small runtime binds its controls to the answer store.
 
 ## The format, for people and for AI agents
 
-Everything an agent needs to write a file that KQA accepts is in [`docs/`](docs):
+Everything an agent needs to write a file that survee accepts is in [`docs/`](docs):
 
 For contributors, [`docs/README.md`](docs/README.md) maps current source-of-truth docs to implementation and describes how to keep the guides synchronized.
 
@@ -102,7 +104,7 @@ The respondent E2E, offline, concurrency, security and state-screenshot checks c
 
 ### Security model
 
-* Uploaded HTML is untrusted. It runs in a sandboxed iframe with a strict Content-Security-Policy that blocks network calls, remote images, framing and form posts. Stored same-origin KQA image URLs are allowed so a questionnaire can show workspace images. The page can only talk to the app with `postMessage`, and the app accepts messages only from its own frame.
+* Uploaded HTML is untrusted. It runs in a sandboxed iframe with a strict Content-Security-Policy that blocks network calls, remote images, framing and form posts. Stored same-origin survee image URLs are allowed so a questionnaire can show workspace images. The page can only talk to the app with `postMessage`, and the app accepts messages only from its own frame.
 * Respondent links carry a 144-bit random token. Tokens are the credential, so keep links private. The link in an invite email is that credential. A host can issue a new link for a person at any time; the mailed link then stops working and is not sent again on its own.
 * One verified account can join several workspaces through emailed invitations and switch between active memberships from the host navigation. Owners and admins can revoke workspace memberships; an owner is required to remove another owner, and the last owner is protected. Removal leaves the account and other workspace memberships intact, while workspace sessions and linked OAuth access stop working. Each session is bound to one workspace; passwords use salted scrypt hashes, sessions are HMAC-signed, httpOnly and same-site, check persisted membership and credential version, and expire after 12 hours. Mutating calls check request origin; login, signup, email changes and password resets are throttled.
 * Agents use `POST /api/mcp` with `Authorization: Bearer`. The server accepts `KQA_MCP_TOKEN` for Axion or a tenant-scoped key from Settings. That credential is not the admin password and not the session cookie. A missing bearer is rejected before the database is touched. See [`docs/MCP.md`](docs/MCP.md). `/_next/mcp` is only the Next.js development diagnostics endpoint.

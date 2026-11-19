@@ -1,6 +1,6 @@
 # Personal planning example: design and review record
 
-**Status: illustrative draft only — NOT validated.** This artifact demonstrates a low-stakes, respondent-controlled personal reflection using KQA's supported controls and bounded routing. It is not a validated instrument, clinical tool, diagnostic screen, treatment plan, coaching protocol, or measure of an individual's ability or worth. Do not use answers to make decisions about access, employment, eligibility, care, or other consequential outcomes.
+**Status: illustrative draft only — NOT validated.** This artifact demonstrates a low-stakes, respondent-controlled personal reflection using survee's supported controls and bounded routing. It is not a validated instrument, clinical tool, diagnostic screen, treatment plan, coaching protocol, or measure of an individual's ability or worth. Do not use answers to make decisions about access, employment, eligibility, care, or other consequential outcomes.
 
 ## Scope and assumptions
 
@@ -11,7 +11,7 @@
 - Wording avoids asking for names, health details, or other sensitive information. Respondents are reminded to leave out details they do not want to share. Hosts should still review their collection context and provide a suitable notice before use.
 - The instrument intentionally does not promise a specific completion time. **Target time: unmeasured**; measure through respondent testing before publishing an estimate.
 - There is no scoring or ranking. The 1–5 answer is a present-moment self-check only; it must not be summed, benchmarked, interpreted as a trait, or used to compare people.
-- The one routed detail question appears only for a substantive focus choice. If the respondent changes their focus to “keep the focus private” or clears it, the former answer is retained by KQA while inactive and may reappear if the route becomes eligible again. The on-page disclosure and KQA review flow explain that retained answers can be inspected and cleared.
+- The one routed detail question appears only for a substantive focus choice. If the respondent changes their focus to “keep the focus private” or clears it, the former answer is retained by survee while inactive and may reappear if the route becomes eligible again. The on-page disclosure and survee review flow explain that retained answers can be inspected and cleared.
 - The example uses all-at-once presentation so respondents can move among sections with ordinary links. The package does not require a particular visual design or the use of routing.
 
 ## Decisions, question map, and interpretation boundaries
@@ -33,16 +33,16 @@
 - **Sample placeholder:** [define intended respondent group, inclusion criteria, recruitment approach, target number, and rationale]. Do not describe the draft as tested until sessions have taken place and evidence is recorded.
 - **Cognitive interview placeholder:** [record dates, number and context of participants, language/mode, probes used, interpretation differences, revisions, and unresolved issues]. Probe what “manageable,” “a small next step,” and the topic options mean to intended respondents. Ask whether “nothing comes to mind” and leaving an item blank feel distinct and appropriate.
 - **Usability/accessibility placeholder:** [record keyboard-only, screen-reader, zoom/reflow, mobile, and low-digital-confidence checks separately from cognitive findings]. Confirm that routed content and the retained-answer disclosure are understood and discoverable.
-- **Functional test placeholder:** select each focus value, verify the detail route and route changes, refresh/reopen to check save/restore, test checkbox cap behavior, inspect Review answers and exports, clear retained inactive text, then test submission and locked state in a real KQA interview. A static checker does not cover these paths.
+- **Functional test placeholder:** select each focus value, verify the detail route and route changes, refresh/reopen to check save/restore, test checkbox cap behavior, inspect Review answers and exports, clear retained inactive text, then test submission and locked state in a real survee interview. A static checker does not cover these paths.
 - **Target completion time:** unmeasured. Record observed times and respondent feedback, including skipped items and interruptions, before publishing any time estimate.
 
 ## Notice and ownership placeholders
 
 - **Host / accountable owner:** [name, role, and contact route].
 - **Purpose and audience:** [describe the specific setting and why this reflection is being offered].
-- **Response access:** [identify who can view and export responses, including any organization roles]. Tell respondents that KQA saves answers as they go and the host may review/export them.
+- **Response access:** [identify who can view and export responses, including any organization roles]. Tell respondents that survee saves answers as they go and the host may review/export them.
 - **Use and sharing:** [state what the host will and will not do with answers, including whether any follow-up is expected]. No secondary use should be implied by this template.
-- **Retention, deletion, and withdrawal:** [state the applicable retention period and how to request a correction, deletion, or withdrawal; verify these commitments against actual KQA and organizational practice].
+- **Retention, deletion, and withdrawal:** [state the applicable retention period and how to request a correction, deletion, or withdrawal; verify these commitments against actual survee and organizational practice].
 - **Voluntary participation and alternatives:** [explain whether participation is optional and how to decline or use an alternative without penalty].
 - **Support and privacy contact:** [provide an appropriate contact or process]. Do not promise clinical support or emergency response unless the host can provide it.
 - **Notice approval:** [record the responsible privacy/ethics or organizational reviewer and approval date, where applicable].

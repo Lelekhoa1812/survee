@@ -327,7 +327,7 @@ Guided presentation needs declared sections and assigns every question to one of
 
 Severity: **error**
 
-Guided presentations hide inactive question blocks and need one stable wrapper for every question, inside its matching question list. Without those markers KQA cannot safely switch steps.
+Guided presentations hide inactive question blocks and need one stable wrapper for every question, inside its matching question list. Without those markers survee cannot safely switch steps.
 
 **How to fix:** Mark each question list with data-kqa-question-list="<section-id>" (or an empty value for unsectioned questions in guided-question mode) and each complete question wrapper with data-kqa-question-id="<question-id>" as a direct child.
 
@@ -635,7 +635,7 @@ Severity: **warning**
 
 A <form> with no action still tries to submit when someone presses Enter in a text field. The submit is blocked by the sandbox, but the browser logs an error and some browsers reload the frame first, which would lose anything typed and not yet saved.
 
-**How to fix:** Remove the <form> wrapper (KQA saves each answer as it changes, so no form is needed), or add an onsubmit="return false" attribute or a submit handler that calls event.preventDefault().
+**How to fix:** Remove the <form> wrapper (survee saves each answer as it changes, so no form is needed), or add an onsubmit="return false" attribute or a submit handler that calls event.preventDefault().
 
 ### KQA415: File input
 
@@ -649,7 +649,7 @@ File uploads are not supported in questionnaires.
 
 Severity: **warning**
 
-The frame blocks remote images. Use a stored KQA asset URL or embed the image as a data: URI or inline SVG.
+The frame blocks remote images. Use a stored survee asset URL or embed the image as a data: URI or inline SVG.
 
 **How to fix:** Upload the image in Settings and use its /api/assets/ URL, or embed it as a data: URI or inline <svg>.
 
@@ -665,11 +665,11 @@ Right:
 <img src="/api/assets/REPLACE_WITH_ASSET_ID" alt="Logo">
 ```
 
-### KQA418: Image file is not stored in KQA
+### KQA418: Image file is not stored in survee
 
 Severity: **error**
 
-A relative image path points at a file that is not part of the saved questionnaire or KQA image library, so it will not load for respondents.
+A relative image path points at a file that is not part of the saved questionnaire or survee image library, so it will not load for respondents.
 
 **How to fix:** Upload the image in Settings and use its /api/assets/ URL, or embed the image as a data: URI or inline SVG.
 
@@ -687,7 +687,7 @@ Screen readers and spell-check use <html lang> to identify the language of the q
 
 Severity: **warning**
 
-The <html lang> value declares the questionnaire content language for assistive technology. KQA's built-in shell currently supports en-AU, Vietnamese, Spanish, and Arabic, while the vi/es/ar interface wording is still a machine-drafted first release awaiting qualified native-speaker and in-context review. This setting does not translate questionnaire content, invitations, or host-provided notices.
+The <html lang> value declares the questionnaire content language for assistive technology. survee's built-in shell currently supports en-AU, Vietnamese, Spanish, and Arabic, while the vi/es/ar interface wording is still a machine-drafted first release awaiting qualified native-speaker and in-context review. This setting does not translate questionnaire content, invitations, or host-provided notices.
 
 **How to fix:** Use an accurate BCP 47 language tag for the questionnaire and mark passages in another language with their own lang attribute (and dir="rtl" when appropriate). Select the intended shell language and review the complete journey: questions, notices, help, navigation, save and error states, review, submission, completion, and support. Test realistic tasks and error recovery with intended-language respondents. Arrange qualified review of machine-drafted shell translations before field use; block fielding when respondents cannot operate essential steps or understand the questionnaire.
 
@@ -835,7 +835,7 @@ People who already submitted have no answer to the new required question.
 
 Severity: **warning**
 
-Some saved answers contain more choices than the new maxSelections permits. KQA keeps those choices visible and lets respondents remove them; submission stays blocked until each eligible answer is within the cap.
+Some saved answers contain more choices than the new maxSelections permits. survee keeps those choices visible and lets respondents remove them; submission stays blocked until each eligible answer is within the cap.
 
 **How to fix:** Keep the existing limit, choose a cap that fits saved answers, or proceed only after reviewing the correction burden and respondent communication.
 
@@ -843,7 +843,7 @@ Some saved answers contain more choices than the new maxSelections permits. KQA 
 
 Severity: **warning**
 
-Some saved multi-select answers combine a newly exclusive option with other choices. KQA preserves those answers; affected respondents must resolve the conflict before submitting.
+Some saved multi-select answers combine a newly exclusive option with other choices. survee preserves those answers; affected respondents must resolve the conflict before submitting.
 
 **How to fix:** Keep the option non-exclusive, choose different options, or proceed only after reviewing the correction burden and respondent communication.
 
@@ -851,7 +851,7 @@ Some saved multi-select answers combine a newly exclusive option with other choi
 
 Severity: **warning**
 
-Some saved multi-select answers contain fewer choices than the new minSelections requires. KQA preserves those answers; affected respondents must add choices before submitting or clear an optional response.
+Some saved multi-select answers contain fewer choices than the new minSelections requires. survee preserves those answers; affected respondents must add choices before submitting or clear an optional response.
 
 **How to fix:** Keep the existing minimum, choose a minimum that fits saved answers, or proceed only after reviewing the correction burden and respondent communication.
 

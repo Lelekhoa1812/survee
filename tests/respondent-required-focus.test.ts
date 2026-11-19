@@ -236,7 +236,7 @@ describe("respondent required-answer recovery", () => {
     });
     const status = host.querySelector(".save-state")!;
     expect(status.textContent).toContain("Offline — changes waiting to sync");
-    expect(status.getAttribute("title")).toContain("These changes have not reached KQA");
+    expect(status.getAttribute("title")).toContain("These changes have not reached survee");
   });
 
   it("lists a saved multi-select answer that exceeds its current cap", async () => {

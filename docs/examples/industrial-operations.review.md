@@ -1,6 +1,6 @@
 # Industrial operations example review
 
-**Status: illustrative draft only — NOT validated or ready to field.** This example adapts the `industrial-operations` package and its bounded frontline resource-efficiency discovery module from `kqa-interview-packages/11`. It demonstrates KQA's optional one-question-at-a-time flow. A clean static check verifies format and markup only; no respondent, usability, accessibility, safety, privacy, or resource-efficiency review has been performed.
+**Status: illustrative draft only — NOT validated or ready to field.** This example adapts the `industrial-operations` package and its bounded frontline resource-efficiency discovery module from `kqa-interview-packages/11`. It demonstrates survee's optional one-question-at-a-time flow. A clean static check verifies format and markup only; no respondent, usability, accessibility, safety, privacy, or resource-efficiency review has been performed.
 
 ## Scope and assumptions
 
@@ -10,7 +10,7 @@
 - **Use and risk class:** Assumed non-decisional operational learning. The accountable host must verify that responses will not be used for employment, performance, compliance, safety-investigation, or individual decisions. Any such proposed use is outside this package and requires a separately governed method.
 - **Interaction:** `guided-question` shows one eligible root question per step, preserves authored order, and uses the regular answer review. It was chosen here to keep each optional prompt in a focused step and to demonstrate a routed follow-up. This increases navigation actions; it is a design hypothesis, not evidence of improved usability. Compare against the full-page flow with intended workers before selecting a field version.
 - **Burden:** Seven optional questions, with two routed follow-ups. **Target completion time: host to set before testing. Observed time: unmeasured.** Do not publish a time estimate until observed with intended respondents.
-- **Analysis boundary:** Descriptive local learning only. Responses are person-linked in KQA. Do not promise anonymity or infer representative worker or site-level prevalence from opt-in responses.
+- **Analysis boundary:** Descriptive local learning only. Responses are person-linked in survee. Do not promise anonymity or infer representative worker or site-level prevalence from opt-in responses.
 
 ## Decision-to-question map
 
@@ -40,7 +40,7 @@ Before fielding, test each route, route changes in both directions, restoration 
 - **Collection mode/language:** `[private-link setup, offered languages, approved support, and accessible completion alternative]`.
 - **Collection dates:** `[start/end dates]`.
 - **Target and observed completion time:** `[set target before test]`; observed time is unmeasured until tested with intended workers.
-- **Monitoring and stop criteria:** `[named host owner, review cadence, available manual disposition checks, anomaly process, urgent/safety escalation route, and stop/extend criteria]`. KQA does not provide live response notifications, item-display telemetry, or monitored hazard escalation.
+- **Monitoring and stop criteria:** `[named host owner, review cadence, available manual disposition checks, anomaly process, urgent/safety escalation route, and stop/extend criteria]`. survee does not provide live response notifications, item-display telemetry, or monitored hazard escalation.
 - **Analysis and report-back:** `[qualified analyst, intended audience, small-cell suppression, free-text handling, host owner, report-back date/channel, and how suggestions will be dispositioned]`. Separate worker observations from measured baselines and approved engineering estimates.
 
 ## Respondent notice, privacy and ownership
@@ -67,7 +67,7 @@ Do not collect exact asset, shift, team, product, customer, security, health, or
 
 The only completed check is the structural one below. All other evidence is **not tested** until a reviewer records method, scope, evidence, limitations, date, and disposition.
 
-- [x] Static KQA checker: passed with 0 errors, 0 warnings, and 0 notes (`npm run check -- docs/examples/industrial-operations.kqa.html --agent`). This does not validate question quality or usability.
+- [x] Static survee checker: passed with 0 errors, 0 warnings, and 0 notes (`npm run check -- docs/examples/industrial-operations.kqa.html --agent`). This does not validate question quality or usability.
 - [ ] Replace all bracketed process, period, host, notice, sample, analysis, and review placeholders.
 - [ ] Accountable host confirms non-decisional use and approves the respondent notice and field plan.
 - [ ] Qualified industrial operations, safety, resource-efficiency, workforce, privacy, and methodology review is completed where applicable.

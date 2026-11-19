@@ -369,8 +369,8 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
       for (const a of ["src", "srcset", "poster", "href", "xlink:href"]) {
         const v = attr(el, a);
         if (v && /(^|\s)http:\/\//i.test(v)) add(ctx, "KQA411", `<${tag}> loads ${v.trim().split(/\s+/)[0]} over http.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
-        else if (v && /(^|\s)(https:)?\/\//i.test(v) && a !== "href" && a !== "xlink:href") add(ctx, "KQA417", `<${tag} ${a}="${v.trim().split(/\s+/)[0].slice(0, 80)}"> loads from the network. Use an embedded image or a stored KQA asset URL.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
-        else if (tag === "img" && a === "src" && v && !/^(?:data:image\/|blob:)/i.test(v) && !/^\/api\/assets\/[A-Za-z0-9_-]{43}$/.test(v.trim())) add(ctx, "KQA418", `<img src="${v.slice(0, 100)}"> points at a file that is not stored in KQA.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
+        else if (v && /(^|\s)(https:)?\/\//i.test(v) && a !== "href" && a !== "xlink:href") add(ctx, "KQA417", `<${tag} ${a}="${v.trim().split(/\s+/)[0].slice(0, 80)}"> loads from the network. Use an embedded image or a stored survee asset URL.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
+        else if (tag === "img" && a === "src" && v && !/^(?:data:image\/|blob:)/i.test(v) && !/^\/api\/assets\/[A-Za-z0-9_-]{43}$/.test(v.trim())) add(ctx, "KQA418", `<img src="${v.slice(0, 100)}"> points at a file that is not stored in survee.`, undefined, { offset: el.sourceCodeLocation?.startOffset });
       }
     }
     if (tag === "script") {
@@ -410,7 +410,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
       for (const m of css.matchAll(/url\(\s*['"]?(https?:\/\/[^'")\s]+\.(?:png|jpe?g|gif|webp|avif|svg|ico)(?:\?[^'")\s]*)?)/gi)) {
         let nl = 0;
         for (let q = 0; q < (m.index ?? 0); q++) if (css.charCodeAt(q) === 10) nl++;
-        add(ctx, "KQA417", `CSS loads an image from ${m[1].slice(0, 80)}. Use a data: URI or a stored KQA asset URL.`, undefined, { line: startLine + nl });
+        add(ctx, "KQA417", `CSS loads an image from ${m[1].slice(0, 80)}. Use a data: URI or a stored survee asset URL.`, undefined, { line: startLine + nl });
       }
       for (const m of css.matchAll(/@font-face\s*{[^}]*?src\s*:[^;}]*url\(\s*['"]?(https?:[^'")\s]+)/gi)) {
         const h = hostOf(m[1]);
@@ -493,7 +493,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   const htmlLang = htmlEl ? attr(htmlEl, "lang")?.trim() : undefined;
   if (htmlEl && !htmlLang) add(ctx, "KQA501", "<html> has no non-empty lang value.", undefined, { offset: htmlEl.sourceCodeLocation?.startOffset });
   else if (htmlLang && !/^en(?:-|$)/i.test(htmlLang)) {
-    add(ctx, "KQA505", `The questionnaire declares lang="${htmlLang}". This identifies the language of the questionnaire for assistive technology. KQA's shell currently supports en-AU, Vietnamese, Spanish, and Arabic, but vi/es/ar wording is a machine-drafted first release awaiting qualified native-speaker and in-context review. The shell locale does not translate questionnaire content or host-provided notices. Review the full intended-language journey and arrange qualified language review before field use.`, undefined, { offset: htmlEl?.sourceCodeLocation?.startOffset });
+    add(ctx, "KQA505", `The questionnaire declares lang="${htmlLang}". This identifies the language of the questionnaire for assistive technology. survee's shell currently supports en-AU, Vietnamese, Spanish, and Arabic, but vi/es/ar wording is a machine-drafted first release awaiting qualified native-speaker and in-context review. The shell locale does not translate questionnaire content or host-provided notices. Review the full intended-language journey and arrange qualified language review before field use.`, undefined, { offset: htmlEl?.sourceCodeLocation?.startOffset });
   }
   if (!hasViewport) add(ctx, "KQA502", "No <meta name=\"viewport\"> was found.", undefined);
   if (!hasTitle) add(ctx, "KQA503", "No <title> was found.", undefined);
@@ -1071,7 +1071,7 @@ function checkBindings(manifest: Manifest, b: BCtx) {
       if (list.length) for (const found of list) add(ctx, "KQA309", `Repeat question "${q.id}" must not use data-kqa; bind its row fields with data-kqa-repeat-field inside its template.`, undefined, { offset: startOf(found.el), snippet: tagSrc(found.el), questionId: q.id });
       continue;
     }
-    if (q.randomizeOptions === true && q.custom) add(ctx, "KQA223", `Question "${q.id}" cannot randomize options when it is custom.`, "Use native radio, checkbox, or select controls so KQA can apply and retain the presented order.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
+    if (q.randomizeOptions === true && q.custom) add(ctx, "KQA223", `Question "${q.id}" cannot randomize options when it is custom.`, "Use native radio, checkbox, or select controls so survee can apply and retain the presented order.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
     if (list.length === 0) {
       if (!q.custom) {
         const near = closest(q.id, b.dataKqa.map((f) => attr(f.el, "data-kqa") ?? ""));
@@ -1099,7 +1099,7 @@ function checkBindings(manifest: Manifest, b: BCtx) {
         const labelIndex = found.ancestors.findIndex((ancestor) => ancestor.tagName === "label");
         return labelIndex < 0 ? null : found.ancestors[labelIndex - 1] ?? null;
       });
-      if (labelParents.some((parent) => parent === null) || labelParents.some((parent) => parent !== labelParents[0])) add(ctx, "KQA223", `Question "${q.id}" uses choice markup that KQA cannot safely reorder.`, "Wrap each radio or checkbox in a label, and place all option labels as siblings under the same parent.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
+      if (labelParents.some((parent) => parent === null) || labelParents.some((parent) => parent !== labelParents[0])) add(ctx, "KQA223", `Question "${q.id}" uses choice markup that survee cannot safely reorder.`, "Wrap each radio or checkbox in a label, and place all option labels as siblings under the same parent.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
     }
     if (q.randomizeOptions === true && q.type === "select" && list[0] && kids(list[0].el).some((child) => isEl(child) && child.tagName !== "option")) add(ctx, "KQA223", `Select question "${q.id}" must use direct <option> children for option rotation.`, "Move options out of <optgroup> elements; an empty direct option can remain as the placeholder.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
 

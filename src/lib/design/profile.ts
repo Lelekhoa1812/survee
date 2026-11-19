@@ -467,7 +467,7 @@ function roleCandidate(tokenName: string): RoleCandidate | null {
   }
   if (/(?:^|[-_])(spacing|space)(?:$|[-_])/.test(name)) {
     const suffix = name.replace(/^(?:.*?[-_])?(spacing|space)[-_]?/, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
-    return { role: `spacing.${suffix || tail}`, targetToken: `--space-${suffix || "base"}`.slice(0, 80), category: "length", rationale: "The token name identifies a spacing scale value; KQA has no built-in spacing scale." };
+    return { role: `spacing.${suffix || tail}`, targetToken: `--space-${suffix || "base"}`.slice(0, 80), category: "length", rationale: "The token name identifies a spacing scale value; survee has no built-in spacing scale." };
   }
   if (/(?:^|[-_])(shadow|elevation)(?:$|[-_])/.test(name)) {
     const suffix = name.replace(/^(?:.*?[-_])?(shadow|elevation)[-_]?/, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
@@ -604,7 +604,7 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
   for (const token of extracted.tokens) {
     const candidate = roleCandidate(token.name);
     if (!candidate) {
-      unmapped.push({ token: token.name, value: token.value, scope: token.scope, sourceContext: token.sourceContext, reason: "Token name does not clearly identify a KQA semantic role." });
+      unmapped.push({ token: token.name, value: token.value, scope: token.scope, sourceContext: token.sourceContext, reason: "Token name does not clearly identify a survee semantic role." });
       continue;
     }
     const key = `${token.scope}\u0000${candidate.role}`;
@@ -671,7 +671,7 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
     },
     integrationProposal: {
       status: "proposal_only",
-      note: "Mappings are heuristic and require review. KQA does not fetch, execute, store, or apply the supplied source.",
+      note: "Mappings are heuristic and require review. survee does not fetch, execute, store, or apply the supplied source.",
       cssOverlay: overlay.css,
       overlayNotes: overlay.notes,
     },

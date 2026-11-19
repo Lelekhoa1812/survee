@@ -52,7 +52,7 @@ export function CheckerPanel({ report, markdown, running, runningLabel }: { repo
             {running
               ? runningLabel ?? "Opening the file in a sandboxed frame and trying every control."
               : blocked
-                ? "KQA cannot read or save answers from this file yet. Copy the report below to the AI agent that wrote it."
+                ? "survee cannot read or save answers from this file yet. Copy the report below to the AI agent that wrote it."
                 : `${report.stats.questions} ${report.stats.questions === 1 ? "question" : "questions"} found and bound to the answer store.${warning || info ? ` ${warning} ${warning === 1 ? "warning" : "warnings"} and ${info} ${info === 1 ? "note" : "notes"} are worth a look.` : ""}`}
           </p>
         </div>

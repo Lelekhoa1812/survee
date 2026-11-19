@@ -66,7 +66,7 @@ describe("signup validation fields", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
-      message: "If this address is eligible for a KQA workspace, check its inbox for next steps.",
+      message: "If this address is eligible for a survee workspace, check its inbox for next steps.",
     });
     expect(createPendingSignup).toHaveBeenCalledWith({
       tenantName: "Research",
@@ -76,7 +76,7 @@ describe("signup validation fields", () => {
     });
     expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({
       to: "person@example.com",
-      subject: "Verify your KQA account",
+      subject: "Verify your survee account",
     }));
   });
 
@@ -88,14 +88,14 @@ describe("signup validation fields", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
-      message: "If this address is eligible for a KQA workspace, check its inbox for next steps.",
+      message: "If this address is eligible for a survee workspace, check its inbox for next steps.",
     });
     expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({
       to: "person@example.com",
-      subject: "A KQA account sign-in was requested",
+      subject: "A survee account sign-in was requested",
       text: expect.stringContaining("reset your password"),
     }));
-    expect(sendSmtp).not.toHaveBeenCalledWith(expect.objectContaining({ subject: "Verify your KQA account" }));
+    expect(sendSmtp).not.toHaveBeenCalledWith(expect.objectContaining({ subject: "Verify your survee account" }));
     expect(removePendingSignup).not.toHaveBeenCalled();
   });
 
@@ -107,7 +107,7 @@ describe("signup validation fields", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
-      message: "If this address is eligible for a KQA workspace, check its inbox for next steps.",
+      message: "If this address is eligible for a survee workspace, check its inbox for next steps.",
     });
     expect(sendSmtp).not.toHaveBeenCalled();
     expect(removePendingSignup).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe("signup validation fields", () => {
     const response = await post({ tenantName: "Research", email: "person@example.com", password: "a sufficiently long password" });
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({ ok: false, error: "We could not send the KQA message. Try again later." });
+    await expect(response.json()).resolves.toMatchObject({ ok: false, error: "We could not send the survee message. Try again later." });
     expect(removePendingSignup).toHaveBeenCalledWith(pendingId);
   });
 

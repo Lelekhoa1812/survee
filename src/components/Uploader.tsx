@@ -84,7 +84,7 @@ export function Uploader({ interviewId, onChange, compact, disabled = false }: {
         >
           <div className="ico"><Icon name="upload" size={20} /></div>
           <strong>Drop the questionnaire file here, or choose one</strong>
-          <span className="muted" style={{ fontSize: 13.5 }}>A single .html file in the KQA format, up to {LIMITS.maxFileBytes / 1048576} MB. It is checked the moment you add it.</span>
+          <span className="muted" style={{ fontSize: 13.5 }}>A single .html file in the survee format, up to {LIMITS.maxFileBytes / 1048576} MB. It is checked the moment you add it.</span>
         </div>
       ) : (
         <div className="file-pill">

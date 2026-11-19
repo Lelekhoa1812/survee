@@ -3,7 +3,7 @@
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/12",
-  "description": "Synthetic, source-informed briefs for expert review of complete package-based KQA questionnaire drafts. Cases define decision intent and boundaries, not canonical question wording.",
+  "description": "Synthetic, source-informed briefs for expert review of complete package-based survee questionnaire drafts. Cases define decision intent and boundaries, not canonical question wording.",
   "dimensions": [
     "intent_coverage",
     "construct_and_question_design",
@@ -1526,7 +1526,7 @@
         "The languages, literacy needs, accessibility needs, digital access, and trusted participation channels of affected communities are unknown.",
         "No translation equivalence assessment, target-language cognitive pretest, accessibility review, or community testing has occurred.",
         "The consultation may inform but does not determine the authority's decision; decision scope, constraints, and report-back commitments are host facts requiring confirmation.",
-        "KQA serves respondent shell navigation, save and error states, built-in controls, and answer review in en-AU, Vietnamese, Spanish, and Arabic; Vietnamese, Spanish, and Arabic wording is currently a machine-drafted first release awaiting qualified native-speaker and in-context review. The questionnaire HTML retains its own authored language and direction."
+        "survee serves respondent shell navigation, save and error states, built-in controls, and answer review in en-AU, Vietnamese, Spanish, and Arabic; Vietnamese, Spanish, and Arabic wording is currently a machine-drafted first release awaiting qualified native-speaker and in-context review. The questionnaire HTML retains its own authored language and direction."
       ],
       "requiredIntents": [
         {
@@ -1659,7 +1659,7 @@
       "requiredIntents": [
         {
           "id": "localized-flow-evidence",
-          "intent": "Recognize that the participant journey is localized and tested across content and controls; do not falsely fail it based on an obsolete assumption that KQA's shell is always English."
+          "intent": "Recognize that the participant journey is localized and tested across content and controls; do not falsely fail it based on an obsolete assumption that survee's shell is always English."
         },
         {
           "id": "language-version-integrity",
@@ -1719,7 +1719,7 @@
           "url": "https://www.w3.org/International/questions/qa-i18n.var"
         }
       ],
-      "sourceNotes": "This paired control checks that reviewers distinguish an unlocalized shell from a documented full-language journey and do not apply a blanket KQA-English assumption. Census A2, GOV.UK language navigation, Home Office limited-English guidance, and W3C localization guidance support evaluating the actual participant journey and bounded test evidence. The synthetic evidence does not establish universal accessibility, legal compliance, translation equivalence outside tested material, or representative sampling."
+      "sourceNotes": "This paired control checks that reviewers distinguish an unlocalized shell from a documented full-language journey and do not apply a blanket survee-English assumption. Census A2, GOV.UK language navigation, Home Office limited-English guidance, and W3C localization guidance support evaluating the actual participant journey and bounded test evidence. The synthetic evidence does not establish universal accessibility, legal compliance, translation equivalence outside tested material, or representative sampling."
     },
     {
       "id": "employee-experience-power-imbalance-small-cell-privacy",
@@ -1818,7 +1818,7 @@
     {
       "id": "personal-planning-sensitive-disclosure-minimization",
       "packageId": "personal-planning",
-      "brief": "A person wants a private-feeling, optional reflection to plan a manageable personal goal for the next month, such as learning a skill or organizing a hobby. They want to identify what matters to them, what resources are available, a possible obstacle, and one next step or a decision to wait. The goal, circumstances, and support network are unknown. The tool is not clinical care, therapy, crisis support, diagnosis, treatment, or a measure of wellbeing or motivation. KQA may store answers and the host has not provided a privacy notice or deletion schedule.",
+      "brief": "A person wants a private-feeling, optional reflection to plan a manageable personal goal for the next month, such as learning a skill or organizing a hobby. They want to identify what matters to them, what resources are available, a possible obstacle, and one next step or a decision to wait. The goal, circumstances, and support network are unknown. The tool is not clinical care, therapy, crisis support, diagnosis, treatment, or a measure of wellbeing or motivation. survee may store answers and the host has not provided a privacy notice or deletion schedule.",
       "contextFacts": [
         "The person may have limited time, money, access, privacy, or support; do not assume a stable schedule or resources.",
         "The host, storage access, sharing, retention, deletion, and support pathway are unspecified; a warm tone cannot imply data confidentiality.",

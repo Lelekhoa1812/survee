@@ -32,7 +32,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
           <BrandMark size={40} wordmark />
           <div>
             <h1>This app cannot be connected</h1>
-            <p className="muted" style={{ marginTop: 4 }}>The request did not match an app KQA has registered, so nothing was approved.</p>
+            <p className="muted" style={{ marginTop: 4 }}>The request did not match an app survee has registered, so nothing was approved.</p>
           </div>
         </section>
       </main>
@@ -55,9 +55,9 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
         <BrandMark size={40} wordmark />
         <div>
           <h1>Connect {client.name}</h1>
-          <p className="muted" style={{ marginTop: 4 }}>Signed in as {session.email}. Choose the KQA permissions this app needs.</p>
+          <p className="muted" style={{ marginTop: 4 }}>Signed in as {session.email}. Choose the survee permissions this app needs.</p>
         </div>
-        <p>The protocol connection uses the standard <code>host</code> scope. KQA applies the permissions below to every tool call. The read-only setup and aggregate analysis permissions are selected by default; respondent details, changes, email actions, and deletion require your explicit choice.</p>
+        <p>The protocol connection uses the standard <code>host</code> scope. survee applies the permissions below to every tool call. The read-only setup and aggregate analysis permissions are selected by default; respondent details, changes, email actions, and deletion require your explicit choice.</p>
         <p className="muted">The connection is saved in Settings as a key. You can change its permissions or revoke it there.</p>
         <form action={decide} className="stack">
           <input type="hidden" name="client_id" value={clientId} />

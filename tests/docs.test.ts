@@ -45,7 +45,7 @@ describe("agent documentation bundle", () => {
   it("publishes the design system and includes it in the full questionnaire bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "design-system" && doc.file === "DESIGN_SYSTEM.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
-    expect(bundle).toContain("KQA design system and agent guidance");
+    expect(bundle).toContain("survee design system and agent guidance");
     expect(bundle).toContain("WCAG 2.2 Quick Reference");
     expect(bundle).toContain("Separate observed facts from interpretation");
   });
@@ -72,7 +72,7 @@ describe("agent documentation bundle", () => {
     expect(packages).toContain("Neither is an employee climate or recurring workforce pulse instrument");
     expect(packages).toContain("field-tested patient-experience measure");
     expect(packages).toContain("## Industrial operations");
-    expect(packages).toContain("Do not imply that KQA is anonymous");
+    expect(packages).toContain("Do not imply that survee is anonymous");
     expect(packages).toContain("do not report a conventional margin of error or claim representativeness");
     expect(packages).toContain("jurisdiction-specific assessment and legal review");
     expect(packages).toContain("not an emergency or statutory reporting channel");
@@ -101,7 +101,7 @@ describe("agent documentation bundle", () => {
     expect(packages).toContain("material unresolved purpose, access, use, retention, or contact fact blocks fielding");
     expect(packages).toContain("responsible ethics/HRPP/IRB office");
     expect(packages).toContain("## Field monitoring and respondent burden");
-    expect(packages).toContain("KQA does not collect item display telemetry");
+    expect(packages).toContain("survee does not collect item display telemetry");
     expect(packages).toContain("Synthetic responses can test code paths");
     expect(packages).toContain("preceding instructions/questions");
     expect(packages).toContain("AAPOR Responsible AI Integration in Survey Research report (2026)");
@@ -144,7 +144,7 @@ describe("agent documentation bundle", () => {
     expect(format).toContain("clear-answer");
     expect(format).toContain("announces how many questions are shown or hidden");
     expect(format).toContain('With the default `presentation: "all"`, the respondent shell adds **Questions** navigation');
-    expect(format).toContain('With `presentation: "guided"`, KQA shows one currently eligible section at a time');
+    expect(format).toContain('With `presentation: "guided"`, survee shows one currently eligible section at a time');
   });
 
   it("keeps authoring and README quality claims bounded to verified evidence", async () => {
@@ -169,7 +169,7 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("does not simulate respondent input");
     expect(bundle).toContain("<!-- QUESTION_BLUEPRINT.md -->");
     expect(bundle).toContain("<!-- kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md -->");
-    expect(bundle).toContain("Status: supported in the KQA questionnaire format");
+    expect(bundle).toContain("Status: supported in the survee questionnaire format");
   });
 
   it("publishes the repeatable-record selection benchmark and its development corpus", async () => {
@@ -284,8 +284,8 @@ describe("agent documentation bundle", () => {
     expect(DOCS.some((doc) => doc.slug === "mcp" && doc.file === "MCP.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("<!-- MCP.md -->");
-    expect(bundle).toContain("KQA MCP server");
-    expect(bundle).toContain("KQA does not persist reviewer identity");
+    expect(bundle).toContain("survee MCP server");
+    expect(bundle).toContain("survee does not persist reviewer identity");
   });
 
   it("publishes the native routing runtime contract to agents", async () => {

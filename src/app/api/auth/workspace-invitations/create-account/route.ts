@@ -11,7 +11,7 @@ function clientIp(h: Headers): string {
 }
 
 export async function POST(req: Request) {
-  if (!(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
+  if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ token?: unknown; password?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
   const token = str(body.data.token, 128);

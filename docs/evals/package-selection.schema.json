@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kqa.invalid/schemas/package-selection-benchmark-v4.json",
-  "title": "KQA package selection benchmark result",
+  "title": "survee package selection benchmark result",
   "type": "object",
   "required": ["benchmarkVersion", "model", "runDate", "promptVersion", "packageLibraryVersion", "cases"],
   "properties": {

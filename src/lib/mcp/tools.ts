@@ -296,7 +296,7 @@ async function onePerson(personId: string) {
 const TOOLS: ToolDef[] = [
   {
     name: "get_interview_packages",
-    description: "Return KQA's versioned package catalog, structured fit metadata, and safeguards. Set catalogOnly to true for a compact metadata-only catalog; otherwise omit packageId for the full library or select a stable packageId for focused guidance. Use decision, audience, and risk boundaries to choose; when fit is ambiguous, clarify rather than inventing a score. These are self-completed questionnaire aids, not validated instruments or automated decisions.",
+    description: "Return survee's versioned package catalog, structured fit metadata, and safeguards. Set catalogOnly to true for a compact metadata-only catalog; otherwise omit packageId for the full library or select a stable packageId for focused guidance. Use decision, audience, and risk boundaries to choose; when fit is ambiguous, clarify rather than inventing a score. These are self-completed questionnaire aids, not validated instruments or automated decisions.",
     inputSchema: obj({ packageId: { type: "string", enum: INTERVIEW_PACKAGES.map((item) => item.id) }, catalogOnly: bool }),
     async run(args) {
       if (args.catalogOnly === true && args.packageId !== undefined) return err("catalogOnly cannot be combined with packageId.", "invalid_arguments");
@@ -306,7 +306,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_questionnaire_authoring_skill",
-    description: "Return an installable KQA Agent Skill bundle with SKILL.md, version-matched references, a starter questionnaire, routing and repeat examples, illustrative package-based questionnaire examples, and package-fit, repeat-pattern, interaction-pattern, content-review, and tool-safety evaluation guides with their development cases and schemas. Preserve the supplied relative paths when installing; examples and public development cases are not validated instruments or held-out evidence, and this bundle is workflow guidance rather than human review.",
+    description: "Return an installable survee Agent Skill bundle with SKILL.md, version-matched references, a starter questionnaire, routing and repeat examples, illustrative package-based questionnaire examples, and package-fit, repeat-pattern, interaction-pattern, content-review, and tool-safety evaluation guides with their development cases and schemas. Preserve the supplied relative paths when installing; examples and public development cases are not validated instruments or held-out evidence, and this bundle is workflow guidance rather than human review.",
     inputSchema: obj({}),
     async run() {
       const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
@@ -319,7 +319,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_analytics_guidance",
-    description: "Return deterministic, versioned guidance for interpreting KQA summaries and generating accessible, traceable charts, with primary sources. KQA does not run an LLM.",
+    description: "Return deterministic, versioned guidance for interpreting survee summaries and generating accessible, traceable charts, with primary sources. survee does not run an LLM.",
     inputSchema: obj({}),
     async run() {
       return ok(getAnalyticsGuidance());
@@ -327,7 +327,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_design_guidance",
-    description: "Return KQA's sourced, versioned design principles, structured design plan, and surface-specific visual profile for questionnaires, the host console, or analytics. No LLM is built into KQA.",
+    description: "Return survee's sourced, versioned design principles, structured design plan, and surface-specific visual profile for questionnaires, the host console, or analytics. No LLM is built into survee.",
     inputSchema: obj({ surface: { type: "string", enum: ["all", "questionnaire", "host", "analytics"] } }),
     async run(args) {
       const surface = (asString(args.surface, 24) || "all") as DesignSurface;
@@ -336,7 +336,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "extract_design_profile",
-    description: "Extract user-supplied CSS custom properties, legacy token JSON, or a bounded Design Tokens Format Module 2025.10 subset into KQA semantic-role proposals. Reports unsupported $extends inheritance, resolver-file modes, external references, and ambiguous mappings; returns provenance, candidate contrast checks, and a reviewable overlay. Never fetches URLs, executes CSS, stores input, or applies changes.",
+    description: "Extract user-supplied CSS custom properties, legacy token JSON, or a bounded Design Tokens Format Module 2025.10 subset into survee semantic-role proposals. Reports unsupported $extends inheritance, resolver-file modes, external references, and ambiguous mappings; returns provenance, candidate contrast checks, and a reviewable overlay. Never fetches URLs, executes CSS, stores input, or applies changes.",
     inputSchema: obj({
       source: { type: "string", minLength: 1, maxLength: 32768 },
       format: { type: "string", enum: ["css", "json"] },
@@ -355,7 +355,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "audit_questionnaire_design",
-    description: "Run KQA's static questionnaire checker and return a review checklist for content, usability research, and rendered design. Wording and user testing require judgment; this tool does not render, observe users, or certify the page.",
+    description: "Run survee's static questionnaire checker and return a review checklist for content, usability research, and rendered design. Wording and user testing require judgment; this tool does not render, observe users, or certify the page.",
     inputSchema: obj({ html: str, fileName: str, interviewId: str }, ["html"]),
     async run(args) {
       if (typeof args.html !== "string") return err("html is required.");
@@ -997,7 +997,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_version_patch",
-    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not publish anything. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.",
+    description: "Preview a complete candidate questionnaire HTML file for a new immutable version. This does not publish anything. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated survee host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.",
     inputSchema: obj({ interviewId: str, html: str, fileName: str }, ["interviewId", "html"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1105,7 +1105,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_required_patch",
-    description: "Preview a batch of required/optional changes by stable question ID. The server changes only the manifest booleans and preserves every other HTML byte; it does not publish. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.",
+    description: "Preview a batch of required/optional changes by stable question ID. The server changes only the manifest booleans and preserves every other HTML byte; it does not publish. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated survee host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.",
     inputSchema: obj({ interviewId: str, changes: requiredChanges }, ["interviewId", "changes"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1297,7 +1297,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "preview_questionnaire_block_patch",
-    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated KQA host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.`,
+    description: `Preview up to ${LIMITS.maxQuestions} add/update/delete/move operations for ordinary questions with explicit question and list markers. Adds and moves can target a position before or after an unchanged question; moves can also change sections. Only the selected manifest entries and question blocks are edited; arbitrary HTML, custom questions, and scripts are not transformed. The result includes review.available and, when temporary storage is available, a short-lived review.url for an authenticated survee host to inspect the candidate in the sandboxed browser preview. Review storage keeps up to five active candidates per interview; when full, review.available is false and the signed preview remains usable.`,
     inputSchema: obj({ interviewId: str, operations: questionnaireBlockOperations }, ["interviewId", "operations"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1696,17 +1696,17 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "check_invite_delivery",
-    description: "Connect briefly over IMAP and look up only the message id KQA stored for this person's current invite. Returns delivered, bounced, or unknown.",
+    description: "Connect briefly over IMAP and look up only the message id survee stored for this person's current invite. Returns delivered, bounced, or unknown.",
     inputSchema: obj({ personId: str }, ["personId"]),
     guard(args) {
       if ("query" in args || "mailbox" in args || "search" in args || "messageId" in args) {
-        return err("Delivery checks only the invites KQA has sent for this person. It does not search a mailbox.");
+        return err("Delivery checks only the invites survee has sent for this person. It does not search a mailbox.");
       }
       return null;
     },
     async run(args) {
       if ("query" in args || "mailbox" in args || "search" in args || "messageId" in args) {
-        return err("Delivery checks only the invites KQA has sent for this person. It does not search a mailbox.");
+        return err("Delivery checks only the invites survee has sent for this person. It does not search a mailbox.");
       }
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");

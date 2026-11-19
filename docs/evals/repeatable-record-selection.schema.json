@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kqa.invalid/schemas/repeatable-record-selection-v2.json",
-  "title": "KQA repeatable record selection benchmark result",
+  "title": "survee repeatable record selection benchmark result",
   "type": "object",
   "required": ["benchmarkVersion", "model", "runDate", "skillVersion", "cases"],
   "properties": {

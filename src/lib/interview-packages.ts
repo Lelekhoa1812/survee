@@ -51,7 +51,7 @@ export const INTERVIEW_PACKAGES = [
     interactionGuidance: {
       consider: [{ pattern: "routing", when: "A short follow-up applies to a workflow branch the respondent directly experienced.", benefit: "Keeps the path relevant to the person's work context.", tradeoff: "Role, team, and location branches can reveal identity in small groups." }],
       avoid: [
-        { pattern: "ranking", when: "The subject is a person, team, or individual performance.", reason: "KQA is not an employee-ranking or performance-assessment tool." },
+        { pattern: "ranking", when: "The subject is a person, team, or individual performance.", reason: "survee is not an employee-ranking or performance-assessment tool." },
         { pattern: "question-order-variation", when: "Questions encode workflow chronology, handoffs, or dependencies.", reason: "Changing their order can damage context and interpretation." },
       ],
       decisionChecks: ["Could any branch combination identify a worker or small team?", "Can every answer be optional without making the process decision unusable?"],
@@ -70,7 +70,7 @@ export const INTERVIEW_PACKAGES = [
         { pattern: "routing", when: "An optional routine coordination follow-up is relevant only after an explicit prior constraint selection.", benefit: "Limits irrelevant follow-up detail.", tradeoff: "Never route into incident or hazard reporting, and test what happens to retained answers." },
       ],
       avoid: [
-        { pattern: "repeat", when: "The proposed rows would be shift, incident, or live operational records.", reason: "KQA is not an operational log, handover, or safety-reporting channel." },
+        { pattern: "repeat", when: "The proposed rows would be shift, incident, or live operational records.", reason: "survee is not an operational log, handover, or safety-reporting channel." },
         { pattern: "ranking", when: "The prompt ranks workers, hazards, or all possible resource opportunities.", reason: "This can turn exploratory feedback into consequential assessment or overstate worker evidence." },
       ],
       decisionChecks: ["Is this a non-urgent improvement inquiry with a separate monitored safety route?", "Has the stepwise flow been tested with the relevant worker groups and devices?"],
@@ -212,7 +212,7 @@ export const INTERVIEW_PACKAGES = [
     interactionGuidance: {
       consider: [{ pattern: "guided-question", when: "A post-event, non-punitive reflection sequence has been tested with people who may find a full page difficult.", benefit: "Can let a respondent move through a small number of prompts at their own pace.", tradeoff: "Steps can imply screening or escalation; a separate monitored incident route is mandatory." }],
       avoid: [
-        { pattern: "routing", when: "A branch would screen urgency, assess a hazard, or trigger an operational response.", reason: "KQA does not monitor responses or provide safety escalation." },
+        { pattern: "routing", when: "A branch would screen urgency, assess a hazard, or trigger an operational response.", reason: "survee does not monitor responses or provide safety escalation." },
         { pattern: "repeat", when: "Rows would act as incident, hazard, or shift logs.", reason: "This package is not an incident-reporting or operational-log system." },
         { pattern: "required-answer", when: "The question requests a sensitive event narrative or account of a near miss.", reason: "Do not make potentially distressing disclosure mandatory." },
       ],
@@ -295,7 +295,7 @@ export const INTERVIEW_PACKAGES = [
     interactionGuidance: {
       consider: [{ pattern: "guided-question", when: "A person actively chooses optional self-reflection and prefers one short prompt at a time.", benefit: "Can support a private, self-paced reflection.", tradeoff: "Additional steps may burden someone who is distressed; keep skip and exit clear." }],
       avoid: [
-        { pattern: "routing", when: "A branch depends on sensitive disclosure or could be read as assessing risk or need.", reason: "KQA does not provide crisis monitoring, diagnosis, or care referral." },
+        { pattern: "routing", when: "A branch depends on sensitive disclosure or could be read as assessing risk or need.", reason: "survee does not provide crisis monitoring, diagnosis, or care referral." },
         { pattern: "ranking", when: "The prompt requires ordering personal priorities or asks a person to justify a sensitive choice.", reason: "Reflection must remain optional and cannot score or prescribe a person's priorities." },
         { pattern: "required-answer", when: "The item concerns sensitive personal or wellbeing information.", reason: "Do not require disclosure to complete the reflection." },
       ],
@@ -329,7 +329,7 @@ export async function getInterviewPackage(packageId?: InterviewPackageId, option
     id, title, decisionFocus, respondents, useWhen, notFor, riskFlags, relatedPackages,
     interactionGuidance,
   }));
-  const selectionGuidance = "Choose by the decision to be informed, respondent group, and collection context—not industry label alone. These are KQA self-completed questionnaire starting points, not moderated interview guides. Compare related packages when a brief overlaps. Carer support-service feedback can fit health-service experience; formal caregiver needs assessment, eligibility, safeguarding, and care planning remain outside scope. Personal planning may help a respondent organize their own priorities and questions before a professional conversation; clinical treatment assessment, scoring, or recommendations are outside scope. If purpose, audience, modality, or risk boundary is unclear, return the candidates and ask a concise clarifying question; do not invent a fit score or imply that a package is validated. `interactionGuidance` lists contextual affordances and reasons to avoid patterns; it is neither a required recipe nor a fit score. Omitted patterns are not endorsed or ruled out. Start with a short all-at-once flow unless task and respondent evidence supports another presentation; offer optionality and a non-digital alternative where needed. Consider ranking only when a complete strict order of every option (KQA supports 2–8) is the construct; use independent ratings when ties or unranked options are meaningful. Use routing only when earlier answers determine applicability, keep branches bounded, and disclose that inactive answers remain saved. Use repeat rows only for distinct instances of the same small structured unit, never as operational or incident logs. Consider option randomization only for unordered nominal categories, keep fixed values explicitly declared, and retain presented-order provenance.";
+  const selectionGuidance = "Choose by the decision to be informed, respondent group, and collection context—not industry label alone. These are survee self-completed questionnaire starting points, not moderated interview guides. Compare related packages when a brief overlaps. Carer support-service feedback can fit health-service experience; formal caregiver needs assessment, eligibility, safeguarding, and care planning remain outside scope. Personal planning may help a respondent organize their own priorities and questions before a professional conversation; clinical treatment assessment, scoring, or recommendations are outside scope. If purpose, audience, modality, or risk boundary is unclear, return the candidates and ask a concise clarifying question; do not invent a fit score or imply that a package is validated. `interactionGuidance` lists contextual affordances and reasons to avoid patterns; it is neither a required recipe nor a fit score. Omitted patterns are not endorsed or ruled out. Start with a short all-at-once flow unless task and respondent evidence supports another presentation; offer optionality and a non-digital alternative where needed. Consider ranking only when a complete strict order of every option (survee supports 2–8) is the construct; use independent ratings when ties or unranked options are meaningful. Use routing only when earlier answers determine applicability, keep branches bounded, and disclose that inactive answers remain saved. Use repeat rows only for distinct instances of the same small structured unit, never as operational or incident logs. Consider option randomization only for unordered nominal categories, keep fixed values explicitly declared, and retain presented-order provenance.";
   if (options.catalogOnly) {
     if (packageId) return null;
     return { packageId: null, packageVersion: INTERVIEW_PACKAGE_VERSION, packageCatalog, selectionGuidance, catalogOnly: true };

@@ -5,7 +5,7 @@ const workflow = [
   {
     number: "01",
     title: "Bring your questionnaire",
-    text: "Use a self-contained HTML file built for KQA. There is no in-app question builder to learn.",
+    text: "Use a self-contained HTML file built for survee. There is no in-app question builder to learn.",
   },
   {
     number: "02",
@@ -23,7 +23,7 @@ export function LandingSurface() {
   return (
     <main className="marketing-page">
       <header className="marketing-nav">
-        <Link href="/" className="marketing-brand" aria-label="KQA home">
+        <Link href="/" className="marketing-brand" aria-label="survee home">
           <BrandMark size={34} wordmark />
         </Link>
         <nav className="marketing-nav-actions" aria-label="Account">
@@ -37,7 +37,7 @@ export function LandingSurface() {
           <div className="marketing-hero-copy">
             <p className="marketing-eyebrow"><span aria-hidden="true" /> Interview hosting for research teams</p>
             <h1 id="marketing-title">Your questionnaire, hosted and ready to share.</h1>
-            <p className="marketing-lede">Bring a self-contained HTML questionnaire. KQA checks the file, creates private interview links, saves answers as people respond, and keeps them ready to review or export.</p>
+            <p className="marketing-lede">Bring a self-contained HTML questionnaire. survee checks the file, creates private interview links, saves answers as people respond, and keeps them ready to review or export.</p>
             <div className="marketing-actions">
               <Link href="/signup" className="btn primary lg">Create a workspace</Link>
               <Link href="/admin/login" className="btn ghost lg">Sign in</Link>
@@ -103,7 +103,7 @@ export function LandingSurface() {
         </section>
 
         <footer className="marketing-footer">
-          <Link href="/" aria-label="KQA home"><BrandMark size={24} wordmark /></Link>
+          <Link href="/" aria-label="survee home"><BrandMark size={24} wordmark /></Link>
           <span>Interview hosting with clear controls for hosts and respondents.</span>
         </footer>
       </div>

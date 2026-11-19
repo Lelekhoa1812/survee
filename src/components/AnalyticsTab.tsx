@@ -210,7 +210,7 @@ function QuestionAnalysis({ question, summary, display, showHeading = true }: { 
       )}
       {!hasDistribution && question.type !== "number" && (
         <p className="analysis-text-note">{question.type === "rank"
-          ? "Response count only. KQA preserves each full order in individual answers and exports; it does not calculate a ranking score."
+          ? "Response count only. survee preserves each full order in individual answers and exports; it does not calculate a ranking score."
           : "Response count only. Text and date values are not included in this analysis; review individual answers in the Answers tab."}</p>
       )}
       {summary.unmappedResponseCount > 0 && (
@@ -393,7 +393,7 @@ export function ComparisonQuestion({ question, summaries, showHeading = true, di
       </div>}
       <p className="analysis-text-note">{responseCounts}</p>
       <ComparisonDisclosureNote summaries={summaries} />
-      {question.type === "rank" && <p className="analysis-text-note">Full answer order is preserved in individual answers and exports. KQA reports counts only and does not calculate a ranking score.</p>}
+      {question.type === "rank" && <p className="analysis-text-note">Full answer order is preserved in individual answers and exports. survee reports counts only and does not calculate a ranking score.</p>}
       {display === "table" ? <ComparisonTable question={question} summaries={summaries} /> : <>
         {distributionQuestion && <ComparisonDistributionChart question={question} summaries={summaries} />}
         {numericQuestion && <ComparisonNumericChart summaries={summaries} />}
@@ -444,7 +444,7 @@ function CrossTabResults({ result, compareStatuses }: { result: CrossTabAnalysis
           <p className="muted">{result.scope.participantCount} people in selected statuses · one shared scan · row percentages</p>
         </div>
       </header>
-      <p className="analysis-disclosure-note">Small groups and combinations of answers can make people identifiable. KQA keeps every cell visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
+      <p className="analysis-disclosure-note">Small groups and combinations of answers can make people identifiable. survee keeps every cell visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
       {result.overlapping && <p className="analysis-text-note analysis-cross-tab-note">At least one question uses checkboxes. A person can appear in multiple rows or columns, so counts and percentages can overlap or sum above 100%.</p>}
       <div className="table-wrap analysis-cross-tab-wrap">
         <table className="t analysis-cross-tab-table">
@@ -486,7 +486,7 @@ function SegmentResults({ questions, result, compareStatuses, display }: { quest
         </div>
         {questions.length === 1 && <span className="code-chip">{questions[0].id}</span>}
       </header>
-      <p className="analysis-disclosure-note">Small groups and combinations of attributes can make people identifiable. KQA keeps every group visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
+      <p className="analysis-disclosure-note">Small groups and combinations of attributes can make people identifiable. survee keeps every group visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
       {result.segments.map((segment) => {
         const statusSummaries = segment.statusSummaries;
         const singletonStatuses = segment.disclosureRisk.singletonStatusGroups.map((status) => STATUS_SHORT_LABELS[status]);

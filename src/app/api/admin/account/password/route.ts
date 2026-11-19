@@ -6,7 +6,7 @@ import { createSession, SESSION_COOKIE } from "@/lib/auth";
 export async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
-  if (!(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
+  if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const session = await adminSession();
   if (!session) return fail(401, "Sign in to continue.");
   const body = await readJson<{ currentPassword?: unknown; newPassword?: unknown }>(req, 4096);

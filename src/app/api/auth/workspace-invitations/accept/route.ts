@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   try {
     const accepted = await acceptWorkspaceInvitation(token, current.userId, current.email);
     if (!accepted.ok && accepted.reason === "email_mismatch") return fail(403, "Sign in with the email address that received this invitation.");
-    if (!accepted.ok && accepted.reason === "account_required") return fail(403, "Verify or create the invited KQA account before accepting this invitation.");
+    if (!accepted.ok && accepted.reason === "account_required") return fail(403, "Verify or create the invited survee account before accepting this invitation.");
     if (!accepted.ok) return fail(400, "This workspace invitation is invalid or has expired.");
     const principal = await loadAccountPrincipal(current.userId, accepted.tenantId);
     if (!principal) return fail(503, "The workspace membership could not be loaded. Sign in again.");

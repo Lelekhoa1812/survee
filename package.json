@@ -1,8 +1,8 @@
 {
-  "name": "kqa",
+  "name": "survee",
   "version": "1.0.0",
   "private": true,
-  "description": "KQA: host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB.",
+  "description": "survee: host-run interviews. Upload a self-contained HTML questionnaire, email or copy each person a private link, and keep every answer in MongoDB.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

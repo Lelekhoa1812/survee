@@ -28,9 +28,9 @@ export function AdminNav({ email, tenantId, workspaces }: { email: string; tenan
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="topbar">
         <div className="topbar-in">
-          <Link href="/admin" className="brand" aria-label="KQA home">
+          <Link href="/admin" className="brand" aria-label="survee home">
             <BrandMark />
-            <span>KQA <small>Host</small></span>
+            <span>survee <small>Host</small></span>
           </Link>
           <nav className="nav" aria-label="Main" ref={navRef}>
             {LINKS.map((l) => (

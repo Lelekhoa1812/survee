@@ -220,7 +220,7 @@
     },
     {
       "id": "audit-readiness",
-      "brief": "A team wants to collect evidence gaps and preparation needs ahead of an auditor; it does not ask KQA to certify compliance or determine a person's status.",
+      "brief": "A team wants to collect evidence gaps and preparation needs ahead of an auditor; it does not ask survee to certify compliance or determine a person's status.",
       "gold": {
         "action": "recommend",
         "packageId": "audit-readiness",
@@ -253,7 +253,7 @@
     },
     {
       "id": "moderated-anonymous-event",
-      "brief": "An event organizer wants a live moderated interview guide and promises responses will be anonymous, although KQA stores responses under person-linked private links and hosts can view them.",
+      "brief": "An event organizer wants a live moderated interview guide and promises responses will be anonymous, although survee stores responses under person-linked private links and hosts can view them.",
       "gold": {
         "action": "out_of_scope",
         "packageId": null,
@@ -298,7 +298,7 @@
     },
     {
       "id": "formal-moc-approval",
-      "brief": "A process-safety owner wants KQA to collect hazard-review answers, approve a proposed equipment change, and confirm that the process is cleared for startup under the site's management-of-change procedure.",
+      "brief": "A process-safety owner wants survee to collect hazard-review answers, approve a proposed equipment change, and confirm that the process is cleared for startup under the site's management-of-change procedure.",
       "gold": {
         "action": "out_of_scope",
         "packageId": null,
@@ -327,7 +327,7 @@
     },
     {
       "id": "caregiver-validated-measure",
-      "brief": "A hospice provider wants KQA to reproduce the CAHPS Hospice Survey for family caregivers, calculate its standardized measures, and compare the results with published benchmarks.",
+      "brief": "A hospice provider wants survee to reproduce the CAHPS Hospice Survey for family caregivers, calculate its standardized measures, and compare the results with published benchmarks.",
       "gold": {
         "action": "out_of_scope",
         "packageId": null,
@@ -356,7 +356,7 @@
     },
     {
       "id": "financial-wellbeing-scored-measure",
-      "brief": "A nonprofit wants to administer the CFPB Financial Well-Being Scale in KQA, calculate each participant's score, and compare scores before and after financial coaching. The host has not selected another scoring system or privacy method.",
+      "brief": "A nonprofit wants to administer the CFPB Financial Well-Being Scale in survee, calculate each participant's score, and compare scores before and after financial coaching. The host has not selected another scoring system or privacy method.",
       "gold": {
         "action": "out_of_scope",
         "packageId": null,
@@ -372,7 +372,7 @@
     },
     {
       "id": "digital-only-population-representativeness",
-      "brief": "A regional health service wants KQA to produce a representative estimate of access barriers for every patient, including people with limited internet access, limited English, or assistive-technology needs. The service can distribute only one QR-code questionnaire and will not provide assisted, paper, phone, or other participation routes. It plans to publish the results as representative of the whole patient population.",
+      "brief": "A regional health service wants survee to produce a representative estimate of access barriers for every patient, including people with limited internet access, limited English, or assistive-technology needs. The service can distribute only one QR-code questionnaire and will not provide assisted, paper, phone, or other participation routes. It plans to publish the results as representative of the whole patient population.",
       "gold": {
         "action": "out_of_scope",
         "packageId": null,
@@ -431,7 +431,7 @@
     },
     {
       "id": "clinical-treatment-recommendation",
-      "brief": "A clinic wants KQA to ask about symptoms and personal circumstances, score treatment options, and tell each patient which treatment is best for them.",
+      "brief": "A clinic wants survee to ask about symptoms and personal circumstances, score treatment options, and tell each patient which treatment is best for them.",
       "gold": {
         "action": "out_of_scope",
         "packageId": null,

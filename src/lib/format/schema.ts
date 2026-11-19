@@ -209,7 +209,7 @@ export const questionSchema = z.object({
     ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions only applies to nominal single, multi, or select questions" });
   }
   if (question.randomizeOptions && question.custom) {
-    ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions requires native choice controls so KQA can apply and record the presented order" });
+    ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions requires native choice controls so survee can apply and record the presented order" });
   }
   if (question.randomizeOptions && !question.options) {
     ctx.addIssue({ code: "custom", path: ["options"], message: "randomizeOptions requires at least two declared options" });

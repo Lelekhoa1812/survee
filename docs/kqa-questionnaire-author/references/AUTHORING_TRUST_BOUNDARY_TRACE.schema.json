@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kqa-bay.vercel.app/api/docs/evals/authoring-trust-boundary-trace.schema.json",
-  "title": "KQA sanitized authoring trust-boundary trace",
+  "title": "survee sanitized authoring trust-boundary trace",
   "description": "A minimized MCP-client trace for evaluating seeded agent behavior. Do not include raw tool arguments, questionnaire content, respondent answers, credentials, or direct identifiers.",
   "type": "object",
   "additionalProperties": false,

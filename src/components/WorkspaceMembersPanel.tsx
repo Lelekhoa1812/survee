@@ -84,7 +84,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
 
   return (
     <section id="workspace-members" className="card settings-anchor" style={{ marginBottom: 16 }}>
-      <div className="card-head"><Icon name="users" size={16} /><div><h2>Workspace members</h2><div className="sub">Invite people to share this workspace. One KQA account can belong to several workspaces.</div></div></div>
+      <div className="card-head"><Icon name="users" size={16} /><div><h2>Workspace members</h2><div className="sub">Invite people to share this workspace. One survee account can belong to several workspaces.</div></div></div>
       <div className="card-pad stack">
         <form className="row wrap" onSubmit={invite} style={{ alignItems: "end" }}>
           <label className="field" style={{ flex: "2 1 230px", margin: 0 }}><span>Email address</span><input className="input" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
@@ -107,7 +107,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
                       : null}</span>
                 </li>;
               })}</ul> : <p className="muted">No members are listed.</p>}
-              <p className="hint">Removing someone revokes access to this workspace and linked OAuth connections. Their KQA account and membership in other workspaces remain.</p>
+              <p className="hint">Removing someone revokes access to this workspace and linked OAuth connections. Their survee account and membership in other workspaces remain.</p>
             </section>
             <section className="stack" aria-labelledby="workspace-pending-invites"><h3 id="workspace-pending-invites">Pending invitations ({invitations.length})</h3>
               {invitations.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{invitations.map((invitation) => <li key={invitation.id} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{invitation.email}<small className="muted" style={{ display: "block" }}>{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</small></span><button className="btn sm" type="button" disabled={busy} onClick={() => void revoke(invitation)}>Revoke</button></li>)}</ul> : <p className="muted">No pending invitations.</p>}
@@ -123,7 +123,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
           <button className="btn danger solid" type="button" disabled={busy} onClick={() => void remove(removing)}>{busy ? <Spinner /> : null} Remove access</button>
         </>}
       >
-        <p>This ends their access to this workspace, including OAuth connections linked to their membership. Their KQA account and access to other workspaces will remain.</p>
+        <p>This ends their access to this workspace, including OAuth connections linked to their membership. Their survee account and access to other workspaces will remain.</p>
         {removing.role === "owner" && <p className="callout warn">The workspace must keep at least one owner. Only an owner can remove another owner.</p>}
       </Modal>}
     </section>

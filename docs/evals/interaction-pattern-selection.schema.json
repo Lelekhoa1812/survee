@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kqa.invalid/schemas/interaction-pattern-selection-v1.json",
-  "title": "KQA interaction pattern selection benchmark result",
+  "title": "survee interaction pattern selection benchmark result",
   "type": "object",
   "required": [
     "benchmarkVersion",

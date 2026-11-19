@@ -1,6 +1,6 @@
 # Questionnaire authoring and review evaluation
 
-KQA separates product-format correctness from questionnaire content quality. A static checker can establish specific HTML, manifest, binding, sandbox, and routing constraints. It cannot establish that an item measures the intended construct, that respondents understand it, that a flow is usable, or that a questionnaire is suitable for a decision.
+survee separates product-format correctness from questionnaire content quality. A static checker can establish specific HTML, manifest, binding, sandbox, and routing constraints. It cannot establish that an item measures the intended construct, that respondents understand it, that a flow is usable, or that a questionnaire is suitable for a decision.
 
 ## Current benchmark
 
@@ -41,7 +41,7 @@ The JSON result format is:
 
 Use `findings: []` when no issue is supported. A finding counts only when case, question location, category, non-empty evidence, rationale, recommendation, and severity are present and the location/category matches the annotation. The runner does not verify that evidence quotes the source or that rationale and recommendation are substantively correct; those require blinded human assessment. Confidence belongs to the live critique contract but is not currently scored by this benchmark. The runner reports micro precision/recall/F1, macro F1 over categories with any expected or predicted findings, category-level metrics, clean-control false-positive case rate, false alarms per 100 clean questions, and severity-weighted missed-issue rate. A finding with missing required fields or a duplicate pair does not earn a hit; it is counted as a false positive, and the expected issue remains a miss if unmatched. Unknown case/category values, duplicate case results, or incomplete case coverage are schema errors and stop scoring.
 
-This scorer measures issue localization and actionable reporting against the current annotations. It does not score whether a rewrite preserves the construct, nor technical correctness, model truthfulness, accessibility, ethics decisions, or actual respondent response processes. Those need distinct checks and human review. Keep KQA checker results in a separate format-validity lane and report them by diagnostic and fixture. Do not combine either lane into a single compensatory headline score.
+This scorer measures issue localization and actionable reporting against the current annotations. It does not score whether a rewrite preserves the construct, nor technical correctness, model truthfulness, accessibility, ethics decisions, or actual respondent response processes. Those need distinct checks and human review. Keep survee checker results in a separate format-validity lane and report them by diagnostic and fixture. Do not combine either lane into a single compensatory headline score.
 
 ## Build an enterprise evaluation program
 
@@ -49,7 +49,7 @@ The public corpus is a development tool only. Before using metrics to approve a 
 
 1. Create a larger frozen case bank from real briefs and questionnaires with permission, plus controlled seeded mutations. Cover full brief-to-questionnaire omissions as well as single-item faults. Include clean near-misses and context-dependent cases so the system can say `needs_context` instead of inventing a defect.
 2. Have two qualified reviewers label cases independently using a published rubric, then adjudicate disagreements. Keep the blind holdout private to reduce label leakage; publish its version and method, not its answer key. Report seeded and naturally occurring cases separately.
-3. Stratify cases across intended packages, populations, languages, supported question types, sensitivity, and risk. Include privacy, employment, health/service, educational, community, customer, event, operational, and personal contexts. Exclude use cases KQA prohibits as a decision instrument; benchmark boundary handling separately.
+3. Stratify cases across intended packages, populations, languages, supported question types, sensitivity, and risk. Include privacy, employment, health/service, educational, community, customer, event, operational, and personal contexts. Exclude use cases survee prohibits as a decision instrument; benchmark boundary handling separately.
 4. Compare versions on identical inputs with randomized output IDs and blinded reviewers. Save model/provider snapshot, settings, system and task prompts, skill hash, corpus and rubric versions, raw outputs, timestamps, run costs, and adjudications. Repeat a subset to estimate generation variability.
 5. Report per-category and per-risk-stratum precision, recall, F1, false positives per 100 clean questions, localization, unsupported assertions, and severity-weighted misses. Use predeclared hard gates for critical privacy or prohibited-use failures. For comparisons, report paired differences and uncertainty clustered by brief, not by treating each question as independent.
 6. Score proposed revisions separately: retain stable IDs and answer meaning, resolve the finding, preserve intended coverage, and avoid introducing a new defect. A finding or plausible rewrite is not evidence of improved measurement.
@@ -63,7 +63,7 @@ Do not report a model, prompt, or package as “validated” from this benchmark
 - [Census Appendix A2](https://www.census.gov/about/policies/quality/standards/appendixa2.html) explains pretesting approaches and their complementary value.
 - [CDC/NCHS Question Evaluation](https://www.cdc.gov/nchs/ccqder/question-evaluation/index.html) describes systematic evaluation of question performance and response error.
 - [Pew Research Center: Writing Survey Questions](https://www.pewresearch.org/writing-survey-questions/) covers wording, response options, order, and pretesting.
-- [ISER working paper on LLM survey pretesting](https://www.iser.essex.ac.uk/research/publications/publication-589050) is early evidence that prompt/model choice matters and simulated cognitive critique can complement expert review; its small seeded study is not a general KQA target.
+- [ISER working paper on LLM survey pretesting](https://www.iser.essex.ac.uk/research/publications/publication-589050) is early evidence that prompt/model choice matters and simulated cognitive critique can complement expert review; its small seeded study is not a general survee target.
 - [GESIS Survey Quality Predictor limitations](https://sqp.gesis.org/limits) describes domain and item-type limits of one measurement-quality resource; it is not a universal questionnaire oracle.
 - [NCHS Q-Bank](https://wwwn.cdc.gov/QBANK/) provides question evaluation reports useful for future natural examples and controls.
 - [AAPOR disclosure standards](https://aapor.org/standards-and-ethics/disclosure-standards/) support transparent reporting of questionnaire wording, population, sampling, and mode.

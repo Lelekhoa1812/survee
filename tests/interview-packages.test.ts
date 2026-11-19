@@ -12,7 +12,7 @@ describe("addressable interview package modules", () => {
       expect(result?.packages?.split("\n") ?? [], item.id).toContain(heading);
       expect(result?.packages, item.id).toContain("**Use for:**");
       expect(result?.packages, item.id).toContain("report-back owner");
-      expect(result?.packages, item.id).toContain("KQA does not monitor outcomes");
+      expect(result?.packages, item.id).toContain("survee does not monitor outcomes");
     }
   });
 
@@ -54,7 +54,7 @@ describe("addressable interview package modules", () => {
     expect(result?.packages).toContain("### Bounded organizational-change module");
     expect(result?.packages).toContain("readiness, engagement, sentiment, adoption, or manager score");
     expect(result?.packages).toContain("how workers will hear what changed");
-    expect(result?.packages).toContain("KQA does not collect or escalate them");
+    expect(result?.packages).toContain("survee does not collect or escalate them");
   });
 
   it("routes frontline resource observations to qualified investigation without claiming measured savings", async () => {

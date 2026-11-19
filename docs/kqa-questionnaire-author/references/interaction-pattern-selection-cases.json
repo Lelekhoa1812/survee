@@ -2,7 +2,7 @@
   "benchmarkVersion": "kqa-interaction-pattern-selection/1",
   "track": "interaction-pattern-selection",
   "status": "public-development-fixture",
-  "description": "Synthetic development cases testing whether authoring agents select KQA interaction patterns that fit the decision and respondent context, clarify material unknowns, or identify unsupported uses.",
+  "description": "Synthetic development cases testing whether authoring agents select survee interaction patterns that fit the decision and respondent context, clarify material unknowns, or identify unsupported uses.",
   "allowedActions": [
     "recommend",
     "clarify",
@@ -184,7 +184,7 @@
     },
     {
       "id": "rank-more-than-native-limit",
-      "brief": "A host wants respondents to rank 12 maintenance initiatives in a native KQA rank question. All 12 cannot be reduced without changing the decision; ties should be allowed and respondents may not know every initiative.",
+      "brief": "A host wants respondents to rank 12 maintenance initiatives in a native survee rank question. All 12 cannot be reduced without changing the decision; ties should be allowed and respondents may not know every initiative.",
       "gold": {
         "action": "clarify",
         "patterns": [],
@@ -341,7 +341,7 @@
     },
     {
       "id": "adaptive-moderator-probing",
-      "brief": "A researcher wants KQA to listen to each answer in real time, generate follow-up probes, and adapt the interview dynamically during a moderated interview.",
+      "brief": "A researcher wants survee to listen to each answer in real time, generate follow-up probes, and adapt the interview dynamically during a moderated interview.",
       "gold": {
         "action": "out_of_scope",
         "patterns": [],

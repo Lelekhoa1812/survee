@@ -56,7 +56,7 @@ export async function guardAdmin(opts: { mutating?: boolean; roles?: readonly Te
   const session = await adminSession();
   if (!session) return fail(401, "Sign in to continue.");
   if (opts.roles && !opts.roles.includes(session.role)) return fail(403, "Your workspace role does not allow this action.");
-  if (opts.mutating && !(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
+  if (opts.mutating && !(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   return null;
 }
 

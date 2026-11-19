@@ -232,7 +232,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                   {(p.questionOrderAssignments ?? []).filter((assignment) => assignment.surveyVersion === data.interview.currentVersion).map((assignment) => (
                     <section key={`${p.id}-${assignment.surveyVersion}`} className="card-pad" aria-label="Assigned question order" style={{ border: "1px solid var(--line)", borderRadius: 10, marginBottom: 10 }}>
                       <div className="who" style={{ marginBottom: 6 }}>Assigned question order · survey v{assignment.surveyVersion}</div>
-                      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Assignment records the order delivered by KQA; it does not confirm that every question was viewed.</p>
+                      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Assignment records the order delivered by survee; it does not confirm that every question was viewed.</p>
                       {Object.entries(assignment.groups).map(([groupId, ids]) => (
                         <div key={groupId} className="val" style={{ marginTop: 4 }}>
                           <span className="code-chip">{groupId}</span>{" "}

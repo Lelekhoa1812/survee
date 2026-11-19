@@ -15,7 +15,7 @@ export default async function NewPage() {
       <div className="page-head">
         <div>
           <h1>New interview</h1>
-          <p>Name it, choose how people answer, then upload the questionnaire. KQA checks the file before anything is created.</p>
+          <p>Name it, choose how people answer, then upload the questionnaire. survee checks the file before anything is created.</p>
         </div>
       </div>
       <NewInterview />

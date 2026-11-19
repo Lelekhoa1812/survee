@@ -59,13 +59,13 @@ describe("password reset routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
-      message: "If a verified KQA account uses this address, check its inbox for a password reset link.",
+      message: "If a verified survee account uses this address, check its inbox for a password reset link.",
     });
     const token = vi.mocked(createPendingPasswordReset).mock.calls[0][0].token;
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({
       to: "person@example.com",
-      subject: "Reset your KQA password",
+      subject: "Reset your survee password",
       text: expect.stringContaining(`https://kqa.example.com/reset-password#token=${token}`),
       html: expect.stringContaining(`href="https://kqa.example.com/reset-password#token=${token}"`),
     }));
@@ -114,7 +114,7 @@ describe("password reset routes", () => {
     expect(completePasswordReset).toHaveBeenCalledWith("reset-token", "a sufficiently long new password");
     expect(sendSmtp).toHaveBeenCalledWith(expect.objectContaining({
       to: "person@example.com",
-      subject: "Your KQA password was changed",
+      subject: "Your survee password was changed",
       text: expect.not.stringContaining("reset-token"),
     }));
   });

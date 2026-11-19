@@ -165,7 +165,7 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
         </>}
       >
         <div className="stack">
-          <p>Deletion permanently removes this image URL. KQA will block deletion while a saved questionnaire or active preview still uses it.</p>
+          <p>Deletion permanently removes this image URL. survee will block deletion while a saved questionnaire or active preview still uses it.</p>
           <label className="field"><span>Type <strong>{deleting.name}</strong> to confirm</span><input className="input" value={confirmName} onChange={(event) => setConfirmName(event.target.value)} autoComplete="off" /></label>
         </div>
       </Modal>}

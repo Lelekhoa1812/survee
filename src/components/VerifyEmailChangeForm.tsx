@@ -35,7 +35,7 @@ export function VerifyEmailChangeForm() {
     <section className="card auth-card">
       <div className="stack" style={{ gap: 10 }}>
         <BrandMark size={40} wordmark />
-        <div><h1>{verifiedEmail ? "Email verified" : "Verify your new email"}</h1><p className="muted" style={{ marginTop: 4 }}>{verifiedEmail ? `${verifiedEmail} is now the sign-in address for your account.` : "Select the button to confirm this address for your KQA account."}</p></div>
+        <div><h1>{verifiedEmail ? "Email verified" : "Verify your new email"}</h1><p className="muted" style={{ marginTop: 4 }}>{verifiedEmail ? `${verifiedEmail} is now the sign-in address for your account.` : "Select the button to confirm this address for your survee account."}</p></div>
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
       {verifiedEmail ? (

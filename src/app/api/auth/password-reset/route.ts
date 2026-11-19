@@ -7,7 +7,7 @@ import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { createPendingPasswordReset, removePendingPasswordReset } from "@/lib/repo/accounts";
 import { consumeRateLimit } from "@/lib/repo";
 
-const GENERIC = "If a verified KQA account uses this address, check its inbox for a password reset link.";
+const GENERIC = "If a verified survee account uses this address, check its inbox for a password reset link.";
 
 function clientIp(h: Headers): string {
   const platform = h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip");
@@ -21,7 +21,7 @@ function escapeHtml(value: string): string {
 }
 
 export async function POST(req: Request) {
-  if (!(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
+  if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ email?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
   const parsed = parseEmail(str(body.data.email, 254) ?? "");
@@ -56,10 +56,10 @@ export async function POST(req: Request) {
   try {
     await sendSmtp({
       to: parsed.email,
-      subject: "Reset your KQA password",
+      subject: "Reset your survee password",
       messageId: newMessageId(smtp.user),
       text: `Choose a new password using this link: ${resetUrl.toString()}\n\nThe link expires in 30 minutes and works once. If you did not request this, you can ignore this message.`,
-      html: `<p>Choose a new KQA password using the link below. It expires in 30 minutes and works once.</p><p><a href="${escapeHtml(resetUrl.toString())}">Reset your password</a></p><p>If you did not request this, you can ignore this message.</p>`,
+      html: `<p>Choose a new survee password using the link below. It expires in 30 minutes and works once.</p><p><a href="${escapeHtml(resetUrl.toString())}">Reset your password</a></p><p>If you did not request this, you can ignore this message.</p>`,
     });
   } catch {
     await removePendingPasswordReset(pendingId).catch(() => {});

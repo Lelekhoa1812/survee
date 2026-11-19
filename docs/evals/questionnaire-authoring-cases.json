@@ -1,7 +1,7 @@
 {
   "benchmarkVersion": "kqa-questionnaire-review/1",
   "track": "content-review",
-  "description": "Public development fixtures for evaluating evidence-grounded KQA questionnaire critique. This corpus is not a held-out performance set.",
+  "description": "Public development fixtures for evaluating evidence-grounded survee questionnaire critique. This corpus is not a held-out performance set.",
   "categories": [
     "construct_scope", "wording_bias", "reference_period", "recall_burden", "response_options",
     "scale_design", "answer_form_fit", "sensitivity_minimization", "flow_burden", "brief_coverage"

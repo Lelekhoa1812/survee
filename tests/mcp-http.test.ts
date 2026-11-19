@@ -36,7 +36,7 @@ async function initialize(protocolVersion: unknown) {
       params: { protocolVersion, capabilities: {}, clientInfo: { name: "test", version: "1" } },
     }),
   }));
-  return { status: response.status, body: await response.json() as { result?: { protocolVersion?: string } } };
+  return { status: response.status, body: await response.json() as { result?: { protocolVersion?: string; serverInfo?: { name: string; version: string } } } };
 }
 
 async function rpc(method: string, params: unknown = {}) {
@@ -53,6 +53,7 @@ describe("MCP protocol version negotiation", () => {
     const response = await initialize("2025-06-18");
     expect(response.status).toBe(200);
     expect(response.body.result?.protocolVersion).toBe("2025-06-18");
+    expect(response.body.result?.serverInfo).toEqual({ name: "survee", version: "1.0.0" });
   });
 
   it("returns the supported version for an unsupported date-shaped request", async () => {

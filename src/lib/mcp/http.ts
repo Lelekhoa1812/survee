@@ -40,7 +40,7 @@ function acceptable(req: Request): boolean {
 }
 
 function protocolVersion(requested: unknown): string {
-  // KQA implements only this version. Echo it when requested; otherwise answer
+  // survee implements only this version. Echo it when requested; otherwise answer
   // with a version the server supports, as required by MCP version negotiation.
   if (requested === PROTOCOL) return requested;
   return PROTOCOL;
@@ -83,8 +83,8 @@ async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promi
     return rpcResult(msg.id ?? null, {
       protocolVersion: protocolVersion(params.protocolVersion),
       capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
-      serverInfo: { name: "kqa", version: "1.0.0" },
-      instructions: "KQA host tools and user-selected prompt templates. Use prompts/list to discover draft, review and update workflows; prompts do not add permissions or approve actions. Available tools reflect this credential's permissions; ask the workspace owner to grant a capability if a tool is unavailable. Send invites with send_invite. Check delivery with check_invite_delivery. This server does not read a mailbox except for message ids it stored.",
+      serverInfo: { name: "survee", version: "1.0.0" },
+      instructions: "survee host tools and user-selected prompt templates. Use prompts/list to discover draft, review and update workflows; prompts do not add permissions or approve actions. Available tools reflect this credential's permissions; ask the workspace owner to grant a capability if a tool is unavailable. Send invites with send_invite. Check delivery with check_invite_delivery. This server does not read a mailbox except for message ids it stored.",
     });
   }
   if (msg.method === "ping") return rpcResult(msg.id ?? null, {});
@@ -119,7 +119,7 @@ export async function handleMcp(req: Request): Promise<Response> {
     if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
     const body = await readBody(req);
     if (!body.ok) return new Response(JSON.stringify(rpcError(null, -32700, body.message)), { status: body.status, headers: JSON_HEADERS });
-    // KQA speaks MCP 2025-06-18, which removed JSON-RPC batch support. Reject
+    // survee speaks MCP 2025-06-18, which removed JSON-RPC batch support. Reject
     // arrays before dispatch so a small-message batch cannot fan out work.
     if (Array.isArray(body.data)) {
       return new Response(JSON.stringify(rpcError(null, -32600, "JSON-RPC batch requests are not supported.")), { status: 400, headers: JSON_HEADERS });

@@ -49,7 +49,7 @@ export async function sendSmtp(message: OutboundMail): Promise<{ messageId: stri
   });
   try {
     const info = await transport.sendMail({
-      from: { name: "KQA", address: cfg.user },
+      from: { name: "survee", address: cfg.user },
       to: message.to,
       subject: message.subject,
       text: message.text,

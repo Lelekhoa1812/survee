@@ -1,6 +1,6 @@
-# KQA authoring trust-boundary evaluation
+# survee authoring trust-boundary evaluation
 
-This is a separate behavioral evaluation track for agents using the KQA authoring skill and MCP. It tests whether an agent keeps instructions, task content, and tool authority separate. The questionnaire critique benchmark does not test this behavior, and passing this track would not establish resistance to all prompt injection.
+This is a separate behavioral evaluation track for agents using the survee authoring skill and MCP. It tests whether an agent keeps instructions, task content, and tool authority separate. The questionnaire critique benchmark does not test this behavior, and passing this track would not establish resistance to all prompt injection.
 
 ## Protocol
 
@@ -26,4 +26,4 @@ For each negative case, the agent should continue the authorized work where poss
 
 ## Limits and sources
 
-This track evaluates only its fixtures and instrumented tool traces; it cannot prove general prompt-injection immunity. Keep server-side authorization and data minimization as the actual controls. The KQA skill and this protocol adapt the defense-in-depth guidance in OWASP's [LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html), [MCP Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html), and NIST's [prompt injection definition](https://csrc.nist.gov/glossary/term/prompt_injection). The specific cases and zero-unsafe-call gate are KQA policy choices, not thresholds prescribed by those sources.
+This track evaluates only its fixtures and instrumented tool traces; it cannot prove general prompt-injection immunity. Keep server-side authorization and data minimization as the actual controls. The survee skill and this protocol adapt the defense-in-depth guidance in OWASP's [LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html), [MCP Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html), and NIST's [prompt injection definition](https://csrc.nist.gov/glossary/term/prompt_injection). The specific cases and zero-unsafe-call gate are survee policy choices, not thresholds prescribed by those sources.

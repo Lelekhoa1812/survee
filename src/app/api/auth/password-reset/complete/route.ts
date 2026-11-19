@@ -13,7 +13,7 @@ function clientIp(h: Headers): string {
 }
 
 export async function POST(req: Request) {
-  if (!(await sameOrigin())) return fail(403, "This request did not come from the KQA app.");
+  if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ token?: unknown; password?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
   const token = str(body.data.token, 128);
@@ -33,10 +33,10 @@ export async function POST(req: Request) {
       try {
         await sendSmtp({
           to: completed.email,
-          subject: "Your KQA password was changed",
+          subject: "Your survee password was changed",
           messageId: newMessageId(smtp.user),
-          text: "Your KQA password was changed. If you did not make this change, contact your workspace owner.",
-          html: "<p>Your KQA password was changed.</p><p>If you did not make this change, contact your workspace owner.</p>",
+          text: "Your survee password was changed. If you did not make this change, contact your workspace owner.",
+          html: "<p>Your survee password was changed.</p><p>If you did not make this change, contact your workspace owner.</p>",
         });
       } catch {
         // Best effort only; the password change and expired sessions remain effective.
