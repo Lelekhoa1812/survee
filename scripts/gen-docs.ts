@@ -38,6 +38,8 @@ const skillReferences: Record<string, string> = {
   "repeated-assets.kqa.html": "examples/repeated-assets.kqa.html",
   "service-improvement.kqa.html": "examples/service-improvement.kqa.html",
   "service-improvement.review.md": "examples/service-improvement.review.md",
+  "industrial-operations.kqa.html": "examples/industrial-operations.kqa.html",
+  "industrial-operations.review.md": "examples/industrial-operations.review.md",
   "personal-planning.kqa.html": "examples/personal-planning.kqa.html",
   "personal-planning.review.md": "examples/personal-planning.review.md",
   "question-order-variation.kqa.html": "examples/question-order-variation.kqa.html",

@@ -29,6 +29,8 @@ describe("agent documentation bundle", () => {
     ["repeated-assets.kqa.html", "examples/repeated-assets.kqa.html"],
     ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
     ["service-improvement.review.md", "examples/service-improvement.review.md"],
+    ["industrial-operations.kqa.html", "examples/industrial-operations.kqa.html"],
+    ["industrial-operations.review.md", "examples/industrial-operations.review.md"],
     ["personal-planning.kqa.html", "examples/personal-planning.kqa.html"],
     ["personal-planning.review.md", "examples/personal-planning.review.md"],
   ] as const;
@@ -47,6 +49,7 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("<!-- INTERVIEW_PACKAGES.md -->");
     expect(bundle).toContain("### Safety and quality learning");
     expect(bundle).toContain("### Personal reflection and wellbeing");
+    expect(bundle).toContain("industrial-operations.kqa.html");
   });
 
   it("keeps the package taxonomy and high-risk use safeguards explicit", async () => {
@@ -274,6 +277,7 @@ describe("agent documentation bundle", () => {
   it("publishes package-based worked examples with non-validation limits", async () => {
     for (const [htmlPath, reviewPath, packageId] of [
       ["examples/service-improvement.kqa.html", "examples/service-improvement.review.md", "service-improvement"],
+      ["examples/industrial-operations.kqa.html", "examples/industrial-operations.review.md", "industrial-operations"],
       ["examples/personal-planning.kqa.html", "examples/personal-planning.review.md", "personal-planning"],
     ]) {
       const html = await readAsset(htmlPath);
@@ -284,5 +288,19 @@ describe("agent documentation bundle", () => {
       expect(review?.body).toContain(packageId);
       expect(review?.body?.toLowerCase()).toContain("not validated");
     }
+  });
+
+  it("publishes the industrial package example as a one-question flow with a bounded route and honest AI/test provenance", async () => {
+    const html = await readAsset("examples/industrial-operations.kqa.html");
+    const review = await readAsset("examples/industrial-operations.review.md");
+    expect(html?.type).toBe("text/html; charset=utf-8");
+    expect(html?.body).toContain('"presentation": "guided-question"');
+    expect(html?.body).toContain('"operator": "contains", "value": "maintenance-coordination"');
+    expect(html?.body).toContain('"operator": "equals", "value": "yes"');
+    expect(review?.body).toContain("AI assisted drafting");
+    expect(review?.body).toContain("Synthetic data:");
+    expect(review?.body).toContain("None used.");
+    expect(review?.body).toContain("NOT validated or ready to field");
+    expect(review?.body).toContain("task-based usability comparison");
   });
 });

@@ -166,6 +166,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const pendingRecordOperations = useRef<PendingRecordOperation[]>([]);
   const rejectedRecordDraftsRef = useRef<RejectedRecordDraft[]>([]);
   const focusQuestionAfterClose = useRef<string | null>(null);
+  const submittedStatusRef = useRef<HTMLDivElement>(null);
+  const submittedFocusPending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inflight = useRef(false);
@@ -173,6 +175,13 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const attempts = useRef(0);
   const localeMeta = RESPONDENT_LOCALE_META[locale];
   const t = (key: RespondentMessage, values: Record<string, string | number> = {}) => respondentMessage(locale, key, values);
+  const submitted = data?.participant.status === "submitted";
+
+  useEffect(() => {
+    if (!submitted || !submittedFocusPending.current) return;
+    submittedFocusPending.current = false;
+    submittedStatusRef.current?.focus();
+  }, [submitted]);
 
   const changeLocale = (value: string) => {
     if (!(value in RESPONDENT_LOCALE_META)) return;
@@ -644,6 +653,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: { questionId: string; rowId?: string; fieldId?: string; reason: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
     setSubmitting(false);
     if (res.ok) {
+      submittedFocusPending.current = true;
       setConfirming(false);
       setSubmitProblems({});
       setSubmitError("");
@@ -728,7 +738,6 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     );
   }
 
-  const submitted = data.participant.status === "submitted";
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
   const hasUnsavedChanges = Object.keys(pending.current).length > 0 || pendingRecordOperations.current.length > 0 || rejectedRecordDrafts.length > 0;
   const firstLengthDraft = Object.values(lengthDrafts)[0];
@@ -849,7 +858,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         </div>
       </div>
 
-      <div className={`rs-banner ${refreshRequired || (!submitted && closed) ? "warn" : submitted ? "ok" : "none"}`} role={refreshRequired ? "alert" : submitted || closed ? "status" : undefined}>
+      <div ref={submittedStatusRef} tabIndex={submitted ? -1 : undefined} className={`rs-banner ${refreshRequired || (!submitted && closed) ? "warn" : submitted ? "ok" : "none"}`} role={refreshRequired ? "alert" : submitted || closed ? "status" : undefined}>
         {refreshRequired && <><Icon name="lock" size={16} /> {staleDraft.length > 0 ? t("changedDraft") : t("changedSaved")} <span className="row">{staleDraft.length > 0 && <button className="btn" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button>}<button className="btn" onClick={reloadLatestVersion}>{t("reloadQuestionnaire")}</button></span></>}
         {submitted && <><Icon name="check" size={16} /> {t("submittedMessage")}</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> {t("closedMessage")}</>}

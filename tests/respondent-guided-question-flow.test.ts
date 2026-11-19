@@ -137,6 +137,29 @@ describe("guided question respondent flow", () => {
     expect(host.querySelector("[role=dialog]")).not.toBeNull();
   });
 
+  it("moves focus to the submitted status after the review dialog closes", async () => {
+    await start();
+    const reviewButton = findButton("Review answers");
+    await act(async () => reviewButton.click());
+    expect(host.querySelector("[role=dialog]")).not.toBeNull();
+
+    const submitButton = findButton("Submit answers");
+    await act(async () => {
+      submitButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const submittedStatus = host.querySelector<HTMLDivElement>(".rs-banner.ok");
+    expect(host.querySelector("[role=dialog]")).toBeNull();
+    expect(reviewButton.disabled).toBe(true);
+    expect(submittedStatus).not.toBeNull();
+    expect(submittedStatus?.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(submittedStatus);
+    expect(submittedStatus?.textContent).toContain("Submitted.");
+    expect(document.activeElement).not.toBe(document.body);
+    expect(submitButton.isConnected).toBe(false);
+  });
+
   it("clears the active-question filter when switching to show all", async () => {
     const { postMessage } = await start();
     await act(async () => findButton("Show all questions").click());

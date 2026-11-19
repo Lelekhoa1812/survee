@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Industrial process learning</title>
+<script type="application/json" id="kqa-manifest">
+{
+  "format": "kqa/1",
+  "title": "Industrial process learning",
+  "description": "Illustrative, optional feedback about recurring workflow friction and resource-efficiency opportunities.",
+  "presentation": "guided-question",
+  "sections": [
+    { "id": "context", "title": "Work context" },
+    { "id": "flow", "title": "Recurring workflow friction" },
+    { "id": "resources", "title": "Resource-efficiency observations" }
+  ],
+  "questions": [
+    {
+      "id": "work-area", "type": "select", "section": "context",
+      "label": "Which broad work area best matches the work you are thinking about?",
+      "help": "Think about [defined process] during [recent reference period]. Choose a broad area only; do not name a team, shift, asset, or person.",
+      "options": [
+        { "value": "operations", "label": "Operations or production" },
+        { "value": "maintenance", "label": "Maintenance" },
+        { "value": "planning", "label": "Planning or scheduling" },
+        { "value": "process-partner", "label": "Another process partner" },
+        { "value": "unsure", "label": "Not sure or prefer not to say" }
+      ]
+    },
+    {
+      "id": "constraints", "type": "multi", "section": "flow", "maxSelections": 3,
+      "exclusiveOptions": ["none", "unsure"],
+      "label": "During [period], which factors, if any, most often made this work wait or repeat?",
+      "help": "Choose up to three. Leave this blank if you are not sure or do not want to answer. Do not report an active hazard, incident, or urgent issue here.",
+      "options": [
+        { "value": "materials", "label": "Materials or parts were unavailable" },
+        { "value": "equipment", "label": "Equipment or tools were unavailable" },
+        { "value": "information", "label": "Information or instructions were unclear" },
+        { "value": "approval", "label": "A decision or approval was delayed" },
+        { "value": "maintenance-coordination", "label": "Routine operations and maintenance coordination" },
+        { "value": "schedule", "label": "Schedule or priority changes" },
+        { "value": "rework", "label": "Work had to be repeated" },
+        { "value": "none", "label": "None of these" },
+        { "value": "unsure", "label": "Not sure or prefer not to say" }
+      ]
+    },
+    {
+      "id": "coordination", "type": "scale", "section": "flow", "min": 1, "max": 5,
+      "label": "Thinking only about routine planned work, how reliably do operations and maintenance coordinate timing and return-to-service expectations?",
+      "help": "1 is Not reliably; 5 is Very reliably. Leave unanswered if this is outside your experience. Do not assess permit, isolation, safeguard, or other safety-control compliance.",
+      "when": { "all": [{ "question": "constraints", "operator": "contains", "value": "maintenance-coordination" }] }
+    },
+    {
+      "id": "flow-example", "type": "longtext", "section": "flow", "maxLength": 1000,
+      "label": "What general process condition should the improvement owner examine?",
+      "help": "Optional. Describe a recurring condition, not a person or a one-off incident. Leave out exact asset identifiers, product or customer details, names, security-sensitive information, and urgent or safety-critical concerns."
+    },
+    {
+      "id": "resource-observed", "type": "single", "section": "resources",
+      "label": "During [period], did you notice a possible opportunity to use energy, water, or materials more efficiently, or to reduce waste, in [defined process]?",
+      "help": "This asks about an observation for later qualified review. It does not measure savings or authorize a change.",
+      "options": [
+        { "value": "yes", "label": "Yes" },
+        { "value": "no", "label": "No" },
+        { "value": "unsure", "label": "Not sure or prefer not to say" }
+      ]
+    },
+    {
+      "id": "resource-detail", "type": "longtext", "section": "resources", "maxLength": 1200,
+      "label": "What did you observe, and what operating conditions should a qualified team understand?",
+      "help": "Optional. Describe conditions in general terms. Do not estimate savings, emissions, cost, or output; name a person or asset; or recommend changing approved work. Consider quality, reliability, workload, timing, and safety constraints. Use the site's monitored route for urgent concerns.",
+      "when": { "all": [{ "question": "resource-observed", "operator": "equals", "value": "yes" }] }
+    },
+    {
+      "id": "improvement", "type": "longtext", "section": "resources", "maxLength": 1000,
+      "label": "What small process change, if any, should the improvement owner consider investigating?",
+      "help": "Optional. A suggestion is not an authorization or a promise that the change will be adopted. Do not include names or sensitive operational details."
+    }
+  ]
+}
+</script>
+<style>
+:root { color-scheme: light dark; font: 1rem/1.55 system-ui, sans-serif; --surface: Canvas; --ink: CanvasText; --line: color-mix(in srgb, CanvasText 24%, Canvas); --muted: color-mix(in srgb, CanvasText 72%, Canvas); --focus: #1265c7; }
+* { box-sizing: border-box; }
+body { margin: 0; background: color-mix(in srgb, Canvas 94%, #7293a8); color: var(--ink); }
+main { width: min(100% - 2rem, 54rem); margin: 0 auto; padding: 2rem 0 5rem; }
+h1, h2, p { margin: 0; }
+h1 { font-size: clamp(1.65rem, 4vw, 2.2rem); line-height: 1.2; }
+h2 { font-size: 1.15rem; }
+.intro, .question { border: 1px solid var(--line); border-radius: .8rem; background: var(--surface); padding: clamp(1rem, 3vw, 1.4rem); }
+.intro { display: grid; gap: .9rem; margin: 1.25rem 0 2rem; }
+.eyebrow { color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.question-list { display: grid; gap: 1rem; }
+.question { display: grid; gap: .8rem; }
+.question h3 { font-size: 1rem; line-height: 1.4; margin: 0; }
+.help { color: var(--muted); font-size: .93rem; }
+label { display: grid; gap: .45rem; padding: .55rem 0; }
+label.option { display: flex; align-items: flex-start; gap: .7rem; }
+input, select, textarea { font: inherit; }
+input[type="radio"], input[type="checkbox"] { width: 1.15rem; height: 1.15rem; margin-top: .22rem; flex: none; accent-color: #16775c; }
+select, textarea { width: 100%; min-height: 2.8rem; border: 1px solid var(--line); border-radius: .45rem; padding: .65rem .75rem; background: var(--surface); color: var(--ink); }
+textarea { min-height: 7rem; resize: vertical; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.choices { border: 0; padding: 0; margin: 0; }
+.choices legend { font-weight: 600; margin-bottom: .4rem; }
+.section { margin-top: 2rem; }
+.section > p { color: var(--muted); margin: .5rem 0 1rem; }
+.notice { border-left: .25rem solid #16775c; padding-left: 1rem; }
+.placeholder { background: color-mix(in srgb, #d99c27 22%, Canvas); padding: .75rem; border-radius: .35rem; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Illustrative industrial-operations example</p>
+  <h1>Help improve [defined process]</h1>
+  <p>This optional questionnaire asks about recurring workflow friction and possible resource-efficiency opportunities during [recent reference period]. Do not use it to report an urgent issue, hazard, incident, or safety concern.</p>
+
+  <section class="intro" aria-labelledby="before-heading">
+    <h2 id="before-heading">Before you begin</h2>
+    <p class="placeholder"><strong>[Host: replace with an approved, site-specific notice before inviting anyone.]</strong> Explain the purpose, who can see identifiable answers, how they will be used, retention or deletion expectations, and whom to contact.</p>
+    <p class="notice">KQA associates answers with participant records, and authorized hosts can review person-level answers. Do not describe this collection as anonymous. Your answers are optional. This is not a live operations log, handover, hazard or incident report, safety investigation, or monitored request channel. Use the site's established urgent and safety reporting process for those matters.</p>
+    <p>A qualified operations and resource-efficiency team may review general observations. Suggestions do not measure savings or authorize a change. If an earlier answer makes a follow-up no longer apply, KQA retains the saved response; it may appear again if the question becomes eligible. You can inspect or clear retained answers in Check your answers before submitting.</p>
+  </section>
+
+  <section class="section" aria-labelledby="context-heading">
+    <p class="eyebrow">Context</p><h2 id="context-heading">Choose a broad work context</h2>
+    <p>Use the recent period and process named by the host. Do not identify an individual or exact asset.</p>
+    <div class="question-list" data-kqa-question-list="context">
+      <article class="question" data-kqa-question-id="work-area">
+        <h3 id="work-area-question">Which broad work area best matches the work you are thinking about?</h3>
+        <p class="help" id="work-area-help">Choose a broad area only. Leave unanswered if you prefer not to say.</p>
+        <label for="work-area"><span>Work area</span>
+          <select id="work-area" aria-labelledby="work-area-question" aria-describedby="work-area-help" data-kqa="work-area">
+            <option value="">Choose a broad work area</option>
+            <option value="operations">Operations or production</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="planning">Planning or scheduling</option>
+            <option value="process-partner">Another process partner</option>
+            <option value="unsure">Not sure or prefer not to say</option>
+          </select>
+        </label>
+      </article>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="flow-heading">
+    <p class="eyebrow">Workflow</p><h2 id="flow-heading">Describe recurring friction, if any</h2>
+    <p>These questions concern general process conditions, not individual performance or safety-control compliance.</p>
+    <div class="question-list" data-kqa-question-list="flow">
+      <article class="question" data-kqa-question-id="constraints">
+        <h3 id="constraints-question">During [period], which factors, if any, most often made this work wait or repeat?</h3>
+        <p class="help" id="constraints-help">Choose up to three. “None” and “Not sure or prefer not to say” must be selected alone.</p>
+        <fieldset class="choices" aria-labelledby="constraints-question" aria-describedby="constraints-help">
+          <legend>Select all that apply</legend>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="materials"><span>Materials or parts were unavailable</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="equipment"><span>Equipment or tools were unavailable</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="information"><span>Information or instructions were unclear</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="approval"><span>A decision or approval was delayed</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="maintenance-coordination"><span>Routine operations and maintenance coordination</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="schedule"><span>Schedule or priority changes</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="rework"><span>Work had to be repeated</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="none"><span>None of these</span></label>
+          <label class="option"><input type="checkbox" data-kqa="constraints" value="unsure"><span>Not sure or prefer not to say</span></label>
+        </fieldset>
+      </article>
+      <article class="question" data-kqa-question-id="coordination">
+        <h3 id="coordination-question">Thinking only about routine planned work, how reliably do operations and maintenance coordinate timing and return-to-service expectations?</h3>
+        <p class="help" id="coordination-help">1 is Not reliably; 5 is Very reliably. Leave unanswered if this is outside your experience. Do not assess permits, isolations, safeguards, or other safety-control compliance.</p>
+        <fieldset class="choices" aria-labelledby="coordination-question" aria-describedby="coordination-help">
+          <legend>Choose one answer from 1 to 5</legend>
+          <label class="option"><input type="radio" name="coordination" data-kqa="coordination" value="1"><span>1 — Not reliably</span></label>
+          <label class="option"><input type="radio" name="coordination" data-kqa="coordination" value="2"><span>2</span></label>
+          <label class="option"><input type="radio" name="coordination" data-kqa="coordination" value="3"><span>3</span></label>
+          <label class="option"><input type="radio" name="coordination" data-kqa="coordination" value="4"><span>4</span></label>
+          <label class="option"><input type="radio" name="coordination" data-kqa="coordination" value="5"><span>5 — Very reliably</span></label>
+        </fieldset>
+      </article>
+      <article class="question" data-kqa-question-id="flow-example">
+        <label for="flow-example"><strong>What general process condition should the improvement owner examine?</strong></label>
+        <p class="help">Optional. Describe a recurring condition, not a person or a one-off incident. Leave out exact asset, product, customer, security-sensitive, or personal details.</p>
+        <textarea id="flow-example" data-kqa="flow-example" maxlength="1000"></textarea>
+      </article>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="resources-heading">
+    <p class="eyebrow">Resource efficiency</p><h2 id="resources-heading">Share an observation for qualified review</h2>
+    <p>Observations are leads for investigation, not measured performance or authorization to change standard work.</p>
+    <div class="question-list" data-kqa-question-list="resources">
+      <article class="question" data-kqa-question-id="resource-observed">
+        <h3 id="resource-observed-question">During [period], did you notice a possible opportunity to use energy, water, or materials more efficiently, or to reduce waste, in [defined process]?</h3>
+        <p class="help" id="resource-observed-help">This is optional. Leave unanswered if you are unsure or prefer not to say.</p>
+        <fieldset class="choices" aria-labelledby="resource-observed-question" aria-describedby="resource-observed-help">
+          <legend>Choose one answer</legend>
+          <label class="option"><input type="radio" name="resource-observed" data-kqa="resource-observed" value="yes"><span>Yes</span></label>
+          <label class="option"><input type="radio" name="resource-observed" data-kqa="resource-observed" value="no"><span>No</span></label>
+          <label class="option"><input type="radio" name="resource-observed" data-kqa="resource-observed" value="unsure"><span>Not sure or prefer not to say</span></label>
+        </fieldset>
+      </article>
+      <article class="question" data-kqa-question-id="resource-detail">
+        <label for="resource-detail"><strong>What did you observe, and what operating conditions should a qualified team understand?</strong></label>
+        <p class="help">Optional. Describe conditions generally. Do not estimate savings, emissions, cost, or output; identify a person or asset; or recommend changing approved work. Mention quality, reliability, workload, timing, or safety constraints only at a general level.</p>
+        <textarea id="resource-detail" data-kqa="resource-detail" maxlength="1200"></textarea>
+      </article>
+      <article class="question" data-kqa-question-id="improvement">
+        <label for="improvement"><strong>What small process change, if any, should the improvement owner consider investigating?</strong></label>
+        <p class="help">Optional. A suggestion is not authorization, a commitment, or a promise that the change will be adopted. Do not include names or sensitive operational details.</p>
+        <textarea id="improvement" data-kqa="improvement" maxlength="1000"></textarea>
+      </article>
+    </div>
+  </section>
+</main>
+</body>
+</html>
