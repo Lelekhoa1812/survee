@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBundle, DOCS, readAsset, readDoc } from "../src/lib/docs";
+import { getInterviewPackage, INTERVIEW_PACKAGES, INTERVIEW_PACKAGE_VERSION } from "../src/lib/interview-packages";
 
 describe("agent documentation bundle", () => {
   it("publishes the design system and includes it in the full questionnaire bundle", async () => {
@@ -60,6 +61,19 @@ describe("agent documentation bundle", () => {
     expect(packages).toContain("Synthetic responses can test code paths");
     expect(packages).toContain("preceding instructions/questions");
     expect(packages).toContain("AAPOR Responsible AI Integration in Survey Research report (2026)");
+  });
+
+  it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
+    const packages = await readDoc("INTERVIEW_PACKAGES.md");
+    expect(packages).toContain("kqa-interview-packages/1");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/1");
+    for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
+    const profile = await getInterviewPackage("candidate-experience");
+    expect(profile?.packageId).toBe("candidate-experience");
+    expect(profile?.packageVersion).toBe(INTERVIEW_PACKAGE_VERSION);
+    expect(profile?.packages).toContain("### Candidate experience");
+    expect(profile?.packages).toContain("## Risk-based release gate");
+    expect(profile?.packages).not.toContain("### Safety and quality learning\n\n**Use for:**");
   });
 
   it("documents respondent navigation and custom-question focus targets once", async () => {

@@ -170,10 +170,16 @@ beforeEach(() => {
 describe("MCP tools", () => {
   it("returns the interview package guide to interview readers", async () => {
     const res = await call("get_interview_packages", {});
-    const body = await res.json() as { result: { structuredContent: { source: string; packages: string } } };
+    const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string } } };
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/1");
+    const focused = await call("get_interview_packages", { packageId: "candidate-experience" });
+    const focusedBody = await focused.json() as { result: { structuredContent: { packageId: string; packages: string } } };
+    expect(focusedBody.result.structuredContent.packageId).toBe("candidate-experience");
+    expect(focusedBody.result.structuredContent.packages).toContain("### Candidate experience");
+    expect(focusedBody.result.structuredContent.packages).not.toContain("### Safety and quality learning\n\n**Use for:**");
     expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_interview_packages");
     expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_interview_packages");
   });
@@ -216,6 +222,9 @@ describe("MCP tools", () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(Object.keys(MCP_TOOL_CAPABILITIES).sort());
     expect(tools.every((tool) => tool.annotations && typeof tool.annotations.readOnlyHint === "boolean")).toBe(true);
     expect(tools.find((tool) => tool.name === "preview_questionnaire_version_patch")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
+    expect(tools.find((tool) => tool.name === "create_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
+    expect(tools.find((tool) => tool.name === "create_interview")?.description).toContain("immediately open a live version-1 interview");
+    expect(tools.find((tool) => tool.name === "get_interview_packages")?.inputSchema.properties).toMatchObject({ packageId: { type: "string", enum: expect.arrayContaining(["product-discovery", "personal-wellbeing-reflection"]) } });
     expect(tools.find((tool) => tool.name === "delete_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
   });

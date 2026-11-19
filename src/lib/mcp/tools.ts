@@ -5,6 +5,7 @@ import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canS
 import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, withCurrentEligibility, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
 import { readDoc } from "../docs";
+import { getInterviewPackage, INTERVIEW_PACKAGES } from "../interview-packages";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
@@ -295,11 +296,11 @@ async function onePerson(personId: string) {
 const TOOLS: ToolDef[] = [
   {
     name: "get_interview_packages",
-    description: "Return KQA's current domain-specific interview packages, reusable prompts, and safeguards for industrial, public-service, research, and personal use. These are design aids, not validated instruments or automated decisions.",
-    inputSchema: obj({}),
-    async run() {
-      const packages = await readDoc("INTERVIEW_PACKAGES.md");
-      return packages ? ok({ source: "docs/INTERVIEW_PACKAGES.md", packages }) : err("The interview package guide is unavailable.", "docs_unavailable");
+    description: "Return KQA's versioned interview package catalog and safeguards. Omit packageId for the full library, or select a stable packageId to receive the catalog, shared safeguards, and focused package guidance. These are design aids, not validated instruments or automated decisions.",
+    inputSchema: obj({ packageId: { type: "string", enum: INTERVIEW_PACKAGES.map((item) => item.id) } }),
+    async run(args) {
+      const pack = await getInterviewPackage(args.packageId as (typeof INTERVIEW_PACKAGES)[number]["id"] | undefined);
+      return pack ? ok({ source: "docs/INTERVIEW_PACKAGES.md", ...pack }) : err("The interview package guide is unavailable.", "docs_unavailable");
     },
   },
   {
@@ -925,7 +926,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "create_interview",
-    description: "Create an interview from a questionnaire file. A failed check stores nothing.",
+    description: "Create and immediately open a live version-1 interview from a questionnaire file after a static check. This is a persistent workspace mutation, not a draft or preview; single mode also creates a default Respondent. Use check_questionnaire first and only call after the accountable host has approved fielding.",
     inputSchema: obj({ name: str, description: str, mode: { type: "string", enum: ["single", "multi"] }, html: str, fileName: str }, ["name", "mode", "html"]),
     async run(args) {
       const name = asString(args.name, 120);
@@ -1709,7 +1710,7 @@ export function listToolDefs(capabilities?: readonly McpCapability[]) {
   ]);
   return TOOLS.filter(({ name }) => canCallMcpTool(name, capabilities)).map(({ name, description, inputSchema }) => {
     const readOnly = readOnlyTools.has(name);
-    const destructive = ["delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_block_patch", "apply_questionnaire_required_patch", "upload_survey_version", "delete_image_asset"].includes(name);
+    const destructive = ["create_interview", "delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_block_patch", "apply_questionnaire_required_patch", "upload_survey_version", "delete_image_asset"].includes(name);
     const external = name === "send_invite" || name === "check_invite_delivery";
     return {
       name,

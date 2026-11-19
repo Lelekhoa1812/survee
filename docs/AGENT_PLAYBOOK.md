@@ -79,6 +79,8 @@ Before fielding, include a host-approved respondent notice covering purpose, acc
 
 For a complete routed example, see [`examples/routed-follow-up.kqa.html`](examples/routed-follow-up.kqa.html), also available from this KQA instance at `/api/docs/examples/routed-follow-up.kqa.html`. The earlier [`conditional-follow-up.kqa.html`](examples/conditional-follow-up.kqa.html) shows a custom scripted reveal and does not contribute native eligibility semantics.
 
+For every conditional branch, keep a small route test matrix in the review record. Test each distinct source-answer path, including a path with no matching follow-up and a change that makes a previously answered item inactive. Record the source answer, expected eligible question IDs, required questions, progress count, answer-review visibility, retained-answer behavior on inactivation and reactivation, and current-version export/analysis treatment. The static checker and in-app live probe do not execute this matrix for you.
+
 ## Step 3. Write the markup
 
 1. Copy `template/starter.kqa.html`. Keep its `<style>` design kit unchanged, add your rules after it.

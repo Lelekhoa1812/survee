@@ -4,6 +4,8 @@ These packages are starting points for designing an interview, not validated ins
 
 Read [FORMAT.md](FORMAT.md), [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), and [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) before producing the complete HTML. The packages do not add question types, scoring or automated decisions to KQA. Supported choice-based conditional routing is described in FORMAT.md. A sample question below is a candidate, not a mandatory item; choose only those whose answers inform the stated decision. Give each selected question a stable, distinct ID and make it self-contained in exports.
 
+The package library is versioned as `kqa-interview-packages/1`. Its 17 stable IDs are listed in the catalog below and are accepted by the MCP `get_interview_packages` tool. Omit `packageId` to retrieve the complete library; pass one ID to retrieve the catalog, common operating and risk safeguards, sampling guidance, and only that package's detailed module. Record the package ID and library version in the review record so later revisions remain traceable.
+
 ## Common operating procedure
 
 1. Establish the decision, intended respondents, context and timeframe, target completion time, owner, and how answers will be used. Ask for missing facts when they are essential; state reasonable assumptions otherwise. The accountable host must approve a respondent-facing notice covering purpose, who will see identifiable answers, how answers will be used, retention or deletion expectations, and a contact route. Include only facts the host has supplied and verified; do not invent a privacy promise or treat this notice as legal consent.
@@ -45,25 +47,25 @@ Keep the evaluations distinct: expert or method review does not replace pretesti
 
 ## Package selection
 
-| Package or module | Type | Decision supported | Respondents | Typical modules |
-| --- | --- | --- | --- |
-| Product discovery | Full package | What problem should a team investigate? | Customers or users | Recent experience, workaround, unmet need |
-| Service improvement | Full package | Where should a service improve? | Service users | Journey, friction, recovery |
-| Workplace process | Full package | Which process change deserves investigation? | Staff or process participants | Work context, handoffs, barriers |
-| Project discovery | Full package | What needs clarification before planning? | Sponsors and delivery stakeholders | Outcomes, constraints, dependencies |
-| Education and learning | Full package | What support could improve a learning experience? | Learners or educators | Goals, access, feedback |
-| Health service experience | Full package | How can a service improve communication or access? | Patients or carers | Access, understanding, improvement |
-| Personal planning | Full package | What matters to a person when planning a change? | An individual or household | Goals, resources, next steps |
-| Candidate experience | Sector module | How can a hiring process improve for applicants? | Candidates | Clarity, access, communication |
-| Employee onboarding | Sector module | Where can a new starter's first weeks improve? | New employees | Access, role clarity, support |
-| Customer success | Sector module | What helps a customer reach an agreed outcome? | Customers or account contacts | Goals, use, blockers, support |
-| Supplier and partner review | Sector module | Which working relationship or delivery issue needs attention? | Suppliers, partners, internal owners | Delivery, coordination, risks |
-| Safety learning | Sector module | What conditions can help prevent recurrence? | Staff or service participants | Context, barriers, learning |
-| Audit readiness | Sector module | What evidence or process gaps need follow-up? | Process owners | Control awareness, evidence location, owner |
-| Program evaluation | Sector module | How did a defined program work for participants? | Participants and delivery partners | Reach, experience, outcomes |
-| Community consultation | Sector module | What local priorities should inform a decision? | Residents or community groups | Needs, impacts, trade-offs |
-| Event feedback | Sector module | What should organizers keep or change? | Attendees, speakers, staff | Access, experience, logistics |
-| Personal wellbeing reflection | Sector module | What support or next step would a person choose? | An individual | Self-defined needs, preferences, next step |
+| Package or module | Type | Decision supported | Respondents | Typical modules | Stable ID |
+| --- | --- | --- | --- | --- | --- |
+| Product discovery | Full package | What problem should a team investigate? | Customers or users | Recent experience, workaround, unmet need | `product-discovery` |
+| Service improvement | Full package | Where should a service improve? | Service users | Journey, friction, recovery | `service-improvement` |
+| Workplace process | Full package | Which process change deserves investigation? | Staff or process participants | Work context, handoffs, barriers | `workplace-process` |
+| Project discovery | Full package | What needs clarification before planning? | Sponsors and delivery stakeholders | Outcomes, constraints, dependencies | `project-discovery` |
+| Education and learning | Full package | What support could improve a learning experience? | Learners or educators | Goals, access, feedback | `education-learning` |
+| Health service experience | Full package | How can a service improve communication or access? | Patients or carers | Access, understanding, improvement | `health-service-experience` |
+| Personal planning | Full package | What matters to a person when planning a change? | An individual or household | Goals, resources, next steps | `personal-planning` |
+| Candidate experience | Sector module | How can a hiring process improve for applicants? | Candidates | Clarity, access, communication | `candidate-experience` |
+| Employee onboarding | Sector module | Where can a new starter's first weeks improve? | New employees | Access, role clarity, support | `employee-onboarding` |
+| Customer success | Sector module | What helps a customer reach an agreed outcome? | Customers or account contacts | Goals, use, blockers, support | `customer-success` |
+| Supplier and partner review | Sector module | Which working relationship or delivery issue needs attention? | Suppliers, partners, internal owners | Delivery, coordination, risks | `supplier-partner-review` |
+| Safety learning | Sector module | What conditions can help prevent recurrence? | Staff or service participants | Context, barriers, learning | `safety-quality-learning` |
+| Audit readiness | Sector module | What evidence or process gaps need follow-up? | Process owners | Control awareness, evidence location, owner | `audit-readiness` |
+| Program evaluation | Sector module | How did a defined program work for participants? | Participants and delivery partners | Reach, experience, outcomes | `program-evaluation` |
+| Community consultation | Sector module | What local priorities should inform a decision? | Residents or community groups | Needs, impacts, trade-offs | `community-consultation` |
+| Event feedback | Sector module | What should organizers keep or change? | Attendees, speakers, staff | Access, experience, logistics | `event-feedback` |
+| Personal wellbeing reflection | Sector module | What support or next step would a person choose? | An individual | Self-defined needs, preferences, next step | `personal-wellbeing-reflection` |
 
 Full packages have complete decision-oriented question examples below. Sector modules are shorter patterns and need the same purpose, respondent, timeframe, privacy, method-fit and review decisions established in the common operating procedure. The table is a routing aid, not a claim that a package is validated for a population or outcome.
 

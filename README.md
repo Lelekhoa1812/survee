@@ -15,15 +15,21 @@ Interactive HTML questionnaires are great to design but lose answers when they k
 
 Everything an agent needs to write a file that KQA accepts is in [`docs/`](docs):
 
+For contributors, [`docs/README.md`](docs/README.md) maps current source-of-truth docs to implementation and describes how to keep the guides synchronized.
+
 | File | What it is |
 |---|---|
 | [`docs/FORMAT.md`](docs/FORMAT.md) | The specification: manifest schema, control bindings, runtime API, sandbox limits, what is stored |
 | [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYBOOK.md) | The procedure an agent follows, the fix loop with the checker report, a prompt to paste |
+| [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Sourced design, accessibility, interaction, analytics and usability review standards |
+| [`docs/INTERVIEW_PACKAGES.md`](docs/INTERVIEW_PACKAGES.md) | 17 versioned, addressable industrial, public-service, research and personal starting packages with risk safeguards |
+| [`docs/kqa-questionnaire-author/SKILL.md`](docs/kqa-questionnaire-author/SKILL.md) | Portable Agent Skills workflow for questionnaire design and live updates |
 | [`docs/DIAGNOSTICS.md`](docs/DIAGNOSTICS.md) | Every checker code, why it matters, how to fix it (generated) |
 | [`docs/kqa-manifest.schema.json`](docs/kqa-manifest.schema.json) | JSON Schema of the manifest (generated) |
 | [`docs/template/starter.kqa.html`](docs/template/starter.kqa.html) | A known-good file with every question type and the standard design kit |
 | [`docs/examples/`](docs/examples) | Real questionnaires converted to the format |
 | [`docs/MCP.md`](docs/MCP.md) | How an agent operates a live interview (not how to write the HTML) |
+| [`docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | Reproducible review cases, scoring contract and evidence limits |
 
 In the app, **Format guide** has a one-click **Copy everything for an AI agent** button, and `/api/docs/bundle.md` serves the same bundle as a single markdown document an agent can fetch.
 
@@ -53,11 +59,11 @@ In development the legacy Axion owner login falls back to `admin@axion.local` / 
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Initial Axion owner bootstrap credential. Required in production; regular accounts use their own passwords |
 | `SESSION_SECRET` | Signs the admin session cookie. Required in production. `openssl rand -base64 32` |
 | `KQA_PUBLIC_URL` | Public origin used in invite emails, such as `https://your-host`. Required to send. The copied link on screen can still be the address you are visiting |
-| `KQA_MCP_TOKEN` | Axion-bound service bearer for `POST /api/mcp`. Named keys created in Settings are also accepted and scoped to their workspace. Not the admin password. `openssl rand -base64 32` |
+| `KQA_MCP_TOKEN` | Optional Axion-bound service bearer for `POST /api/mcp`. Named keys created in Settings are also accepted and scoped to their workspace. Not the admin password. `openssl rand -base64 32` |
 | `KQA_MCP_ALLOWED_ORIGINS` | Optional comma-separated cross-origin browser MCP origins (`https://client.example`). `KQA_PUBLIC_URL` is trusted too. Requests without an `Origin` header remain supported for server-to-server clients |
 | `KQA_AXION_LEGACY_TENANT_FALLBACK` | Defaults to enabled for Axion data during migration. After a reviewed backfill and a zero-unscoped audit, set to `false` and redeploy to enforce strict tenant filters |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Send interview invites, account verification, email changes and password resets. Port 587, STARTTLS. The password is never written into the repo |
-| `IMAP_HOST`, `IMAP_PORT` | On-demand bounce check. Port 993. Uses the same `SMTP_USER` and `SMTP_PASSWORD` |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | Optional email delivery for interview invites, account verification, email changes and password resets. `SMTP_PORT` defaults to 587 with STARTTLS. The password is never written into the repo |
+| `IMAP_HOST` | Optional on-demand invite delivery check. `IMAP_PORT` defaults to 993 and uses the same `SMTP_USER` and `SMTP_PASSWORD` |
 
 ## Commands
 
@@ -98,4 +104,4 @@ The respondent E2E, offline, concurrency, security and state-screenshot checks c
 
 ## Deploying
 
-Vercel. Set the environment variables above, including `KQA_MCP_TOKEN`, `KQA_PUBLIC_URL`, and the SMTP and IMAP names. Make sure the Atlas network access list allows Vercel (Atlas **Network Access**, allow `0.0.0.0/0` or use a private link), then `vercel --prod`. Review the owner-only Axion data audit and verify a current database backup before assigning tenant IDs. After the backfill completes and the audit reports zero unscoped owned records, set `KQA_AXION_LEGACY_TENANT_FALLBACK=false` in Vercel and redeploy to make Axion filters strict; setting it earlier hides untagged legacy records. Do not put the SMTP password or the MCP token in the repository.
+Deploy to Vercel after setting the core variables `MONGODB_URI`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `SESSION_SECRET`. Add `KQA_PUBLIC_URL` and SMTP settings when invite/account email is enabled; add `IMAP_HOST` for on-demand invite delivery checks. `KQA_MCP_TOKEN` is optional when named workspace keys from Settings are used; set it only when the Axion-bound service credential is needed. For Atlas access, prefer a private connection or the narrowest allowlist that fits the deployment. Review the owner-only Axion data audit and verify a current database backup before assigning tenant IDs. After the backfill completes and the audit reports zero unscoped owned records, set `KQA_AXION_LEGACY_TENANT_FALLBACK=false` in Vercel and redeploy to make Axion filters strict; setting it earlier hides untagged legacy records. Do not put the SMTP password or the MCP token in the repository.
