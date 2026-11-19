@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { auditArtifacts, scoreResults, validateBenchmark, validateResults } from "../scripts/eval-package-draft";
+import { INTERVIEW_PACKAGES } from "../src/lib/interview-packages";
 
 const benchmark = JSON.parse(await readFile(new URL("../docs/evals/package-draft-cases.json", import.meta.url), "utf8"));
 const dimensions = benchmark.dimensions;
@@ -35,13 +36,28 @@ const resultsFor = () => ({
 
 describe("package draft development benchmark", () => {
   it("loads the versioned corpus against the current catalog and preserves public-development limits", () => {
-    expect(validateBenchmark(benchmark).cases).toHaveLength(3);
+    expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length);
     const report = scoreResults(benchmark, resultsFor());
     expect(report.developmentOnly).toBe(true);
     expect(report.hardGateReview.flaggedCaseCount).toBe(0);
     expect(report.dimensions.intent_coverage.meanScore).toBe(2);
     expect(report.dimensions.intent_coverage.pairwiseReviewerAgreement).toBe(1);
     expect(report.limitations.join(" ")).toContain("not a hidden holdout");
+  });
+
+
+  it("covers each current package with a source-noted brief and explicit boundaries", () => {
+    expect(new Set(benchmark.cases.map((item: any) => item.packageId)).size).toBe(INTERVIEW_PACKAGES.length);
+    for (const item of benchmark.cases) {
+      expect(item.sourceNotes).toBeTruthy();
+      expect(item.methodologySources.length).toBeGreaterThan(0);
+      expect(item.methodologySources.every((source: any) => source.url.startsWith("https://"))).toBe(true);
+      expect(item.requiredIntents.length).toBeGreaterThanOrEqual(5);
+      expect(item.hardGates.length).toBeGreaterThanOrEqual(1);
+    }
+    const missingPackage = structuredClone(benchmark);
+    missingPackage.cases = missingPackage.cases.filter((item: any) => item.packageId !== "event-feedback");
+    expect(() => validateBenchmark(missingPackage)).toThrow("cover every current interview package");
   });
 
   it("requires two reviewer roles and a complete case by reviewer rating matrix", () => {
@@ -82,7 +98,7 @@ describe("package draft development benchmark", () => {
   it("keeps KQA static format checks separate and hashes each submitted artifact", async () => {
     const results = resultsFor();
     const checks = await auditArtifacts(benchmark, results);
-    expect(checks).toHaveLength(3);
+    expect(checks).toHaveLength(benchmark.cases.length);
     expect(checks[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(checks[0].reviewSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(checks[0].staticFormat).toHaveProperty("hasErrors");

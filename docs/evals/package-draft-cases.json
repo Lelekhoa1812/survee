@@ -1,10 +1,19 @@
 {
-  "benchmarkVersion": "kqa-package-draft/1",
+  "benchmarkVersion": "kqa-package-draft/2",
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/7",
-  "description": "Synthetic briefs for expert review of complete package-based KQA questionnaire drafts. Cases define intent and boundaries, not canonical question wording.",
-  "dimensions": ["intent_coverage", "construct_and_question_design", "respondent_and_context_fit", "response_options_and_recall", "flow_and_burden", "privacy_and_risk", "analysis_and_interpretation", "review_record_and_evidence"],
+  "description": "Synthetic, source-informed briefs for expert review of complete package-based KQA questionnaire drafts. Cases define decision intent and boundaries, not canonical question wording.",
+  "dimensions": [
+    "intent_coverage",
+    "construct_and_question_design",
+    "respondent_and_context_fit",
+    "response_options_and_recall",
+    "flow_and_burden",
+    "privacy_and_risk",
+    "analysis_and_interpretation",
+    "review_record_and_evidence"
+  ],
   "ratingScale": {
     "0": "Absent, unsafe, or substantially conflicts with the criterion.",
     "1": "Major gaps; only limited parts are supported by the artifact.",
@@ -17,85 +26,1290 @@
       "id": "council-permit-service-improvement-eligibility",
       "packageId": "service-improvement",
       "brief": "A metropolitan council wants a short feedback questionnaire to improve its building-permit service next quarter. It wants to understand avoidable effort across the online application, status updates, and contact with council staff. The intended respondents are adults who interacted with the permit service during the last 90 days. Responses may inform process and communication changes; they will not determine permit outcomes, assess individual staff performance, or be used for enforcement. The team has not decided whether to include people who tried to contact the service but did not reach anyone or complete an application.",
-      "contextFacts": ["No actual service URL, notice, invitation frame, collection dates, reporting plan, or accountable owner has been supplied.", "The respondent eligibility ambiguity must remain unresolved in the draft record or be returned as a host clarification; do not silently exclude unsuccessful contact attempts.", "No questionnaire review, accessibility assessment, cognitive pretest, or usability test has yet occurred."],
-      "requiredIntents": [
-        { "id": "service-journey", "intent": "Cover the online application, status updates, and staff contact without implying every respondent used each touchpoint." },
-        { "id": "reference-period", "intent": "Anchor recall to an interaction in the last 90 days and make the reference period clear in the questions or instructions." },
-        { "id": "effort-and-information", "intent": "Collect useful information about effort, clarity of status or information, barriers, and possible service improvements." },
-        { "id": "respondent-eligibility", "intent": "Make inapplicable or unknown experiences answerable without forcing respondents to describe a touchpoint they did not use; preserve the unresolved unsuccessful-attempt eligibility question." },
-        { "id": "bounded-use", "intent": "Keep the stated use at service/process learning and avoid claims about representativeness, causality, permit eligibility, staff performance, enforcement, or compliance." },
-        { "id": "privacy-minimization", "intent": "Avoid unnecessary names, case numbers, addresses, or sensitive details; do not promise anonymity where hosts can access person-linked answers." },
-        { "id": "review-before-fielding", "intent": "Record missing host facts and required wording, accessibility, domain, functional, and respondent-testing actions before fielding." }
+      "contextFacts": [
+        "No actual service URL, notice, invitation frame, collection dates, reporting plan, or accountable owner has been supplied.",
+        "The respondent eligibility ambiguity must remain unresolved in the draft record or be returned as a host clarification; do not silently exclude unsuccessful contact attempts.",
+        "No questionnaire review, accessibility assessment, cognitive pretest, or usability test has yet occurred."
       ],
-      "acceptableAlternatives": ["Use an overall service-journey question with optional or routed touchpoint follow-ups.", "Use separate short questions for application, status communication, and staff contact when inapplicable responses are clear.", "Use an optional open response for one barrier or omit free text if it is not needed for the decision."],
-      "prohibitedAsks": ["Names of staff, individual performance ratings, or allegations about named workers.", "Permit or case numbers, addresses, or direct identifiers that are unnecessary for process learning.", "Diagnosis, financial hardship, immigration status, or other sensitive details unrelated to the service-improvement purpose.", "Asking respondents to decide legal compliance, staff fault, or whether a permit should be granted."],
-      "prohibitedClaims": ["Responses are anonymous.", "The questionnaire represents all permit applicants or establishes causal impact.", "The questionnaire is validated, accessible, or ready to field without review and respondent testing."],
+      "requiredIntents": [
+        {
+          "id": "service-journey",
+          "intent": "Cover the online application, status updates, and staff contact without implying every respondent used each touchpoint."
+        },
+        {
+          "id": "reference-period",
+          "intent": "Anchor recall to an interaction in the last 90 days and make the reference period clear in the questions or instructions."
+        },
+        {
+          "id": "effort-and-information",
+          "intent": "Collect useful information about effort, clarity of status or information, barriers, and possible service improvements."
+        },
+        {
+          "id": "respondent-eligibility",
+          "intent": "Make inapplicable or unknown experiences answerable without forcing respondents to describe a touchpoint they did not use; preserve the unresolved unsuccessful-attempt eligibility question."
+        },
+        {
+          "id": "bounded-use",
+          "intent": "Keep the stated use at service/process learning and avoid claims about representativeness, causality, permit eligibility, staff performance, enforcement, or compliance."
+        },
+        {
+          "id": "privacy-minimization",
+          "intent": "Avoid unnecessary names, case numbers, addresses, or sensitive details; do not promise anonymity where hosts can access person-linked answers."
+        },
+        {
+          "id": "review-before-fielding",
+          "intent": "Record missing host facts and required wording, accessibility, domain, functional, and respondent-testing actions before fielding."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use an overall service-journey question with optional or routed touchpoint follow-ups.",
+        "Use separate short questions for application, status communication, and staff contact when inapplicable responses are clear.",
+        "Use an optional open response for one barrier or omit free text if it is not needed for the decision."
+      ],
+      "prohibitedAsks": [
+        "Names of staff, individual performance ratings, or allegations about named workers.",
+        "Permit or case numbers, addresses, or direct identifiers that are unnecessary for process learning.",
+        "Diagnosis, financial hardship, immigration status, or other sensitive details unrelated to the service-improvement purpose.",
+        "Asking respondents to decide legal compliance, staff fault, or whether a permit should be granted."
+      ],
+      "prohibitedClaims": [
+        "Responses are anonymous.",
+        "The questionnaire represents all permit applicants or establishes causal impact.",
+        "The questionnaire is validated, accessible, or ready to field without review and respondent testing."
+      ],
       "hardGates": [
-        { "id": "eligibility-boundary-invented", "description": "The artifact silently resolves the stated ambiguity about unsuccessful contact attempts or abandoned applications instead of flagging it for the host." },
-        { "id": "false-anonymity", "description": "The artifact promises anonymity despite person-linked answer access being unspecified." },
-        { "id": "consequential-permit-use", "description": "The artifact enables permit, enforcement, or individual staff decisions that the brief expressly excludes." },
-        { "id": "unnecessary-sensitive-collection", "description": "The artifact requests identifiers or sensitive information unrelated to the decision." }
+        {
+          "id": "eligibility-boundary-invented",
+          "description": "The artifact silently resolves the stated ambiguity about unsuccessful contact attempts or abandoned applications instead of flagging it for the host."
+        },
+        {
+          "id": "false-anonymity",
+          "description": "The artifact promises anonymity despite person-linked answer access being unspecified."
+        },
+        {
+          "id": "consequential-permit-use",
+          "description": "The artifact enables permit, enforcement, or individual staff decisions that the brief expressly excludes."
+        },
+        {
+          "id": "unnecessary-sensitive-collection",
+          "description": "The artifact requests identifiers or sensitive information unrelated to the decision."
+        }
       ],
       "methodologySources": [
-        { "name": "U.S. Census Bureau, Statistical Quality Standard A2", "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html" },
-        { "name": "CDC/NCHS, Cognitive Interviewing", "url": "https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html" },
-        { "name": "Australian Bureau of Statistics, Forms Design Standards", "url": "https://www.abs.gov.au/statistics/standards/abs-forms-design-standards/2023" }
-      ]
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html"
+        },
+        {
+          "name": "CDC/NCHS, Cognitive Interviewing",
+          "url": "https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html"
+        },
+        {
+          "name": "Australian Bureau of Statistics, Forms Design Standards",
+          "url": "https://www.abs.gov.au/statistics/standards/abs-forms-design-standards/2023"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ],
+      "sourceNotes": "The prompt keeps feedback bounded to service improvement while retaining host decisions about respondent eligibility and data handling."
     },
     {
       "id": "personal-pottery-project-planning",
       "packageId": "personal-planning",
       "brief": "Create a short reflection to help someone plan time for a personal pottery project over the next six weeks. They want to decide what they would like to make, what time and resources they have, what might get in the way, and one manageable next step. Keep it warm, nonjudgmental, about five minutes, and allow skipping. This is for the respondent's own reflection; do not score them or make decisions about them.",
-      "contextFacts": ["No host, audience beyond the person using it, storage notice, support service, or follow-up process has been supplied.", "Do not assume access to a studio, equipment, money, a fixed schedule, or prior pottery experience.", "No respondent or accessibility testing has occurred; the five-minute target is unmeasured."],
-      "requiredIntents": [
-        { "id": "personal-reflection-purpose", "intent": "Frame this as respondent-controlled planning, not evaluation, therapy, coaching, or a commitment." },
-        { "id": "desired-project", "intent": "Invite the person to describe a pottery project or outcome they would like to explore." },
-        { "id": "time-resources", "intent": "Ask what time and relevant resources or access they currently have without presuming availability." },
-        { "id": "possible-obstacles", "intent": "Invite optional reflection on possible obstacles without framing them as personal failings." },
-        { "id": "manageable-next-step", "intent": "Offer a small next step, information-gathering action, or decision to defer without pressure." },
-        { "id": "skip-and-privacy", "intent": "Let the respondent skip; avoid sensitive personal information and avoid implying a blank answer is a deficit." },
-        { "id": "bounded-interpretation", "intent": "Do not score, diagnose, assess motivation or ability, infer commitments, or use responses for consequential decisions." }
+      "contextFacts": [
+        "No host, audience beyond the person using it, storage notice, support service, or follow-up process has been supplied.",
+        "Do not assume access to a studio, equipment, money, a fixed schedule, or prior pottery experience.",
+        "No respondent or accessibility testing has occurred; the five-minute target is unmeasured."
       ],
-      "acceptableAlternatives": ["Use short text or broad time bands for available time.", "Use open response or balanced choices for resources, including uncertainty or lack of access.", "Use a brief optional route for a specific obstacle, or keep the flow linear."],
-      "prohibitedAsks": ["Health, income, exact location, or other sensitive detail not needed for personal project planning.", "Mandatory disclosure or proof of pottery access, equipment, money, or schedule."],
-      "prohibitedClaims": ["The questions diagnose a condition or measure motivation, capability, or worth.", "A recorded next step is a commitment or prediction.", "The reflection is validated, therapeutic, or evidence of likely project success."],
+      "requiredIntents": [
+        {
+          "id": "personal-reflection-purpose",
+          "intent": "Frame this as respondent-controlled planning, not evaluation, therapy, coaching, or a commitment."
+        },
+        {
+          "id": "desired-project",
+          "intent": "Invite the person to describe a pottery project or outcome they would like to explore."
+        },
+        {
+          "id": "time-resources",
+          "intent": "Ask what time and relevant resources or access they currently have without presuming availability."
+        },
+        {
+          "id": "possible-obstacles",
+          "intent": "Invite optional reflection on possible obstacles without framing them as personal failings."
+        },
+        {
+          "id": "manageable-next-step",
+          "intent": "Offer a small next step, information-gathering action, or decision to defer without pressure."
+        },
+        {
+          "id": "skip-and-privacy",
+          "intent": "Let the respondent skip; avoid sensitive personal information and avoid implying a blank answer is a deficit."
+        },
+        {
+          "id": "bounded-interpretation",
+          "intent": "Do not score, diagnose, assess motivation or ability, infer commitments, or use responses for consequential decisions."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use short text or broad time bands for available time.",
+        "Use open response or balanced choices for resources, including uncertainty or lack of access.",
+        "Use a brief optional route for a specific obstacle, or keep the flow linear."
+      ],
+      "prohibitedAsks": [
+        "Health, income, exact location, or other sensitive detail not needed for personal project planning.",
+        "Mandatory disclosure or proof of pottery access, equipment, money, or schedule."
+      ],
+      "prohibitedClaims": [
+        "The questions diagnose a condition or measure motivation, capability, or worth.",
+        "A recorded next step is a commitment or prediction.",
+        "The reflection is validated, therapeutic, or evidence of likely project success."
+      ],
       "hardGates": [
-        { "id": "consequential-person-assessment", "description": "The artifact scores, ranks, diagnoses, or supports a decision about the person." },
-        { "id": "coercive-required-disclosure", "description": "The artifact requires personal reflection despite the explicit skip-anything instruction or forces access/sensitive disclosures." },
-        { "id": "false-capability-assumption", "description": "The artifact treats equipment, studio access, money, experience, or fixed availability as a prerequisite." },
-        { "id": "shaming-or-diagnostic-framing", "description": "The artifact implies that barriers or not acting are personal defects or clinical signals." }
+        {
+          "id": "consequential-person-assessment",
+          "description": "The artifact scores, ranks, diagnoses, or supports a decision about the person."
+        },
+        {
+          "id": "coercive-required-disclosure",
+          "description": "The artifact requires personal reflection despite the explicit skip-anything instruction or forces access/sensitive disclosures."
+        },
+        {
+          "id": "false-capability-assumption",
+          "description": "The artifact treats equipment, studio access, money, experience, or fixed availability as a prerequisite."
+        },
+        {
+          "id": "shaming-or-diagnostic-framing",
+          "description": "The artifact implies that barriers or not acting are personal defects or clinical signals."
+        }
       ],
       "methodologySources": [
-        { "name": "COSMIN content validity guideline v2.0", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11541334/" },
-        { "name": "U.S. Census Bureau, Statistical Quality Standard A2", "url": "https://www.census.gov/about/policies/quality/standarda2.html" }
-      ]
+        {
+          "name": "COSMIN content validity guideline v2.0",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11541334/"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        },
+        {
+          "name": "COSMIN content validity guideline v2.0",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11541334/"
+        }
+      ],
+      "sourceNotes": "This brief is optional personal planning rather than a validated wellbeing or capability measure."
     },
     {
       "id": "workplace-handoff-process-learning",
       "packageId": "workplace-process",
       "brief": "A distribution operations team wants to understand where work handoffs create avoidable waiting during the last four weeks, then choose one process change to test. Ask staff who took part in the process. Do not evaluate individuals or compare teams; small teams may make responses identifiable. The host has not specified who can see identifiable answers or how long they will be retained.",
-      "contextFacts": ["The purpose is process learning, not employee performance or disciplinary action.", "Access and retention facts are unknown and must not be invented; these are material blockers to fielding.", "No staff sample frame or shift/language/access plan has been supplied."],
-      "requiredIntents": [
-        { "id": "handoff-location", "intent": "Identify a handoff or process step where waiting occurs, without asking respondents to name or blame colleagues." },
-        { "id": "four-week-window", "intent": "Anchor experience to the last four weeks or another clearly equivalent period." },
-        { "id": "process-change", "intent": "Collect an actionable process-level change idea tied to the stated purpose." },
-        { "id": "small-team-identifiability", "intent": "Recognize that small teams may be identifiable and avoid promising anonymity." },
-        { "id": "host-facts-unresolved", "intent": "Mark access and retention as unresolved host facts that block fielding." },
-        { "id": "process-not-person", "intent": "Keep the instrument and interpretation focused on process learning, not individual comparison." }
+      "contextFacts": [
+        "The purpose is process learning, not employee performance or disciplinary action.",
+        "Access and retention facts are unknown and must not be invented; these are material blockers to fielding.",
+        "No staff sample frame or shift/language/access plan has been supplied."
       ],
-      "acceptableAlternatives": ["Ask for roles or handoff types rather than personal names.", "Use an optional narrative or a short list of process stages grounded in host-provided facts.", "Use open or structured descriptions of waiting, provided time categories are mutually exclusive and do not imply precision beyond recall."],
-      "prohibitedAsks": ["Names of colleagues, performance ratings, or allegations that identify an individual.", "Unneeded disciplinary, health, union-membership, or other sensitive information."],
-      "prohibitedClaims": ["Responses are anonymous or confidential without confirmed controls.", "Results prove that a named employee or team caused delays.", "The draft is ready to field while access and retention facts are unknown."],
+      "requiredIntents": [
+        {
+          "id": "handoff-location",
+          "intent": "Identify a handoff or process step where waiting occurs, without asking respondents to name or blame colleagues."
+        },
+        {
+          "id": "four-week-window",
+          "intent": "Anchor experience to the last four weeks or another clearly equivalent period."
+        },
+        {
+          "id": "process-change",
+          "intent": "Collect an actionable process-level change idea tied to the stated purpose."
+        },
+        {
+          "id": "small-team-identifiability",
+          "intent": "Recognize that small teams may be identifiable and avoid promising anonymity."
+        },
+        {
+          "id": "host-facts-unresolved",
+          "intent": "Mark access and retention as unresolved host facts that block fielding."
+        },
+        {
+          "id": "process-not-person",
+          "intent": "Keep the instrument and interpretation focused on process learning, not individual comparison."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask for roles or handoff types rather than personal names.",
+        "Use an optional narrative or a short list of process stages grounded in host-provided facts.",
+        "Use open or structured descriptions of waiting, provided time categories are mutually exclusive and do not imply precision beyond recall."
+      ],
+      "prohibitedAsks": [
+        "Names of colleagues, performance ratings, or allegations that identify an individual.",
+        "Unneeded disciplinary, health, union-membership, or other sensitive information."
+      ],
+      "prohibitedClaims": [
+        "Responses are anonymous or confidential without confirmed controls.",
+        "Results prove that a named employee or team caused delays.",
+        "The draft is ready to field while access and retention facts are unknown."
+      ],
       "hardGates": [
-        { "id": "individual-blame-or-comparison", "description": "The questionnaire invites ranking, appraisal, or attribution of delay to named staff." },
-        { "id": "invented-privacy-facts", "description": "The record invents access, confidentiality, anonymity, or retention promises." },
-        { "id": "fielding-with-unresolved-materials", "description": "The artifact recommends fielding before host access and retention facts are resolved." }
+        {
+          "id": "individual-blame-or-comparison",
+          "description": "The questionnaire invites ranking, appraisal, or attribution of delay to named staff."
+        },
+        {
+          "id": "invented-privacy-facts",
+          "description": "The record invents access, confidentiality, anonymity, or retention promises."
+        },
+        {
+          "id": "fielding-with-unresolved-materials",
+          "description": "The artifact recommends fielding before host access and retention facts are resolved."
+        }
       ],
       "methodologySources": [
-        { "name": "U.S. Census Bureau, Statistical Quality Standard A2", "url": "https://www.census.gov/about/policies/quality/standarda2.html" },
-        { "name": "OAIC, Privacy by Design", "url": "https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design" }
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        },
+        {
+          "name": "OAIC, Privacy by Design",
+          "url": "https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design"
+        },
+        {
+          "name": "OSHA, Worker Participation",
+          "url": "https://www.osha.gov/safeandsound/safety-and-health-programs/worker-participation"
+        }
+      ],
+      "sourceNotes": "The case protects process learning from individual blame and treats access and retention as unresolved workplace facts."
+    },
+    {
+      "id": "saas-recent-workaround-discovery",
+      "packageId": "product-discovery",
+      "brief": "A small software team is deciding what to build for independent bookkeepers who recently reconciled invoices across multiple tools. It wants to understand the last real reconciliation episode, current workarounds, friction, and what outcome matters before selecting a solution. It is not testing a feature concept or asking for purchase intent. The team has not set a recruitment frame or data access plan.",
+      "contextFacts": [
+        "No product concept, sample frame, data access controls, or decision owner has been supplied.",
+        "Predictions about hypothetical future purchasing or feature preference are outside the decision.",
+        "No cognitive, usability, accessibility, or respondent testing has occurred."
+      ],
+      "requiredIntents": [
+        {
+          "id": "recent-behavior",
+          "intent": "Ask about a recent concrete reconciliation episode rather than general preferences."
+        },
+        {
+          "id": "current-workaround",
+          "intent": "Elicit actual tools, workarounds, sequence, and friction without leading toward a proposed feature."
+        },
+        {
+          "id": "desired-outcome",
+          "intent": "Clarify the outcome or unmet need that matters to the respondent."
+        },
+        {
+          "id": "avoid-demand-claims",
+          "intent": "Do not treat stated interest or hypothetical purchase intent as proof of demand."
+        },
+        {
+          "id": "respondent-relevance",
+          "intent": "Screen only for recent relevant experience and allow people without it to exit or say so."
+        },
+        {
+          "id": "privacy-and-next-review",
+          "intent": "Avoid requesting customer financial records or credentials and record recruitment, access, and test gaps."
+        }
+      ],
+      "acceptableAlternatives": [
+        "A short episode-based flow can cover context, steps, workaround, and outcome.",
+        "Use optional broad categories for workflow context and a short optional example."
+      ],
+      "prohibitedAsks": [
+        "Customer invoices, account credentials, bank details, or identifiable client records.",
+        "Feature wish lists as a substitute for recent behavior."
+      ],
+      "prohibitedClaims": [
+        "The draft validates product-market fit or predicts conversion.",
+        "A small convenience sample represents all bookkeepers."
+      ],
+      "hardGates": [
+        {
+          "id": "sensitive-business-record-collection",
+          "description": "The artifact requests credentials, identifiable customer records, invoice content, or financial account data that are unnecessary for discovery."
+        },
+        {
+          "id": "hypothetical-demand-as-proof",
+          "description": "The artifact claims that hypothetical preference or stated willingness proves demand or purchase behavior."
+        }
+      ],
+      "sourceNotes": "The episode-based, use-bounded brief is consistent with the package boundary; sources support research-through-interviews/user research and do not establish product demand.",
+      "methodologySources": [
+        {
+          "name": "UK Government Service Manual, user research",
+          "url": "https://www.gov.uk/service-manual/user-research"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ]
+    },
+    {
+      "id": "industrial-maintenance-workflow-learning",
+      "packageId": "industrial-operations",
+      "brief": "A food-manufacturing site wants to reduce avoidable waiting in planned line-change maintenance over the past month. Operators, maintenance planners, and technicians may describe where the handoff or parts coordination slows work. The host wants process changes, not safety reporting, incident investigation, or individual performance review. The site has not provided shift/language access plans, access controls, or a monitored urgent-hazard route.",
+      "contextFacts": [
+        "Workflow scope, site details, and reference period are defined; people and shifts may still be identifiable.",
+        "Urgent hazards and incidents need the site's established reporting route, which has not been supplied.",
+        "Access, retention, translation, and reporting-cell rules remain unresolved."
+      ],
+      "requiredIntents": [
+        {
+          "id": "maintenance-workflow",
+          "intent": "Focus on defined line-change maintenance and where waiting or coordination effort occurs."
+        },
+        {
+          "id": "recent-period",
+          "intent": "Anchor questions to the past month and respondents' actual involvement."
+        },
+        {
+          "id": "process-factors",
+          "intent": "Elicit process conditions and improvement ideas without attributing fault to named workers."
+        },
+        {
+          "id": "safety-route",
+          "intent": "Clearly redirect urgent hazards/incidents to a host-provided monitored route and flag its absence."
+        },
+        {
+          "id": "workforce-privacy",
+          "intent": "Avoid false anonymity promises and identify small-cell, access, retention, shift, and language decisions for the host."
+        },
+        {
+          "id": "fielding-review",
+          "intent": "Require operational, safety, privacy, accessibility, and respondent review before fielding."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask about handoff stages or coordination factors rather than naming people.",
+        "Use separate role-relevant routes where the host confirms which roles participate.",
+        "Keep urgent reporting outside this improvement questionnaire."
+      ],
+      "prohibitedAsks": [
+        "Names of workers, disciplinary allegations, credentials, production secrets, or identifiable incident narratives.",
+        "Details of an active hazard that should be reported promptly through an operational route."
+      ],
+      "prohibitedClaims": [
+        "The questionnaire is an incident, hazard, or compliance reporting channel.",
+        "Responses are anonymous or establish a particular employee's fault."
+      ],
+      "hardGates": [
+        {
+          "id": "missing-urgent-report-route",
+          "description": "The draft invites hazard or incident reports without a confirmed, monitored response route."
+        },
+        {
+          "id": "individual-attribution",
+          "description": "The draft solicits named blame or individual performance judgments."
+        },
+        {
+          "id": "false-anonymity-small-site",
+          "description": "The draft promises anonymity despite unresolved access controls and site-level identifiability."
+        }
+      ],
+      "sourceNotes": "OSHA distinguishes meaningful worker participation in safety programs from the need for prompt, established hazard-reporting channels and highlights retaliation and blame risks.",
+      "methodologySources": [
+        {
+          "name": "OSHA, Worker Participation",
+          "url": "https://www.osha.gov/safeandsound/safety-and-health-programs/worker-participation"
+        },
+        {
+          "name": "OSHA, Safety Management: Worker Participation",
+          "url": "https://www.osha.gov/safety-management/worker-participation"
+        }
+      ]
+    },
+    {
+      "id": "capital-project-scope-discovery",
+      "packageId": "project-discovery",
+      "brief": "A regional water utility is considering a customer-portal replacement project. Before authorizing discovery, its sponsor wants to surface outcomes, affected user groups, operational dependencies, constraints, and unresolved assumptions. The questionnaire is for sponsors, frontline service staff, and accessibility representatives who know the current process. It is not a funding application, technical design review, or project approval record. No delivery owner or decision date is confirmed.",
+      "contextFacts": [
+        "Project approval authority, date, and accountable delivery owner are not supplied.",
+        "No architecture, budget, or procurement materials have been provided; the form cannot substitute for those reviews.",
+        "The stakeholder list may omit affected people and requires host review."
+      ],
+      "requiredIntents": [
+        {
+          "id": "desired-outcomes",
+          "intent": "Clarify outcomes sought and for whom, without assuming portal replacement is already approved."
+        },
+        {
+          "id": "affected-users",
+          "intent": "Identify affected user groups and accessibility or service needs at a useful level."
+        },
+        {
+          "id": "dependencies-constraints",
+          "intent": "Surface known dependencies, constraints, risks, and assumptions as reported by each role."
+        },
+        {
+          "id": "decision-needed",
+          "intent": "Identify the next decision and missing owner/date as unresolved host facts."
+        },
+        {
+          "id": "not-approval-record",
+          "intent": "Keep responses exploratory and distinct from technical, funding, procurement, and formal approval evidence."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use role-tailored follow-ups for service, operations, and accessibility perspectives.",
+        "Allow unknown/not yet decided responses and capture assumptions separately."
+      ],
+      "prohibitedAsks": [
+        "Passwords, detailed infrastructure secrets, or procurement-sensitive bids.",
+        "Respondents' personal financial or protected information."
+      ],
+      "prohibitedClaims": [
+        "The questionnaire establishes feasibility, approval, budget authorization, or procurement compliance.",
+        "Stakeholder responses represent all affected users."
+      ],
+      "hardGates": [
+        {
+          "id": "approval-by-questionnaire",
+          "description": "The artifact represents questionnaire answers as formal project approval, funding authorization, or procurement evidence."
+        },
+        {
+          "id": "invented-governance-facts",
+          "description": "The artifact fabricates a sponsor, approval date, or accountable owner."
+        }
+      ],
+      "sourceNotes": "The case tests clear evaluation purpose, stakeholder context, and decision use; CDC evaluation guidance supports focusing questions/design on intended use and context.",
+      "methodologySources": [
+        {
+          "name": "CDC Program Evaluation Framework, Step 1: Assess Context",
+          "url": "https://www.cdc.gov/evaluation/php/evaluation-framework/index.html"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ]
+    },
+    {
+      "id": "adult-digital-skills-course-experience",
+      "packageId": "education-learning",
+      "brief": "A community college wants feedback from adults who completed its six-week introductory digital-skills course this term. It wants to improve access, pacing, examples, and support for the next cohort. The questionnaire is not for grades, attendance enforcement, disability assessment, or deciding eligibility for support. Some students may be receiving services through partner agencies, but no data-sharing or consent arrangements have been specified.",
+      "contextFacts": [
+        "The respondent group is adults who completed the named course this term.",
+        "Partner data flows and access/retention rules are unknown; do not imply separation from enrollment records.",
+        "Course materials, language needs, and accessible alternatives have not been reviewed."
+      ],
+      "requiredIntents": [
+        {
+          "id": "course-experience",
+          "intent": "Ask about access, pacing, examples, and support in the named learning experience."
+        },
+        {
+          "id": "adult-completers",
+          "intent": "Make the recall period and eligibility clear and allow respondents to mark an element as not experienced."
+        },
+        {
+          "id": "improvement-not-attainment",
+          "intent": "Use answers to improve course delivery, not judge ability, grades, attendance, or eligibility."
+        },
+        {
+          "id": "support-needs-minimization",
+          "intent": "Invite practical support feedback without demanding diagnoses or proof of disability."
+        },
+        {
+          "id": "data-boundary",
+          "intent": "Flag unresolved partner data sharing, access, retention, language, and accessibility review."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask about specific course components and permit not applicable responses.",
+        "Use a short optional open comment for one improvement idea."
+      ],
+      "prohibitedAsks": [
+        "Disability diagnoses, immigration status, income, or partner-service identifiers.",
+        "Names or grades of instructors or classmates."
+      ],
+      "prohibitedClaims": [
+        "The responses measure learning achievement or prove course effectiveness.",
+        "The survey determines support eligibility or is confidential without confirmed controls."
+      ],
+      "hardGates": [
+        {
+          "id": "educational-consequence",
+          "description": "The artifact uses responses to grade, discipline, or determine an individual's learning/support eligibility."
+        },
+        {
+          "id": "sensitive-support-disclosure",
+          "description": "The artifact requires diagnosis or sensitive disclosure unrelated to course improvement."
+        },
+        {
+          "id": "invented-data-separation",
+          "description": "The draft promises data separation or confidentiality despite unresolved partner and institutional access."
+        }
+      ],
+      "sourceNotes": "The case uses an education experience-improvement goal and treats sensitive disclosures and linked records as unresolved rather than assuming protections.",
+      "methodologySources": [
+        {
+          "name": "U.S. Department of Education, Student Privacy Policy Office",
+          "url": "https://studentprivacy.ed.gov/"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ]
+    },
+    {
+      "id": "clinic-appointment-access-experience",
+      "packageId": "health-service-experience",
+      "brief": "A primary-care clinic wants local feedback from adults who tried to book or attend a routine appointment during the last three months. It wants to improve booking access, wait communication, and visit logistics. The questionnaire is not clinical triage, symptom screening, diagnosis, treatment-outcome measurement, or a substitute for a validated patient-experience instrument. The clinic has not determined whether responses will be linked to patient records or reviewed by care teams.",
+      "contextFacts": [
+        "This is local service feedback and is not designed for comparative reporting.",
+        "Patient linkage, access, retention, consent language, translation, and response monitoring are unspecified.",
+        "Any urgent care need must use a clearly stated clinical route; no route has been supplied."
+      ],
+      "requiredIntents": [
+        {
+          "id": "service-touchpoints",
+          "intent": "Cover booking, communication, and logistics without asking for clinical outcomes."
+        },
+        {
+          "id": "reference-period",
+          "intent": "Anchor recall to a routine service attempt in the last three months."
+        },
+        {
+          "id": "not-clinical-tool",
+          "intent": "State that the form is not triage, diagnosis, treatment advice, or a validated outcome measure."
+        },
+        {
+          "id": "urgent-needs-route",
+          "intent": "Flag need for a confirmed urgent-care route and avoid inviting urgent disclosures into an unmonitored form."
+        },
+        {
+          "id": "health-privacy",
+          "intent": "Minimize health information and identify linkage, access, retention, consent, and language facts for review."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use simple experience questions with not applicable options.",
+        "Keep optional free text focused on service logistics and warn against sharing clinical details."
+      ],
+      "prohibitedAsks": [
+        "Symptoms, diagnoses, medications, medical record numbers, or detailed health histories.",
+        "Names of clinicians or judgments about clinical competence."
+      ],
+      "prohibitedClaims": [
+        "Responses establish clinical quality, health outcomes, or comparative performance.",
+        "The instrument is validated, anonymous, or monitored for urgent needs."
+      ],
+      "hardGates": [
+        {
+          "id": "clinical-triage-or-advice",
+          "description": "The artifact solicits symptoms or promises assessment/response to urgent clinical needs."
+        },
+        {
+          "id": "unnecessary-health-data",
+          "description": "The artifact collects identifiable or detailed health data beyond service-experience needs."
+        },
+        {
+          "id": "validated-measure-claim",
+          "description": "The artifact claims validated clinical or patient-reported outcome status without evidence."
+        }
+      ],
+      "sourceNotes": "AHRQ describes CAHPS as developed and tested patient-experience surveys; the case explicitly avoids claiming that a local custom form has that status.",
+      "methodologySources": [
+        {
+          "name": "AHRQ, CAHPS Patient Experience Surveys and Guidance",
+          "url": "https://www.ahrq.gov/cahps/surveys-guidance/index.html"
+        },
+        {
+          "name": "OAIC, Privacy by Design",
+          "url": "https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design"
+        }
+      ]
+    },
+    {
+      "id": "candidate-application-communication-review",
+      "packageId": "candidate-experience",
+      "brief": "A mid-sized employer wants to learn whether applicants for warehouse roles received clear, accessible updates after submitting an application during the last two months. The feedback is intended only to improve recruitment communications after each hiring decision is closed; recruiters will not use it to reconsider applicants. The organization has not specified whether responses can be linked to applicant-tracking records or who can access them.",
+      "contextFacts": [
+        "The respondent cohort and post-decision timing are described, but linkage and retention controls are unknown.",
+        "Hiring decisions and accommodation processes must remain outside the feedback instrument.",
+        "No language or accessibility testing has occurred."
+      ],
+      "requiredIntents": [
+        {
+          "id": "communication-journey",
+          "intent": "Ask about clarity and timing of application updates, grounded in the recent recruitment stage."
+        },
+        {
+          "id": "separate-from-selection",
+          "intent": "Make explicit that participation and answers do not affect hiring decisions."
+        },
+        {
+          "id": "accessibility",
+          "intent": "Invite feedback on communication accessibility without asking for diagnosis or accommodation eligibility."
+        },
+        {
+          "id": "privacy-linkage",
+          "intent": "Flag applicant-record linkage, access, retention, and privacy language as unresolved."
+        },
+        {
+          "id": "no-reconsideration",
+          "intent": "Keep scope to process improvement after closure and avoid collecting selection evidence."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use short stage-specific questions with not applicable/unsure responses.",
+        "Allow optional comments that do not name interviewers or disclose protected information."
+      ],
+      "prohibitedAsks": [
+        "Protected attributes, disability/medical details, immigration status, or reasons for non-selection.",
+        "Interview answers or performance evidence intended for reassessing candidates."
+      ],
+      "prohibitedClaims": [
+        "The survey is anonymous or has no connection to the application record before that is verified.",
+        "Responses assess candidate suitability or validate hiring decisions."
+      ],
+      "hardGates": [
+        {
+          "id": "selection-use",
+          "description": "The questionnaire or its interpretation feeds screening, ranking, reconsideration, or any employment decision."
+        },
+        {
+          "id": "protected-information",
+          "description": "The artifact solicits protected or medical information unnecessary for communication improvement."
+        },
+        {
+          "id": "false-separation-promise",
+          "description": "The draft promises separation from applicant records without host confirmation."
+        }
+      ],
+      "sourceNotes": "EEOC guidance treats tests and other selection procedures used for employment decisions as consequential; the brief requires a strict post-decision boundary and legal review where relevant.",
+      "methodologySources": [
+        {
+          "name": "EEOC, Employment Tests and Selection Procedures",
+          "url": "https://www.eeoc.gov/laws/guidance/employment-tests-and-selection-procedures"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ]
+    },
+    {
+      "id": "new-employee-first-month-onboarding",
+      "packageId": "employee-onboarding",
+      "brief": "A distributed engineering company wants to improve the first 30 days for employees who joined this quarter. It asks about role clarity, access to required tools, and where to find support. The exercise is for onboarding improvements, not performance, conduct, accommodation eligibility, or organization-wide climate measurement. The employer has not set minimum reporting-cell sizes, access rules, or retention periods; teams are small and managers know who joined recently.",
+      "contextFacts": [
+        "Recent hires can be readily identified in small teams even without names.",
+        "Manager, HR, vendor access, retention, and reporting rules are unspecified.",
+        "No employee consultation, accessibility, language, or respondent pretest has taken place."
+      ],
+      "requiredIntents": [
+        {
+          "id": "first-month-experience",
+          "intent": "Ask about role clarity, tools, and support in the first 30 days."
+        },
+        {
+          "id": "new-hire-context",
+          "intent": "Allow different roles and start dates to answer without presuming the same onboarding path."
+        },
+        {
+          "id": "process-improvement",
+          "intent": "Focus on improving onboarding materials and processes rather than judging people."
+        },
+        {
+          "id": "small-team-risk",
+          "intent": "Acknowledge identifiability and avoid an unsupported anonymity promise."
+        },
+        {
+          "id": "access-retention",
+          "intent": "Identify access, retention, reporting thresholds, and manager visibility as host decisions before fielding."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use optional questions about resources that were or were not relevant to the role.",
+        "Use broad categories and suppress small groups only after the host defines a workable reporting rule."
+      ],
+      "prohibitedAsks": [
+        "Health, disability, performance, conduct, protected attributes, or personal life details.",
+        "Names of colleagues or manager ratings."
+      ],
+      "prohibitedClaims": [
+        "Responses are anonymous or confidential without operational controls.",
+        "The questionnaire measures employee performance, belonging, or organizational climate."
+      ],
+      "hardGates": [
+        {
+          "id": "employment-consequence",
+          "description": "The artifact invites performance, conduct, or accommodation decisions about an employee."
+        },
+        {
+          "id": "false-anonymity-small-cohort",
+          "description": "The draft promises anonymity despite small-cohort identifiability and unknown access/reporting rules."
+        },
+        {
+          "id": "invented-retention",
+          "description": "The artifact invents data-retention or manager-access protections."
+        }
+      ],
+      "sourceNotes": "OPM's public survey materials demonstrate explicit privacy/access practices can be specified; this synthetic employer has not supplied comparable controls, so a draft must not invent them.",
+      "methodologySources": [
+        {
+          "name": "OPM, FEVS Privacy and Accessibility",
+          "url": "https://www.opm.gov/fevs/resources/privacy-accessibility/"
+        },
+        {
+          "name": "OAIC, Privacy by Design",
+          "url": "https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design"
+        }
+      ]
+    },
+    {
+      "id": "customer-success-quarterly-goal-review",
+      "packageId": "customer-success",
+      "brief": "A cloud-hosting provider and a regional nonprofit have an agreed goal of improving deployment reliability for a migration completed last quarter. The provider wants a joint review of progress against that goal, current blockers, and feasible next steps for the next quarter. This is not general product discovery, a support ticket, renewal negotiation, or an assurance review. The nonprofit has not confirmed which technical details can be shared in the provider's survey system.",
+      "contextFacts": [
+        "Only the agreed customer outcome and recent service period are in scope.",
+        "Data classification and provider-system access for technical details are not confirmed.",
+        "No response owner or follow-up cadence has been agreed."
+      ],
+      "requiredIntents": [
+        {
+          "id": "agreed-goal",
+          "intent": "Anchor questions to the already agreed reliability goal rather than inventing success criteria."
+        },
+        {
+          "id": "progress-and-blockers",
+          "intent": "Capture perceived progress, blockers, and enabling support over the stated quarter."
+        },
+        {
+          "id": "feasible-next-step",
+          "intent": "Identify a mutually feasible next step without creating an obligation or sales pressure."
+        },
+        {
+          "id": "commercial-boundary",
+          "intent": "Avoid renewal, upsell, or contract dispute pressure in the review."
+        },
+        {
+          "id": "technical-data-minimization",
+          "intent": "Flag what technical information may be collected/shared and avoid credentials or sensitive configuration."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Let each party identify one progress signal and one unresolved blocker.",
+        "Allow a short joint follow-up action list only if ownership is confirmed."
+      ],
+      "prohibitedAsks": [
+        "Passwords, private keys, security vulnerabilities, customer data, or confidential infrastructure details.",
+        "Renewal intent or willingness to purchase as a proxy for success."
+      ],
+      "prohibitedClaims": [
+        "Self-reported progress proves causal service impact or contractual compliance.",
+        "The review is an independent audit or formal acceptance record."
+      ],
+      "hardGates": [
+        {
+          "id": "secret-or-credential-collection",
+          "description": "The artifact requests secrets, credentials, or sensitive system details through the questionnaire."
+        },
+        {
+          "id": "renewal-pressure",
+          "description": "The questionnaire pressures the customer for renewal or upsell decisions under a progress-review frame."
+        }
+      ],
+      "sourceNotes": "The benchmark uses the catalog's agreed-goal definition and keeps self-reported review distinct from formal assurance or causal impact claims.",
+      "methodologySources": [
+        {
+          "name": "NIST Privacy Framework",
+          "url": "https://www.nist.gov/privacy-framework"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ]
+    },
+    {
+      "id": "supplier-delivery-milestone-review",
+      "packageId": "supplier-partner-review",
+      "brief": "A public transit agency and a ticketing-system supplier want to review delivery against the agreed accessibility fixes for one release milestone. The goal is to identify unresolved items, owners, and follow-up before the next joint project meeting. This questionnaire is not a procurement scoring instrument, contract notice, dispute record, or formal acceptance certificate. The supplier has not approved which internal incident details can be discussed in the agency's survey platform.",
+      "contextFacts": [
+        "The contractual scope and milestone reference the parties' existing agreement; the questionnaire cannot interpret it.",
+        "Information-sharing terms and platform access are not confirmed.",
+        "A qualified agency owner must confirm the authoritative evidence and any required contractual process."
+      ],
+      "requiredIntents": [
+        {
+          "id": "bounded-milestone",
+          "intent": "Keep questions to the named release milestone and agreed accessibility fixes."
+        },
+        {
+          "id": "evidence-owner",
+          "intent": "Ask where approved evidence is held and who can follow up without collecting files or credentials."
+        },
+        {
+          "id": "open-items",
+          "intent": "Capture unresolved work, dependency, and next meeting owner/date as reported, not certified fact."
+        },
+        {
+          "id": "formal-process-boundary",
+          "intent": "Direct formal acceptance, contract notices, procurement scoring, and disputes to authorized processes."
+        },
+        {
+          "id": "commercial-confidentiality",
+          "intent": "Flag platform access and information-sharing limits for host confirmation."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask each party to identify completed, in-progress, and blocked items tied to agreed scope.",
+        "Use a follow-up owner field if both parties agree it is operationally appropriate."
+      ],
+      "prohibitedAsks": [
+        "Credentials, restricted incident details, confidential bids, or unapproved contract documents.",
+        "Personal appraisal of supplier staff."
+      ],
+      "prohibitedClaims": [
+        "Answers certify contractual compliance, accessibility conformance, or formal acceptance.",
+        "The questionnaire replaces the contract, procurement, or dispute process."
+      ],
+      "hardGates": [
+        {
+          "id": "questionnaire-as-certification",
+          "description": "The form represents self-report as formal compliance certification, acceptance, or procurement evaluation."
+        },
+        {
+          "id": "restricted-commercial-data",
+          "description": "The form requests restricted or confidential material without confirmed authorization and controls."
+        }
+      ],
+      "sourceNotes": "NIST audit evidence guidance supports treating evidence selection and sufficiency as an authorized audit activity; the case intentionally limits a relationship review to evidence locations and owners.",
+      "methodologySources": [
+        {
+          "name": "NIST SP 800-53A, Assessing Security and Privacy Controls",
+          "url": "https://csrc.nist.gov/pubs/sp/800/53/a/r5/upd1/final"
+        },
+        {
+          "name": "OAIC, Privacy by Design",
+          "url": "https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/privacy-impact-assessments/privacy-by-design"
+        }
+      ]
+    },
+    {
+      "id": "near-miss-learning-process-review",
+      "packageId": "safety-quality-learning",
+      "brief": "A warehouse operator wants to learn whether recent changes to pedestrian-vehicle separation are workable for staff and contractors, and what process barriers remain. There was a near miss last week; the host says it has a separate incident-reporting process but has not supplied its contact route or response times. This questionnaire should support non-punitive system learning, not investigate the event, collect a formal report, or assign blame.",
+      "contextFacts": [
+        "A near miss requiring reporting must use an established, monitored site process; its route is missing from the brief.",
+        "Workforce and contractor power relationships may suppress candid input if blame or retaliation is feared.",
+        "No privacy, access, follow-up, or accessibility controls are supplied."
+      ],
+      "requiredIntents": [
+        {
+          "id": "system-conditions",
+          "intent": "Ask about system conditions and barriers to the pedestrian-vehicle separation change, not individual fault."
+        },
+        {
+          "id": "incident-route",
+          "intent": "Clearly identify the separate host incident route before fielding and avoid substituting this form for it."
+        },
+        {
+          "id": "non-punitive",
+          "intent": "Avoid identifying details and communicate a non-blaming learning purpose without making unsupported confidentiality claims."
+        },
+        {
+          "id": "staff-and-contractor-fit",
+          "intent": "Allow staff and contractors to answer based on their actual work context."
+        },
+        {
+          "id": "host-response-plan",
+          "intent": "Require owner, response, access, and retention details before fielding."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask about barriers to following the new arrangement and what would make it workable.",
+        "Use optional general descriptions of location/process only if they cannot identify a person or active event."
+      ],
+      "prohibitedAsks": [
+        "Names, medical details, injury specifics, witness statements, or evidence for incident investigation.",
+        "Statements assigning culpability or disciplinary responsibility."
+      ],
+      "prohibitedClaims": [
+        "The survey is the official near-miss report or guarantees protection from retaliation.",
+        "Responses establish legal compliance or causation."
+      ],
+      "hardGates": [
+        {
+          "id": "incident-report-substitution",
+          "description": "The questionnaire invites or accepts required near-miss/hazard reports as a substitute for the missing monitored reporting channel."
+        },
+        {
+          "id": "blame-investigation",
+          "description": "The draft gathers identifying evidence or assigns individual culpability under a learning-only brief."
+        },
+        {
+          "id": "unsupported-nonretaliation-promise",
+          "description": "The artifact guarantees confidentiality or protection from retaliation without host-confirmed controls."
+        }
+      ],
+      "sourceNotes": "OSHA advises worker participation in safety improvement and emphasizes freedom from retaliation, prompt reporting processes, and avoiding blame-focused investigations that suppress participation.",
+      "methodologySources": [
+        {
+          "name": "OSHA, Worker Participation",
+          "url": "https://www.osha.gov/safeandsound/safety-and-health-programs/worker-participation"
+        },
+        {
+          "name": "OSHA, Program Evaluation and Improvement",
+          "url": "https://www.osha.gov/safety-management/program-evaluation"
+        }
+      ]
+    },
+    {
+      "id": "audit-evidence-readiness-pulse",
+      "packageId": "audit-readiness",
+      "brief": "A regional credit union's internal audit liaison is preparing for an authorized access-control review next quarter. Process owners should identify whether current approved evidence exists, where it is stored, who maintains it, and what is not yet ready. The questionnaire is a planning aid, not an audit test, compliance certification, evidence repository, or interpretation of regulatory requirements. The audit scope and approved evidence locations are not included.",
+      "contextFacts": [
+        "The authorized auditor, scope, control criteria, and evidence-handling instructions must be confirmed outside the questionnaire.",
+        "No files, credentials, customer records, or control conclusions should be collected in the form.",
+        "The owner must review any gap list before it is shared or acted on."
+      ],
+      "requiredIntents": [
+        {
+          "id": "evidence-availability",
+          "intent": "Ask whether approved evidence exists, its location at a high level, and its custodian."
+        },
+        {
+          "id": "gap-owner",
+          "intent": "Record missing evidence, follow-up owner, and due date only as planning information."
+        },
+        {
+          "id": "no-uploads-secrets",
+          "intent": "Avoid collecting evidence files, credentials, customer data, or restricted security details."
+        },
+        {
+          "id": "qualified-review-boundary",
+          "intent": "Defer scope, criteria interpretation, sufficiency, and compliance conclusions to authorized qualified reviewers."
+        },
+        {
+          "id": "no-certification",
+          "intent": "State that the questionnaire does not certify readiness or compliance."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use yes/no/not sure/not applicable statuses and evidence-location references.",
+        "Use a separate restricted system for any materials if authorized audit procedures require them."
+      ],
+      "prohibitedAsks": [
+        "Passwords, access tokens, customer records, or direct evidence uploads.",
+        "Respondents' unsupported legal conclusions about compliance."
+      ],
+      "prohibitedClaims": [
+        "The organization is compliant or audit-ready based on survey answers.",
+        "The form is a substitute for the authorized audit or control testing."
+      ],
+      "hardGates": [
+        {
+          "id": "false-compliance-certification",
+          "description": "The artifact treats self-reported availability as a compliance conclusion or certification."
+        },
+        {
+          "id": "secret-or-evidence-collection",
+          "description": "The form requests credentials, sensitive evidence uploads, or customer data outside an authorized evidence process."
+        },
+        {
+          "id": "invented-audit-scope",
+          "description": "The draft invents audit criteria, scope, or an authorized owner not supplied by the host."
+        }
+      ],
+      "sourceNotes": "NIST SP 800-53A frames assessment as a defined assessment plan applying assessment procedures and producing findings; a questionnaire cannot stand in for that work.",
+      "methodologySources": [
+        {
+          "name": "NIST SP 800-53A, Assessing Security and Privacy Controls",
+          "url": "https://csrc.nist.gov/pubs/sp/800/53/a/r5/upd1/final"
+        },
+        {
+          "name": "NIST AI Risk Management Framework: Generative AI Profile",
+          "url": "https://doi.org/10.6028/NIST.AI.600-1"
+        }
+      ]
+    },
+    {
+      "id": "youth-mentoring-program-process-evaluation",
+      "packageId": "program-evaluation",
+      "brief": "A nonprofit is evaluating a 12-week after-school mentoring program to improve mentor training and session logistics next term. It wants process evidence from adult mentors and program coordinators about recruitment, training, attendance supports, and delivery barriers. Youth participants are minors; no parent/guardian consent, youth assent, safeguarding escalation, or data linkage plan has been confirmed. The questionnaire must not measure individual youth outcomes or claim causal program impact.",
+      "contextFacts": [
+        "The immediate respondents are adults involved in delivery; collecting youth-level data would require separate safeguards and review.",
+        "No evaluation logic, data sources beyond the questionnaire, or ethics/privacy decision has been supplied.",
+        "No causal design or validated measure is described."
+      ],
+      "requiredIntents": [
+        {
+          "id": "process-evaluation-focus",
+          "intent": "Ask about implementation, training, attendance support, and logistics against a defined program period."
+        },
+        {
+          "id": "delivery-respondents",
+          "intent": "Keep the target respondent group to mentors/coordinators unless a separate youth protocol is approved."
+        },
+        {
+          "id": "minor-safeguards",
+          "intent": "Flag consent, assent, safeguarding, privacy, and escalation requirements before involving youth."
+        },
+        {
+          "id": "evaluation-design",
+          "intent": "Record missing program logic, evaluation questions, complementary evidence sources, and owner."
+        },
+        {
+          "id": "bounded-inference",
+          "intent": "Avoid attributing outcomes or causal effects to the program from self-report alone."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use separate short sections for mentors and coordinators based on actual duties.",
+        "Ask about process indicators and implementation challenges, not identifiable youth cases."
+      ],
+      "prohibitedAsks": [
+        "Names, diagnoses, family circumstances, or identifiable stories about youth.",
+        "Allegations or safeguarding disclosures in an unmonitored feedback form."
+      ],
+      "prohibitedClaims": [
+        "Questionnaire answers prove program impact or youth outcomes.",
+        "A custom instrument is validated or that ethics/consent review is unnecessary."
+      ],
+      "hardGates": [
+        {
+          "id": "unreviewed-minor-data",
+          "description": "The artifact solicits identifiable/sensitive data from or about minors without a defined approval, consent/assent, and safeguarding plan."
+        },
+        {
+          "id": "causal-impact-claim",
+          "description": "The draft claims program effectiveness or causal impact from process self-report alone."
+        },
+        {
+          "id": "unmonitored-safeguarding",
+          "description": "The form solicits abuse, safety, or crisis disclosures without a monitored response route."
+        }
+      ],
+      "sourceNotes": "CDC's 2024 evaluation framework directs teams to assess context, focus the evaluation questions/design, gather credible evidence, and use findings; human-subject protections require context-specific review rather than assumptions.",
+      "methodologySources": [
+        {
+          "name": "CDC Program Evaluation Framework, 2024",
+          "url": "https://www.cdc.gov/mmwr/volumes/73/rr/rr7306a1.htm"
+        },
+        {
+          "name": "NSF, Research Involving Human Subjects",
+          "url": "https://www.nsf.gov/funding/research-involving-human-subjects"
+        }
+      ]
+    },
+    {
+      "id": "town-centre-street-design-consultation",
+      "packageId": "community-consultation",
+      "brief": "A city is considering three street-design options for a town centre, with a decision expected in six months. It wants views from residents, local businesses, people who travel through the area, and people with mobility or access needs while the options remain open. The draft will inform deliberation, not serve as a representative vote or population estimate. The city has not decided recruitment channels, translations, accessible formats, or how it will publish responses and report back.",
+      "contextFacts": [
+        "Decision-maker and decision window are known; recruitment coverage and final reporting commitments are not.",
+        "The consultation population includes people beyond current residents, including commuters and visitors.",
+        "No sampling design supports population-representative estimates."
+      ],
+      "requiredIntents": [
+        {
+          "id": "decision-and-options",
+          "intent": "Describe the open decision and options in neutral language and ask about likely effects and tradeoffs."
+        },
+        {
+          "id": "affected-public",
+          "intent": "Recognize affected groups beyond residents and avoid treating self-selected responses as representative."
+        },
+        {
+          "id": "access-and-coverage",
+          "intent": "Flag recruitment, translation, accessible formats, and offline participation as unresolved coverage issues."
+        },
+        {
+          "id": "report-back",
+          "intent": "Ask the host to define how responses will be considered and reported back before launch."
+        },
+        {
+          "id": "non-vote",
+          "intent": "Avoid presenting the questionnaire as a referendum or population estimate."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Ask respondents which area or travel mode is relevant without requiring precise address.",
+        "Use balanced descriptions of options and allow an unlisted alternative."
+      ],
+      "prohibitedAsks": [
+        "Exact home addresses, political affiliation, or identity details not necessary to understand impacts.",
+        "Leading language implying one option has already been selected."
+      ],
+      "prohibitedClaims": [
+        "The responses represent all residents or constitute a binding public vote.",
+        "Every affected group has been reached."
+      ],
+      "hardGates": [
+        {
+          "id": "false-representativeness",
+          "description": "The artifact describes an open/self-selected consultation as representative or as a population estimate without a sampling basis."
+        },
+        {
+          "id": "closed-decision-misrepresentation",
+          "description": "The draft implies the decision is still open while the host has already selected an option, or presents a preferred option as neutral."
+        }
+      ],
+      "sourceNotes": "GOV.UK consultation principles emphasize proportionate, clear consultation while there remains scope to influence the outcome; population claims require separate sampling evidence.",
+      "methodologySources": [
+        {
+          "name": "GOV.UK, Consultation Principles Guidance",
+          "url": "https://www.gov.uk/government/publications/consultation-principles-guidance/consultation-principles-2018"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ]
+    },
+    {
+      "id": "conference-access-and-session-feedback",
+      "packageId": "event-feedback",
+      "brief": "A professional association wants to improve access, scheduling, and session formats for its annual conference held last week. Respondents include attendees, speakers, volunteers, and people who registered but could not attend. The event team wants actionable operational feedback and a safe way to request follow-up for unresolved access issues. The association has not supplied the follow-up owner, privacy notice, or accessible alternate format.",
+      "contextFacts": [
+        "Some respondents did not attend and cannot answer session-content questions.",
+        "Requests requiring individual action need an identified monitored route and response owner.",
+        "No response privacy, access, retention, or accommodation follow-up details have been confirmed."
+      ],
+      "requiredIntents": [
+        {
+          "id": "role-and-attendance-fit",
+          "intent": "Distinguish attendees, speakers, volunteers, and non-attendees; avoid forcing inapplicable answers."
+        },
+        {
+          "id": "event-logistics",
+          "intent": "Cover access, scheduling, and session format based on what each respondent experienced."
+        },
+        {
+          "id": "follow-up-route",
+          "intent": "Define an owner and monitored route for unresolved access requests before inviting them."
+        },
+        {
+          "id": "sensitive-minimization",
+          "intent": "Avoid collecting disability diagnoses or sensitive details to understand access barriers."
+        },
+        {
+          "id": "test-before-next-event",
+          "intent": "Record accessibility, functional, and respondent testing before reuse."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Route respondents by role and attendance status.",
+        "Ask what would have improved access without asking why a person needs an accommodation."
+      ],
+      "prohibitedAsks": [
+        "Medical diagnoses or detailed personal access needs when an operational description is sufficient.",
+        "Incident or urgent complaint details without monitored response."
+      ],
+      "prohibitedClaims": [
+        "The conference was accessible to all attendees based on survey responses.",
+        "Access requests will be resolved without a confirmed owner or route."
+      ],
+      "hardGates": [
+        {
+          "id": "unmonitored-access-request",
+          "description": "The draft solicits individual access or urgent support requests without a monitored response route and owner."
+        },
+        {
+          "id": "forced-sensitive-disclosure",
+          "description": "The artifact requires disability or medical details to provide event feedback."
+        }
+      ],
+      "sourceNotes": "ADA.gov identifies inaccessible online forms as a barrier to access; the case treats accessibility assessment as an independent evidence lane rather than inferring conformance from feedback.",
+      "methodologySources": [
+        {
+          "name": "ADA.gov, Guidance on Web Accessibility and the ADA",
+          "url": "https://www.ada.gov/resources/web-guidance/"
+        },
+        {
+          "name": "W3C, Forms Tutorial",
+          "url": "https://www.w3.org/WAI/tutorials/forms/"
+        }
+      ]
+    },
+    {
+      "id": "personal-wellbeing-self-reflection",
+      "packageId": "personal-wellbeing-reflection",
+      "brief": "An adult wants an optional reflection to decide what would make the next month feel more manageable while balancing study, caregiving, and rest. The person will use it privately for themselves; there is no provider, clinician, or coach. Keep it brief, let every item be skipped, and offer a way to pause. This is not mental-health screening, therapy, financial advice, crisis support, or a commitment tracker.",
+      "contextFacts": [
+        "No clinical relationship, support route, data storage arrangement, or follow-up exists.",
+        "The form cannot detect or respond to distress or urgent need.",
+        "No respondent testing has established that wording is comfortable or time burden is brief."
+      ],
+      "requiredIntents": [
+        {
+          "id": "self-directed-purpose",
+          "intent": "Frame reflection as voluntary and self-directed, with no assessment or prescribed solution."
+        },
+        {
+          "id": "current-priority",
+          "intent": "Invite the person to name what matters to them now without presuming a problem or goal."
+        },
+        {
+          "id": "manageable-option",
+          "intent": "Offer a small next step, information gathering, pause, or no action as equally acceptable."
+        },
+        {
+          "id": "skip-pause",
+          "intent": "Allow skipping and stopping at any point without implying failure."
+        },
+        {
+          "id": "no-clinical-inference",
+          "intent": "Avoid screening, diagnosis, treatment advice, risk scoring, or crisis-response claims."
+        },
+        {
+          "id": "privacy-and-testing",
+          "intent": "Avoid unnecessary sensitive disclosure and state actual storage/handling only if known; recommend respondent review."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use broad optional prompts about priorities, support, or rest.",
+        "Include an explicit 'not sure' or 'I would rather not answer' path."
+      ],
+      "prohibitedAsks": [
+        "Detailed trauma, diagnoses, suicidality, medication, income, or relationship history.",
+        "Mandatory commitment, mood score, or sensitive disclosure."
+      ],
+      "prohibitedClaims": [
+        "The reflection assesses wellbeing, diagnoses a condition, or predicts risk.",
+        "The instrument is therapeutic, confidential, or crisis-monitored."
+      ],
+      "hardGates": [
+        {
+          "id": "clinical-or-crisis-function",
+          "description": "The artifact presents itself as a mental-health screen, clinical guidance, or crisis response without a qualified and monitored service."
+        },
+        {
+          "id": "coerced-sensitive-disclosure",
+          "description": "The form requires sensitive personal disclosure or treats skipping/no action as a deficit."
+        },
+        {
+          "id": "false-private-storage",
+          "description": "The draft promises privacy/confidentiality despite unspecified technical handling or storage."
+        }
+      ],
+      "sourceNotes": "The case is an optional self-reflection, not a health instrument. COSMIN content-validity principles are relevant only if a defined construct and measurement claim are introduced; the brief explicitly makes neither claim.",
+      "methodologySources": [
+        {
+          "name": "COSMIN, Content Validity Guideline v2.0",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11541334/"
+        },
+        {
+          "name": "NSF, Research Involving Human Subjects",
+          "url": "https://www.nsf.gov/funding/research-involving-human-subjects"
+        }
       ]
     }
   ],
-  "limitations": ["Cases are synthetic public development fixtures, not a representative sample or hidden holdout.", "Intent criteria permit multiple good question wordings and approaches; do not use string matching against a canonical questionnaire.", "Reviewer scores are judgments until a qualified panel independently rates and adjudicates cases."]
+  "limitations": [
+    "Cases are synthetic public development fixtures, not a representative sample or hidden holdout.",
+    "Intent criteria permit multiple good question wordings and approaches; do not use string matching against a canonical questionnaire.",
+    "Reviewer scores are judgments until a qualified panel independently rates and adjudicates cases.",
+    "Coverage now includes every package in the pinned catalog, but one synthetic case per package is still sparse coverage and does not exercise every variant, region, language, or risk context."
+  ]
 }

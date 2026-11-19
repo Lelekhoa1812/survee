@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["benchmarkVersion", "model", "skillVersion", "promptVersion", "packageLibraryVersion", "runDate", "outputs", "reviewers", "ratings", "evidenceStatus"],
   "properties": {
-    "benchmarkVersion": { "const": "kqa-package-draft/1" },
+    "benchmarkVersion": { "const": "kqa-package-draft/2" },
     "model": { "type": "string", "minLength": 1 },
     "skillVersion": { "type": "string", "minLength": 1 },
     "promptVersion": { "type": "string", "minLength": 1 },

@@ -28,13 +28,13 @@ function unique(values: unknown, label: string): asserts values is string[] {
 }
 
 export function validateBenchmark(benchmark: any) {
-  assert(benchmark?.benchmarkVersion === "kqa-package-draft/1", "Unsupported package-draft benchmark version.");
+  assert(benchmark?.benchmarkVersion === "kqa-package-draft/2", "Unsupported package-draft benchmark version.");
   assert(benchmark.track === "package-draft-review", "Benchmark track must be package-draft-review.");
   assert(benchmark.packageLibraryVersion === INTERVIEW_PACKAGE_VERSION, "Benchmark package-library version does not match the current catalog.");
   unique(benchmark.dimensions, "dimensions");
   assert(JSON.stringify(benchmark.dimensions) === JSON.stringify(DIMENSIONS), "Benchmark dimensions must match the versioned rubric.");
-  assert(benchmark.cases?.length >= 3, "Benchmark needs at least three development cases.");
   const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
+  assert(Array.isArray(benchmark.cases) && benchmark.cases.length >= packageIds.size, "Benchmark must cover every current interview package.");
   const caseIds = new Set<string>();
   for (const item of benchmark.cases) {
     assert(NONEMPTY(item.id) && !caseIds.has(item.id), `Missing or duplicate case id: ${item.id}`);
@@ -46,7 +46,10 @@ export function validateBenchmark(benchmark: any) {
     unique(item.hardGates?.map((gate: any) => gate.id), `${item.id}: hard gate ids`);
     assert(item.hardGates.length > 0 && item.hardGates.every((gate: any) => NONEMPTY(gate.description)), `${item.id}: each hard gate needs a description.`);
     assert(Array.isArray(item.prohibitedAsks) && Array.isArray(item.prohibitedClaims), `${item.id}: prohibited asks and claims must be arrays.`);
+    assert(NONEMPTY(item.sourceNotes), `${item.id}: sourceNotes must explain how cited guidance informs the case.`);
+    assert(Array.isArray(item.methodologySources) && item.methodologySources.length > 0 && item.methodologySources.every((source: any) => NONEMPTY(source.name) && typeof source.url === "string" && /^https:\/\//.test(source.url)), `${item.id}: methodologySources need named HTTPS citations.`);
   }
+  assert([...packageIds].every((packageId) => benchmark.cases.some((item: any) => item.packageId === packageId)), "Benchmark must cover every current interview package.");
   assert(benchmark.ratingScale && ["0", "1", "2", "3"].every((score) => NONEMPTY(benchmark.ratingScale[score])), "Benchmark needs anchored 0–3 rating descriptions.");
   return benchmark;
 }
