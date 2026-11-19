@@ -174,8 +174,8 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
-    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/6");
-    expect(body.result.structuredContent.packageCatalog).toHaveLength(17);
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/7");
+    expect(body.result.structuredContent.packageCatalog).toHaveLength(18);
     expect(body.result.structuredContent.packageCatalog[0]).toMatchObject({
       id: "product-discovery",
       decisionFocus: expect.any(String),
@@ -188,7 +188,7 @@ describe("MCP tools", () => {
     const compact = await call("get_interview_packages", { catalogOnly: true });
     const compactBody = await compact.json() as { result: { structuredContent: { catalogOnly: boolean; packageCatalog: unknown[]; packages?: unknown } } };
     expect(compactBody.result.structuredContent.catalogOnly).toBe(true);
-    expect(compactBody.result.structuredContent.packageCatalog).toHaveLength(17);
+    expect(compactBody.result.structuredContent.packageCatalog).toHaveLength(18);
     expect(compactBody.result.structuredContent).not.toHaveProperty("packages");
     const invalidMode = await call("get_interview_packages", { catalogOnly: true, packageId: "candidate-experience" });
     const invalidBody = await invalidMode.json() as { result: { isError?: boolean; content: { text: string }[] } };
@@ -199,6 +199,11 @@ describe("MCP tools", () => {
     expect(focusedBody.result.structuredContent.packageId).toBe("candidate-experience");
     expect(focusedBody.result.structuredContent.packages).toContain("### Candidate experience");
     expect(focusedBody.result.structuredContent.packages).not.toContain("### Safety and quality learning\n\n**Use for:**");
+    const industrial = await call("get_interview_packages", { packageId: "industrial-operations" });
+    const industrialBody = await industrial.json() as { result: { structuredContent: { packageId: string; packages: string } } };
+    expect(industrialBody.result.structuredContent).toMatchObject({ packageId: "industrial-operations" });
+    expect(industrialBody.result.structuredContent.packages).toContain("## Industrial operations\n\n**Use for:**");
+    expect(industrialBody.result.structuredContent.packages).toContain("not live handover");
     expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_interview_packages");
     expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_interview_packages");
   });
@@ -248,7 +253,7 @@ describe("MCP tools", () => {
     expect(tools.find((tool) => tool.name === "preview_questionnaire_version_patch")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
     expect(tools.find((tool) => tool.name === "create_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
     expect(tools.find((tool) => tool.name === "create_interview")?.description).toContain("immediately open a live version-1 interview");
-    expect(tools.find((tool) => tool.name === "get_interview_packages")?.inputSchema.properties).toMatchObject({ packageId: { type: "string", enum: expect.arrayContaining(["product-discovery", "personal-wellbeing-reflection"]) } });
+    expect(tools.find((tool) => tool.name === "get_interview_packages")?.inputSchema.properties).toMatchObject({ packageId: { type: "string", enum: expect.arrayContaining(["product-discovery", "personal-wellbeing-reflection", "industrial-operations"]) } });
     expect(tools.find((tool) => tool.name === "delete_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
   });

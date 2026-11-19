@@ -1,6 +1,6 @@
 import { readDoc } from "./docs";
 
-export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/6" as const;
+export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/7" as const;
 
 export const INTERVIEW_PACKAGES = [
   {
@@ -25,7 +25,15 @@ export const INTERVIEW_PACKAGES = [
     respondents: "Staff or other people who perform or depend on the defined process.",
     useWhen: "The inquiry concerns how work moves across steps, roles, or teams.",
     notFor: "Ranking individuals, measuring general organizational climate, or assessing employee performance.",
-    riskFlags: ["employment-context review"], relatedPackages: ["employee-onboarding"],
+    riskFlags: ["employment-context review"], relatedPackages: ["employee-onboarding", "industrial-operations"],
+  },
+  {
+    id: "industrial-operations", title: "Industrial operations", level: 2,
+    decisionFocus: "Improve recurring production and maintenance workflows with input from the people doing the work.",
+    respondents: "Operators, maintenance and planning staff, supervisors, and process partners with recent experience.",
+    useWhen: "The host has defined the workflow, reference period, improvement owner, and monitored route for urgent concerns.",
+    notFor: "Live shift handover, hazard or incident reports, safety investigations, compliance certification, or individual performance review.",
+    riskFlags: ["workforce power imbalance and identifiability", "operational confidentiality", "safety-reporting boundary"], relatedPackages: ["workplace-process", "safety-quality-learning", "supplier-partner-review", "audit-readiness"],
   },
   {
     id: "project-discovery", title: "Project discovery", level: 2,
@@ -100,7 +108,7 @@ export const INTERVIEW_PACKAGES = [
     riskFlags: ["safety escalation route required", "sensitive event details"], relatedPackages: ["workplace-process", "program-evaluation"],
   },
   {
-    id: "audit-readiness", title: "Audit readiness", level: 3,
+    id: "audit-readiness", title: "Audit and compliance readiness", level: 3,
     decisionFocus: "Locate evidence gaps, process owners, and follow-up before an authorized review.",
     respondents: "Process and control owners who know where approved evidence is held.",
     useWhen: "A qualified owner needs a preliminary view of evidence availability and responsibility.",
@@ -132,7 +140,7 @@ export const INTERVIEW_PACKAGES = [
     riskFlags: ["accessibility needs route"], relatedPackages: ["service-improvement", "community-consultation"],
   },
   {
-    id: "personal-wellbeing-reflection", title: "Personal wellbeing reflection", level: 3,
+    id: "personal-wellbeing-reflection", title: "Personal reflection and wellbeing", level: 3,
     decisionFocus: "Support optional, self-directed reflection about what matters to the person now.",
     respondents: "An individual choosing whether to reflect on personal priorities or a next step.",
     useWhen: "The purpose is personal reflection with an explicit skip option and no clinical interpretation.",

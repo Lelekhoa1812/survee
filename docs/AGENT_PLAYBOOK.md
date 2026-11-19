@@ -18,7 +18,7 @@ Before writing, make sure you know:
 |---|---|
 | Who answers, and what the questionnaire is for | Ask once, briefly. Do not invent a purpose |
 | The questions, in order, with answer choices | If given as prose, list them back as a numbered table and proceed |
-| Which questions are mandatory and when they apply | Default to optional. Mark a question `required` only when the host cannot proceed without it, and use supported `when` rules for earlier choice answers or whether an earlier answer is present |
+| Which questions are mandatory and when they apply | Default to optional. Mark a question `required` only when the host cannot proceed without it. Use supported `when` rules for earlier choice comparisons, numeric/scale/date comparisons, or whether an earlier answer is present. Sources must be earlier and eligible; typed comparisons fail closed for missing, invalid, out-of-range, or ineligible values, including `ne` |
 | Target completion time and collection window | Record the target and intended field period; say when either is unknown |
 | Respondent notice: purpose, access, use, retention, contact | Require host-verified facts and approval. Material unresolved privacy facts block fielding; do not invent consent or anonymity claims |
 | Existing ids and option values, if this replaces an earlier file | Reuse them exactly. See "Updating an existing questionnaire" |

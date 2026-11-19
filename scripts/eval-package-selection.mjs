@@ -12,7 +12,7 @@ function uniqueStrings(values, label) {
 }
 
 export function validateBenchmark(benchmark) {
-  assert(benchmark && benchmark.benchmarkVersion === "kqa-package-selection/1", "Unsupported benchmarkVersion.");
+  assert(benchmark && benchmark.benchmarkVersion === "kqa-package-selection/2", "Unsupported benchmarkVersion.");
   assert(benchmark.track === "package-selection", "track must be package-selection.");
   uniqueStrings(benchmark.packageIds, "packageIds");
   assert(Array.isArray(benchmark.allowedActions) && benchmark.allowedActions.length === ACTIONS.size && benchmark.allowedActions.every((x) => ACTIONS.has(x)), "allowedActions must declare all supported actions.");

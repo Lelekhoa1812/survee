@@ -24,13 +24,15 @@ describe("agent documentation bundle", () => {
     expect(packages).not.toBeNull();
     const selection = packages!.split("## Package selection")[1].split("## Additional sector modules")[0];
     const rows = Array.from(selection.matchAll(/^\| (.+?) \| (Full package|Sector module) \|/gm));
-    expect(rows).toHaveLength(17);
-    expect(rows.filter(([, , type]) => type === "Full package")).toHaveLength(7);
+    expect(rows).toHaveLength(18);
+    expect(rows.filter(([, , type]) => type === "Full package")).toHaveLength(8);
     expect(rows.filter(([, , type]) => type === "Sector module")).toHaveLength(10);
     expect(packages).toContain("### Program evaluation");
     expect(packages).toContain("### Community consultation");
     expect(packages).toContain("Neither is an employee climate or recurring workforce pulse instrument");
     expect(packages).toContain("field-tested patient-experience measure");
+    expect(packages).toContain("## Industrial operations");
+    expect(packages).toContain("Do not imply that KQA is anonymous");
     expect(packages).toContain("do not report a conventional margin of error or claim representativeness");
     expect(packages).toContain("jurisdiction-specific assessment and legal review");
     expect(packages).toContain("not an emergency or statutory reporting channel");
@@ -67,8 +69,8 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/6");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/6");
+    expect(packages).toContain("kqa-interview-packages/7");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/7");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {
@@ -89,7 +91,7 @@ describe("agent documentation bundle", () => {
     expect(profile?.packageCatalog.find((item) => item.id === "employee-onboarding")?.relatedPackages).toContain("workplace-process");
     const catalogOnly = await getInterviewPackage(undefined, { catalogOnly: true });
     expect(catalogOnly?.catalogOnly).toBe(true);
-    expect(catalogOnly?.packageCatalog).toHaveLength(17);
+    expect(catalogOnly?.packageCatalog).toHaveLength(18);
     expect(catalogOnly).not.toHaveProperty("packages");
   });
 

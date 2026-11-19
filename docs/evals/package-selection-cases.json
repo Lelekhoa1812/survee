@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": "kqa-package-selection/1",
+  "benchmarkVersion": "kqa-package-selection/2",
   "track": "package-selection",
   "status": "public-development-fixture",
   "description": "Small development fixture for package fit, clarification, and boundary handling. Labels are provisional and are not a validated benchmark or universal quality oracle.",
@@ -256,6 +256,22 @@
           "anonymity-limit"
         ]
       }
+    },
+    {
+      "id": "industrial-process-improvement",
+      "brief": "A plant wants a short, person-linked questionnaire about recurring production delays and routine operations-maintenance coordination over the last month. The host will use responses only for team-level process improvements, explains who can see answers, avoids small-group reporting, and directs current hazards and incidents to existing monitored procedures.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "industrial-operations",
+        "acceptablePackageIds": [
+          "industrial-operations"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "safety-reporting-route",
+          "privacy-review"
+        ]
+      }
     }
   ],
   "packageIds": [
@@ -275,6 +291,7 @@
     "program-evaluation",
     "community-consultation",
     "event-feedback",
-    "personal-wellbeing-reflection"
+    "personal-wellbeing-reflection",
+    "industrial-operations"
   ]
 }

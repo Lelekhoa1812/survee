@@ -22,7 +22,7 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/FORMAT.md`](docs/FORMAT.md) | The specification: manifest schema, control bindings, runtime API, sandbox limits, what is stored |
 | [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYBOOK.md) | The procedure an agent follows, the fix loop with the checker report, a prompt to paste |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Sourced design, accessibility, interaction, analytics and usability review standards |
-| [`docs/INTERVIEW_PACKAGES.md`](docs/INTERVIEW_PACKAGES.md) | 17 versioned, addressable industrial, public-service, research and personal starting packages with risk safeguards |
+| [`docs/INTERVIEW_PACKAGES.md`](docs/INTERVIEW_PACKAGES.md) | 18 versioned, addressable industrial, public-service, research and personal starting packages with risk safeguards |
 | [`docs/QUESTION_BLUEPRINT.md`](docs/QUESTION_BLUEPRINT.md) | Reusable per-question purpose, interpretation, routing and test record |
 | [`docs/kqa-questionnaire-author/SKILL.md`](docs/kqa-questionnaire-author/SKILL.md) | Portable Agent Skills workflow for questionnaire design and live updates |
 | [`docs/DIAGNOSTICS.md`](docs/DIAGNOSTICS.md) | Every checker code, why it matters, how to fix it (generated) |

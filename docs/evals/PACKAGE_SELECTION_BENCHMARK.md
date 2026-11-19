@@ -1,6 +1,6 @@
 # Package selection development benchmark
 
-This is a second, separate authoring-evaluation track. The fixture at [`package-selection-cases.json`](package-selection-cases.json) contains 16 synthetic briefs spanning package fit, adjacent-package ambiguity, missing prerequisites, and boundaries where KQA must decline or clarify. It covers the 15 proposed audit scenarios plus a separate active-hazard reporting variant. Cases are development examples only: labels are provisional, the set is small and public, and it is neither a held-out test set nor evidence that a package, prompt, or agent is validated. There is no universal pass score.
+This is a second, separate authoring-evaluation track. The fixture at [`package-selection-cases.json`](package-selection-cases.json) contains 17 synthetic briefs spanning package fit, adjacent-package ambiguity, missing prerequisites, and boundaries where KQA must decline or clarify. It includes a non-decisional industrial-process improvement brief alongside safety-reporting and other boundary cases. Cases are development examples only: labels are provisional, the set is small and public, and it is neither a held-out test set nor evidence that a package, prompt, or agent is validated. There is no universal pass score.
 
 The cases encode three actions:
 
@@ -20,11 +20,11 @@ Example result:
 
 ```json
 {
-  "benchmarkVersion": "kqa-package-selection/1",
+  "benchmarkVersion": "kqa-package-selection/2",
   "model": "provider/model snapshot",
   "runDate": "2026-11-19",
   "promptVersion": "prompt hash or release",
-  "packageLibraryVersion": "kqa-interview-packages/6",
+  "packageLibraryVersion": "kqa-interview-packages/7",
   "cases": [
     {
       "caseId": "account-progress-or-friction",

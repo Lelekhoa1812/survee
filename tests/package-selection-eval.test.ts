@@ -10,13 +10,13 @@ const decision = (action: string, packageId: string | null, overrides: Record<st
 });
 const resultsFor = (fn: (c: any) => any) => ({
   benchmarkVersion: benchmark.benchmarkVersion, model: "test/model", runDate: "2026-11-19",
-  promptVersion: "test-prompt", packageLibraryVersion: "kqa-interview-packages/6",
+  promptVersion: "test-prompt", packageLibraryVersion: "kqa-interview-packages/7",
   cases: benchmark.cases.map((c: any) => ({ caseId: c.id, decision: fn(c) })),
 });
 
 describe("package selection development benchmark", () => {
   it("validates the audit scenarios with distinct fit, clarification, and boundary decisions", () => {
-    expect(validateBenchmark(benchmark).cases).toHaveLength(16);
+    expect(validateBenchmark(benchmark).cases).toHaveLength(17);
     expect(new Set(benchmark.packageIds)).toEqual(new Set(INTERVIEW_PACKAGES.map((p) => p.id)));
     expect(benchmark.cases.filter((c: any) => c.gold.action === "clarify")).toHaveLength(3);
     expect(benchmark.cases.filter((c: any) => c.gold.action === "out_of_scope")).toHaveLength(3);
