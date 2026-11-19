@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": "kqa-package-draft/7",
+  "benchmarkVersion": "kqa-package-draft/8",
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/8",
@@ -2091,12 +2091,105 @@
         }
       ],
       "sourceNotes": "ABS methodology documents that personal-interest learning was collected in earlier survey cycles but was no longer collected in 2024–25. This supports the distinct topic’s existence, not the wording or validity of this synthetic form. Census A2 informs functional and respondent testing. ICO data-minimisation guidance informs limiting collection to information necessary for the stated purpose; legal applicability depends on context and jurisdiction. The case’s non-clinical, non-institutional scope is a scenario boundary, not a claim made by these sources."
+    },
+    {
+      "id": "personal-shared-decision-preparation",
+      "packageId": "personal-planning",
+      "brief": "A person wants a short questionnaire to help prepare for a household decision they expect to discuss with a partner or relative. The questionnaire should help that one respondent clarify what they know, what matters to them, what remains uncertain, and what they may want to ask or discuss. It is a preparation aid only; it does not collect the other household members’ views or establish their agreement.",
+      "contextFacts": [
+        "The host has not specified the decision, collection platform, privacy notice, access, retention, or whether the respondent will use this alone or with others.",
+        "The respondent may not yet know which options are available or what the other people involved prefer; uncertainty must remain answerable.",
+        "No clinical, legal, financial, or professional advice is supplied, and no questionnaire pretest or accessibility review has occurred."
+      ],
+      "requiredIntents": [
+        {
+          "id": "respondent-own-view",
+          "intent": "Collect and label only this respondent’s own priorities, preferences, knowledge, and uncertainties."
+        },
+        {
+          "id": "options-and-questions",
+          "intent": "Allow the respondent to note options they know about and questions they may want to discuss, without assuming a preferred outcome."
+        },
+        {
+          "id": "other-people-distinction",
+          "intent": "Keep the respondent’s views distinct from any presumed partner, relative, or household member view; do not claim their consent or agreement."
+        },
+        {
+          "id": "voluntary-uncertainty",
+          "intent": "Allow skipping, “not sure,” or deferring without pressure or scoring; make any proposed next step optional."
+        },
+        {
+          "id": "privacy-and-boundaries",
+          "intent": "Avoid collecting unnecessary sensitive details or third-party identifiers and state only verified privacy facts."
+        },
+        {
+          "id": "review-evidence",
+          "intent": "Record unresolved host facts and require wording, accessibility, and respondent pretesting before use."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use a short free-text question for what matters most to the respondent, with an optional structured list only when the host can provide balanced, relevant choices.",
+        "Separate known options, questions to discuss, and uncertainties into distinct optional prompts.",
+        "Omit a next-step prompt or offer a respondent-authored discussion question as an optional closing item."
+      ],
+      "prohibitedAsks": [
+        "Require the respondent to disclose another person’s private information, position, or agreement.",
+        "Force a choice or commitment when the respondent is uncertain or wishes to defer.",
+        "Solicit detailed medical, financial, legal, or relationship information beyond what is necessary and approved for the stated preparation purpose."
+      ],
+      "prohibitedClaims": [
+        "The answers represent the views, consent, or agreement of the household or any person who did not respond.",
+        "The questionnaire recommends the correct decision or provides professional advice.",
+        "Answers are confidential, anonymous, deleted, or shared only with named people unless the actual controls and host notice verify those facts.",
+        "The questionnaire is validated, clinically effective, or ready to use without review and respondent testing."
+      ],
+      "hardGates": [
+        {
+          "id": "third-party-view-or-consent-inference",
+          "description": "The draft attributes a view, preference, consent, or agreement to a partner/relative who did not respond, or presents the respondent as speaking for the household."
+        },
+        {
+          "id": "forced-outcome-or-commitment",
+          "description": "The questionnaire forces a decision, action plan, or commitment, or treats uncertainty/deferment as failure."
+        },
+        {
+          "id": "unsupported-professional-advice",
+          "description": "Questions, summaries, or recommendations make unsupported clinical, legal, or financial judgments or imply qualified advice."
+        },
+        {
+          "id": "unnecessary-sensitive-or-identifying-data",
+          "description": "The draft requires sensitive details or identifies third parties beyond the minimum necessary for the stated purpose."
+        },
+        {
+          "id": "privacy-or-readiness-overclaim",
+          "description": "The draft invents privacy assurances or claims readiness without required host review and respondent testing."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "Agency for Healthcare Research and Quality, Shared Decision Making",
+          "url": "https://www.ahrq.gov/sdm/about/index.html"
+        },
+        {
+          "name": "NHS England, Shared decision making",
+          "url": "https://www.england.nhs.uk/personalisedcare/shared-decision-making/about/"
+        },
+        {
+          "name": "Pew Research Center, Writing Survey Questions",
+          "url": "https://www.pewresearch.org/writing-survey-questions/"
+        },
+        {
+          "name": "W3C, Web Content Accessibility Guidelines (WCAG) 2.2",
+          "url": "https://www.w3.org/TR/2023/REC-WCAG22-20231005/"
+        }
+      ],
+      "sourceNotes": "AHRQ and NHS England guidance centers the individual’s own values, goals, preferences, and circumstances in shared decision making. This informs keeping one respondent’s views distinct from other household members and treating the questionnaire as preparation for discussion, not a substitute for the decision process. Pew question-writing guidance and WCAG 2.2 inform clear, single-focus prompts, optionality, and error prevention. These sources do not validate this synthetic questionnaire or establish that it is suitable for clinical, legal, or financial decisions."
     }
   ],
   "limitations": [
     "Cases are synthetic public development fixtures, not a representative sample or hidden holdout.",
     "Intent criteria permit multiple good question wordings and approaches; do not use string matching against a canonical questionnaire.",
     "Reviewer scores are judgments until a qualified panel independently rates and adjudicates cases.",
-    "Coverage includes every package in the pinned catalog plus eight cross-cutting cases, but remains sparse and cannot represent package variants, jurisdictions, languages, recruitment modes, or risk contexts."
+    "Coverage includes every package in the pinned catalog plus nine cross-cutting cases, but remains sparse and cannot represent package variants, jurisdictions, languages, recruitment modes, or risk contexts."
   ]
 }
