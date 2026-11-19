@@ -170,11 +170,30 @@ beforeEach(() => {
 describe("MCP tools", () => {
   it("returns the interview package guide to interview readers", async () => {
     const res = await call("get_interview_packages", {});
-    const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string } } };
+    const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string; packageCatalog: { id: string; decisionFocus: string; respondents: string; useWhen: string; notFor: string; riskFlags: string[]; relatedPackages: string[] }[] } } };
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
-    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/2");
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/3");
+    expect(body.result.structuredContent.packageCatalog).toHaveLength(17);
+    expect(body.result.structuredContent.packageCatalog[0]).toMatchObject({
+      id: "product-discovery",
+      decisionFocus: expect.any(String),
+      respondents: expect.any(String),
+      useWhen: expect.any(String),
+      notFor: expect.any(String),
+      riskFlags: expect.any(Array),
+      relatedPackages: expect.any(Array),
+    });
+    const compact = await call("get_interview_packages", { catalogOnly: true });
+    const compactBody = await compact.json() as { result: { structuredContent: { catalogOnly: boolean; packageCatalog: unknown[]; packages?: unknown } } };
+    expect(compactBody.result.structuredContent.catalogOnly).toBe(true);
+    expect(compactBody.result.structuredContent.packageCatalog).toHaveLength(17);
+    expect(compactBody.result.structuredContent).not.toHaveProperty("packages");
+    const invalidMode = await call("get_interview_packages", { catalogOnly: true, packageId: "candidate-experience" });
+    const invalidBody = await invalidMode.json() as { result: { isError?: boolean; content: { text: string }[] } };
+    expect(invalidBody.result.isError).toBe(true);
+    expect(invalidBody.result.content[0].text).toContain("cannot be combined with packageId");
     const focused = await call("get_interview_packages", { packageId: "candidate-experience" });
     const focusedBody = await focused.json() as { result: { structuredContent: { packageId: string; packages: string } } };
     expect(focusedBody.result.structuredContent.packageId).toBe("candidate-experience");

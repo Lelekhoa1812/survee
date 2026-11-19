@@ -296,10 +296,11 @@ async function onePerson(personId: string) {
 const TOOLS: ToolDef[] = [
   {
     name: "get_interview_packages",
-    description: "Return KQA's versioned interview package catalog and safeguards. Omit packageId for the full library, or select a stable packageId to receive the catalog, shared safeguards, and focused package guidance. These are design aids, not validated instruments or automated decisions.",
-    inputSchema: obj({ packageId: { type: "string", enum: INTERVIEW_PACKAGES.map((item) => item.id) } }),
+    description: "Return KQA's versioned package catalog, structured fit metadata, and safeguards. Set catalogOnly to true for a compact metadata-only catalog; otherwise omit packageId for the full library or select a stable packageId for focused guidance. Use decision, audience, and risk boundaries to choose; when fit is ambiguous, clarify rather than inventing a score. These are self-completed questionnaire aids, not validated instruments or automated decisions.",
+    inputSchema: obj({ packageId: { type: "string", enum: INTERVIEW_PACKAGES.map((item) => item.id) }, catalogOnly: bool }),
     async run(args) {
-      const pack = await getInterviewPackage(args.packageId as (typeof INTERVIEW_PACKAGES)[number]["id"] | undefined);
+      if (args.catalogOnly === true && args.packageId !== undefined) return err("catalogOnly cannot be combined with packageId.", "invalid_arguments");
+      const pack = await getInterviewPackage(args.packageId as (typeof INTERVIEW_PACKAGES)[number]["id"] | undefined, { catalogOnly: args.catalogOnly === true });
       return pack ? ok({ source: "docs/INTERVIEW_PACKAGES.md", ...pack }) : err("The interview package guide is unavailable.", "docs_unavailable");
     },
   },

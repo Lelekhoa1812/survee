@@ -29,6 +29,8 @@ describe("agent documentation bundle", () => {
     expect(rows.filter(([, , type]) => type === "Sector module")).toHaveLength(10);
     expect(packages).toContain("### Program evaluation");
     expect(packages).toContain("### Community consultation");
+    expect(packages).toContain("Neither is an employee climate or recurring workforce pulse instrument");
+    expect(packages).toContain("field-tested patient-experience measure");
     expect(packages).toContain("do not report a conventional margin of error or claim representativeness");
     expect(packages).toContain("jurisdiction-specific assessment and legal review");
     expect(packages).toContain("not an emergency or statutory reporting channel");
@@ -65,15 +67,30 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/2");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/2");
+    expect(packages).toContain("kqa-interview-packages/3");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/3");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
+    const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
+    for (const item of INTERVIEW_PACKAGES) {
+      expect(item.decisionFocus.length).toBeGreaterThan(0);
+      expect(item.respondents.length).toBeGreaterThan(0);
+      expect(item.useWhen.length).toBeGreaterThan(0);
+      expect(item.notFor.length).toBeGreaterThan(0);
+      for (const relatedId of item.relatedPackages) expect(packageIds.has(relatedId)).toBe(true);
+    }
     const profile = await getInterviewPackage("candidate-experience");
     expect(profile?.packageId).toBe("candidate-experience");
     expect(profile?.packageVersion).toBe(INTERVIEW_PACKAGE_VERSION);
     expect(profile?.packages).toContain("### Candidate experience");
     expect(profile?.packages).toContain("## Risk-based release gate");
     expect(profile?.packages).not.toContain("### Safety and quality learning\n\n**Use for:**");
+    expect(profile?.packageCatalog.find((item) => item.id === "candidate-experience")?.notFor).toContain("ranking");
+    expect(profile?.selectionGuidance).toContain("If purpose, audience, modality, or risk boundary is unclear");
+    expect(profile?.packageCatalog.find((item) => item.id === "employee-onboarding")?.relatedPackages).toContain("workplace-process");
+    const catalogOnly = await getInterviewPackage(undefined, { catalogOnly: true });
+    expect(catalogOnly?.catalogOnly).toBe(true);
+    expect(catalogOnly?.packageCatalog).toHaveLength(17);
+    expect(catalogOnly).not.toHaveProperty("packages");
   });
 
   it("documents respondent navigation and custom-question focus targets once", async () => {

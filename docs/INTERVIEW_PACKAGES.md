@@ -4,7 +4,9 @@ These packages are starting points for designing an interview, not validated ins
 
 Read [FORMAT.md](FORMAT.md), [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), and [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) before producing the complete HTML. The packages do not add question types, scoring or automated decisions to KQA. Supported bounded routing includes choice comparisons and checks for whether an earlier answer is present; FORMAT.md defines its limits. A sample question below is a candidate, not a mandatory item; choose only those whose answers inform the stated decision. Give each selected question a stable, distinct ID and make it self-contained in exports.
 
-The package library is versioned as `kqa-interview-packages/2`. Its 17 stable IDs are listed in the catalog below and are accepted by the MCP `get_interview_packages` tool. Omit `packageId` to retrieve the complete library; pass one ID to retrieve the catalog, common operating and risk safeguards, sampling guidance, and only that package's detailed module. Record the package ID and library version in the review record so later revisions remain traceable.
+The package library is versioned as `kqa-interview-packages/3`. Its 17 stable IDs are listed in the catalog below and are accepted by the MCP `get_interview_packages` tool. Set `catalogOnly: true` for just the compact structured metadata; omit both arguments to retrieve the complete library; pass one `packageId` to retrieve shared operating and risk safeguards, sampling guidance, and only that package's detailed module. MCP returns decision focus, intended respondents, when to use or avoid each package, risk flags, and adjacent packages. Choose by purpose, audience, and collection context; if the brief is ambiguous, show the closest candidates and ask rather than producing a false fit score. Record the package ID and library version in the review record so later revisions remain traceable.
+
+KQA hosts self-completed HTML questionnaires. It does not provide a live moderator, interviewer probes, or a qualitative interview guide. If the host means a synchronous moderated interview, use these packages only as source material and create a separate moderator guide and recording process.
 
 ## Common operating procedure
 
@@ -70,6 +72,16 @@ Keep the evaluations distinct: expert or method review does not replace pretesti
 Full packages have complete decision-oriented question examples below. Sector modules are shorter patterns and need the same purpose, respondent, timeframe, privacy, method-fit and review decisions established in the common operating procedure. The table is a routing aid, not a claim that a package is validated for a population or outcome.
 
 Before drafting, confirm the decision and accountable owner, intended population and recruitment, response use and audience, timeframe, reporting and retention facts, and accessibility or sensitivity needs. Ask about critical unknowns or mark them as assumptions; do not invent them.
+
+### Distinguish adjacent purposes
+
+- Choose **product discovery** for a real user problem or unmet need; **service improvement** for friction in a defined service journey; and **customer success** for progress toward a goal the provider and customer already agreed.
+- Choose **employee onboarding** for a bounded early-tenure period; **workplace process** for a workflow or handoff regardless of tenure. Neither is an employee climate or recurring workforce pulse instrument; KQA has no dedicated validated climate package.
+- Choose **personal planning** for a practical self-selected goal; **personal wellbeing reflection** for optional present-focused reflection. Neither supports screening, diagnosis, therapy, or crisis response.
+- Choose **program evaluation** only when an evaluation owner has defined the evaluation question, design, indicators, and evidence sources. It is not interchangeable with a general experience-feedback package.
+- Choose **health service experience** only for local, non-clinical service feedback. It is not a substitute for a field-tested patient-experience measure such as a relevant CAHPS instrument.
+
+When two purposes still fit, preserve the ambiguity in the review and ask which decision the host needs to inform. Do not treat a larger package as automatically more comprehensive or more valid.
 
 ## Sampling and reporting plan
 
