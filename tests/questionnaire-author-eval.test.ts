@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error The checked JavaScript CLI intentionally has no TypeScript build dependency.
 import { scoreResults, validateBenchmark } from "../scripts/eval-questionnaire-author.mjs";
 
-const benchmark = JSON.parse(await readFile(new URL("../eval/questionnaire-authoring/cases.json", import.meta.url), "utf8"));
+const benchmark = JSON.parse(await readFile(new URL("../docs/evals/questionnaire-authoring-cases.json", import.meta.url), "utf8"));
 
 describe("questionnaire authoring review benchmark", () => {
   it("has unique cases, known categories, valid question locations, and clean controls", () => {

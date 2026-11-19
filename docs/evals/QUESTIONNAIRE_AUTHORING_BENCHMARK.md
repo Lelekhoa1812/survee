@@ -4,7 +4,7 @@ KQA separates product-format correctness from questionnaire content quality. A s
 
 ## Current benchmark
 
-The public development corpus is [`eval/questionnaire-authoring/cases.json`](../../eval/questionnaire-authoring/cases.json). It is a small, explicitly non-held-out review set of realistic briefs, flawed questions, and clean controls across customer, workplace, service, event, community, operational, and personal contexts. The labels are development annotations for improving the evaluation method; they are not a universal quality oracle or a claim that two independent survey-methods reviewers have adjudicated the cases.
+The public development corpus is [`questionnaire-authoring-cases.json`](questionnaire-authoring-cases.json), also available at `/api/docs/evals/questionnaire-authoring-cases.json`. It is a small, explicitly non-held-out review set of realistic briefs, flawed questions, and clean controls across customer, workplace, service, event, community, operational, and personal contexts. The labels are development annotations for improving the evaluation method; they are not a universal quality oracle or a claim that two independent survey-methods reviewers have adjudicated the cases.
 
 Run a provider-neutral scorer by saving one review result per corpus case and running:
 

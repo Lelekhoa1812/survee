@@ -135,7 +135,7 @@ async function main() {
   const getArg = (name) => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };
   const resultsPath = getArg("--results");
   assert(resultsPath && !resultsPath.startsWith("--"), "Usage: node scripts/eval-questionnaire-author.mjs --results <result.json> [--benchmark <cases.json>]");
-  const benchmarkPath = getArg("--benchmark") ?? "eval/questionnaire-authoring/cases.json";
+  const benchmarkPath = getArg("--benchmark") ?? "docs/evals/questionnaire-authoring-cases.json";
   const [benchmark, results] = await Promise.all([benchmarkPath, resultsPath].map(async (path) => JSON.parse(await readFile(path, "utf8"))));
   process.stdout.write(`${JSON.stringify(scoreResults(benchmark, results), null, 2)}\n`);
 }

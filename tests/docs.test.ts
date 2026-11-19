@@ -92,6 +92,16 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("does not simulate respondent input");
   });
 
+  it("publishes the questionnaire evaluation benchmark and its labeled development corpus", async () => {
+    expect(DOCS.some((doc) => doc.slug === "questionnaire-authoring-benchmark" && doc.file === "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md")).toBe(true);
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
+    expect(bundle).toContain("scores are not validation or respondent evidence");
+    const corpus = await readAsset("evals/questionnaire-authoring-cases.json");
+    expect(corpus?.type).toBe("application/json; charset=utf-8");
+    expect(JSON.parse(corpus!.body).benchmarkVersion).toBe("kqa-questionnaire-review/1");
+  });
+
   it("publishes the live MCP operating guide as a named doc and in the agent bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "mcp" && doc.file === "MCP.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
