@@ -160,6 +160,18 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("The proposal is not a shipped KQA capability");
   });
 
+  it("publishes the repeatable-record selection benchmark and its development corpus", async () => {
+    expect(DOCS.some((doc) => doc.slug === "repeatable-record-selection-benchmark" && doc.file === "evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md")).toBe(true);
+    const benchmark = await readAsset("evals/repeatable-record-selection-cases.json");
+    const schema = await readAsset("evals/repeatable-record-selection.schema.json");
+    expect(JSON.parse(benchmark!.body).benchmarkVersion).toBe("kqa-repeatable-record-selection/1");
+    expect(JSON.parse(benchmark!.body).cases).toHaveLength(12);
+    expect(JSON.parse(schema!.body).properties.benchmarkVersion.const).toBe("kqa-repeatable-record-selection/1");
+    const bundle = await buildBundle("https://kqa.example");
+    expect(bundle).toContain("<!-- evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md -->");
+    expect(bundle).toContain("This is a public development set, not a held-out benchmark");
+  });
+
   it("ships version-matched references for the standalone questionnaire author skill", async () => {
     const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
     expect(skill).toContain("references/FORMAT.md");

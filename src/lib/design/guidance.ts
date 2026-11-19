@@ -59,6 +59,7 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check empty, loading, saving, success, error, submitted, long-content, dark-theme, and reduced-motion states." },
   { surfaces: ["questionnaire"], text: "Review question wording for one clear idea, neutral language, specific reference periods, and respondent-appropriate terms; this is a content judgment, not a static checker result." },
   { surfaces: ["questionnaire"], text: "For closed questions, check options are distinct and cover reasonable answers, scales read consistently, and option ordering is intentional." },
+  { surfaces: ["questionnaire"], text: "If repeated records are proposed, verify a clear repeated unit, shared compact fields, decision value, bounded recall period and finite cap, valid zero-row behavior, and respondent-understood subset guidance; KQA does not currently support native repeat groups, so do not simulate them with JSON text or cloned controls." },
   { surfaces: ["questionnaire"], text: "Use the question-content rubric and cognitive pretest protocol for new or high-impact items. Record participant fit, items and context tested, probe dimensions, findings, revisions, severity, and unresolved issues; keep this evidence distinct from usability findings." },
   { surfaces: ["questionnaire"], text: "For long forms, test the shell's section-aware question navigation with keyboard and narrow screens. Confirm it follows current eligibility, announces section answer counts, and never moves respondents automatically." },
   { surfaces: ["questionnaire"], text: "Change answers that reveal or hide routed questions and confirm a concise polite status announces the count without stealing focus. In pre-submit review, verify Clear removes the value, preserves an optional note, and autosaves; required questions must still be answered before submit." },
@@ -85,6 +86,10 @@ const SOURCES = [
   { name: "WAI-ARIA Authoring Practices Guide: Tabs", url: "https://www.w3.org/WAI/ARIA/apg/patterns/tabs/", role: "Implementation guidance for accessible tab interactions; not a conformance standard." },
   { name: "WAI-ARIA Authoring Practices Guide: Radio Group", url: "https://www.w3.org/WAI/ARIA/apg/patterns/radio/", role: "Keyboard interaction guidance for custom radio groups; native radio controls remain preferable." },
   { name: "WAI Forms Tutorial: User Notifications", url: "https://www.w3.org/WAI/tutorials/forms/notifications/", role: "Guidance for concise, understandable form errors and status messages." },
+  { name: "WAI Forms Tutorial: Grouping Controls", url: "https://www.w3.org/WAI/tutorials/forms/grouping/", role: "Recommends fieldset and legend to programmatically group related controls; apply per repeated record so each row has a clear name." },
+  { name: "ODK: Form Logic and Repeat Groups", url: "https://docs.getodk.org/form-logic/", role: "Production form-system guidance for bounded repeats, their collection and analysis costs, and avoiding repeats when a small known set can be unrolled; precedent, not direct usability evidence for KQA." },
+  { name: "Frictionless Data: Table Schema", url: "https://specs.frictionlessdata.io/table-schema/", role: "Portable schema precedent for typed fields, constraints, primary keys, and foreign keys in normalized data exports." },
+  { name: "UK HSE: Shift Handover", url: "https://www.hse.gov.uk/humanfactors/topics/shift-handover.htm", role: "Emphasizes incoming-worker information needs, two-way communication, adequate time, and end-user involvement; a questionnaire cannot replace operational handover procedures." },
   { name: "GOV.UK Design System: Character count", url: "https://design-system.service.gov.uk/components/character-count/", role: "Documents threshold-based character feedback and a consistent unit contract; adapt the pattern to KQA's UTF-16 browser and server validation behavior." },
   { name: "WCAG 2.2 SC 4.1.3: Status Messages", url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html", role: "Requires status messages that do not take focus to be programmatically determinable by assistive technology; KQA announces routing counts without moving focus." },
   { name: "WCAG 2.2 SC 3.2.2: On Input", url: "https://www.w3.org/WAI/WCAG22/Understanding/on-input", role: "Explains predictable behavior and advance notice of changes of context caused by changing an input; a content change is not necessarily a context change." },
@@ -305,7 +310,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/26",
+    policyVersion: "kqa-design/27",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
@@ -313,6 +318,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
       "There is no in-app question builder and no scoring. Keep authoring as HTML plus the KQA checker, and keep analytics descriptive.",
       "Keep original question and option ids stable when revising a live interview; explain data-compatibility findings before applying a new version.",
       "For adaptable domain briefs and safeguards, read /api/docs/interview-packages on this KQA instance or the full agent bundle at /api/docs/bundle.md. These are starting points, not validated instruments.",
+      "Current KQA has no native repeatable-record group. Never fake structured rows with JSON text, cloned controls, or generated question IDs. Only consider the future pattern when distinct repeated instances share a compact field set and materially change the decision; define a finite cap, reference period, and disclosed subset rule. Read /api/docs/repeatable-records-design and /api/docs/repeatable-record-selection-benchmark; the benchmark is public development data, not validation.",
       "With native manifest `when` routing, requiredness applies only while a question is eligible; inactive answers are retained, and eligibility reflects current rules and answers rather than historical display telemetry. For custom/script-driven reveals outside `when`, KQA cannot calculate eligibility, so keep hidden questions optional or use native routing. Disclose answer retention and test context changes.",
     ],
     designPlan: { ...DESIGN_PLAN, surfaceInstructions },

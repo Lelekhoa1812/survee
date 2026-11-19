@@ -13,6 +13,7 @@
     "eval:questionnaire-author": "node scripts/eval-questionnaire-author.mjs",
     "eval:authoring-trust-boundary": "tsx scripts/eval-authoring-trust-boundary.ts",
     "eval:package-selection": "node scripts/eval-package-selection.mjs",
+    "eval:repeatable-record-selection": "node scripts/eval-repeatable-record-selection.mjs",
     "eval:package-draft": "tsx scripts/eval-package-draft.ts",
     "check": "tsx scripts/check.ts",
     "audit:tenant-migration": "tsx scripts/audit-tenant-migration.ts",

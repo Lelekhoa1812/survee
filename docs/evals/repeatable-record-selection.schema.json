@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kqa.invalid/schemas/repeatable-record-selection-v1.json",
+  "title": "KQA repeatable record selection benchmark result",
+  "type": "object",
+  "required": ["benchmarkVersion", "model", "runDate", "skillVersion", "cases"],
+  "properties": {
+    "benchmarkVersion": { "const": "kqa-repeatable-record-selection/1" },
+    "model": { "type": "string", "minLength": 1 },
+    "runDate": { "type": "string", "format": "date" },
+    "skillVersion": { "type": "string", "minLength": 1 },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "decision"],
+        "properties": {
+          "caseId": { "type": "string", "minLength": 1 },
+          "decision": {
+            "type": "object",
+            "required": ["pattern", "formatStatus", "fallbackPattern", "clarificationSlots", "gates"],
+            "properties": {
+              "pattern": { "enum": ["fixed_questions", "multi", "optional_longtext", "repeat_group", "clarify", "out_of_scope"] },
+              "formatStatus": { "enum": ["supported", "unsupported", "not_applicable"] },
+              "fallbackPattern": { "enum": ["fixed_questions", "multi", "optional_longtext", null] },
+              "clarificationSlots": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "gates": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "pattern": { "const": "repeat_group" } }, "required": ["pattern"] },
+                "then": {
+                  "properties": {
+                    "formatStatus": { "const": "unsupported" },
+                    "fallbackPattern": { "enum": ["fixed_questions", "multi", "optional_longtext"] },
+                    "gates": { "contains": { "const": "feature_unavailable_in_current_format" } }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "pattern": { "const": "clarify" } }, "required": ["pattern"] },
+                "then": { "properties": { "clarificationSlots": { "minItems": 1 } } },
+                "else": { "properties": { "clarificationSlots": { "maxItems": 0 } } }
+              },
+              {
+                "if": { "properties": { "pattern": { "const": "out_of_scope" } }, "required": ["pattern"] },
+                "then": { "properties": { "formatStatus": { "const": "not_applicable" }, "gates": { "minItems": 1 } } }
+              }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

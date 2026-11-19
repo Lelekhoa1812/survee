@@ -640,7 +640,7 @@ export function extractDesignProfile(input: { source: string; format: DesignProf
   const darkTokenCount = extracted.tokens.filter((token) => token.scope === "dark").length;
   const profile = {
     profileVersion: "kqa-design-profile/2",
-    policyVersion: "kqa-design/26",
+    policyVersion: "kqa-design/27",
     surface: input.surface,
     sourceFormat: input.format,
     ...(jsonFormat === "dtcg-2025.10" ? {
