@@ -27,6 +27,38 @@
               "clarificationSlots": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
               "gates": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
             },
+            "allOf": [
+              {
+                "if": { "properties": { "action": { "const": "recommend" } }, "required": ["action"] },
+                "then": {
+                  "properties": {
+                    "packageId": { "type": "string", "minLength": 1 },
+                    "candidatePackageIds": { "maxItems": 0 },
+                    "clarificationSlots": { "maxItems": 0 }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "action": { "const": "clarify" } }, "required": ["action"] },
+                "then": {
+                  "properties": {
+                    "packageId": { "type": "null" },
+                    "candidatePackageIds": { "minItems": 2 },
+                    "clarificationSlots": { "minItems": 1 }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "action": { "const": "out_of_scope" } }, "required": ["action"] },
+                "then": {
+                  "properties": {
+                    "packageId": { "type": "null" },
+                    "candidatePackageIds": { "maxItems": 0 },
+                    "clarificationSlots": { "maxItems": 0 }
+                  }
+                }
+              }
+            ],
             "additionalProperties": false
           }
         },

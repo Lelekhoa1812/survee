@@ -31,6 +31,8 @@ describe("package selection development benchmark", () => {
     })));
     expect(report.actionAccuracy).toBe(1);
     expect(report.packageAccuracyAmongRecommendations).toBe(1);
+    expect(report.clarificationCandidateF1).toBe(1);
+    expect(report.clarificationSlotF1).toBe(1);
     expect(report.hardGateFailures).toBe(0);
     expect(report.developmentOnly).toBe(true);
     expect(report.interpretation).toContain("no universal pass score");
@@ -47,6 +49,17 @@ describe("package selection development benchmark", () => {
     expect(report.hardGateFailureCases).toContain("applicant-ranking");
   });
 
+  it("treats clarification of an explicitly out-of-scope use as a hard-gate failure", () => {
+    const report = scoreResults(benchmark, resultsFor((c: any) => c.id === "active-hazard-reporting"
+      ? decision("clarify", null, { candidatePackageIds: ["safety-quality-learning", "event-feedback"], clarificationSlots: ["decision_focus"] })
+      : decision(c.gold.action, c.gold.packageId, {
+        candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots,
+        gates: c.gold.requiredGates,
+      })));
+    expect(report.hardGateFailures).toBe(1);
+    expect(report.hardGateFailureCases).toContain("active-hazard-reporting");
+  });
+
   it("rejects incomplete result coverage and unknown package-selection gates", () => {
     const incomplete = resultsFor((c: any) => decision(c.gold.action, c.gold.packageId, {
       candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots, gates: c.gold.requiredGates,
@@ -61,5 +74,50 @@ describe("package selection development benchmark", () => {
     const invalid = structuredClone(benchmark);
     invalid.cases.find((c: any) => c.id === "applicant-ranking").gold.requiredGates = [];
     expect(() => validateBenchmark(invalid)).toThrow("out_of_scope must name the boundary gate");
+  });
+
+  it("scores clarify candidates and slots, penalizing missing and extra selections", () => {
+    const report = scoreResults(benchmark, resultsFor((c: any) => c.id === "account-progress-or-friction"
+      ? decision("clarify", null, {
+        candidatePackageIds: ["customer-success", "product-discovery"],
+        clarificationSlots: ["decision_focus", "respondent_group"],
+      })
+      : decision(c.gold.action, c.gold.packageId, {
+        candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots,
+        gates: c.gold.requiredGates,
+      })));
+    expect(report.clarificationCandidatePrecision).toBeLessThan(1);
+    expect(report.clarificationCandidateRecall).toBeLessThan(1);
+    expect(report.clarificationSlotPrecision).toBeLessThan(1);
+    expect(report.clarificationSlotRecall).toBe(1);
+  });
+
+  it("does not give clarification candidate or slot credit when the action is not clarify", () => {
+    const report = scoreResults(benchmark, resultsFor((c: any) => c.id === "account-progress-or-friction"
+      ? decision("recommend", "customer-success")
+      : decision(c.gold.action, c.gold.packageId, {
+        candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots,
+        gates: c.gold.requiredGates,
+      })));
+    expect(report.clarificationCandidateRecall).toBeLessThan(1);
+    expect(report.clarificationSlotRecall).toBeLessThan(1);
+  });
+
+  it("rejects recommendation results that carry clarification-only fields", () => {
+    const invalid = resultsFor((c: any) => decision(c.gold.action, c.gold.packageId, {
+      candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots,
+      gates: c.gold.requiredGates,
+    }));
+    invalid.cases.find((row: any) => row.caseId === "saas-unmet-need").decision.clarificationSlots = ["decision_focus"];
+    expect(() => scoreResults(benchmark, invalid)).toThrow("recommend cannot include clarification");
+  });
+
+  it("requires result dates to be real ISO calendar dates", () => {
+    const invalid = resultsFor((c: any) => decision(c.gold.action, c.gold.packageId, {
+      candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots,
+      gates: c.gold.requiredGates,
+    }));
+    invalid.runDate = "2026-02-30";
+    expect(() => scoreResults(benchmark, invalid)).toThrow("YYYY-MM-DD");
   });
 });

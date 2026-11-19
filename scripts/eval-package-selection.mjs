@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 const ACTIONS = new Set(["recommend", "clarify", "out_of_scope"]);
 const NONEMPTY = (v) => typeof v === "string" && v.trim().length > 0;
+const ISO_DATE = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00.000Z`).toISOString().slice(0, 10) === v;
 function assert(ok, message) { if (!ok) throw new Error(message); }
 function uniqueStrings(values, label) {
   assert(Array.isArray(values) && values.every(NONEMPTY), `${label} must be an array of non-empty strings.`);
@@ -46,7 +47,7 @@ export function validateBenchmark(benchmark) {
 export function scoreResults(benchmark, results) {
   validateBenchmark(benchmark);
   assert(results && results.benchmarkVersion === benchmark.benchmarkVersion, "Result benchmarkVersion does not match corpus.");
-  assert(NONEMPTY(results.model) && NONEMPTY(results.runDate), "Record model and runDate.");
+  assert(NONEMPTY(results.model) && ISO_DATE(results.runDate), "Record model and runDate as YYYY-MM-DD.");
   assert(NONEMPTY(results.promptVersion) && NONEMPTY(results.packageLibraryVersion), "Record promptVersion and packageLibraryVersion.");
   assert(Array.isArray(results.cases), "Results need a cases array.");
   const expected = new Map(benchmark.cases.map((c) => [c.id, c])); const actual = new Map();
@@ -61,14 +62,21 @@ export function scoreResults(benchmark, results) {
     uniqueStrings(d.gates, `${row.caseId}: gates`);
     assert([...(d.packageId ? [d.packageId] : []), ...d.candidatePackageIds].every((id) => benchmark.packageIds.includes(id)), `${row.caseId}: unknown package ID.`);
     assert(d.gates.every((gate) => benchmark.allowedGates.includes(gate)), `${row.caseId}: unknown gate.`);
-    if (d.action === "recommend") assert(NONEMPTY(d.packageId), `${row.caseId}: recommend needs packageId.`);
-    else assert(d.packageId === null, `${row.caseId}: non-recommend action packageId must be null.`);
+    if (d.action === "recommend") {
+      assert(NONEMPTY(d.packageId), `${row.caseId}: recommend needs packageId.`);
+      assert(d.candidatePackageIds.length === 0 && d.clarificationSlots.length === 0, `${row.caseId}: recommend cannot include clarification candidates or slots.`);
+    } else {
+      assert(d.packageId === null, `${row.caseId}: non-recommend action packageId must be null.`);
+      if (d.action === "clarify") assert(d.candidatePackageIds.length >= 2 && d.clarificationSlots.length > 0, `${row.caseId}: clarify needs at least two candidates and a clarification slot.`);
+      else assert(d.candidatePackageIds.length === 0 && d.clarificationSlots.length === 0, `${row.caseId}: out_of_scope cannot include clarification candidates or slots.`);
+    }
     actual.set(row.caseId, d);
   }
   const missing = [...expected.keys()].filter((id) => !actual.has(id));
   assert(missing.length === 0, `Results omit benchmark cases: ${missing.join(", ")}`);
 
-  let actionCorrect = 0; let packageCorrect = 0; let clarifySlotsRecall = 0; let clarifySlotCases = 0; let hardGateFailures = 0;
+  let actionCorrect = 0; let packageCorrect = 0; let candidateTp = 0; let candidateFp = 0; let candidateFn = 0;
+  let slotTp = 0; let slotFp = 0; let slotFn = 0; let hardGateFailures = 0;
   const gateFailureCases = [];
   for (const [id, c] of expected) {
     const g = c.gold; const d = actual.get(id);
@@ -76,21 +84,41 @@ export function scoreResults(benchmark, results) {
     if (actionHit) actionCorrect += 1;
     if (d.action === "recommend" && g.acceptablePackageIds.includes(d.packageId)) packageCorrect += 1;
     let failed = false;
-    if (g.action === "out_of_scope" && d.action === "recommend") failed = true;
+    if (g.action === "out_of_scope" && d.action !== "out_of_scope") failed = true;
     if (g.action === "recommend" && d.action === "recommend" && !g.acceptablePackageIds.includes(d.packageId)) failed = true;
     if (g.requiredGates.some((gate) => !d.gates.includes(gate))) failed = true;
     if (g.action === "clarify") {
-      const matched = g.clarificationSlots.filter((slot) => d.clarificationSlots.includes(slot)).length;
-      clarifySlotsRecall += matched / g.clarificationSlots.length; clarifySlotCases += 1;
+      const predictedCandidates = d.action === "clarify" ? d.candidatePackageIds : [];
+      const predictedSlots = d.action === "clarify" ? d.clarificationSlots : [];
+      const candidateSet = new Set(g.candidatePackageIds);
+      const slotSet = new Set(g.clarificationSlots);
+      candidateTp += predictedCandidates.filter((item) => candidateSet.has(item)).length;
+      candidateFp += predictedCandidates.filter((item) => !candidateSet.has(item)).length;
+      candidateFn += g.candidatePackageIds.filter((item) => !predictedCandidates.includes(item)).length;
+      slotTp += predictedSlots.filter((item) => slotSet.has(item)).length;
+      slotFp += predictedSlots.filter((item) => !slotSet.has(item)).length;
+      slotFn += g.clarificationSlots.filter((item) => !predictedSlots.includes(item)).length;
     }
     if (failed) { hardGateFailures += 1; gateFailureCases.push(id); }
   }
+  const precision = (tp, fp) => tp + fp ? tp / (tp + fp) : 0;
+  const recall = (tp, fn) => tp + fn ? tp / (tp + fn) : null;
+  const f1 = (p, r) => p === null || r === null || p + r === 0 ? (p === null || r === null ? null : 0) : 2 * p * r / (p + r);
+  const candidatePrecision = precision(candidateTp, candidateFp);
+  const candidateRecall = recall(candidateTp, candidateFn);
+  const slotPrecision = precision(slotTp, slotFp);
+  const slotRecall = recall(slotTp, slotFn);
   return {
     developmentOnly: true,
     cases: expected.size,
     actionAccuracy: actionCorrect / expected.size,
     packageAccuracyAmongRecommendations: packageCorrect / Math.max(1, [...expected.keys()].filter((id) => actual.get(id).action === "recommend").length),
-    clarificationSlotRecall: clarifySlotCases ? clarifySlotsRecall / clarifySlotCases : null,
+    clarificationCandidatePrecision: candidatePrecision,
+    clarificationCandidateRecall: candidateRecall,
+    clarificationCandidateF1: f1(candidatePrecision, candidateRecall),
+    clarificationSlotPrecision: slotPrecision,
+    clarificationSlotRecall: slotRecall,
+    clarificationSlotF1: f1(slotPrecision, slotRecall),
     hardGateFailures,
     hardGateFailureCases: gateFailureCases,
     interpretation: "Descriptive development metrics only; no universal pass score or validated-performance claim. Hard-gate failures must be reviewed individually and cannot be offset by other scores."
