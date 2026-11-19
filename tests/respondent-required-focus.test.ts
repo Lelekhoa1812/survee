@@ -573,4 +573,81 @@ describe("respondent required-answer recovery", () => {
     expect(host.querySelector(".save-state")?.textContent).toContain("Saved");
     vi.useRealTimers();
   });
+  it("does not submit when the final save rejects a record draft, and permits submission after explicit discard", async () => {
+    const loaded = { ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+      version: 7, title: "Study", questions: [{ id: "records", type: "repeat", label: "Records", fields: [], maxRows: 3 }], answers: {}, recordGroups: {},
+    } };
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) return Promise.resolve({ ok: false, status: 400, data: { recordErrors: [{ questionId: "records", rowId: "r1", reason: "Record conflict" }] } });
+      if (url.endsWith("/submit")) return Promise.resolve({ ok: true, status: 200, data: { submittedAt: "2026-11-20T00:00:00Z" } });
+      return Promise.resolve(loaded);
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "record-operation", operationId: "op1", operation: { op: "add", questionId: "records", rowId: "r1" } }, origin: "null", source: frame.contentWindow })));
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!.click());
+    await act(async () => { Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!.click(); await Promise.resolve(); });
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    const submit = Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!;
+    expect(submit.disabled).toBe(true);
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Record conflict");
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Discard draft")!.click());
+    expect(submit.disabled).toBe(false);
+    await act(async () => { submit.click(); await Promise.resolve(); });
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
+  });
+
+  it.each([false, true])("retains pending record drafts on version conflict (in-flight record: %s)", async (inFlightRecord) => {
+    vi.useFakeTimers();
+    let resolveSave!: (value: unknown) => void;
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) return new Promise((resolve) => { resolveSave = resolve; });
+      return Promise.resolve({ ok: true, status: 200, data: {
+        participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+        questions: [{ id: "answer", type: "text", label: "Answer" }, { id: "records", type: "repeat", label: "Records", fields: [], maxRows: 3 }], answers: {}, recordGroups: {},
+      } });
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const send = (data: object) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, ...data }, origin: "null", source: frame.contentWindow }));
+    await act(async () => {
+      if (inFlightRecord) send({ type: "record-operation", operationId: "first", operation: { op: "add", questionId: "records", rowId: "r1" } });
+      else send({ type: "set", id: "answer", value: "draft" });
+      await vi.advanceTimersByTimeAsync(650);
+      send({ type: "record-operation", operationId: "second", operation: { op: "add", questionId: "records", rowId: "r2" } });
+      resolveSave({ ok: false, status: 409, data: { code: "questionnaire_version_changed" } });
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain(`Record changes not saved: ${inFlightRecord ? 2 : 1}.`);
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Some record changes were not saved")!.click());
+    expect(Array.from(host.querySelectorAll("[role=dialog] button")).filter((button) => button.textContent === "Discard draft")).toHaveLength(inFlightRecord ? 2 : 1);
+    vi.useRealTimers();
+  });
+
+  it("does not submit while a save remains in flight past the wait limit", async () => {
+    vi.useFakeTimers();
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) return new Promise(() => {});
+      return Promise.resolve({ ok: true, status: 200, data: {
+        participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+        questions: [{ id: "answer", type: "text", label: "Answer" }], answers: {},
+      } });
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "unsaved" }, origin: "null", source: frame.contentWindow }));
+      await vi.advanceTimersByTimeAsync(650);
+      Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!.click();
+    });
+    await act(async () => {
+      Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!.click();
+      await vi.advanceTimersByTimeAsync(6200);
+    });
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    expect(state.toast).toHaveBeenCalledWith(expect.stringContaining("not saved yet"), "err", expect.anything());
+    vi.useRealTimers();
+  });
+
 });

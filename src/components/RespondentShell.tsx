@@ -353,13 +353,14 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       return question ? [{ question, patch }] : [];
     });
     staleDraftRef.current = draft;
-    if (failedRecords.length) {
-      const records = failedRecords.map(({ operationId, operation }) => ({ operationId, operation, reason: respondentMessage(localeRef.current, "previousDraftWarning") }));
+    const recordDrafts = [...failedRecords, ...pendingRecordOperations.current].filter((item, index, all) => all.findIndex((candidate) => candidate.operationId === item.operationId) === index && !rejectedRecordDraftsRef.current.some((candidate) => candidate.operationId === item.operationId));
+    if (recordDrafts.length) {
+      const records = recordDrafts.map(({ operationId, operation }) => ({ operationId, operation, reason: respondentMessage(localeRef.current, "previousDraftWarning") }));
       rejectedRecordDraftsRef.current = [...rejectedRecordDraftsRef.current, ...records];
       setRejectedRecordDrafts(rejectedRecordDraftsRef.current);
       recordGroupsRef.current = authoritativeRecordGroupsRef.current;
       setRecordGroups(recordGroupsRef.current);
-      post({ type: "record-rejected", recordGroups: recordGroupsRef.current, rejectedOperationIds: failedRecords.map((item) => item.operationId), recordErrors: [] });
+      post({ type: "record-rejected", recordGroups: recordGroupsRef.current, rejectedOperationIds: recordDrafts.map((item) => item.operationId), recordErrors: [] });
       recount();
     }
     setStaleDraft(draft);
@@ -642,14 +643,15 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
 
   // ---- submit
   async function submit() {
-    if (Object.keys(lengthDrafts).length) return;
+    if (Object.keys(lengthDrafts).length || rejectedRecordDraftsRef.current.length) return;
     setSubmitting(true);
     clearTimeout(timer.current);
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     await flush();
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     if (refreshRequiredRef.current) { setSubmitting(false); setConfirming(false); return; }
-    if (Object.keys(pending.current).length || pendingRecordOperations.current.length) { setSubmitting(false); toast(t("notSavedYet"), "err", localeMeta); return; }
+    if (rejectedRecordDraftsRef.current.length) { setSubmitting(false); toast(t("repeatRejectedTitle"), "err", localeMeta); return; }
+    if (inflight.current || Object.keys(pending.current).length || pendingRecordOperations.current.length) { setSubmitting(false); toast(t("notSavedYet"), "err", localeMeta); return; }
     const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: { questionId: string; rowId?: string; fieldId?: string; reason: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
     setSubmitting(false);
     if (res.ok) {
@@ -928,7 +930,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           actions={
             <>
               <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>{t("keepEditing")}</button>
-              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || Object.keys(lengthDrafts).length > 0} onClick={submit}>{submitting && <Spinner />} {t("submitAnswers")}</button>}
+              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || Object.keys(lengthDrafts).length > 0 || rejectedRecordDrafts.length > 0} onClick={submit}>{submitting && <Spinner />} {t("submitAnswers")}</button>}
             </>
           }
         >
