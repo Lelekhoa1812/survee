@@ -13,7 +13,7 @@ export function exclusiveConflictCount(q: Question, value: unknown): number {
  * Validate and normalise a value for a question. `null` means "clear the answer".
  * Used by the answer API (server side), the probe and the importer, so there is one definition of "valid".
  */
-export function validateAnswer(q: Question, raw: unknown, options: { allowOverLimit?: boolean; allowExclusiveConflict?: boolean } = {}): ValidateResult {
+export function validateAnswer(q: Question, raw: unknown, options: { allowOverLimit?: boolean; allowExclusiveConflict?: boolean; allowUnderMinSelections?: boolean } = {}): ValidateResult {
   if (raw === null || raw === undefined) return { ok: true, value: null };
   switch (q.type) {
     case "single":
@@ -30,6 +30,7 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
       const bad = raw.filter((x) => !allowed.has(x));
       if (bad.length) return { ok: false, reason: `not option values: ${bad.map((b) => `"${b}"`).join(", ")}` };
       const unique = [...new Set(raw)];
+      if (!options.allowUnderMinSelections && unique.length > 0 && q.minSelections !== undefined && unique.length < q.minSelections) return { ok: false, reason: `choose at least ${q.minSelections} options or leave this question blank` };
       if (!options.allowOverLimit && q.maxSelections !== undefined && unique.length > q.maxSelections) return { ok: false, reason: `choose no more than ${q.maxSelections} options` };
       const exclusive = new Set(q.exclusiveOptions ?? []);
       if (!options.allowExclusiveConflict && unique.some((value) => exclusive.has(value)) && unique.length > 1) return { ok: false, reason: "choose an exclusive option by itself" };
@@ -173,6 +174,7 @@ export interface Progress {
   requiredAnswered: number;
   missingRequired: string[];
   invalidSelections: { id: string; selected: number; maximum: number }[];
+  invalidMinimumSelections: { id: string; selected: number; minimum: number }[];
   invalidExclusiveSelections: { id: string }[];
   invalidRankSelections: { id: string }[];
   eligible: Record<string, boolean>;
@@ -185,6 +187,7 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
   let requiredAnswered = 0;
   const missingRequired: string[] = [];
   const invalidSelections: Progress["invalidSelections"] = [];
+  const invalidMinimumSelections: Progress["invalidMinimumSelections"] = [];
   const invalidExclusiveSelections: Progress["invalidExclusiveSelections"] = [];
   const invalidRankSelections: Progress["invalidRankSelections"] = [];
   const eligible = evaluateEligibility(manifest, answers);
@@ -199,6 +202,10 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
       const selected = new Set(value).size;
       if (selected > q.maxSelections) invalidSelections.push({ id: q.id, selected, maximum: q.maxSelections });
     }
+    if (q.type === "multi" && q.minSelections !== undefined && Array.isArray(value)) {
+      const selected = new Set(value).size;
+      if (selected > 0 && selected < q.minSelections) invalidMinimumSelections.push({ id: q.id, selected, minimum: q.minSelections });
+    }
     if (q.type === "multi" && Array.isArray(value) && value.some((item) => q.exclusiveOptions?.includes(item)) && new Set(value).size > 1) invalidExclusiveSelections.push({ id: q.id });
     if (q.type === "rank" && value !== undefined && value !== null && !validateAnswer(q, value).ok) invalidRankSelections.push({ id: q.id });
     if (q.required) {
@@ -207,7 +214,7 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
       else missingRequired.push(q.id);
     }
   }
-  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidExclusiveSelections, invalidRankSelections, eligible, inactive: manifest.questions.length - total };
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidMinimumSelections, invalidExclusiveSelections, invalidRankSelections, eligible, inactive: manifest.questions.length - total };
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

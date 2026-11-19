@@ -39,6 +39,16 @@ describe("exclusive checkbox options", () => {
   });
 });
 
+describe("minimum checkbox selections", () => {
+  it("accepts a valid minimum and rejects incompatible values", () => {
+    const html = `<!doctype html><html lang="en"><head><title>Test</title><script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Test","questions":[{"id":"choices","type":"multi","label":"Choose","minSelections":2,"maxSelections":3,"options":[{"value":"a","label":"A"},{"value":"b","label":"B"},{"value":"c","label":"C"}]}]}</script></head><body><fieldset><legend>Choose</legend><label><input type="checkbox" data-kqa="choices" value="a">A</label><label><input type="checkbox" data-kqa="choices" value="b">B</label><label><input type="checkbox" data-kqa="choices" value="c">C</label></fieldset></body></html>`;
+    expect(codes(checkHtml(html))).not.toContain("KQA222");
+    expect(codes(checkHtml(html.replace('"minSelections":2', '"minSelections":4')))).toContain("KQA222");
+    expect(codes(checkHtml(html.replace('"type":"multi"', '"type":"single"')))).toContain("KQA222");
+    expect(codes(checkHtml(html.replace('"maxSelections":3', '"maxSelections":1')))).toContain("KQA222");
+  });
+});
+
 describe("file level", () => {
   it("rejects an empty file", () => expect(codes(checkHtml("  \n"))).toContain("KQA100"));
   it("reports a missing manifest", () => {

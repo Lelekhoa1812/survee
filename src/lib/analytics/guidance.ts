@@ -39,7 +39,7 @@ const PRINCIPLES = [
     id: "explain-multiselect",
     title: "Explain multi-select denominators",
     guidance:
-      "For multi-select questions, percentages are the share of valid responding people selecting each option, not the share of all selections. A person may select multiple options, so option percentages can sum to more than 100%. State the valid-respondent denominator and keep missing or malformed answers outside that denominator as reported by KQA.",
+      "For multi-select questions, percentages are the share of valid responding people selecting each option, not the share of all selections. A person may select multiple options, so option percentages can sum to more than 100%. State the valid-respondent denominator. Answers below an authored minSelections threshold remain answered but are excluded from valid distributions and counted as unmapped; disclose that when present. Keep missing or malformed answers outside the denominator as reported by KQA.",
   },
   {
     id: "describe-uncertainty",

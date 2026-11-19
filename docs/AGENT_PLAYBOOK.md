@@ -104,12 +104,31 @@ Single choice (`single`). Help text is "Pick one." Nothing is pre-checked.
 </article>
 ```
 
-Checkboxes (`multi`). Use "Tick all that apply" when there is no cap. If the question has a meaningful upper bound, set `maxSelections` and say "Choose up to N" in help text. For a declared option such as “None of these” that cannot combine with another choice, add its value to `exclusiveOptions`; KQA enforces that rule and announces automatic clearing. A required checkbox is answered when at least one box is ticked; `maxSelections` and `exclusiveOptions` never impose a minimum. Do not add “None”, “Not sure”, or “Prefer not to answer” unless it is appropriate to the question.
+Checkboxes (`multi`). Use "Tick all that apply" when there is no bound. If the question has a meaningful upper bound, set `maxSelections` and say "Choose up to N" in help text. Use `minSelections` only when the decision requires respondents to select at least N options; explain the allowed range and whether leaving the question blank is acceptable. A minimum applies to non-empty answers, so an optional blank remains a valid skip, while a required blank still requires an answer. Partial non-empty selections autosave, but an under-minimum answer blocks guided Continue and final submission until corrected. `minSelections` cannot be higher than `maxSelections`. For a declared option such as “None of these” that cannot combine with another choice, add its value to `exclusiveOptions`; KQA enforces that rule and announces automatic clearing. Do not add “None”, “Not sure”, or “Prefer not to answer” unless it is appropriate to the question.
+
+For example, this optional checkbox item requires two choices when answered, allows at most three, and still allows a blank skip:
+
+```json
+{
+  "id": "improvements",
+  "type": "multi",
+  "required": false,
+  "label": "Which improvements would help most?",
+  "help": "Choose 2 to 3; leave blank to skip.",
+  "minSelections": 2,
+  "maxSelections": 3,
+  "options": [
+    { "value": "accuracy", "label": "More accurate ratings" },
+    { "value": "speed", "label": "Faster runs" },
+    { "value": "clarity", "label": "Clearer reports" }
+  ]
+}
+```
 
 ```html
 <article class="kq-q" id="q-ID">
   <div class="kq-q-head"><span class="kq-n">N</span><h3>LABEL</h3><span class="kq-tick" data-kqa-status="ID" aria-hidden="true"></span></div>
-  <p class="kq-help">Tick all that apply.</p>
+  <p class="kq-help">Tick all that apply, or state the configured minimum and maximum.</p>
   <fieldset class="kq-options">
     <legend class="kq-sr">LABEL</legend>
     <label class="kq-opt"><input type="checkbox" data-kqa="ID" value="OPTION"><span>OPTION LABEL</span></label>

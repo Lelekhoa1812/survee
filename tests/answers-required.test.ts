@@ -32,6 +32,18 @@ describe("answered, without scores", () => {
     expect(validateAnswer(capped, ["email", "phone", "email", "phone"], { allowOverLimit: true })).toEqual({ ok: true, value: ["email", "phone"] });
   });
 
+  it("allows blank optional multi answers but requires a minimum once choices are selected", () => {
+    const minimum = { ...checkbox, required: false, minSelections: 2 };
+    expect(validateAnswer(minimum, [])).toEqual({ ok: true, value: null });
+    expect(validateAnswer(minimum, ["email", "email"])).toEqual({ ok: false, reason: "choose at least 2 options or leave this question blank" });
+    expect(validateAnswer(minimum, ["email", "phone"])).toEqual({ ok: true, value: ["email", "phone"] });
+    expect(validateAnswer(minimum, ["email"], { allowUnderMinSelections: true })).toEqual({ ok: true, value: ["email"] });
+    expect(progress({ format: "kqa/1", title: "Minimum", questions: [minimum] }, {
+      channels: { value: ["email"], updatedAt: "now" },
+    }).invalidMinimumSelections).toEqual([{ id: "channels", selected: 1, minimum: 2 }]);
+    expect(progress({ format: "kqa/1", title: "Minimum", questions: [minimum] }, {}).invalidMinimumSelections).toEqual([]);
+  });
+
   it("requires exclusive checkbox options to stand alone and blocks legacy conflicts from progress", () => {
     const exclusive = { ...checkbox, exclusiveOptions: ["email"] };
     expect(validateAnswer(exclusive, ["email"])).toEqual({ ok: true, value: ["email"] });

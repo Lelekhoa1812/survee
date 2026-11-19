@@ -30,6 +30,19 @@ describe("compareVersions", () => {
     ]);
   });
 
+  it("warns when a new minimum makes already saved partial choices incomplete", () => {
+    const previous = manifest([{ id: "q", type: "multi", label: "Choices", options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);
+    const next = manifest([{ id: "q", type: "multi", label: "Choices", minSelections: 2, options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);
+    const diagnostics = compareVersions({ previous, next, answers: [
+      { status: "open", answers: { q: { value: ["a"], updatedAt: "now" } } },
+      { status: "submitted", answers: { q: { value: ["a", "b"], updatedAt: "now" } } },
+      { status: "open", answers: { q: { value: [], updatedAt: "now" } } },
+    ] });
+    expect(diagnostics.filter((d) => d.code === "KQA707").map((d) => d.message)).toEqual([
+      'Question "q" now requires at least 2 choices when answered, but 1 person has already saved fewer.',
+    ]);
+  });
+
   it("keeps compatibility diagnostics and participant counting semantics", () => {
     const previous = manifest([
       { id: "qgone", type: "text", label: "Removed prompt" },

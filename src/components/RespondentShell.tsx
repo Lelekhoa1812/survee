@@ -102,6 +102,9 @@ export function RespondentShell({ token }: { token: string }) {
       if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
         addAttention(question, `Choose no more than ${question.maxSelections} ${question.maxSelections === 1 ? "option" : "options"}.`);
       }
+      if (question.type === "multi" && question.minSelections !== undefined && Array.isArray(value) && new Set(value).size > 0 && new Set(value).size < question.minSelections) {
+        addAttention(question, `Choose at least ${question.minSelections} ${question.minSelections === 1 ? "option" : "options"}, or leave this question blank.`);
+      }
       if (question.type === "multi" && Array.isArray(value) && value.some((item) => question.exclusiveOptions?.includes(item)) && new Set(value).size > 1) {
         addAttention(question, "Choose an exclusive option by itself.");
       }
@@ -368,7 +371,7 @@ export function RespondentShell({ token }: { token: string }) {
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     if (refreshRequiredRef.current) { setSubmitting(false); setConfirming(false); return; }
     if (Object.keys(pending.current).length) { setSubmitting(false); toast("Your latest changes have not saved yet. Check your connection and try again.", "err"); return; }
-    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
+    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
     setSubmitting(false);
     if (res.ok) {
       setConfirming(false);
@@ -387,6 +390,7 @@ export function RespondentShell({ token }: { token: string }) {
         const problems: Record<string, string> = {};
         for (const item of res.data.missing ?? []) problems[item.id] = "Answer this required question.";
         for (const item of res.data.invalidSelections ?? []) problems[item.id] = `Choose no more than ${item.maximum} ${item.maximum === 1 ? "option" : "options"}.`;
+        for (const item of res.data.invalidMinimumSelections ?? []) problems[item.id] = `Choose at least ${item.minimum} ${item.minimum === 1 ? "option" : "options"}, or leave this question blank.`;
         for (const item of res.data.invalidExclusiveSelections ?? []) problems[item.id] = "Choose an exclusive option by itself.";
         for (const item of res.data.invalidRankSelections ?? []) problems[item.id] = "Rank every current option exactly once, then choose Use this order.";
         setSubmitProblems(problems);

@@ -103,6 +103,8 @@ export const questionSchema = z.object({
   options: z.array(optionSchema).min(2).max(LIMITS.maxOptions).optional(),
   /** Optional maximum number of distinct options for a multi question. */
   maxSelections: z.number().int().min(1).max(LIMITS.maxOptions).optional(),
+  /** Optional minimum for a non-empty multi answer; an optional empty answer remains a skip. */
+  minSelections: z.number().int().min(1).max(LIMITS.maxOptions).optional(),
   /** Option values that cannot be selected with any other option in this multi question. */
   exclusiveOptions: z.array(z.string().regex(OPTION_VALUE_RE)).min(1).optional(),
   note: noteSchema.optional(),
@@ -118,6 +120,11 @@ export const questionSchema = z.object({
   if (question.type === "rank") {
     if ((question.options?.length ?? 0) < 2) ctx.addIssue({ code: "custom", path: ["options"], message: "rank questions need at least two options" });
     if ((question.options?.length ?? 0) > LIMITS.maxRankOptions) ctx.addIssue({ code: "custom", path: ["options"], message: `rank questions support at most ${LIMITS.maxRankOptions} options` });
+  }
+  if (question.minSelections !== undefined) {
+    if (question.type !== "multi") ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections only applies to multi questions" });
+    if (question.options && question.minSelections > question.options.length) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed the number of options" });
+    if (question.maxSelections !== undefined && question.minSelections > question.maxSelections) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed maxSelections" });
   }
   if (question.exclusiveOptions !== undefined) {
     if (question.type !== "multi") ctx.addIssue({ code: "custom", path: ["exclusiveOptions"], message: "exclusiveOptions only applies to multi questions" });
@@ -189,6 +196,17 @@ export function manifestJsonSchema(): unknown {
         if: { required: ["exclusiveOptions"] },
         then: { properties: { type: { const: "multi" } } },
       },
+      {
+        if: { required: ["minSelections"] },
+        then: { properties: { type: { const: "multi" } } },
+      },
+      ...Array.from({ length: LIMITS.maxOptions }, (_, index) => {
+        const minimum = index + 1;
+        return {
+          if: { properties: { minSelections: { const: minimum } }, required: ["minSelections"] },
+          then: { properties: { options: { minItems: minimum }, maxSelections: { minimum } }, required: ["options"] },
+        };
+      }),
     ];
   }
   return schema;

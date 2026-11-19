@@ -93,6 +93,21 @@ Exactly one `<script type="application/json" id="kqa-manifest">` element holding
         { "value": "speed", "label": "Speed of each run" }
       ],
       "note": true
+    },
+    {
+      "id": "improvements",
+      "type": "multi",
+      "section": "choices",
+      "required": false,
+      "label": "Which improvements would help most?",
+      "help": "Choose 2 to 3; leave blank to skip.",
+      "minSelections": 2,
+      "maxSelections": 3,
+      "options": [
+        { "value": "accuracy", "label": "More accurate ratings" },
+        { "value": "speed", "label": "Faster runs" },
+        { "value": "clarity", "label": "Clearer reports" }
+      ]
     }
   ]
 }
@@ -131,6 +146,7 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `required` | no | all | `true` blocks Submit until answered. Default `false` |
 | `options` | yes for `single`, `multi`, `select`, `rank` | those four | 2 to 50 items of `{ "value", "label" }`; `rank` requires 2 to 8. Not allowed on other types |
 | `maxSelections` | no | `multi` | Maximum distinct checked options, from 1 through the number of options. Omit for no maximum. It does not set a minimum or change requiredness |
+| `minSelections` | no | `multi` | Minimum distinct checked options for a non-empty answer, from 1 through the number of options. Omit for no minimum. Must not exceed `maxSelections` when both are set. An optional empty answer remains a valid skip |
 | `exclusiveOptions` | no | `multi` | Non-empty list of declared option values that must be selected alone (for example, `none`, `not-sure`, or `prefer-not`). These options are not added automatically |
 | Full-order contract | — | `rank` | A non-empty answer contains every declared option exactly once; partial rankings are invalid. The stored value is an array of option values in respondent-chosen order. An optional rank may remain unanswered. If a later questionnaire version changes the option set, a retained old order must be confirmed against every current option before submission. |
 | `note` | no | all | `true`, or `{ "label", "placeholder", "maxLength" }`. Enables an optional free-text note stored beside the answer. Up to 5000 characters |
@@ -156,7 +172,9 @@ Unknown fields are ignored with a warning (KQA216), so a typo in a field name si
 
 **Label and help.** `label` is the question itself and must make sense on its own, because the host reads it in exports without the page around it. `help` is the instruction to the respondent ("Pick one", "Tick all that apply"). Read-only background text can stay in the page only; it does not need to be repeated in `help`.
 
-For a capped checkbox group, set `maxSelections` and state the same limit in `help` (for example, "Choose up to 3"). The runtime adds visible guidance and rejects additional selections. Existing saved answers above a newly lowered cap stay visible; respondents can remove choices and save each reduction until within the cap. Submission remains blocked until the current eligible answer is within the limit. KQA never silently truncates saved answers.
+For a bounded checkbox group, set `minSelections` and/or `maxSelections` only when those bounds reflect the decision, and state the permitted range in `help` (for example, "Choose 2 to 3; leave blank to skip"). A minimum applies to non-empty answers: an optional blank remains a valid skip, while a required blank still needs an answer. Partial non-empty selections autosave so respondents can make progress, but an answer below the minimum must be corrected before guided Continue or final submission. The runtime adds visible guidance and does not silently add or remove choices. Existing saved answers that fall below a newly raised minimum or above a newly lowered maximum stay visible; respondents can edit them, and submission remains blocked until the current eligible answer satisfies the new bounds. `minSelections` cannot exceed `maxSelections`.
+
+For example, the manifest question above allows a respondent to choose two or three improvements, or leave the optional question blank. If they select one, that partial value is saved, but KQA asks them to add another choice before they continue or submit.
 
 For a checkbox option that cannot logically combine with any other answer, declare its value in `exclusiveOptions` (for example, `"exclusiveOptions": ["none"]`). The native controls clear other checked choices when an exclusive option is selected, and clear exclusive choices when a substantive option is selected; the change is announced to assistive technology. Custom controls must implement the same rule, explain rejected values, and handle `KQA.set()` returning `false`. If a revised live questionnaire newly makes an option exclusive, KQA preserves existing mixed answers and warns the host; affected respondents must resolve the conflict before submission. Analytics excludes unresolved conflicting answers from valid distributions. Do not use exclusivity to force an answer: keep the option optional where appropriate and include a clear way to decline or say “not sure” when the task calls for it. This follows the [ABS guidance on question types](https://www.abs.gov.au/statistics/standards/abs-forms-design-standards/2023/general-forms-design-principles-question-type) and [W3C guidance for status messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html).
 
@@ -186,7 +204,7 @@ Bind a control to a question by giving it `data-kqa="<question id>"`. The runtim
 | Type | Markup | Stored value |
 |---|---|---|
 | `single` | Several `<input type="radio" data-kqa="ID" name="ID" value="OPTION">`, one per option. Same `name`. | the chosen option `value` (string) |
-| `multi` | Several `<input type="checkbox" data-kqa="ID" value="OPTION">` | array of chosen option values, in manifest order; `maxSelections` limits the distinct values |
+| `multi` | Several `<input type="checkbox" data-kqa="ID" value="OPTION">` | array of chosen option values, in manifest order; `minSelections` and `maxSelections` validate non-empty answers |
 | `select` | `<select data-kqa="ID">` with `<option value="OPTION">`. Keep a first `<option value="">` as the placeholder | the chosen option value |
 | `text` | `<input type="text" data-kqa="ID">` | string, trimmed-empty clears |
 | `longtext` | `<textarea data-kqa="ID">` | string |
@@ -234,7 +252,7 @@ The runtime sets `data-state="answered"` or `data-state="empty"`. Style it with 
 
 ### 4.3 Custom questions
 
-When the standard controls are not enough, set `"custom": true`, build your own UI, and talk to the runtime. Three rules make a custom control work: **write** with `KQA.set`, **read** with `KQA.get`, and **repaint** whenever `ready`, `change` or `lock` fires. The repaint rule matters most. It is how a person who returns to their link sees their earlier answer. `KQA.set` and `KQA.clear` return `false` when a value is rejected; listen for `KQA.on("validation", ...)` to show or clear field-level feedback. A custom `multi` control must enforce `maxSelections` and ensure every `exclusiveOptions` choice stands alone. Explain a rejected choice to the respondent; `KQA.set` remains strict and does not silently discard selections. Wrap each custom question in one whole-question element with `data-kqa-question-id="QUESTION_ID"`; this lets routing hide the full question and the respondent shell's **Questions** menu focus its first visible enabled control. If the block has no focusable control, the runtime temporarily makes the block itself programmatically focusable for the jump.
+When the standard controls are not enough, set `"custom": true`, build your own UI, and talk to the runtime. Three rules make a custom control work: **write** with `KQA.set`, **read** with `KQA.get`, and **repaint** whenever `ready`, `change` or `lock` fires. The repaint rule matters most. It is how a person who returns to their link sees their earlier answer. `KQA.set` and `KQA.clear` return `false` when a value is rejected; listen for `KQA.on("validation", ...)` to show or clear field-level feedback. A custom `multi` control must enforce `maxSelections` and ensure every `exclusiveOptions` choice stands alone. Allow blank optional values and partial answers to autosave; explain that an under-minimum non-empty answer needs more choices before Continue or submission. Explain a rejected choice to the respondent; `KQA.set` remains strict and does not silently discard selections. Wrap each custom question in one whole-question element with `data-kqa-question-id="QUESTION_ID"`; this lets routing hide the full question and the respondent shell's **Questions** menu focus its first visible enabled control. If the block has no focusable control, the runtime temporarily makes the block itself programmatically focusable for the jump.
 
 ```js
 // A five-star control for a custom question with id "stars" (type scale, min 1, max 5)
@@ -383,7 +401,7 @@ Class names are prefixed `kq-` so they never clash with your own. Use the kit un
 * Mark only genuinely necessary questions as `required`.
 * Group long questionnaires into sections of about 5 to 8 questions with a contents rail.
 * With the default `presentation: "all"`, the respondent shell adds **Questions** navigation grouped by manifest sections. It shows answered counts and can focus a chosen, currently eligible question. Hidden questions are omitted; their saved answers remain retained and may reappear when eligible.
-* With `presentation: "guided"`, KQA shows one currently eligible section at a time with Back and Continue controls. Continue checks required answers and multi-select limits in that section, preserves answers when navigating, and opens the normal answer review from the last section. Respondents can choose **Show all questions** at any time. Routing can change which sections are available; if the current section becomes empty, KQA moves to the first available section and announces the change without moving focus. If no section is eligible, KQA offers the answer review so the respondent can finish. Guided mode is opt-in and needs the markers above; the questionnaire still supplies the HTML and question styling.
+* With `presentation: "guided"`, KQA shows one currently eligible section at a time with Back and Continue controls. Continue checks required answers and multi-select minimum/maximum limits in that section, preserves answers when navigating, and opens the normal answer review from the last section. A non-empty checkbox answer below `minSelections` blocks Continue and final submission; an optional blank remains a valid skip. Respondents can choose **Show all questions** at any time. Routing can change which sections are available; if the current section becomes empty, KQA moves to the first available section and announces the change without moving focus. If no section is eligible, KQA offers the answer review so the respondent can finish. Guided mode is opt-in and needs the markers above; the questionnaire still supplies the HTML and question styling.
 * When an answer changes routing, the frame announces how many questions are shown or hidden through a concise polite status message; it does not move focus. Pre-submit review keeps inactive answers in a collapsed section so respondents can inspect and clear a retained value or optional note independently. The section is collapsed by default to avoid unexpectedly displaying previously hidden responses; all clear actions are disabled after submission.
 * Test at 390 px wide and in dark mode. No sideways scrolling.
 * Every interactive element reachable and usable by keyboard, with a visible focus ring.

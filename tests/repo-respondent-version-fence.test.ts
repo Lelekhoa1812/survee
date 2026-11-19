@@ -123,6 +123,25 @@ describe("respondent version fence", () => {
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
   });
 
+  it("autosaves a partial multi minimum, blocks submission until resolved, and permits an optional skip", async () => {
+    const options = ["a", "b", "c"].map((value) => ({ value, label: value }));
+    mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "multi", label: "Choices", options, minSelections: 2 }] };
+    const partial = await asAxion(() => saveAnswers(token, 4, { q1: { value: ["a"] } }));
+    expect(partial).toMatchObject({ ok: true });
+    const saved = mocks.participantUpdate.mock.calls.at(-1)?.[1].$set["answers.q1"];
+    expect(saved.value).toEqual(["a"]);
+    mocks.participant.answers = { q1: saved };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({
+      ok: false, status: 422, code: "incomplete_answers", invalidMinimumSelections: [{ id: "q1", selected: 1, minimum: 2 }],
+    });
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: ["a", "b"] } }))).toMatchObject({ ok: true });
+    mocks.participant.answers = { q1: { value: ["a", "b"], updatedAt: "now" } };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
+    mocks.participant.status = "invited";
+    mocks.participant.answers = {};
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
+  });
+
   it("rejects new exclusive conflicts, preserves legacy data, and permits correction", async () => {
     const options = ["none", "a", "b"].map((value) => ({ value, label: value }));
     mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "multi", label: "Choices", options, exclusiveOptions: ["none"] }] };

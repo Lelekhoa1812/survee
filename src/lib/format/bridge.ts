@@ -253,17 +253,17 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function applySelectionLimitGuidance() {
     state.questions.forEach(function (question) {
-      if (question.type !== "multi" || (typeof question.maxSelections !== "number" && !(question.exclusiveOptions || []).length)) return;
+      if (question.type !== "multi" || (typeof question.minSelections !== "number" && typeof question.maxSelections !== "number" && !(question.exclusiveOptions || []).length)) return;
       var els = controls(question.id);
       if (!els.length) return;
       var group = els[0].closest ? els[0].closest("fieldset") : null;
       var host = group && group.parentElement ? group.parentElement : els[0].parentElement;
       if (!host || host.querySelector('[data-kqa-selection-limit="' + question.id + '"]')) return;
       var hint = document.createElement("p");
-      hint.id = "kqa-max-selections-" + question.id;
+      hint.id = "kqa-multi-guidance-" + question.id;
       hint.setAttribute("data-kqa-selection-limit", question.id);
       hint.className = "kq-help";
-      hint.textContent = (typeof question.maxSelections === "number" ? "Choose up to " + question.maxSelections + (question.maxSelections === 1 ? " option. " : " options. ") : "") + ((question.exclusiveOptions || []).length ? "Exclusive options must be chosen by themselves." : "");
+      hint.textContent = (typeof question.minSelections === "number" ? "Choose at least " + question.minSelections + (question.minSelections === 1 ? " option, or leave this question blank. " : " options, or leave this question blank. ") : "") + (typeof question.maxSelections === "number" ? "Choose up to " + question.maxSelections + (question.maxSelections === 1 ? " option. " : " options. ") : "") + ((question.exclusiveOptions || []).length ? "Exclusive options must be chosen by themselves." : "");
       if (group) {
         var describedBy = (group.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
         if (describedBy.indexOf(hint.id) === -1) describedBy.push(hint.id);
@@ -861,7 +861,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var o = question.options || [];
     switch (question.type) {
       case "single": case "select": return o.length ? o[0].value : null;
-      case "multi": return o.slice(0, Math.min(question.maxSelections || 2, 2)).map(function (x) { return x.value; });
+      case "multi": return o.slice(0, Math.min(question.maxSelections || o.length, Math.max(question.minSelections || 1, 2))).map(function (x) { return x.value; });
       case "rank": return o.map(function (x) { return x.value; }).reverse();
       case "text": return "Probe text";
       case "longtext": return "Probe line one\nProbe line two";

@@ -45,7 +45,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
   return best;
 }
 
-const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "exclusiveOptions", "note", "min", "max", "step", "maxLength", "custom", "when"];
+const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "minSelections", "exclusiveOptions", "note", "min", "max", "step", "maxLength", "custom", "when"];
 const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
@@ -684,6 +684,13 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       } else if (!Number.isInteger(q.maxSelections) || (q.maxSelections as number) < 1 || (q.maxSelections as number) > LIMITS.maxOptions || (Array.isArray(q.options) && (q.maxSelections as number) > q.options.length)) {
         const maximum = Array.isArray(q.options) ? q.options.length : LIMITS.maxOptions;
         add(ctx, "KQA219", `${p}.maxSelections must be a whole number from 1 to the number of declared options (at most ${maximum}).`, "Set maxSelections to a valid option count.", { offset: m.at(`${p}.maxSelections`), path: `${p}.maxSelections`, questionId: qid });
+      }
+    }
+    if (q.minSelections !== undefined) {
+      const optionCount = Array.isArray(q.options) ? q.options.length : LIMITS.maxOptions;
+      if (t !== "multi" || !Number.isInteger(q.minSelections) || (q.minSelections as number) < 1 || (q.minSelections as number) > LIMITS.maxOptions || (Array.isArray(q.options) && (q.minSelections as number) > optionCount) || (typeof q.maxSelections === "number" && (q.minSelections as number) > q.maxSelections)) {
+        const maximum = Math.min(optionCount, typeof q.maxSelections === "number" && Number.isInteger(q.maxSelections) ? q.maxSelections : LIMITS.maxOptions);
+        add(ctx, "KQA222", `${p}.minSelections must be a whole number from 1 to ${maximum} and applies only to multi questions.`, "Set a valid minimum that does not exceed the available options or maxSelections.", { offset: m.at(`${p}.minSelections`), path: `${p}.minSelections`, questionId: qid });
       }
     }
     if (q.exclusiveOptions !== undefined) {

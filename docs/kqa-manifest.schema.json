@@ -119,6 +119,11 @@
             "minimum": 1,
             "maximum": 50
           },
+          "minSelections": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
           "exclusiveOptions": {
             "minItems": 1,
             "type": "array",
@@ -409,6 +414,1270 @@
                   "const": "multi"
                 }
               }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "const": "multi"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 1
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 1
+                },
+                "maxSelections": {
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 2
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 2
+                },
+                "maxSelections": {
+                  "minimum": 2
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 3
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 3
+                },
+                "maxSelections": {
+                  "minimum": 3
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 4
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 4
+                },
+                "maxSelections": {
+                  "minimum": 4
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 5
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 5
+                },
+                "maxSelections": {
+                  "minimum": 5
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 6
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 6
+                },
+                "maxSelections": {
+                  "minimum": 6
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 7
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 7
+                },
+                "maxSelections": {
+                  "minimum": 7
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 8
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 8
+                },
+                "maxSelections": {
+                  "minimum": 8
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 9
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 9
+                },
+                "maxSelections": {
+                  "minimum": 9
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 10
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 10
+                },
+                "maxSelections": {
+                  "minimum": 10
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 11
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 11
+                },
+                "maxSelections": {
+                  "minimum": 11
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 12
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 12
+                },
+                "maxSelections": {
+                  "minimum": 12
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 13
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 13
+                },
+                "maxSelections": {
+                  "minimum": 13
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 14
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 14
+                },
+                "maxSelections": {
+                  "minimum": 14
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 15
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 15
+                },
+                "maxSelections": {
+                  "minimum": 15
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 16
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 16
+                },
+                "maxSelections": {
+                  "minimum": 16
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 17
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 17
+                },
+                "maxSelections": {
+                  "minimum": 17
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 18
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 18
+                },
+                "maxSelections": {
+                  "minimum": 18
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 19
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 19
+                },
+                "maxSelections": {
+                  "minimum": 19
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 20
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 20
+                },
+                "maxSelections": {
+                  "minimum": 20
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 21
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 21
+                },
+                "maxSelections": {
+                  "minimum": 21
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 22
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 22
+                },
+                "maxSelections": {
+                  "minimum": 22
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 23
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 23
+                },
+                "maxSelections": {
+                  "minimum": 23
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 24
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 24
+                },
+                "maxSelections": {
+                  "minimum": 24
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 25
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 25
+                },
+                "maxSelections": {
+                  "minimum": 25
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 26
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 26
+                },
+                "maxSelections": {
+                  "minimum": 26
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 27
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 27
+                },
+                "maxSelections": {
+                  "minimum": 27
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 28
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 28
+                },
+                "maxSelections": {
+                  "minimum": 28
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 29
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 29
+                },
+                "maxSelections": {
+                  "minimum": 29
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 30
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 30
+                },
+                "maxSelections": {
+                  "minimum": 30
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 31
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 31
+                },
+                "maxSelections": {
+                  "minimum": 31
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 32
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 32
+                },
+                "maxSelections": {
+                  "minimum": 32
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 33
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 33
+                },
+                "maxSelections": {
+                  "minimum": 33
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 34
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 34
+                },
+                "maxSelections": {
+                  "minimum": 34
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 35
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 35
+                },
+                "maxSelections": {
+                  "minimum": 35
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 36
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 36
+                },
+                "maxSelections": {
+                  "minimum": 36
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 37
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 37
+                },
+                "maxSelections": {
+                  "minimum": 37
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 38
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 38
+                },
+                "maxSelections": {
+                  "minimum": 38
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 39
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 39
+                },
+                "maxSelections": {
+                  "minimum": 39
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 40
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 40
+                },
+                "maxSelections": {
+                  "minimum": 40
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 41
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 41
+                },
+                "maxSelections": {
+                  "minimum": 41
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 42
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 42
+                },
+                "maxSelections": {
+                  "minimum": 42
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 43
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 43
+                },
+                "maxSelections": {
+                  "minimum": 43
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 44
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 44
+                },
+                "maxSelections": {
+                  "minimum": 44
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 45
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 45
+                },
+                "maxSelections": {
+                  "minimum": 45
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 46
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 46
+                },
+                "maxSelections": {
+                  "minimum": 46
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 47
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 47
+                },
+                "maxSelections": {
+                  "minimum": 47
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 48
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 48
+                },
+                "maxSelections": {
+                  "minimum": 48
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 49
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 49
+                },
+                "maxSelections": {
+                  "minimum": 49
+                }
+              },
+              "required": [
+                "options"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "minSelections": {
+                  "const": 50
+                }
+              },
+              "required": [
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "options": {
+                  "minItems": 50
+                },
+                "maxSelections": {
+                  "minimum": 50
+                }
+              },
+              "required": [
+                "options"
+              ]
             }
           }
         ]

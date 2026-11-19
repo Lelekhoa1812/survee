@@ -42,6 +42,7 @@ For host surfaces, `visualProfile.host` exposes the default KQA visual direction
 - Can a keyboard-only user operate the full flow and see where focus is?
 - Are pointer targets at least 24 × 24 CSS px, or covered by a WCAG 2.2 SC 2.5.8 exception such as sufficient spacing?
 - Do controls have labels, errors explain recovery, and save/submission status reach assistive technology?
+- If a checkbox question has `minSelections`, does its help state the minimum and any skip option; can respondents save partial progress and understand why Continue or submission is blocked until the minimum is met? Does an optional blank remain a valid skip?
 - Is keyboard focus unobscured around fixed/sticky UI, is there a non-drag alternative for dragging, and do errors identify the affected field and explain a correction?
 - Are native radio controls used where possible; if custom radio groups are necessary, do they follow the WAI-ARIA APG arrow-key and Tab pattern?
 - Have WCAG 2.2 AA contrast and reflow been checked at 320 CSS px, plus KQA's 360/390 px questionnaire widths?

@@ -51,3 +51,26 @@ describe("questionnaire bridge multi-select cap", () => {
     page.window.close();
   });
 });
+
+describe("questionnaire bridge multi-select minimum guidance", () => {
+  it("explains the minimum while still accepting partial autosaved choices", () => {
+    const dom = new JSDOM(`<!doctype html><html><body><fieldset><legend>Choices</legend>
+      <label><input type="checkbox" data-kqa="q" value="a">A</label>
+      <label><input type="checkbox" data-kqa="q" value="b">B</label>
+      <label><input type="checkbox" data-kqa="q" value="c">C</label>
+    </fieldset></body></html>`, { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    window.dispatchEvent(new window.MessageEvent("message", { data: {
+      kqa: 1, type: "init", questions: [{ id: "q", type: "multi", label: "Choices", minSelections: 2, options: ["a", "b", "c"].map((v) => ({ value: v, label: v })) }], answers: {},
+    }, source: window }));
+    expect(window.document.querySelector("[data-kqa-selection-limit=q]")?.textContent).toContain("Choose at least 2 options");
+    expect(window.document.querySelector("[data-kqa-selection-limit=q]")?.textContent).toContain("leave this question blank");
+    const checkbox = window.document.querySelector<HTMLInputElement>('[data-kqa="q"][value="a"]')!;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new window.Event("change", { bubbles: true }));
+    expect(window.KQA.get("q")).toEqual(["a"]);
+    expect(window.KQA.set("q", ["a"])).toBe(true);
+    window.close();
+  });
+});

@@ -25,6 +25,7 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
   const answeredPeopleByQuestion = new Map<string, number>();
   const optionUsageByQuestion = new Map<string, Map<string, number>>();
   const peopleOverNewSelectionLimit = new Map<string, number>();
+  const peopleUnderNewSelectionMinimum = new Map<string, number>();
   const peopleWithExclusiveConflicts = new Map<string, number>();
   let submitted = 0;
 
@@ -49,6 +50,13 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
         const retainedSelections = new Set(answer.value.filter((value) => retained.has(value)));
         if (retainedSelections.size > nextQuestion.maxSelections) {
           peopleOverNewSelectionLimit.set(questionId, (peopleOverNewSelectionLimit.get(questionId) ?? 0) + 1);
+        }
+      }
+      if (nextQuestion?.type === "multi" && nextQuestion.minSelections !== undefined && Array.isArray(answer.value)) {
+        const retained = new Set(nextQuestion.options?.map((option) => option.value) ?? []);
+        const retainedSelections = new Set(answer.value.filter((value) => retained.has(value)));
+        if (retainedSelections.size > 0 && retainedSelections.size < nextQuestion.minSelections) {
+          peopleUnderNewSelectionMinimum.set(questionId, (peopleUnderNewSelectionMinimum.get(questionId) ?? 0) + 1);
         }
       }
       if (nextQuestion?.type === "multi" && Array.isArray(answer.value)) {
@@ -102,6 +110,12 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
       const peopleOverLimit = peopleOverNewSelectionLimit.get(q.id) ?? 0;
       if (peopleOverLimit > 0) {
         out.push(make("KQA705", `Question "${q.id}" now allows at most ${n.maxSelections} choices, but ${peopleOverLimit} ${peopleOverLimit === 1 ? "person has" : "people have"} already saved more.`, undefined, q.id));
+      }
+    }
+    if (n.type === "multi" && n.minSelections !== undefined) {
+      const peopleUnderMinimum = peopleUnderNewSelectionMinimum.get(q.id) ?? 0;
+      if (peopleUnderMinimum > 0) {
+        out.push(make("KQA707", `Question "${q.id}" now requires at least ${n.minSelections} choices when answered, but ${peopleUnderMinimum} ${peopleUnderMinimum === 1 ? "person has" : "people have"} already saved fewer.`, undefined, q.id));
       }
     }
     if (n.type === "multi") {

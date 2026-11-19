@@ -15,6 +15,7 @@ describe("survey candidate question changes", () => {
       section: "intro",
       options: [{ label: "Keep", value: "keep" }, { label: "Leave", value: "leave" }],
       maxSelections: 2,
+      minSelections: 1,
       min: 1,
       max: 5,
       help: "Choose one",
@@ -38,12 +39,13 @@ describe("survey candidate question changes", () => {
     expect(changes.updated[0]).toEqual({
       previous: before[0],
       question: after[0],
-      fields: ["label", "type", "required", "section", "options", "maxSelections", "min", "max", "step", "help", "note", "when"],
+      fields: ["label", "type", "required", "section", "options", "maxSelections", "minSelections", "min", "max", "step", "help", "note", "when"],
     });
     expect(formatQuestionFieldValue("label", changes.updated[0].previous, [])).toBe("Old wording");
     expect(formatQuestionFieldValue("label", changes.updated[0].question, [])).toBe("New wording");
     expect(formatQuestionFieldValue("options", changes.updated[0].previous, [])).toBe("Keep (value: keep); Leave (value: leave)");
     expect(formatQuestionFieldValue("maxSelections", changes.updated[0].previous, [])).toBe("2 choices");
+    expect(formatQuestionFieldValue("minSelections", changes.updated[0].previous, [])).toBe("1 choice");
     expect(formatQuestionFieldValue("options", changes.updated[0].question, [])).toBe("Not applicable");
     expect(formatQuestionFieldValue("section", changes.updated[0].previous, [{ id: "intro", title: "Introduction" }])).toBe("Introduction (intro)");
     expect(formatQuestionFieldValue("section", changes.updated[0].question, [])).toBe("closing");
@@ -69,6 +71,7 @@ describe("survey candidate question changes", () => {
     expect(formatQuestionFieldValue("custom", newQuestion, [])).toBe("Custom response set with KQA.set()");
     expect(FIELD_LABELS.options).toBe("Response options");
     expect(FIELD_LABELS.maxSelections).toBe("Maximum choices");
+    expect(FIELD_LABELS.minSelections).toBe("Minimum choices");
     expect(FIELD_LABELS.when).toBe("Conditional routing");
   });
 
