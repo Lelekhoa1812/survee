@@ -60,7 +60,7 @@ function validateRunDate(value: unknown) {
 
 export function validateResults(benchmark: any, results: any) {
   assert(results?.benchmarkVersion === benchmark.benchmarkVersion, "Result benchmarkVersion does not match the corpus.");
-  assert(results?.resultsSchemaVersion === "kqa-package-draft-results/1", "Unsupported package-draft results schema version.");
+  assert(results?.resultsSchemaVersion === "kqa-package-draft-results/2", "Unsupported package-draft results schema version.");
   assert(NONEMPTY(results.model) && NONEMPTY(results.skillVersion) && NONEMPTY(results.promptVersion), "Record model, skillVersion and promptVersion.");
   const provenance = results.runProvenance;
   assert(provenance && NONEMPTY(provenance.provider) && NONEMPTY(provenance.modelSnapshot), "Record provider and immutable modelSnapshot in runProvenance.");
@@ -145,8 +145,14 @@ export function validateResults(benchmark: any, results: any) {
     for (const lane of ["functional", "accessibility", "respondentPretest"]) {
       const evidence = record[lane];
       assert(evidence && EVIDENCE_STATUS.has(evidence.status), `${record.caseId}: ${lane} needs a valid status.`);
-      if (["passed", "issues_found"].includes(evidence.status)) assert(NONEMPTY(evidence.evidence), `${record.caseId}/${lane}: record the method and evidence reference.`);
-      if (evidence.status === "not_applicable") assert(NONEMPTY(evidence.evidence), `${record.caseId}/${lane}: explain why this evidence lane is not applicable.`);
+      if (["passed", "issues_found"].includes(evidence.status)) {
+        assert(NONEMPTY(evidence.method), `${record.caseId}/${lane}: record the method used.`);
+        assert(NONEMPTY(evidence.scope), `${record.caseId}/${lane}: record the tested scope or sample.`);
+        assert(NONEMPTY(evidence.evidenceRef), `${record.caseId}/${lane}: record a stable evidence reference.`);
+        assert(Array.isArray(evidence.limitations) && evidence.limitations.length > 0 && evidence.limitations.every(NONEMPTY), `${record.caseId}/${lane}: record at least one limitation (or state that none were identified in scope).`);
+      }
+      if (evidence.status === "not_tested") assert(NONEMPTY(evidence.unrunReason), `${record.caseId}/${lane}: explain why this lane was not tested.`);
+      if (evidence.status === "not_applicable") assert(NONEMPTY(evidence.notApplicableReason), `${record.caseId}/${lane}: explain why this evidence lane is not applicable.`);
     }
     evidenceByCase.set(record.caseId, record);
   }

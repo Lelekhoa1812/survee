@@ -227,7 +227,7 @@ describe("agent documentation bundle", () => {
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
     expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/9");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
-    expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/1");
+    expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/2");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
     const selectionCases = await readAsset("evals/package-selection-cases.json");
     const selectionSchema = await readAsset("evals/package-selection.schema.json");

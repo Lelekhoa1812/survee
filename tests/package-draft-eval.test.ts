@@ -9,7 +9,7 @@ const benchmark = JSON.parse(await readFile(new URL("../docs/evals/package-draft
 const dimensions = benchmark.dimensions;
 const resultsFor = () => ({
   benchmarkVersion: benchmark.benchmarkVersion,
-  resultsSchemaVersion: "kqa-package-draft-results/1",
+  resultsSchemaVersion: "kqa-package-draft-results/2",
   model: "test/model@1",
   skillVersion: "test-skill@1",
   promptVersion: "test-prompt@1",
@@ -39,9 +39,9 @@ const resultsFor = () => ({
   }))),
   evidenceStatus: benchmark.cases.map((item: any) => ({
     caseId: item.id,
-    functional: { status: "not_tested" },
-    accessibility: { status: "not_tested" },
-    respondentPretest: { status: "not_tested" },
+    functional: { status: "not_tested", unrunReason: "No functional run was conducted for this fixture." },
+    accessibility: { status: "not_tested", unrunReason: "No accessibility review was conducted for this fixture." },
+    respondentPretest: { status: "not_tested", unrunReason: "No respondent pretest was conducted for this fixture." },
   })),
 });
 
@@ -149,7 +149,11 @@ describe("package draft development benchmark", () => {
     const rating = results.ratings.find((candidate: any) => candidate.caseId === item.id && candidate.reviewerId === "domain-1");
     rating.intentCoverage[0].status = "missing";
     rating.hardGateFindings = [{ gateId: item.hardGates[0].id, evidence: "The consultation purpose is absent from the draft." }];
-    results.evidenceStatus.find((record: any) => record.caseId === item.id).functional = { status: "passed", evidence: "Observed full submit and correction flow in browser." };
+    results.evidenceStatus.find((record: any) => record.caseId === item.id).functional = {
+      status: "passed", method: "Manual browser task run", scope: "Required-answer, save, correction, and submit flow",
+      evidenceRef: "run-2026-11-19/case-community-consultation/functional.md#submit-flow",
+      limitations: ["One desktop browser and one scripted path; no mobile or network-interruption coverage."],
+    };
     const report = scoreResults(benchmark, results);
     const coverage = report.packageCoverage.byPackage["community-consultation"];
     expect(coverage.caseCount).toBe(benchmark.cases.filter((candidate: any) => candidate.packageId === "community-consultation").length);
@@ -173,7 +177,7 @@ describe("package draft development benchmark", () => {
     const report = scoreResults(benchmark, results, checks);
     expect(report.staticFormatChecks).toEqual(checks);
     expect(report.dimensions).not.toHaveProperty("staticFormat");
-    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/1");
+    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/2");
     expect(report.run.runProvenance).toEqual(results.runProvenance);
     expect(report.cases[0]).toMatchObject({ htmlSha256: checks[0].htmlSha256, reviewSha256: checks[0].reviewSha256 });
     expect(report.cases[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);
@@ -205,8 +209,12 @@ describe("package draft development benchmark", () => {
     expect(() => validateResults(benchmark, noOutput)).toThrow("omit output artifacts");
     const noEvidence = resultsFor();
     noEvidence.evidenceStatus[0].respondentPretest.status = "passed";
-    expect(() => validateResults(benchmark, noEvidence)).toThrow("record the method and evidence reference");
-    noEvidence.evidenceStatus[0].respondentPretest.status = "not_applicable";
+    expect(() => validateResults(benchmark, noEvidence)).toThrow("record the method used");
+    noEvidence.evidenceStatus[0].respondentPretest = { status: "passed", method: "Cognitive interview", scope: "Two intended-language participants", evidenceRef: "run-1/pretest.md", limitations: [] };
+    expect(() => validateResults(benchmark, noEvidence)).toThrow("record at least one limitation");
+    noEvidence.evidenceStatus[0].respondentPretest = { status: "not_applicable" };
     expect(() => validateResults(benchmark, noEvidence)).toThrow("explain why this evidence lane is not applicable");
+    noEvidence.evidenceStatus[0].respondentPretest = { status: "not_tested" };
+    expect(() => validateResults(benchmark, noEvidence)).toThrow("explain why this lane was not tested");
   });
 });
