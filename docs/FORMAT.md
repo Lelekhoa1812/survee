@@ -336,6 +336,10 @@ The app validates every value against the manifest before saving (types, option 
 
 There is no answer key and no score. "Answered" means a non-empty value: one chosen option, at least one ticked checkbox, or text that is not blank after trimming. A note on its own does not count. An optional email address may be stored on the person so the host can send the private link. That address is not a question in this file, and this file never sends mail.
 
+### Identity and anonymity limits
+
+KQA saves answers under the respondent's participant record and private-link identity. In a multi-person interview, hosts can review answers for each participant and may also store that person's name, email, or private note. Aggregate analysis does not anonymize the underlying records, small groups, combinations of attributes, or free-text answers. One-person mode creates one respondent record; it is not an anonymous cohort mode. The current KQA modes do not provide anonymous collection. If strict anonymity is a requirement, do not describe a KQA interview as anonymous; pause fielding and use a separately verified collection method, or have the accountable host approve and accurately describe another privacy model after checking real access and data flows.
+
 ## 7. Replacing a file after people have answered
 
 The host can upload a new version. The app compares it with the current one and the saved answers and reports (KQA7xx):

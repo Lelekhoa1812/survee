@@ -13,6 +13,8 @@ Before authoring, read `references/FORMAT.md` and `references/AGENT_PLAYBOOK.md`
 
 Do not invent question types, routing rules, host actions, privacy promises, or quality guarantees. KQA supports `single`, `multi`, `select`, `text`, `longtext`, `number`, `scale`, and `date`; there is no native score or ranking type. Follow the current format for custom controls and bounded routing: choice comparisons and `answered`/`notAnswered` checks on earlier questions. Do not compare free text, numbers, dates, or scales by value.
 
+**Check anonymity claims before drafting.** KQA stores answers under a respondent participant record associated with a private link, and hosts can review person-level answers. Aggregate analysis does not anonymize raw records; small groups and free text may identify people. One-person mode is not an anonymous cohort mode, and current KQA modes do not provide anonymous collection. If strict anonymity is required, pause and ask the host to choose a separately verified collection method. Removing name or email questions does not make KQA responses anonymous.
+
 For bounded checkbox questions, use `maxSelections` only when the decision requires a fixed upper bound, reflect it in respondent help ("Choose up to N"), and treat it separately from requiredness. Custom controls must handle a rejected `KQA.set` result and the `validation` event. Never remove saved choices silently when a live questionnaire's cap is lowered.
 
 ## Workflow

@@ -174,7 +174,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
-    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/1");
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/2");
     const focused = await call("get_interview_packages", { packageId: "candidate-experience" });
     const focusedBody = await focused.json() as { result: { structuredContent: { packageId: string; packages: string } } };
     expect(focusedBody.result.structuredContent.packageId).toBe("candidate-experience");
