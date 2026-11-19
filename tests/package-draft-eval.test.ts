@@ -47,7 +47,7 @@ const resultsFor = () => ({
 
 describe("package draft development benchmark", () => {
   it("loads the versioned corpus against the current catalog and preserves public-development limits", () => {
-    expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length + 5);
+    expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length + 7);
     const report = scoreResults(benchmark, resultsFor());
     expect(report.developmentOnly).toBe(true);
     expect(report.hardGateReview.flaggedCaseCount).toBe(0);
@@ -59,8 +59,8 @@ describe("package draft development benchmark", () => {
 
   it("covers each current package with a source-noted brief and explicit boundaries", () => {
     expect(new Set(benchmark.cases.map((item: any) => item.packageId))).toEqual(new Set(INTERVIEW_PACKAGES.map((item) => item.id)));
-    expect(benchmark.cases).toHaveLength(INTERVIEW_PACKAGES.length + 5);
-    for (const id of ["industrial-multishift-contractor-process-feedback", "multilingual-public-consultation-language-equivalence", "employee-experience-power-imbalance-small-cell-privacy", "personal-planning-sensitive-disclosure-minimization", "industrial-maintenance-improvement-rating-not-ranking"]) {
+    expect(benchmark.cases).toHaveLength(INTERVIEW_PACKAGES.length + 7);
+    for (const id of ["industrial-multishift-contractor-process-feedback", "multilingual-public-consultation-language-equivalence", "employee-experience-power-imbalance-small-cell-privacy", "personal-planning-sensitive-disclosure-minimization", "industrial-maintenance-improvement-rating-not-ranking", "industrial-resource-efficiency-frontline-discovery", "personal-interest-learning-choice"]) {
       expect(benchmark.cases.some((item: any) => item.id === id)).toBe(true);
     }
     for (const item of benchmark.cases) {
@@ -70,6 +70,14 @@ describe("package draft development benchmark", () => {
       expect(item.requiredIntents.length).toBeGreaterThanOrEqual(5);
       expect(item.hardGates.length).toBeGreaterThanOrEqual(1);
     }
+    const resourceEfficiency = benchmark.cases.find((item: any) => item.id === "industrial-resource-efficiency-frontline-discovery");
+    expect(resourceEfficiency.requiredIntents.map((intent: any) => intent.id)).toContain("resource-ideas-vs-measurement");
+    expect(resourceEfficiency.hardGates.map((gate: any) => gate.id)).toContain("worker-observation-as-verified-savings");
+    expect(resourceEfficiency.sourceNotes).toContain("demonstrate savings");
+    const personalLearning = benchmark.cases.find((item: any) => item.id === "personal-interest-learning-choice");
+    expect(personalLearning.requiredIntents.map((intent: any) => intent.id)).toContain("defer-or-decline");
+    expect(personalLearning.hardGates.map((gate: any) => gate.id)).toContain("institutional-purpose-drift");
+    expect(personalLearning.sourceNotes).toContain("personal-interest learning");
     const missingPackage = structuredClone(benchmark);
     missingPackage.cases = missingPackage.cases.filter((item: any) => item.packageId !== "event-feedback");
     expect(() => validateBenchmark(missingPackage)).toThrow("cover every current interview package");

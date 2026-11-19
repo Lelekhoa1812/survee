@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": "kqa-package-draft/4",
+  "benchmarkVersion": "kqa-package-draft/5",
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/8",
@@ -1786,12 +1786,211 @@
         }
       ],
       "sourceNotes": "ICO guidance informs data minimization and heightened care if special-category information is elicited. COSMIN content-validity guidance is relevant only to the distinction between a defined construct and this non-measure planning prompt; it does not validate the questionnaire. Census A2 informs testing. The clinical boundary is an explicit scope decision for this scenario, not a claim derived from these privacy or methodology sources."
+    },
+    {
+      "id": "industrial-resource-efficiency-frontline-discovery",
+      "packageId": "industrial-operations",
+      "brief": "A multi-shift food-processing facility plans a 90-day investigation of routine energy and water use during production and changeovers. Operators, utilities technicians, and process engineers should describe recent operating conditions they observed, where avoidable resource use or process friction may occur, how a proposed change could affect product quality, reliability, output, workload, or safety, and what the energy team should investigate next. This is learning/input to qualified assessment, not an energy audit, engineering estimate, sustainability claim, incentive application, or authorization to change standard work.",
+      "contextFacts": [
+        "No meter data, resource baselines, normalized intensity, engineering assessment, or verified savings estimates have been provided.",
+        "The host has not defined the site-specific safe operating boundary, standard-work/change-control path, urgent hazard route, or accountable energy-team owner.",
+        "Workers have different roles and shifts; language/access plans, private completion conditions, raw-answer access, retention, and small-cell reporting controls are unknown.",
+        "No worker-representative review, functional testing, accessibility assessment, or respondent pretest has occurred."
+      ],
+      "requiredIntents": [
+        {
+          "id": "recent-observable-conditions",
+          "intent": "Ask about a recent, bounded period and observable operating conditions or work practices, rather than relying only on abstract attitudes."
+        },
+        {
+          "id": "role-exposure-and-uncertainty",
+          "intent": "Allow “not observed,” “outside my role,” or “not sure”; do not demand engineering estimates or savings calculations from workers."
+        },
+        {
+          "id": "resource-ideas-vs-measurement",
+          "intent": "Treat worker observations as candidate opportunities for expert investigation, distinct from verified energy/water measurements, normalized intensity, financial savings, or emissions claims."
+        },
+        {
+          "id": "operational-constraints",
+          "intent": "Surface potential impacts on product quality, reliability, throughput, workload, and safety without implying that respondents can authorize an operating change."
+        },
+        {
+          "id": "safe-work-boundary",
+          "intent": "Preserve standard operating procedures, safety controls, lockout, and formal change-control; route urgent hazards only through a host-verified existing channel and block fielding if it is missing."
+        },
+        {
+          "id": "worker-access-and-privacy",
+          "intent": "Address shift, role, language, contractor participation, private access, raw-answer access, retention, and small-cell disclosure as unresolved; do not promise anonymity or solicit names."
+        },
+        {
+          "id": "qualified-review-and-testing",
+          "intent": "Require accountable energy and operations review plus worker review, functional and accessibility checks, and respondent pretesting before fielding; state that the questionnaire is not an audit or savings verification."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use optional questions about recent situations, observable conditions, and candidate areas to investigate; permit uncertainty and non-exposure responses.",
+        "Invite a broad operational constraint or missing opportunity in optional text, with a reminder not to disclose sensitive process or security information.",
+        "Ask which areas the qualified energy team should investigate next, but do not force a rank or convert responses into a budget decision without a defined rule."
+      ],
+      "prohibitedAsks": [
+        "Exact facility vulnerabilities, security-sensitive controls, confidential recipes, detailed hazardous-material information, or operating instructions unnecessary to the learning purpose.",
+        "Names or identifiable blame narratives about coworkers, supervisors, contractors, or shifts.",
+        "Technical savings estimates, meter readings, or emissions calculations from respondents who do not own or have the expertise for those measurements.",
+        "Instructions to bypass standard operating procedures, lockout, safety controls, or formal management-of-change processes."
+      ],
+      "prohibitedClaims": [
+        "Reported observations prove energy or water savings, normalized performance, financial benefit, emissions reduction, regulatory compliance, or ENERGY STAR eligibility/certification.",
+        "Questionnaire responses authorize an operational change or replace engineering assessment, site safety review, or change control.",
+        "Results represent all sites, shifts, contractors, or workers, or establish consensus or a single funded priority without a defined design and decision rule.",
+        "Answers are anonymous or urgent concerns are monitored when the host has not verified those controls and routes.",
+        "The draft is an energy audit, safety validation, or ready-to-field instrument without the required site-specific review and testing."
+      ],
+      "hardGates": [
+        {
+          "id": "worker-observation-as-verified-savings",
+          "description": "The draft or its interpretation treats unverified worker observations as measured energy/water savings, financial impact, emissions reductions, or an audit conclusion."
+        },
+        {
+          "id": "unsafe-work-change-or-invented-route",
+          "description": "The draft invites bypassing controls, authorizes change, solicits urgent hazard reports without a host-verified monitored route, or invents a site process."
+        },
+        {
+          "id": "forced-technical-judgment",
+          "description": "Respondents must supply technical estimates or judgments outside their role or experience without a “not sure/not observed/outside my role” path."
+        },
+        {
+          "id": "false-anonymity-or-identifiable-blame",
+          "description": "The draft promises anonymity without verified controls or asks for identifying blame details in this workforce context."
+        },
+        {
+          "id": "fielding-without-owner-and-review",
+          "description": "The questionnaire is presented as field-ready while the accountable owner, safety boundary, worker access/privacy plan, or required review and testing remain unresolved."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "U.S. EPA ENERGY STAR, Build an energy management program",
+          "url": "https://www.energystar.gov/industrial_plants/build-energy-management-program"
+        },
+        {
+          "name": "U.S. EPA ENERGY STAR, Assess opportunities",
+          "url": "https://www.energystar.gov/industrial_plants/improve/plant-energy-auditing"
+        },
+        {
+          "name": "U.S. EPA, Lean & Energy Toolkit preface",
+          "url": "https://www.epa.gov/sustainability/lean-energy-toolkit-preface"
+        },
+        {
+          "name": "OSHA, Worker Participation",
+          "url": "https://www.osha.gov/safety-management/worker-participation"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ],
+      "sourceNotes": "EPA ENERGY STAR program guidance supports involving employees and cross-functional energy teams in identifying opportunities; its assessment guidance distinguishes day-to-day employee opportunity discovery from plant assessments used to evaluate performance and demonstrate savings. EPA Lean & Energy guidance informs attention to quality and operational value. OSHA informs meaningful worker participation, not anonymity or site-specific legal duties. Census A2 informs documented functional checks and respondent testing. These U.S. program sources are not questionnaire validation, universal requirements, or evidence of site savings; the case does not imply certification or authorize process changes."
+    },
+    {
+      "id": "personal-interest-learning-choice",
+      "packageId": "personal-planning",
+      "brief": "An adult wants an optional reflection on whether or how to try a personally interesting, non-credential learning activity in the next one to three months. They may be curious but uncertain, and may choose a small step, seek information, defer, or not pursue it. This is for the respondent’s own reflection, not an educational assessment, provider recommendation, workforce development plan, or measure of motivation or likely follow-through. The host has not supplied a privacy notice or data-retention facts.",
+      "contextFacts": [
+        "The person’s interests, previous experience, time, money, language, access needs, and preferred learning mode are unknown.",
+        "The host has not verified who can access stored answers, how they will be used, retention/deletion, or whether any service or provider is available.",
+        "No course catalogue, referral service, financial support, or human follow-up process has been provided.",
+        "No respondent comprehension, burden, accessibility, or usability testing has occurred."
+      ],
+      "requiredIntents": [
+        {
+          "id": "respondent-defined-interest",
+          "intent": "Let the respondent choose a personal-interest topic and timeframe, including uncertainty, without presuming a credential or institutional objective."
+        },
+        {
+          "id": "feasible-mode-and-resources",
+          "intent": "Explore preferred learning mode or resources without assuming a stable budget, schedule, device, location, or prior experience."
+        },
+        {
+          "id": "broad-optional-barrier",
+          "intent": "Allow a broad optional barrier or support preference without requiring the respondent to disclose sensitive causes or personal circumstances."
+        },
+        {
+          "id": "defer-or-decline",
+          "intent": "Treat a small step, information seeking, waiting, and not pursuing the activity as equally valid choices; do not require a commitment."
+        },
+        {
+          "id": "personal-not-institutional-use",
+          "intent": "Keep the purpose as self-directed reflection, not evaluation of a school/provider, employer training, course recommendation, credentialing, or prediction of completion."
+        },
+        {
+          "id": "privacy-and-collection-facts",
+          "intent": "Make no confidentiality, anonymity, deletion, or service-availability claim; require the host to resolve and communicate actual collection/access/retention facts before fielding."
+        },
+        {
+          "id": "testing-and-bounded-interpretation",
+          "intent": "Require comprehension, accessibility, burden, and optional routing tests; prohibit scoring motivation, predicting follow-through, or generalizing demand from these responses."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use a short linear set of optional prompts and allow the respondent to finish without selecting a next step.",
+        "Add one optional routed follow-up about a learning mode or information preference only after the respondent voluntarily selects that interest; test skip and return behavior.",
+        "Use broad response choices such as “not sure yet,” “I would rather wait,” or “I do not want to pursue this now” without treating them as deficits."
+      ],
+      "prohibitedAsks": [
+        "A required commitment, completion date, proof of effort, or explanation for not pursuing the activity.",
+        "Health/disability, income/debt, exact location, immigration status, employer/school performance, or third-party information without a separately justified and governed purpose.",
+        "Specific course/provider recommendation requests when no verified catalogue, matching criteria, or service exists.",
+        "Names or contact information for an unsolicited follow-up."
+      ],
+      "prohibitedClaims": [
+        "The questionnaire assesses ability, motivation, readiness, likely completion, intelligence, wellbeing, or educational attainment.",
+        "Answers are anonymous/confidential, are not stored, or will be deleted unless actual controls are verified.",
+        "A provider, course, support service, or human follow-up is available when none was supplied.",
+        "Responses estimate population demand, predict enrollment, or prove that a person will follow through."
+      ],
+      "hardGates": [
+        {
+          "id": "forced-commitment-or-person-score",
+          "description": "The draft requires an answer/commitment, scores or ranks the respondent, or frames deferring/not pursuing as failure or a deficit."
+        },
+        {
+          "id": "unnecessary-sensitive-data",
+          "description": "The draft requires or elicits sensitive personal details not necessary for the self-directed reflection purpose."
+        },
+        {
+          "id": "invented-service-or-privacy-promise",
+          "description": "The draft promises confidentiality, deletion, a course, provider, financial support, or human follow-up without verified facts."
+        },
+        {
+          "id": "institutional-purpose-drift",
+          "description": "The questions or analysis shift the stated self-use purpose into employer, school/provider evaluation, credential screening, or representative demand measurement."
+        },
+        {
+          "id": "untested-routing-or-readiness-claim",
+          "description": "The form is called ready to use without required notice and respondent testing, or optional routing changes are not tested for skip/return and retained answers."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "Australian Bureau of Statistics, Work-Related Training and Adult Learning methodology 2024–25",
+          "url": "https://www.abs.gov.au/methodologies/work-related-training-and-adult-learning-methodology/2024-25"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        },
+        {
+          "name": "Information Commissioner’s Office, Data minimisation",
+          "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/"
+        }
+      ],
+      "sourceNotes": "ABS methodology documents that personal-interest learning was collected in earlier survey cycles but was no longer collected in 2024–25. This supports the distinct topic’s existence, not the wording or validity of this synthetic form. Census A2 informs functional and respondent testing. ICO data-minimisation guidance informs limiting collection to information necessary for the stated purpose; legal applicability depends on context and jurisdiction. The case’s non-clinical, non-institutional scope is a scenario boundary, not a claim made by these sources."
     }
   ],
   "limitations": [
     "Cases are synthetic public development fixtures, not a representative sample or hidden holdout.",
     "Intent criteria permit multiple good question wordings and approaches; do not use string matching against a canonical questionnaire.",
     "Reviewer scores are judgments until a qualified panel independently rates and adjudicates cases.",
-    "Coverage now includes every package in the pinned catalog, but one synthetic case per package is still sparse coverage and does not exercise every variant, region, language, or risk context."
+    "Coverage includes every package in the pinned catalog plus seven cross-cutting cases, but remains sparse and cannot represent package variants, jurisdictions, languages, recruitment modes, or risk contexts."
   ]
 }
