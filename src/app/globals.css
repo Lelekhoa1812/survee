@@ -627,7 +627,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 /* ---- respondent shell */
 .rs { height: 100dvh; display: flex; flex-direction: column; background: var(--bg); }
 .rs[dir="rtl"] { font-family: var(--sans), Tahoma, Arial, sans-serif; }
-.rs[dir="rtl"] .bar > i { transform-origin: right center; }
+.rs[dir="rtl"] .bar { display: flex; direction: rtl; }
 .rs[dir="rtl"] .rs-question-nav { inset-inline: auto 0; }
 .rs[dir="rtl"] .rs-question-nav-item, .rs[dir="rtl"] .rs-guided-error button { text-align: start; }
 .rs .right { margin-inline-start: auto; margin-inline-end: 0; }
@@ -681,7 +681,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .rs-guided-error:focus { outline: 3px solid color-mix(in srgb, var(--danger) 30%, transparent); outline-offset: 2px; }
 .rs-guided-error h2 { font-size: 15px; }
 .rs-guided-error p { margin: 4px 0; font-size: 13px; }
-.rs-guided-error ul { margin: 5px 0 0; padding-left: 20px; }
+.rs-guided-error ul { margin: 5px 0 0; padding-inline-start: 20px; }
 .rs-guided-error button { padding: 2px 0; border: 0; background: transparent; color: var(--danger); text-align: left; text-decoration: underline; cursor: pointer; }
 .rs-frame { position: relative; flex: 1 1 auto; min-height: 0; }
 .rs-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }

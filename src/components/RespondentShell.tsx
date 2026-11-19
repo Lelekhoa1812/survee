@@ -445,16 +445,16 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const conflictDraftText = JSON.stringify({
     format: "kqa-unsaved-draft/1",
     questionnaireVersion: version.current,
-    warning: "Reference only. These rejected changes are not saved and must not be automatically applied to a newer questionnaire version.",
+    warning: t("previousDraftWarning"),
     changes: staleDraft.map(({ question, patch }) => ({
       questionId: question.id,
       question: question.label,
       type: question.type,
       ...(Object.prototype.hasOwnProperty.call(patch, "value") ? {
         value: patch.value,
-        displayValue: patch.value === null ? "Answer cleared" : displayValue(question, patch.value as AnswerValue),
+        displayValue: patch.value === null ? t("answerCleared") : displayValue(question, patch.value as AnswerValue),
       } : {}),
-      ...(Object.prototype.hasOwnProperty.call(patch, "note") ? { note: patch.note, displayNote: patch.note === null ? "Note cleared" : patch.note } : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "note") ? { note: patch.note, displayNote: patch.note === null ? t("noteCleared") : patch.note } : {}),
     })),
   }, null, 2);
 

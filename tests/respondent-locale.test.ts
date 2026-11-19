@@ -36,4 +36,11 @@ describe("respondent shell locales", () => {
     expect(respondentTime("en-AU", timestamp)).toBe(new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit" }).format(timestamp));
     expect(respondentTime("ar", new Date("2026-11-19T13:05:00Z"))).toBeTruthy();
   });
+
+  it("uses Arabic plural categories for selection limits", () => {
+    expect(respondentMessage("ar", "maxSelections", { count: 0 })).toBe("لا تختر أي خيارات.");
+    expect(respondentMessage("ar", "maxSelections", { count: 2 })).toBe("اختر خيارين كحد أقصى.");
+    expect(respondentMessage("ar", "selectionMin", { count: 3 })).toBe(`اختر ${new Intl.NumberFormat("ar").format(3)} خيارات على الأقل أو اترك السؤال فارغًا.`);
+    expect(respondentMessage("ar", "selectionMax", { count: 11 })).toBe(`اختر ${new Intl.NumberFormat("ar").format(11)} خيارًا كحد أقصى.`);
+  });
 });
