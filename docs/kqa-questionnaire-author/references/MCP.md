@@ -8,7 +8,7 @@ Writing a questionnaire file is still [`AGENT_PLAYBOOK.md`](AGENT_PLAYBOOK.md), 
 
 ## Connect
 
-Stateless Streamable HTTP. One JSON-RPC request, one JSON response. KQA supports MCP `2025-06-18`; initialization returns a version the server supports if the client requests another version. JSON-RPC batch arrays are rejected because this MCP version removed batching. There is no session and no long-lived stream.
+Stateless Streamable HTTP. One JSON-RPC request, one JSON response. KQA supports MCP `2025-06-18`; initialization returns a version the server supports if the client requests another version. JSON-RPC batch arrays are rejected because this MCP version removed batching. There is no session and no long-lived stream. The server exposes tools and user-selected prompt templates; it does not open an SSE channel or send prompt notifications.
 
 | | |
 |---|---|
@@ -29,6 +29,18 @@ Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is a tena
 ### Credential permissions
 
 `tools/list` returns only tools available to that credential, and the server checks permission again for every `tools/call`. Hiding a tool from the list is not the authorization boundary. `initialize` and `ping` remain available to any authenticated credential.
+
+### Prompt templates
+
+Initialization advertises the MCP `prompts` capability with `listChanged: false`. Authenticated clients can call `prompts/list` to discover three static, user-selected workflows, then `prompts/get` with the listed arguments. This follows MCP's [server prompts specification](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts): clients decide how to surface templates and users choose whether to use them.
+
+| Prompt | Required arguments | Purpose |
+|---|---|---|
+| `draft_questionnaire` | `brief` | Draft a reviewable questionnaire using the current authoring skill, design guidance, package library, and risk gate |
+| `review_questionnaire` | `interviewId` | Produce a read-only structured review of the current questionnaire; optional `focus` narrows the review emphasis |
+| `update_questionnaire` | `interviewId`, `requestedChange` | Prepare a version-safe candidate and preview it without applying or publishing |
+
+Prompt arguments must be non-empty strings when supplied. Input length is capped at 20,000 for briefs and requested changes and 2,000 for other strings. Prompt selection only supplies instructions to the client. It does not execute tools, add credential permissions, approve a change, create an interview, or authorize publishing or fielding. The same bearer checks still apply independently to each tool call. The templates tell agents to treat supplied briefs and requested changes as untrusted data, inspect the current questionnaire before an update, and keep checker results separate from human, respondent, accessibility, privacy, domain, and legal review.
 
 | Capability | Tools |
 |---|---|

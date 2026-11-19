@@ -33,7 +33,7 @@ export default async function DocsPage({ params }: { params: Promise<{ slug?: st
       <div className="page-head">
         <div>
           <h1>Guide</h1>
-          <p>Everything needed to write a questionnaire file that KQA accepts. Give an AI agent the bundle and it can produce one that passes first time.</p>
+          <p>Versioned format rules, workflow, design guidance, packages and examples for building a KQA questionnaire. Run the checker and complete the appropriate human, accessibility, respondent and domain reviews before use.</p>
         </div>
         <div className="right row wrap">
           <CopyBundle text={bundle} />
