@@ -77,6 +77,33 @@ describe("respondent required-answer recovery", () => {
     expect(Array.from(review.querySelectorAll("button")).some((button) => button.textContent?.includes("Submit answers"))).toBe(false);
   });
 
+  it("offers a built-in clear action for an answered item in the pre-submit review", async () => {
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const reviewButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!;
+    await act(async () => reviewButton.click());
+    const review = host.querySelector("[role=dialog]")!;
+    const iframe = host.querySelector("iframe")!;
+    expect(review.querySelector<HTMLButtonElement>('[aria-label="Clear answer to Already answered question"]')!.disabled).toBe(true);
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "hello" },
+        origin: "null",
+        source: iframe.contentWindow,
+      }));
+    });
+    const clearButton = review.querySelector<HTMLButtonElement>('[aria-label="Clear answer to Already answered question"]')!;
+    const postMessage = vi.spyOn(iframe.contentWindow!, "postMessage");
+
+    expect(clearButton.disabled).toBe(false);
+    expect(review.textContent).toContain("any optional note stays saved");
+    await act(async () => clearButton.click());
+    expect(postMessage).toHaveBeenCalledWith({ kqa: 1, type: "clear-answer", id: "already-answered" }, "*");
+    expect(host.querySelector("[role=dialog]")).not.toBeNull();
+  });
+
   it("keeps the review open and maps server validation errors to their answers", async () => {
     state.api.mockImplementation(async (url: string) => url.endsWith("/submit")
       ? { ok: false, status: 422, data: { error: "Some answers need attention.", missing: [], invalidSelections: [{ id: "channels", selected: 2, maximum: 1 }] } }

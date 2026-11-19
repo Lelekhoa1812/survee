@@ -268,7 +268,7 @@ Injected automatically. Available as `window.KQA` once the page loads.
 | `KQA.getNote(id)` | Current note text, or `undefined` |
 | `KQA.set(id, value)` | Set a value. Updates bound controls, saves it, and returns `false` when rejected or locked. Pass `null` to clear |
 | `KQA.setNote(id, text)` | Set a note. Pass `""` or `null` to clear it; returns `false` when rejected or locked |
-| `KQA.clear(id)` | Same as `KQA.set(id, null)`. Unticks radios and checkboxes and empties text fields (a saved note is kept; clear it with `KQA.setNote(id, "")`). A respondent cannot untick a radio by themselves, so offer a "Clear" button that calls this if people may need to withdraw an answer |
+| `KQA.clear(id)` | Same as `KQA.set(id, null)`. Unticks radios and checkboxes and empties text fields; a saved note is kept (clear it with `KQA.setNote(id, "")`). The respondent shell also offers **Clear** beside answered items in pre-submit review; it clears the value and keeps any optional note. Required questions still need an answer before submission |
 | `KQA.isAnswered(id)` | `true` when a value is present (non-empty) |
 | `KQA.answers()` | Copy of all answers as `{ [id]: { value, note } }` |
 | `KQA.progress()` | `{ answered, total }` for currently eligible questions only |
@@ -302,6 +302,7 @@ You never need this to write a questionnaire. It is documented so developers can
 | frame → app | `probe-result` | results of the live check |
 | app → frame | `init` | `{ questions, answers, participant, locked, probe, preview }` |
 | app → frame | `answers` | `{ answers }` replace all answers |
+| app → frame | `clear-answer` | `{ id }` clear one answer through the normal validation and save path; notes are preserved |
 | app → frame | `lock` | `{ locked }` |
 | app → frame | `offline` | `{ offline }` |
 
@@ -361,6 +362,7 @@ Class names are prefixed `kq-` so they never clash with your own. Use the kit un
 * Mark only genuinely necessary questions as `required`.
 * Group long questionnaires into sections of about 5 to 8 questions with a contents rail.
 * The KQA respondent shell adds **Questions** navigation grouped by manifest sections. It shows answered counts and can focus a chosen, currently eligible question. Hidden questions are omitted; their saved answers remain retained and may reappear when eligible. This is additional shell navigation; the shell does not move respondents automatically or control the questionnaire's visual sections.
+* When an answer changes routing, the frame announces how many questions are shown or hidden through a concise polite status message; it does not move focus. In pre-submit review, respondents can clear an answer without clearing its optional note.
 * Test at 390 px wide and in dark mode. No sideways scrolling.
 * Every interactive element reachable and usable by keyboard, with a visible focus ring.
 

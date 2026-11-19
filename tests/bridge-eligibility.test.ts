@@ -13,9 +13,9 @@ const questions = [
   { id: "nested", type: "text", label: "Nested", when: { any: [{ question: "details", operator: "contains", value: "why" }] } },
 ];
 
-function start(answers: Record<string, { value: unknown }> = {}) {
+function start(answers: Record<string, { value: unknown; note?: string }> = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>
-    <section data-kqa-question-id="mode"><input data-kqa="mode" value="other"></section>
+    <section data-kqa-question-id="mode"><input type="radio" data-kqa="mode" name="mode" value="other"></section>
     <section data-kqa-question-id="details" aria-hidden="false"><input data-kqa="details" tabindex="3"></section>
     <section data-kqa-question-id="nested" hidden><input data-kqa="nested"></section>
   </body></html>`, { runScripts: "dangerously" });
@@ -57,6 +57,50 @@ describe("questionnaire bridge conditional eligibility", () => {
     const nested = page.window.document.querySelector<HTMLElement>('[data-kqa-question-id="nested"]')!;
     expect(nested.hidden).toBe(true); // author's initial hidden state is restored when eligible
     expect(page.window.KQA.get("nested")).toBeUndefined();
+    page.window.close();
+  });
+
+  it("announces routing changes politely after initialization without moving focus", () => {
+    const page = start();
+    const status = page.window.document.querySelector<HTMLElement>('[data-kqa-routing-status]')!;
+    expect(status).not.toBeNull();
+    expect(status.textContent).toBe("");
+    const mode = page.window.document.querySelector<HTMLInputElement>('[data-kqa="mode"]')!;
+    mode.focus();
+    page.window.KQA.set("mode", "other");
+
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(status.getAttribute("aria-atomic")).toBe("true");
+    expect(status.textContent).toBe("1 question is now shown.");
+    expect(page.window.document.activeElement).toBe(mode);
+
+    page.window.KQA.set("mode", "standard");
+    expect(status.textContent).toBe("1 question is now hidden. Answers to hidden questions are retained.");
+    page.window.KQA.set("mode", "standard");
+    expect(status.textContent).toBe("1 question is now hidden. Answers to hidden questions are retained.");
+    page.dom.window.close();
+  });
+
+  it("clears a respondent answer while preserving its note and uses the normal save event", () => {
+    const page = start({ mode: { value: "other", note: "Keep this note" } });
+    const mode = page.window.document.querySelector<HTMLInputElement>('[data-kqa="mode"]')!;
+    expect(mode.checked).toBe(true);
+    page.send({ type: "clear-answer", id: "mode" });
+
+    expect(page.window.KQA.get("mode")).toBeUndefined();
+    expect(page.window.KQA.getNote("mode")).toBe("Keep this note");
+    expect(mode.checked).toBe(false);
+    expect(page.post.mock.calls.some(([message]) => message.type === "set" && message.id === "mode" && message.value === null)).toBe(true);
+    page.window.close();
+  });
+
+  it("ignores respondent clear actions after submission has locked the answers", () => {
+    const page = start({ mode: { value: "other" } });
+    page.send({ type: "lock", locked: true });
+    page.send({ type: "clear-answer", id: "mode" });
+
+    expect(page.window.KQA.get("mode")).toBe("other");
+    expect(page.window.document.querySelector<HTMLInputElement>('[data-kqa="mode"]')!.checked).toBe(true);
     page.window.close();
   });
 });

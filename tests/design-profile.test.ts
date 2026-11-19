@@ -26,7 +26,7 @@ describe("user-supplied design profile extraction", () => {
   it("extracts default and dark CSS tokens with source provenance and safe overlay proposals", () => {
     const result = profile(`:root {\n  --bg: #ffffff;\n  --ink: #111111;\n  --brand: #155eef;\n}\n@media (prefers-color-scheme: dark) { :root { --bg: #000000; --ink: #ffffff; } }`);
 
-    expect(result).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/20", themeCoverage: { hasDarkTokens: true } });
+    expect(result).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/21", themeCoverage: { hasDarkTokens: true } });
     expect(result.sourceSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(result.extractedTokens.find((token) => token.name === "--bg" && token.scope === "default")).toMatchObject({ value: "#ffffff", line: 2, sourceContext: ":root" });
     expect(result.proposedMappings).toContainEqual(expect.objectContaining({ role: "color.canvas", targetToken: "--bg", scope: "default", confidence: "high" }));

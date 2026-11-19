@@ -13,9 +13,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   if (window.KQA) return;
 
   var listeners = { ready: [], change: [], lock: [], eligibility: [], validation: [] };
-  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, participant: null, probe: false, preview: false };
+  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false };
   var errors = [];
   var consoleErrors = [];
+  var routingStatusNode = null;
   var readyResolve;
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
 
@@ -314,6 +315,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     }
   }
   function updateEligibility(announce) {
+    var wasInitialized = state.eligibilityReady;
+    var previous = state.eligibility || {};
     var eligible = {};
     state.questions.forEach(function (question) {
       var when = question.when;
@@ -326,10 +329,41 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     });
     var changed = !equal(eligible, state.eligibility || {});
     state.eligibility = eligible;
+    state.eligibilityReady = true;
     if (announce && changed) {
       post({ type: "eligibility", eligible: eligible });
       emit("eligibility", eligibilityCopy());
+      if (wasInitialized) announceEligibility(previous, eligible);
     }
+  }
+  function announceEligibility(previous, current) {
+    var shown = 0;
+    var hidden = 0;
+    state.questions.forEach(function (question) {
+      var before = previous[question.id] !== false;
+      var after = current[question.id] !== false;
+      if (before && !after) hidden++;
+      else if (!before && after) shown++;
+    });
+    if (!shown && !hidden) return;
+    var status = ensureRoutingStatus();
+    var parts = [];
+    if (shown) parts.push(shown + " " + (shown === 1 ? "question is" : "questions are") + " now shown.");
+    if (hidden) parts.push(hidden + " " + (hidden === 1 ? "question is" : "questions are") + " now hidden. Answers to hidden questions are retained.");
+    status.textContent = parts.join(" ");
+  }
+  function ensureRoutingStatus() {
+    if (routingStatusNode) return routingStatusNode;
+    var status = document.createElement("div");
+    status.id = "kqa-routing-status";
+    status.setAttribute("data-kqa-routing-status", "");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
+    status.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+    (document.body || document.documentElement).appendChild(status);
+    routingStatusNode = status;
+    return routingStatusNode;
   }
   function eligibilityCopy() {
     var out = {};
@@ -379,6 +413,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.preview = !!m.preview;
       state.locked = !!m.locked;
       state.ready = true;
+      ensureRoutingStatus();
       applySelectionLimitGuidance();
       applyAnswers(m.answers);
       updateEligibility(true);
@@ -396,6 +431,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       emit("lock", { locked: state.locked });
     } else if (m.type === "offline") {
       if (state.ready && !state.locked) setHtmlState(m.offline ? "offline" : "ready");
+    } else if (m.type === "clear-answer" && typeof m.id === "string") {
+      commit(m.id, { value: null }, "script");
     } else if (m.type === "focus-question" && typeof m.id === "string") {
       focusQuestion(m.id);
     }

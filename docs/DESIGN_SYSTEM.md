@@ -1,6 +1,6 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/20` · reviewed 19 November 2026
+Version: `kqa-design/21` · reviewed 19 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 
@@ -77,6 +77,7 @@ This is a repeatable sample, not a scan of authenticated host screens, responden
 - [WAI-ARIA Authoring Practices Guide: Tabs](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/) provides implementation patterns for tab interactions; it is guidance, not a conformance standard.
 - [WAI-ARIA Authoring Practices Guide: Radio Group](https://www.w3.org/WAI/ARIA/apg/patterns/radio/) describes the keyboard behavior expected of custom radio groups; native radio controls are preferable when they fit.
 - [WAI Forms Tutorial: User Notifications](https://www.w3.org/WAI/tutorials/forms/notifications/) explains how to make form errors and status messages concise and understandable.
+- [WCAG 2.2 SC 4.1.3: Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) requires status messages that do not take focus to be programmatically determinable by assistive technology. KQA's routing announcement reports counts and leaves focus where the respondent placed it.
 - [WCAG 2.2: On Input](https://www.w3.org/WAI/WCAG22/Understanding/on-input) explains predictable behavior and advance notice for a change of context caused by changing an input; a content change is not necessarily a change of context.
 - [GOV.UK Design System: Radios](https://design-system.service.gov.uk/components/radios/) recommends keeping conditional questions simple and documents a known assistive-technology notification issue in its own reveal component. This does not establish accessibility of a KQA implementation.
 - [ICO: Data minimisation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/) and [storage limitation](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/storage-limitation/) explain purpose-based collection and retention considerations; apply requirements appropriate to the context and jurisdiction.

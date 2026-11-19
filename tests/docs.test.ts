@@ -52,12 +52,23 @@ describe("agent documentation bundle", () => {
     expect(packages).toContain("do not report a conventional margin of error or claim representativeness");
     expect(packages).toContain("AAPOR's Transparency Initiative");
     expect(packages).toContain("ABS [sample design guide]");
+    expect(packages).toContain("## Respondent notice, privacy, and ethics");
+    expect(packages).toContain("material unresolved purpose, access, use, retention, or contact fact blocks fielding");
+    expect(packages).toContain("responsible ethics/HRPP/IRB office");
+    expect(packages).toContain("## Field monitoring and respondent burden");
+    expect(packages).toContain("KQA does not collect item display telemetry");
+    expect(packages).toContain("Synthetic responses can test code paths");
+    expect(packages).toContain("preceding instructions/questions");
+    expect(packages).toContain("AAPOR Responsible AI Integration in Survey Research report (2026)");
   });
 
   it("documents respondent navigation and custom-question focus targets once", async () => {
     const format = await readDoc("FORMAT.md");
     expect(format).toContain('data-kqa-question-id="QUESTION_ID"');
     expect(format).toContain("focus its first visible enabled control");
+    expect(format).toContain("clears the value and keeps any optional note");
+    expect(format).toContain("clear-answer");
+    expect(format).toContain("announces how many questions are shown or hidden");
     expect(format?.match(/KQA respondent shell adds \*\*Questions\*\* navigation/g)).toHaveLength(1);
   });
 
@@ -77,7 +88,7 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("risk-based release gate");
     expect(bundle).toContain("question-content rubric and cognitive pretest protocol");
     expect(bundle).toContain("sample plan");
-    expect(bundle).toContain("KQA's pre-submit **Check your answers** review");
+    expect(bundle).toContain("pre-submit **Check your answers** review");
     expect(bundle).toContain("does not simulate respondent input");
   });
 

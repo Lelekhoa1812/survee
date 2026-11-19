@@ -19,6 +19,8 @@ Before writing, make sure you know:
 | Who answers, and what the questionnaire is for | Ask once, briefly. Do not invent a purpose |
 | The questions, in order, with answer choices | If given as prose, list them back as a numbered table and proceed |
 | Which questions are mandatory and when they apply | Default to optional. Mark a question `required` only when the host cannot proceed without it, and use supported `when` rules when requiredness depends on an earlier choice |
+| Target completion time and collection window | Record the target and intended field period; say when either is unknown |
+| Respondent notice: purpose, access, use, retention, contact | Require host-verified facts and approval. Material unresolved privacy facts block fielding; do not invent consent or anonymity claims |
 | Existing ids and option values, if this replaces an earlier file | Reuse them exactly. See "Updating an existing questionnaire" |
 | Brand or tone | Default to the standard KQA look and plain Australian English |
 
@@ -55,6 +57,8 @@ When the questionnaire is new or a question could materially affect a decision, 
 For each questionnaire, document the target population and unit, sample frame/source, recruitment and selection method, who may be missed, eligibility rules, collection mode/language, and whether the purpose is qualitative learning or population estimation. Follow the sampling and reporting plan in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md#sampling-and-reporting-plan); do not claim representativeness or a margin of error the design cannot support.
 
 For a new or materially changed respondent flow, observe intended users completing the questionnaire end to end, then record task completion, hesitation, errors, recovery, and misunderstandings. This is different evidence from asking how a participant interprets one question. Cognitive probes and task observation can share a moderated session where practical; report the findings separately. If no representative task sessions occurred, report usability as untested; do not infer it from a prototype walkthrough, checker result, or screenshot.
+
+Before fielding, include a host-approved respondent notice covering purpose, access to identifiable answers, use, retention/deletion expectations, and contact route. If a material fact is unresolved, stop and have the accountable owner resolve it. If human-subjects research may be involved, route the determination to the host's responsible ethics/HRPP/IRB office; the agent does not decide. See the [respondent notice and ethics gate](INTERVIEW_PACKAGES.md#respondent-notice-privacy-and-ethics).
 
 ### Mapping common survey shapes
 

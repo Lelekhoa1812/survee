@@ -437,7 +437,7 @@ export function RespondentShell({ token }: { token: string }) {
           }
         >
           <div className="review-content">
-            <p className="muted">Check the answers below. After submission, your answers are locked; your host can reopen them if you need a change.</p>
+            <p className="muted">Check the answers below. You can clear an answer here; any optional note stays saved. After submission, your answers are locked; your host can reopen them if you need a change.</p>
             {counts.needsAttention.length || submitError ? (
               <p className="review-problems" role="alert">{submitError || "Resolve the marked answers before submitting."} Choose Answer or Edit to return to that question.</p>
             ) : null}
@@ -455,7 +455,10 @@ export function RespondentShell({ token }: { token: string }) {
                       {answer?.note && <p className="review-note"><strong>Note:</strong> {answer.note}</p>}
                       {problem && <p className="review-problem">{problem}</p>}
                     </div>
-                    <button className="btn" disabled={submitting} onClick={() => { focusQuestionAfterClose.current = question.id; setConfirming(false); }}>{answered ? "Edit" : "Answer"}</button>
+                    <div className="review-entry-actions">
+                      <button className="btn" disabled={submitting} onClick={() => { focusQuestionAfterClose.current = question.id; setConfirming(false); }}>{answered ? "Edit" : "Answer"}</button>
+                      {answered && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={`Clear answer to ${question.label}`} onClick={() => post({ type: "clear-answer", id: question.id })}>Clear</button>}
+                    </div>
                   </section>
                 );
               })}

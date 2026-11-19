@@ -486,13 +486,14 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .review-entry { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 16px 4px; border-bottom: 1px solid var(--line); }
 .review-entry:last-child { border-bottom: 0; }
 .review-entry-copy { min-width: 0; }
+.review-entry-actions { display: flex; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .review-entry h3 { font-size: 15px; font-weight: 600; line-height: 1.4; }
 .review-value, .review-note { margin-top: 6px; color: var(--ink-2); overflow-wrap: anywhere; }
 .review-problems, .review-problem { color: var(--danger); font-weight: 600; }
 .review-note { font-size: 13px; }
 .review-retention { font-size: 12px; }
 .modal.review-modal > .actions { position: sticky; bottom: 0; padding-top: 12px; border-top: 1px solid var(--line); background: var(--surface); }
-@media (max-width: 520px) { .modal.review-modal { padding: 18px; } .review-entry { gap: 10px; } .review-entry > .btn { flex-shrink: 0; } }
+@media (max-width: 520px) { .modal.review-modal { padding: 18px; } .review-entry { gap: 10px; } .review-entry-actions { max-width: 140px; } .review-entry-actions > .btn { flex-shrink: 0; } }
 .modal.key-permission-modal { grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
 .modal.key-permission-modal > .stack { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .modal.key-permission-modal > .stack > *, .modal.key-permission-modal fieldset, .modal.key-permission-modal .key-value-row { min-width: 0; }
