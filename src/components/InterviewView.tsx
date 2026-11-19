@@ -109,6 +109,7 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
           {!canManage && <p className="muted">Member access: interview setup and aggregate analysis only. Ask an owner or admin to manage respondents or change this interview.</p>}
         </div>
         {canManage && <div className="right row wrap">
+          <button className="btn sm" type="button" onClick={refresh} title="Reload participant progress, counts, and recent activity"><Icon name="refresh" size={15} /> Refresh progress</button>
           <button className="btn sm" onClick={() => setRenaming(true)}><Icon name="edit" size={15} /> Edit details</button>
           <button className="btn sm" onClick={toggleStatus} disabled={busy}>
             {busy ? <Spinner /> : <Icon name={interview.status === "open" ? "lock" : "refresh"} size={15} />}

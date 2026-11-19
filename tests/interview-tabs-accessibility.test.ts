@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InterviewView } from "../src/components/InterviewView";
 import type { InterviewData } from "../src/components/interview-types";
 
+const routerState = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }));
 vi.mock("next/link", () => ({ default: () => null }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => routerState }));
 vi.mock("../src/components/AnswersTab", () => ({ AnswersTab: () => null }));
 vi.mock("../src/components/AnalyticsTab", () => ({ AnalyticsTab: () => null }));
 vi.mock("../src/components/ExportTab", () => ({ ExportTab: () => null }));
@@ -29,6 +30,7 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  routerState.refresh.mockClear();
   window.sessionStorage.clear();
   host = document.createElement("div");
   document.body.append(host);
@@ -112,6 +114,15 @@ describe("interview section tabs", () => {
     expect(host.textContent).not.toContain("Close interview");
     expect(host.textContent).not.toContain("Delete this interview");
     expect(host.textContent).not.toContain("Add people");
+    expect(host.textContent).not.toContain("Refresh progress");
     expect(host.textContent).toContain("Member access: interview setup and aggregate analysis only.");
+  });
+
+  it("lets an interview manager refresh the live status snapshot", () => {
+    renderInterview();
+    const refresh = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Refresh progress"))!;
+    expect(refresh.type).toBe("button");
+    act(() => refresh.click());
+    expect(routerState.refresh).toHaveBeenCalledOnce();
   });
 });

@@ -2,6 +2,7 @@ export type DesignSurface = "all" | "questionnaire" | "host" | "analytics";
 
 const PRINCIPLES = [
   { id: "task-first", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make the task obvious", guidance: "Lead with the user's current task, the next useful action, and the current state. Keep labels concrete, use plain language, and explain consequences before destructive or irreversible actions." },
+  { id: "host-freshness", surfaces: ["all", "host"], title: "Make live status freshness clear", guidance: "Participant progress and activity are snapshots, not a live stream. Provide a clear manual refresh where live status matters, identify what it refreshes, and do not imply automatic or real-time updates." },
   { id: "theme-fit", surfaces: ["all", "questionnaire", "host"], title: "Fit the intended theme", guidance: "Use the supplied brand, audience, and tone as constraints. Define a small set of semantic color, type, spacing, and shape tokens, then reuse them. Keep contrast and focus indicators legible when the theme changes; do not encode meaning by color alone." },
   { id: "brief-specific-visuals", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make visual choices specific to the brief", guidance: "Choose palette, type, layout, and motion for this product, audience, and task. Treat familiar product patterns as options rather than defaults; keep a distinctive motif only when it supports the brief and remove decoration that adds no meaning. The user's direction takes precedence over this heuristic." },
   { id: "respondent-control", surfaces: ["all", "questionnaire"], title: "Keep respondents oriented and in control", guidance: "Use clear section titles, concise progress, save state, and submission consequences. Make optional and required questions distinct. Preserve stable question and option ids across versions, and disclose when a change can affect stored answers." },
@@ -45,6 +46,7 @@ const TASK_BASED_USABILITY_METHOD = {
 
 const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text: string }[] = [
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check the primary task, next action, and outcome are clear without relying on color or animation." },
+  { surfaces: ["host"], text: "For live interview status, can a manager refresh the participant progress snapshot, and is it clear that updates are manual rather than real time?" },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check semantic labels, keyboard-only operation, focus visibility, validation messages, and save/submission announcements." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check focus is not obscured by fixed or sticky UI, dragging has a non-drag alternative, and errors identify the field and explain a correction." },
   { surfaces: ["questionnaire"], text: "Prefer native radio controls; if a custom radio group is necessary, verify the WAI-ARIA APG arrow-key and Tab behavior." },
@@ -211,7 +213,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/18",
+    policyVersion: "kqa-design/19",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [
