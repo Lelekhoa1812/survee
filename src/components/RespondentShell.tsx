@@ -26,6 +26,7 @@ interface Loaded {
 type Patch = Record<string, { value?: unknown; note?: unknown }>;
 type PendingRecordOperation = { operationId: string; operation: RepeatRecordOperation };
 type RejectedRecordDraft = { operationId: string; operation: RepeatRecordOperation; reason: string };
+type DraftRecoveryReason = "version" | "locked" | "record-conflict";
 
 export function applyRecordOperation(groups: RepeatRecordMap, operation: RepeatRecordOperation): RepeatRecordMap {
   const next = { ...groups };
@@ -131,6 +132,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const [closed, setClosed] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [staleDraft, setStaleDraft] = useState<{ question: Question; patch: Patch[string] }[]>([]);
+  const [draftRecoveryReason, setDraftRecoveryReason] = useState<DraftRecoveryReason | null>(null);
   const [conflictDraftOpen, setConflictDraftOpen] = useState(false);
   const [counts, setCounts] = useState({ answered: 0, total: 0, needsAttention: [] as { question: Question; reason: string }[] });
   const [confirming, setConfirming] = useState(false);
@@ -164,12 +166,17 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const eligibility = useRef<Record<string, boolean>>({});
   const pending = useRef<Patch>({});
   const pendingRecordOperations = useRef<PendingRecordOperation[]>([]);
+  const recordConflictQuestionsRef = useRef<Set<string>>(new Set());
+  const recordConflictRefreshFailedRef = useRef<Set<string>>(new Set());
+  const deferredRecordOperationsRef = useRef<PendingRecordOperation[]>([]);
   const rejectedRecordDraftsRef = useRef<RejectedRecordDraft[]>([]);
   const focusQuestionAfterClose = useRef<string | null>(null);
   const submittedStatusRef = useRef<HTMLDivElement>(null);
   const submittedFocusPending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+  const handleRecordConflictRef = useRef<(batch: Patch, records: PendingRecordOperation[], issues: { questionId: string; rowId?: string; fieldId?: string; reason: string }[]) => void>(() => {});
   const inflight = useRef(false);
   const lockedRef = useRef(false);
   const attempts = useRef(0);
@@ -364,6 +371,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       recount();
     }
     setStaleDraft(draft);
+    setDraftRecoveryReason("version");
     pending.current = {};
     pendingRecordOperations.current = [];
     clearTimeout(timer.current);
@@ -373,6 +381,42 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     setSave("idle");
     applyLock(true);
   }, [applyLock, post, recount]);
+
+  const rememberRejectedRecords = useCallback((operations: PendingRecordOperation[], reason: string) => {
+    const unique = operations.filter((item, index, all) => all.findIndex((candidate) => candidate.operationId === item.operationId) === index);
+    const newDrafts = unique.filter((item) => !rejectedRecordDraftsRef.current.some((draft) => draft.operationId === item.operationId))
+      .map(({ operationId, operation }) => ({ operationId, operation, reason }));
+    if (!newDrafts.length) return;
+    rejectedRecordDraftsRef.current = [...rejectedRecordDraftsRef.current, ...newDrafts];
+    setRejectedRecordDrafts(rejectedRecordDraftsRef.current);
+    recordGroupsRef.current = pendingRecordOperations.current.reduce((groups, item) => applyRecordOperation(groups, item.operation), authoritativeRecordGroupsRef.current);
+    setRecordGroups(recordGroupsRef.current);
+    post({ type: "record-rejected", recordGroups: recordGroupsRef.current, rejectedOperationIds: newDrafts.map((item) => item.operationId), recordErrors: [] });
+    recount();
+  }, [post, recount]);
+
+  const handleLockedWrite = useCallback((failedBatch: Patch, failedRecords: PendingRecordOperation[]) => {
+    const rejected = mergePatches(failedBatch, pending.current);
+    const existing = new Map(staleDraftRef.current.map((item) => [item.question.id, item]));
+    for (const [id, patch] of Object.entries(rejected)) {
+      const question = questions.current.find((item) => item.id === id);
+      if (!question) continue;
+      const previous = existing.get(id);
+      existing.set(id, { question, patch: previous ? { ...previous.patch, ...patch } : patch });
+    }
+    const draft = [...existing.values()];
+    staleDraftRef.current = draft;
+    setStaleDraft(draft);
+    setDraftRecoveryReason("locked");
+    const rejectedRecords = [...failedRecords, ...pendingRecordOperations.current];
+    pending.current = {};
+    pendingRecordOperations.current = [];
+    rememberRejectedRecords(rejectedRecords, t("lockedError"));
+    clearTimeout(timer.current);
+    clearTimeout(retry.current);
+    setSave("failed");
+    applyLock(true);
+  }, [applyLock, rememberRejectedRecords, t]);
 
   // ---- load
   const load = useCallback(async () => {
@@ -384,6 +428,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     refreshRequiredRef.current = false;
     staleDraftRef.current = [];
     setStaleDraft([]);
+    setDraftRecoveryReason(null);
     setConflictDraftOpen(false);
     setRefreshRequired(false);
     answers.current = res.data.answers ?? {};
@@ -416,8 +461,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     inflight.current = true;
     setSave("saving");
     const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string }[]; recordGroups?: RepeatRecordMap; recordErrors?: { questionId: string; rowId?: string; fieldId?: string; reason: string }[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) } });
-    inflight.current = false;
     if (res.ok) {
+      inflight.current = false;
       attempts.current = 0;
       if (res.data.recordGroups) {
         authoritativeRecordGroupsRef.current = { ...authoritativeRecordGroupsRef.current, ...res.data.recordGroups };
@@ -431,6 +476,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       return;
     }
     if (res.status === 0 || res.status >= 500 || res.status === 429) {
+      inflight.current = false;
       // Network or server trouble: keep the changes and try again, newest edits winning.
       pending.current = mergePatches(batch, pending.current);
       pendingRecordOperations.current = [...recordBatch, ...pendingRecordOperations.current];
@@ -440,17 +486,29 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       return;
     }
     if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
+      inflight.current = false;
       handleVersionConflict(batch, recordBatch);
       return;
     }
-    if (res.status === 403 || res.status === 409) {
-      setSave("idle");
-      pendingRecordOperations.current = [...recordBatch, ...pendingRecordOperations.current];
-      applyLock(true);
+    if (res.status === 403) {
+      inflight.current = false;
+      handleLockedWrite(batch, recordBatch);
+      toast(t("lockedError"), "err", localeMeta);
+      return;
+    }
+    if (res.status === 409 && (res.data.code === "record_row_conflict" || res.data.code === "record_field_conflict")) {
+      inflight.current = true;
+      handleRecordConflictRef.current(batch, recordBatch, res.data.recordErrors ?? []);
+      return;
+    }
+    if (res.status === 409) {
+      inflight.current = false;
+      handleLockedWrite(batch, recordBatch);
       toast(t("lockedError"), "err", localeMeta);
       return;
     }
     // 400/404: the server refused a value. Show why, then put the page back to what is actually saved.
+    inflight.current = false;
     setSave("error");
     toast(t("couldNotSave"), "err", localeMeta);
     const reasons = res.data.recordErrors ?? [];
@@ -498,7 +556,67 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         timer.current = setTimeout(flush, 350);
       }
     }
-  }, [token, applyLock, handleVersionConflict, post, recount, toast, locale]);
+  }, [token, applyLock, handleVersionConflict, handleLockedWrite, post, recount, toast, locale]);
+
+  const handleRecordConflict = useCallback(async (failedBatch: Patch, failedRecords: PendingRecordOperation[], issues: { questionId: string; rowId?: string; fieldId?: string; reason: string }[]) => {
+    // A stale repeat-row revision rejects the complete write transaction. Preserve the record
+    // operations for review, but salvage scalar answers by retrying them without the stale rows.
+    const rejectedRecords = [...failedRecords, ...pendingRecordOperations.current];
+    const conflictQuestionIds = new Set(rejectedRecords.map((item) => item.operation.questionId));
+    for (const questionId of conflictQuestionIds) {
+      recordConflictQuestionsRef.current.add(questionId);
+      recordConflictRefreshFailedRef.current.delete(questionId);
+    }
+    deferredRecordOperationsRef.current = [];
+    pendingRecordOperations.current = [];
+    rememberRejectedRecords(rejectedRecords, t("couldNotSave"));
+    setDraftRecoveryReason("record-conflict");
+    pending.current = mergePatches(failedBatch, pending.current);
+    setSave(Object.keys(pending.current).length ? "saving" : "failed");
+
+    let refreshed = false;
+    try {
+      const fresh = await api<Loaded>(`/api/p/${token}`);
+      if (fresh.ok && fresh.data.answers) {
+        refreshed = true;
+        const restoredAnswers: AnswerMap = { ...fresh.data.answers };
+        for (const [id, patch] of Object.entries(pending.current)) {
+          const answer = { ...(restoredAnswers[id] ?? { updatedAt: new Date().toISOString() }) };
+          if ("value" in patch) { if (hasValue(patch.value)) answer.value = patch.value as AnswerValue; else delete answer.value; }
+          if ("note" in patch) { if (typeof patch.note === "string" && patch.note !== "") answer.note = patch.note; else delete answer.note; }
+          if (answer.value === undefined && answer.note === undefined) delete restoredAnswers[id]; else restoredAnswers[id] = answer;
+        }
+        answers.current = restoredAnswers;
+        authoritativeRecordGroupsRef.current = fresh.data.recordGroups ?? {};
+        recordGroupsRef.current = pendingRecordOperations.current.reduce((groups, item) => applyRecordOperation(groups, item.operation), authoritativeRecordGroupsRef.current);
+        setRecordGroups(recordGroupsRef.current);
+        if (fresh.data.progress?.eligible) eligibility.current = fresh.data.progress.eligible;
+        post({ type: "answers", answers: restoredAnswers });
+        recount();
+      }
+    } finally {
+      const deferred = deferredRecordOperationsRef.current;
+      deferredRecordOperationsRef.current = [];
+      if (refreshed) {
+        for (const questionId of conflictQuestionIds) {
+          recordConflictRefreshFailedRef.current.delete(questionId);
+          recordConflictQuestionsRef.current.delete(questionId);
+        }
+      } else {
+        for (const questionId of conflictQuestionIds) recordConflictRefreshFailedRef.current.add(questionId);
+      }
+      rememberRejectedRecords(deferred, t("couldNotSave"));
+      post({ type: "record-rejected", recordGroups: recordGroupsRef.current, rejectedOperationIds: [...rejectedRecords, ...deferred].map((item) => item.operationId), recordErrors: issues });
+      inflight.current = false;
+      if (Object.keys(pending.current).length || pendingRecordOperations.current.length) {
+        setSave("saving");
+        clearTimeout(timer.current);
+        queueMicrotask(() => { void flushRef.current(); });
+      }
+    }
+  }, [post, recount, rememberRejectedRecords, t, token]);
+  handleRecordConflictRef.current = (batch, records, issues) => { void handleRecordConflict(batch, records, issues); };
+  flushRef.current = flush;
 
   const queue = useCallback((id: string, part: { value?: unknown; note?: unknown }) => {
     if (lockedRef.current) return;
@@ -552,6 +670,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       } else if (m.type === "record-operation" && typeof m.operationId === "string" && m.operation && typeof m.operation === "object" && !lockedRef.current) {
         const operation = m.operation as RepeatRecordOperation;
         if (!["add", "set", "clear", "remove"].includes(operation.op) || typeof operation.questionId !== "string" || typeof operation.rowId !== "string") return;
+        if (recordConflictQuestionsRef.current.has(operation.questionId)) {
+          if (!deferredRecordOperationsRef.current.some((item) => item.operationId === m.operationId)) deferredRecordOperationsRef.current.push({ operationId: m.operationId, operation });
+          if (recordConflictRefreshFailedRef.current.has(operation.questionId)) rememberRejectedRecords([{ operationId: m.operationId, operation }], t("couldNotSave"));
+          return;
+        }
         if (pendingRecordOperations.current.some((item) => item.operationId === m.operationId) || rejectedRecordDraftsRef.current.some((item) => item.operationId === m.operationId)) return;
         recordGroupsRef.current = applyRecordOperation(recordGroupsRef.current, operation);
         setRecordGroups(recordGroupsRef.current);
@@ -573,7 +696,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [data, flush, guidedQuestionId, guidedSectionId, locale, post, queue, recount]);
+  }, [data, flush, guidedQuestionId, guidedSectionId, locale, post, queue, recount, rememberRejectedRecords, t]);
 
   useEffect(() => {
     if (frameReady) post({ type: "locale", locale, messages: respondentBridgeMessages(locale) });
@@ -592,11 +715,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         pendingRecordOperations.current = [];
         inflight.current = true;
         setSave("saving");
-        void api<{ savedAt?: string; code?: string; recordGroups?: RepeatRecordMap }>(`/api/p/${token}/answers`, {
+        void api<{ savedAt?: string; code?: string; recordGroups?: RepeatRecordMap; recordErrors?: { questionId: string; rowId?: string; fieldId?: string; reason: string }[] }>(`/api/p/${token}/answers`, {
           method: "PUT", body: { version: version.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) }, keepalive: true,
         }).then((res) => {
-          inflight.current = false;
           if (res.ok) {
+            inflight.current = false;
             attempts.current = 0;
             if (res.data.recordGroups) {
               authoritativeRecordGroupsRef.current = { ...authoritativeRecordGroupsRef.current, ...res.data.recordGroups };
@@ -611,9 +734,28 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
             return;
           }
           if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
+            inflight.current = false;
             handleVersionConflict(batch, recordBatch);
             return;
           }
+          if (res.status === 403) {
+            inflight.current = false;
+            handleLockedWrite(batch, recordBatch);
+            if (document.visibilityState === "visible") toast(t("lockedError"), "err", localeMeta);
+            return;
+          }
+          if (res.status === 409 && (res.data.code === "record_row_conflict" || res.data.code === "record_field_conflict")) {
+            inflight.current = true;
+            handleRecordConflictRef.current(batch, recordBatch, res.data.recordErrors ?? []);
+            return;
+          }
+          if (res.status === 409) {
+            inflight.current = false;
+            handleLockedWrite(batch, recordBatch);
+            if (document.visibilityState === "visible") toast(t("lockedError"), "err", localeMeta);
+            return;
+          }
+          inflight.current = false;
           pending.current = mergePatches(batch, pending.current);
           pendingRecordOperations.current = [...recordBatch, ...pendingRecordOperations.current];
           if (res.status === 0 || res.status >= 500 || res.status === 429) {
@@ -622,7 +764,6 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
             retry.current = setTimeout(flush, Math.min(30000, 1500 * 2 ** Math.min(attempts.current, 5)));
           } else {
             setSave("failed");
-            if (res.status === 403 || res.status === 409) applyLock(true);
             if (document.visibilityState === "visible") toast(t("notSavedYet"), "err", localeMeta);
           }
         });
@@ -633,7 +774,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     document.addEventListener("visibilitychange", hide);
     window.addEventListener("pagehide", hide);
     return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); document.removeEventListener("visibilitychange", hide); window.removeEventListener("pagehide", hide); clearTimeout(timer.current); clearTimeout(retry.current); };
-  }, [applyLock, flush, handleVersionConflict, post, token, toast, locale]);
+  }, [applyLock, flush, handleVersionConflict, handleLockedWrite, post, token, toast, locale]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || pendingRecordOperations.current.length || rejectedRecordDraftsRef.current.length || inflight.current || staleDraftRef.current.length || Object.keys(lengthDrafts).length) { e.preventDefault(); e.returnValue = ""; } };
@@ -689,7 +830,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const conflictDraftText = JSON.stringify({
     format: "kqa-unsaved-draft/1",
     questionnaireVersion: version.current,
-    warning: t("previousDraftWarning"),
+    warning: draftRecoveryReason === "version" ? t("previousDraftWarning") : t("unsavedTitle"),
     changes: staleDraft.map(({ question, patch }) => ({
       questionId: question.id,
       question: question.label,
@@ -700,6 +841,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       } : {}),
       ...(Object.prototype.hasOwnProperty.call(patch, "note") ? { note: patch.note, displayNote: patch.note === null ? t("noteCleared") : patch.note } : {}),
     })),
+    recordChanges: rejectedRecordDrafts.map(({ operationId, operation, reason }) => ({ operationId, operation, reason })),
   }, null, 2);
 
   function continueGuided() {
@@ -741,7 +883,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   }
 
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
-  const hasUnsavedChanges = Object.keys(pending.current).length > 0 || pendingRecordOperations.current.length > 0 || rejectedRecordDrafts.length > 0;
+  const hasUnsavedChanges = Object.keys(pending.current).length > 0 || pendingRecordOperations.current.length > 0 || rejectedRecordDrafts.length > 0 || staleDraft.length > 0;
   const firstLengthDraft = Object.values(lengthDrafts)[0];
   const lengthDraftHidden = firstLengthDraft ? eligibility.current[firstLengthDraft.question.id] === false : false;
   const lengthDraftSourceId = firstLengthDraft?.question.when?.all?.[0]?.question ?? firstLengthDraft?.question.when?.any?.[0]?.question;
@@ -753,7 +895,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     else if (guidedMode && target?.section) goToGuidedGroup(target.section, target.id);
     else post({ type: "focus-question", id: lengthDraftFocusId });
   };
-  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? t("locked") : t("autosaveOn"), saving: t("saving"), saved: t("saved"), error: t("retrying"), failed: t("notSaved"), offline: hasUnsavedChanges ? t("offlinePending") : t("offline") };
+  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted || locked ? t("locked") : t("autosaveOn"), saving: t("saving"), saved: t("saved"), error: t("retrying"), failed: t("notSaved"), offline: hasUnsavedChanges ? t("offlinePending") : t("offline") };
+  const currentSaveLabel = staleDraft.length || rejectedRecordDrafts.length ? t("notSaved") : SAVE_LABEL[save];
   const reviewQuestions = displayedQuestions.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
   const retainedAnswers = displayedQuestions.filter((question) => eligibility.current[question.id] === false && (
@@ -854,7 +997,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
                 </nav>
               )}
             </div>
-            <span className={`save-state ${firstLengthDraft ? "failed" : save}`} role="status" aria-live="polite" title={firstLengthDraft ? t("overLimitTitle") : hasUnsavedChanges ? t("unsavedTitle") : lastSaved ? t("lastSaved", { time: respondentTime(locale, lastSaved) }) : SAVE_LABEL[save]}><i /><span className="rs-save-label">{firstLengthDraft ? t("textNotSaved") : SAVE_LABEL[save]}</span></span>
+            <span className={`save-state ${firstLengthDraft || currentSaveLabel === t("notSaved") ? "failed" : save}`} role="status" aria-live="polite" title={firstLengthDraft ? t("overLimitTitle") : hasUnsavedChanges ? t("unsavedTitle") : lastSaved ? t("lastSaved", { time: respondentTime(locale, lastSaved) }) : currentSaveLabel}><i /><span className="rs-save-label">{firstLengthDraft ? t("textNotSaved") : currentSaveLabel}</span></span>
             <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || Object.keys(lengthDrafts).length > 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> {t("submitted")}</> : t("reviewAnswers")}</button>
           </div>
         </div>
@@ -865,8 +1008,9 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         {submitted && <><Icon name="check" size={16} /> {t("submittedMessage")}</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> {t("closedMessage")}</>}
       </div>
+      {draftRecoveryReason === "locked" && (staleDraft.length > 0 || rejectedRecordDrafts.length > 0) && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("lockedError")} {t("unsavedTitle")} <button className="btn" type="button" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button></div>}
       {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> <LocalizedMessage locale={locale} message={lengthDraftHidden ? "lengthHidden" : "lengthOver"} values={{ question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max }} valueLang={questionnaireLanguage} /> <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? t("reviewEarlier") : t("editResponse")}</button></div>}
-      {rejectedRecordDrafts.length > 0 && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("repeatRejectedCount", { count: rejectedRecordDrafts.length })} <button className="btn" type="button" onClick={() => setConfirming(true)}>{t("repeatRejectedTitle")}</button></div>}
+      {rejectedRecordDrafts.length > 0 && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("repeatRejectedCount", { count: rejectedRecordDrafts.length })} <button className="btn" type="button" onClick={() => setConfirming(true)}>{t("repeatRejectedTitle")}</button>{draftRecoveryReason === "record-conflict" && <button className="btn" type="button" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button>}</div>}
 
       {guidedMode && activeGuidedGroup && (
         <section className="rs-guided" aria-label={t("questionnaireSections")}>
@@ -1044,7 +1188,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         </Modal>
       )}
 
-      {conflictDraftOpen && staleDraft.length > 0 && (
+      {conflictDraftOpen && (staleDraft.length > 0 || rejectedRecordDrafts.length > 0) && (
         <Modal
           title={t("conflictTitle")}
           onClose={() => setConflictDraftOpen(false)}
@@ -1052,12 +1196,12 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           actions={
             <>
               <button className="btn" onClick={() => setConflictDraftOpen(false)}>{t("keepReviewing")}</button>
-              <button className="btn accent" onClick={reloadLatestVersion}>{t("reloadLatest")}</button>
+              {draftRecoveryReason === "version" && <button className="btn accent" onClick={reloadLatestVersion}>{t("reloadLatest")}</button>}
             </>
           }
         >
           <div className="review-content">
-            <p className="muted">{t("conflictDescription")}</p>
+            <p className="muted">{draftRecoveryReason === "version" ? t("conflictDescription") : draftRecoveryReason === "locked" ? <>{t("lockedError")} {t("unsavedTitle")}</> : t("repeatRejectedDescription")}</p>
             <div className="review-list">
               {staleDraft.map(({ question, patch }) => (
                 <section className="review-entry" key={question.id}>
@@ -1068,6 +1212,13 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
                   </div>
                 </section>
               ))}
+              {rejectedRecordDrafts.map(({ operationId, operation, reason }) => {
+                const question = questions.current.find((item) => item.id === operation.questionId);
+                const field = question?.fields?.find((item) => "fieldId" in operation && item.id === operation.fieldId);
+                return <section className="review-entry" key={operationId}>
+                  <div className="review-entry-copy"><h3><bdi lang={questionnaireLanguage} dir="auto">{question?.label ?? operation.questionId}</bdi>{field ? ` · ${field.label}` : ""}</h3><p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{operation.op === "set" ? String(operation.value) : operation.op}</p><p className="review-problem">{reason}</p></div>
+                </section>;
+              })}
             </div>
             <div className="row between"><label htmlFor="conflict-draft-copy">{t("copyableDraft")}</label><CopyButton text={conflictDraftText} label={t("copyDraft")} done={t("copied")} failure={t("copyBlocked")} toastMetadata={localeMeta} /></div>
             <textarea id="conflict-draft-copy" className="conflict-draft-copy" readOnly rows={8} value={conflictDraftText} />

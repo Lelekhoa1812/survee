@@ -470,6 +470,95 @@ describe("respondent required-answer recovery", () => {
     vi.useRealTimers();
   });
 
+  it("preserves a rejected scalar draft after a locked save without retrying it", async () => {
+    vi.useFakeTimers();
+    state.api.mockImplementation(async (url: string) => url.endsWith("/answers")
+      ? { ok: false, status: 403, data: { ok: false, error: "locked" } }
+      : { ok: true, status: 200, data: {
+          ok: true, participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+          version: 7, title: "Study questions", questions: [{ id: "answer", type: "text", label: "Answer" }], answers: {},
+        } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "keep this draft" }, origin: "null", source: frame.contentWindow }));
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    const banner = host.querySelector('[role="alert"]')!;
+    expect(banner.textContent).toContain("Review unsaved changes");
+    expect(host.querySelector(".save-state")?.textContent).toContain("Not saved");
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(1);
+    const leave = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leave);
+    expect(leave.defaultPrevented).toBe(true);
+    await act(async () => Array.from(banner.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    expect(host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain('"value": "keep this draft"');
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it("keeps a locked page-exit draft copyable", async () => {
+    vi.useFakeTimers();
+    state.api.mockImplementation(async (url: string) => url.endsWith("/answers")
+      ? { ok: false, status: 403, data: { ok: false, error: "locked" } }
+      : { ok: true, status: 200, data: {
+          ok: true, participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+          version: 7, title: "Study questions", questions: [{ id: "answer", type: "text", label: "Answer" }], answers: {},
+        } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => { window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "exit draft" }, origin: "null", source: frame.contentWindow })); });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await Promise.resolve(); });
+    const banner = host.querySelector('[role="alert"]')!;
+    expect(banner.textContent).toContain("Review unsaved changes");
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(1);
+    await act(async () => Array.from(banner.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    expect(host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain('"value": "exit draft"');
+    const leave = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leave);
+    expect(leave.defaultPrevented).toBe(true);
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    vi.useRealTimers();
+  });
+
+  it("recovers a page-exit record conflict and saves only scalar edits", async () => {
+    vi.useFakeTimers();
+    let loads = 0;
+    state.api.mockImplementation(async (url: string, options?: any) => {
+      if (url.endsWith("/answers")) {
+        if (options?.body?.recordOperations?.length) return { ok: false, status: 409, data: { ok: false, code: "record_field_conflict", recordErrors: [{ questionId: "records", rowId: "row-1", fieldId: "name", reason: "stale" }] } };
+        return { ok: true, status: 200, data: { savedAt: "2026-11-20T00:00:00.000Z", recordGroups: { records: [] } } };
+      }
+      loads += 1;
+      return { ok: true, status: 200, data: {
+        ok: true, participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+        version: 7, title: "Study questions",
+        questions: [{ id: "answer", type: "text", label: "Answer" }, { id: "records", type: "repeat", label: "Records", fields: [] }],
+        answers: { answer: { value: "server", updatedAt: "2026-11-20T00:00:00.000Z" } }, recordGroups: { records: [] },
+      } };
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const framePost = vi.fn();
+    Object.defineProperty(frame.contentWindow, "postMessage", { configurable: true, value: framePost });
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "exit scalar" }, origin: "null", source: frame.contentWindow }));
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "record-operation", operationId: "exit-record", operation: { op: "add", questionId: "records", rowId: "row-1" } }, origin: "null", source: frame.contentWindow }));
+    });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await Promise.resolve(); await Promise.resolve(); });
+    expect(loads).toBe(2);
+    const writes = state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"));
+    expect(writes).toHaveLength(2);
+    expect(writes[1][1].body).toMatchObject({ answers: { answer: { value: "exit scalar" } }, recordOperations: [] });
+    const rejected = framePost.mock.calls.map(([message]) => message as any).filter((message) => message.type === "record-rejected").flatMap((message) => message.rejectedOperationIds);
+    expect(rejected).toContain("exit-record");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Review unsaved changes");
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    vi.useRealTimers();
+  });
+
   it("keeps the newest in-flight edits and separate question changes in the recovery snapshot", async () => {
     vi.useFakeTimers();
     let resolveSave!: (value: { ok: boolean; status: number; data: { error: string; code: string } }) => void;
@@ -520,6 +609,94 @@ describe("respondent required-answer recovery", () => {
     expect(draft).toContain('"value": "separate draft"');
     expect(draft).not.toContain("first draft");
     expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it("serializes record-conflict refresh and preserves edits queued while it is pending", async () => {
+    vi.useFakeTimers();
+    let resolveRefresh!: (value: any) => void;
+    let loads = 0;
+    const saved = (answers: Record<string, unknown> = {}) => ({ ok: true, status: 200, data: {
+      ok: true, participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+      version: 7, title: "Study questions",
+      questions: [{ id: "answer", type: "text", label: "Answer" }, { id: "records", type: "repeat", label: "Records", fields: [] }],
+      answers, recordGroups: { records: [] },
+    } });
+    state.api.mockImplementation((url: string, options?: any) => {
+      if (url.endsWith("/answers")) {
+        if (options?.body?.recordOperations?.length) return Promise.resolve({ ok: false, status: 409, data: { ok: false, code: "record_row_conflict", recordErrors: [{ questionId: "records", reason: "stale" }] } });
+        return Promise.resolve({ ok: true, status: 200, data: { savedAt: "2026-11-20T00:00:00.000Z", recordGroups: { records: [] } } });
+      }
+      loads += 1;
+      return loads === 1 ? Promise.resolve(saved()) : new Promise((resolve) => { resolveRefresh = resolve; });
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const framePost = vi.fn();
+    Object.defineProperty(frame.contentWindow, "postMessage", { configurable: true, value: framePost });
+    const send = (data: Record<string, unknown>) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, ...data }, origin: "null", source: frame.contentWindow }));
+    await act(async () => {
+      send({ type: "set", id: "answer", value: "before conflict" });
+      send({ type: "record-operation", operationId: "record-old", operation: { op: "add", questionId: "records", rowId: "row-old" } });
+      await vi.advanceTimersByTimeAsync(650);
+      await Promise.resolve();
+    });
+    expect(loads).toBe(2);
+    await act(async () => {
+      send({ type: "set", id: "answer", value: "newer during refresh" });
+      send({ type: "record-operation", operationId: "record-later", operation: { op: "add", questionId: "records", rowId: "row-later" } });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      resolveRefresh(saved({ answer: { value: "server value", updatedAt: "2026-11-20T00:00:00.000Z" } }));
+      await Promise.resolve();
+    });
+    const rejected = framePost.mock.calls.map(([message]) => message as any).filter((message) => message.type === "record-rejected").flatMap((message) => message.rejectedOperationIds);
+    expect(rejected).toContain("record-old");
+    expect(rejected).toContain("record-later");
+    await act(async () => { await Promise.resolve(); });
+    const writes = state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"));
+    expect(writes).toHaveLength(2);
+    expect(writes[1][1].body).toMatchObject({ answers: { answer: { value: "newer during refresh" } }, recordOperations: [] });
+    expect(framePost.mock.calls.map(([message]) => message as any).filter((message) => message.type === "answers").at(-1).answers.answer.value).toBe("newer during refresh");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Review unsaved changes");
+    vi.useRealTimers();
+  });
+
+  it("keeps conflicted repeat edits in review when the authoritative refresh fails", async () => {
+    vi.useFakeTimers();
+    let loads = 0;
+    state.api.mockImplementation(async (url: string) => {
+      if (url.endsWith("/answers")) return { ok: false, status: 409, data: { ok: false, code: "record_row_conflict", recordErrors: [{ questionId: "records", reason: "stale" }] } };
+      loads += 1;
+      if (loads > 1) return { ok: false, status: 503, data: { ok: false, error: "temporarily unavailable" } };
+      return { ok: true, status: 200, data: {
+        ok: true, participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" },
+        version: 7, title: "Study questions",
+        questions: [{ id: "records", type: "repeat", label: "Records", fields: [] }, { id: "other-records", type: "repeat", label: "Other records", fields: [] }], answers: {}, recordGroups: { records: [], "other-records": [] },
+      } };
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const framePost = vi.fn();
+    Object.defineProperty(frame.contentWindow, "postMessage", { configurable: true, value: framePost });
+    const send = (operationId: string, questionId: string, rowId: string) => window.dispatchEvent(new MessageEvent("message", { data: {
+      kqa: 1, type: "record-operation", operationId, operation: { op: "add", questionId, rowId },
+    }, origin: "null", source: frame.contentWindow }));
+    await act(async () => { send("record-stale", "records", "row-stale"); await vi.advanceTimersByTimeAsync(650); await Promise.resolve(); });
+    expect(loads).toBe(2);
+    await act(async () => { send("record-after-failed-refresh", "records", "row-new"); send("other-question-op", "other-records", "row-other"); await vi.advanceTimersByTimeAsync(650); await Promise.resolve(); });
+    expect(loads).toBe(3);
+    await act(async () => { send("record-after-second-failed-refresh", "records", "row-newer"); await Promise.resolve(); });
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(2);
+    const rejected = framePost.mock.calls.map(([message]) => message as any).filter((message) => message.type === "record-rejected").flatMap((message) => message.rejectedOperationIds);
+    expect(rejected).toContain("record-stale");
+    expect(rejected).toContain("record-after-failed-refresh");
+    expect(rejected).toContain("other-question-op");
+    expect(rejected).toContain("record-after-second-failed-refresh");
+    const banner = host.querySelector('[role="alert"]')!;
+    await act(async () => Array.from(banner.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    expect(host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain("record-after-failed-refresh");
     vi.useRealTimers();
   });
 
