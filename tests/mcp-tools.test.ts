@@ -205,7 +205,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
-    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/8");
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/9");
     expect(body.result.structuredContent.packageCatalog).toHaveLength(18);
     expect(body.result.structuredContent.packageCatalog[0]).toMatchObject({
       id: "product-discovery",
@@ -371,6 +371,7 @@ describe("MCP tools", () => {
     const res = await call("get_design_guidance", { surface: "questionnaire" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: {
       policyVersion?: string;
+      productConstraints?: string[];
       principles?: { id: string; guidance: string }[];
       sources?: { name: string; url?: string; revision?: string; contentSha256?: string }[];
       designPlan?: {
@@ -389,7 +390,8 @@ describe("MCP tools", () => {
       visualProfile?: Record<string, unknown>;
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/27");
+    expect(body.result.structuredContent.policyVersion).toBe("kqa-design/28");
+    expect(body.result.structuredContent.productConstraints?.join(" ")).toContain("KQA supports bounded native `repeat` groups");
     expect(body.result.structuredContent.designPlan?.output?.fields).toContain("reviewEvidence");
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix).toMatchObject({ required: true });
     expect(body.result.structuredContent.designPlan?.output?.reviewEvidenceMatrix?.columns?.map(({ name }) => name)).toContain("limitationUntestedReason");
@@ -439,7 +441,7 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { profileVersion?: string; policyVersion?: string; sourceFormat?: string; surface?: string; proposedMappings?: { role: string }[]; contrastChecks?: { status: string }[]; integrationProposal?: { status: string; cssOverlay: string | null } } } };
 
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/27", sourceFormat: "css", surface: "host" });
+    expect(body.result.structuredContent).toMatchObject({ profileVersion: "kqa-design-profile/2", policyVersion: "kqa-design/28", sourceFormat: "css", surface: "host" });
     expect(body.result.structuredContent.proposedMappings?.map(({ role }) => role)).toContain("color.canvas");
     expect(body.result.structuredContent.contrastChecks?.every(({ status }) => status === "evaluated")).toBe(true);
     expect(body.result.structuredContent.integrationProposal).toMatchObject({ status: "proposal_only", cssOverlay: expect.stringContaining("--bg: #ffffff") });

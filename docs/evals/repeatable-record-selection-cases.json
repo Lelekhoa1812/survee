@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-repeatable-record-selection/1",
+  "benchmarkVersion": "kqa-repeatable-record-selection/2",
   "track": "repeatable-record-selection",
   "status": "public-development-fixture",
-  "description": "Synthetic development cases testing whether an authoring agent selects repeated records, ordinary questions, clarification, or out-of-scope handling, and whether it accurately states KQA's current feature support.",
+  "description": "Synthetic development cases testing when bounded native repeat records fit, when ordinary question patterns fit better, when clarification is needed, and when a use is out of scope.",
   "allowedPatterns": ["fixed_questions", "multi", "optional_longtext", "repeat_group", "clarify", "out_of_scope"],
   "allowedFormatStatuses": ["supported", "unsupported", "not_applicable"],
   "allowedFallbackPatterns": ["fixed_questions", "multi", "optional_longtext"],
@@ -17,8 +17,7 @@
     "not_a_live_log",
     "not_safety_or_incident_reporting",
     "not_individual_performance_use",
-    "separate_ratings_not_forced_rank",
-    "feature_unavailable_in_current_format"
+    "separate_ratings_not_forced_rank"
   ],
   "cases": [
     {
@@ -26,10 +25,10 @@
       "brief": "A plant wants to learn where routine maintenance handoffs recently lost time. A technician may recall a few distinct episodes from the last two weeks. The same short fields fit each episode: process stage, coordination barrier, approximate delay band, and possible improvement. The host wants process changes, not a safety log or evaluation of individual workers.",
       "gold": {
         "pattern": "repeat_group",
-        "formatStatus": "unsupported",
-        "fallbackPattern": "optional_longtext",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
         "clarificationSlots": [],
-        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "feature_unavailable_in_current_format", "not_a_live_log", "not_safety_or_incident_reporting", "not_individual_performance_use"]
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "not_a_live_log", "not_safety_or_incident_reporting", "not_individual_performance_use"]
       }
     },
     {
@@ -37,10 +36,10 @@
       "brief": "A person preparing for a coaching conversation may want to note several self-chosen goals. Each goal uses the same optional fields: what matters about it, one available support, and a next step or decision to defer. No other person's preferences are being collected.",
       "gold": {
         "pattern": "repeat_group",
-        "formatStatus": "unsupported",
-        "fallbackPattern": "optional_longtext",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
         "clarificationSlots": [],
-        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "feature_unavailable_in_current_format", "no_third_party_inference"]
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "no_third_party_inference"]
       }
     },
     {
@@ -114,10 +113,10 @@
       "brief": "A procurement team wants to understand a supplier's recent delivery delays over one quarter. Respondents may have a few similar examples, and the same non-identifying fields apply to each: broad delivery stage, delay band, operational effect, and improvement idea. The goal is process improvement, not supplier scoring or contract decisions.",
       "gold": {
         "pattern": "repeat_group",
-        "formatStatus": "unsupported",
-        "fallbackPattern": "optional_longtext",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
         "clarificationSlots": [],
-        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "feature_unavailable_in_current_format", "not_individual_performance_use"]
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "not_individual_performance_use"]
       }
     },
     {

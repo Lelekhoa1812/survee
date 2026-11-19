@@ -1,6 +1,6 @@
 # KQA design system and agent guidance
 
-Version: `kqa-design/27` · reviewed 19 November 2026
+Version: `kqa-design/28` · reviewed 19 November 2026
 
 This is the product-specific design policy for KQA's host console, respondent questionnaires, and analytics. Agents can retrieve the same principles through the read-only `get_design_guidance` MCP tool; its review checklist is scoped to the requested surface, and `all` returns the full checklist. KQA does not include an LLM: connected agents decide how to apply these instructions and should return their rationale and review evidence.
 

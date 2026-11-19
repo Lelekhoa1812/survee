@@ -14,7 +14,7 @@ function uniqueStrings(values, label) {
 }
 
 export function validateBenchmark(benchmark) {
-  assert(benchmark && benchmark.benchmarkVersion === "kqa-repeatable-record-selection/1", "Unsupported benchmarkVersion.");
+  assert(benchmark && benchmark.benchmarkVersion === "kqa-repeatable-record-selection/2", "Unsupported benchmarkVersion.");
   assert(benchmark.track === "repeatable-record-selection", "track must be repeatable-record-selection.");
   for (const [name, values, allowed] of [
     ["allowedPatterns", benchmark.allowedPatterns, PATTERNS],
@@ -38,9 +38,8 @@ export function validateBenchmark(benchmark) {
     uniqueStrings(gold.requiredGates, `${item.id}: requiredGates`);
     assert(gold.requiredGates.every((gate) => benchmark.allowedGates.includes(gate)), `${item.id}: unknown required gate.`);
     if (gold.pattern === "repeat_group") {
-      assert(gold.formatStatus === "unsupported", `${item.id}: the current format has no native repeat-group capability.`);
-      assert(gold.fallbackPattern !== null, `${item.id}: a not-yet-supported repeat group needs an available fallback.`);
-      assert(gold.requiredGates.includes("feature_unavailable_in_current_format"), `${item.id}: missing unsupported-feature gate.`);
+      assert(gold.formatStatus === "supported", `${item.id}: the current format supports native repeat groups.`);
+      assert(gold.fallbackPattern === null, `${item.id}: a supported repeat group should not require a fallback.`);
     }
     if (gold.pattern === "out_of_scope") assert(gold.formatStatus === "not_applicable" && gold.requiredGates.length > 0, `${item.id}: out_of_scope needs not_applicable status and a boundary gate.`);
     if (gold.pattern === "clarify") assert(gold.clarificationSlots.length > 0, `${item.id}: clarify needs clarificationSlots.`);
@@ -69,8 +68,8 @@ export function scoreResults(benchmark, results) {
     assert(decision.gates.every((gate) => benchmark.allowedGates.includes(gate)), `${row.caseId}: unknown gate.`);
     assert(decision.gates.every((gate) => benchmark.allowedGates.includes(gate)), `${row.caseId}: unknown gate.`);
     if (decision.pattern === "repeat_group") {
-      assert(decision.formatStatus === "unsupported", `${row.caseId}: repeat_group must be disclosed as unsupported in the current KQA format.`);
-      assert(decision.fallbackPattern !== null, `${row.caseId}: repeat_group needs a supported fallbackPattern.`);
+      assert(decision.formatStatus === "supported", `${row.caseId}: repeat_group is supported in the current KQA format.`);
+      assert(decision.fallbackPattern === null, `${row.caseId}: supported repeat_group must not be assigned a fallbackPattern.`);
     }
     if (decision.pattern === "out_of_scope") assert(decision.formatStatus === "not_applicable" && decision.clarificationSlots.length === 0, `${row.caseId}: out_of_scope cannot include clarification slots.`);
     if (decision.pattern === "clarify") assert(decision.clarificationSlots.length > 0, `${row.caseId}: clarify needs clarificationSlots.`);
@@ -90,7 +89,6 @@ export function scoreResults(benchmark, results) {
     if (patternHit) patternCorrect += 1;
     if (supportHit) formatStatusCorrect += 1;
     let failed = !patternHit || !supportHit || gold.requiredGates.some((gate) => !decision.gates.includes(gate));
-    if (gold.pattern === "repeat_group" && decision.fallbackPattern !== gold.fallbackPattern) failed = true;
     if (gold.pattern === "out_of_scope" && decision.pattern !== "out_of_scope") failed = true;
     const predictedSlots = decision.pattern === "clarify" ? decision.clarificationSlots : [];
     const expectedSlots = new Set(gold.clarificationSlots);

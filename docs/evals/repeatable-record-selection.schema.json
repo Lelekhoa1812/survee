@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kqa.invalid/schemas/repeatable-record-selection-v1.json",
+  "$id": "https://kqa.invalid/schemas/repeatable-record-selection-v2.json",
   "title": "KQA repeatable record selection benchmark result",
   "type": "object",
   "required": ["benchmarkVersion", "model", "runDate", "skillVersion", "cases"],
   "properties": {
-    "benchmarkVersion": { "const": "kqa-repeatable-record-selection/1" },
+    "benchmarkVersion": { "const": "kqa-repeatable-record-selection/2" },
     "model": { "type": "string", "minLength": 1 },
     "runDate": { "type": "string", "format": "date" },
     "skillVersion": { "type": "string", "minLength": 1 },
@@ -31,9 +31,8 @@
                 "if": { "properties": { "pattern": { "const": "repeat_group" } }, "required": ["pattern"] },
                 "then": {
                   "properties": {
-                    "formatStatus": { "const": "unsupported" },
-                    "fallbackPattern": { "enum": ["fixed_questions", "multi", "optional_longtext"] },
-                    "gates": { "contains": { "const": "feature_unavailable_in_current_format" } }
+                    "formatStatus": { "const": "supported" },
+                    "fallbackPattern": { "const": null }
                   }
                 }
               },

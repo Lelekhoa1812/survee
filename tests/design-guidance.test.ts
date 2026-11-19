@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/27");
+    expect(guidance.policyVersion).toBe("kqa-design/28");
     expect(guidance.principles.some((principle) => principle.id === "host-freshness")).toBe(true);
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
@@ -94,8 +94,11 @@ describe("design guidance package", () => {
     expect(constraints).toContain("requiredness applies only while a question is eligible");
     expect(constraints).toContain("For custom/script-driven reveals outside `when`, KQA cannot calculate eligibility");
     expect(constraints).toContain("keep hidden questions optional");
-    expect(constraints).toContain("Current KQA has no native repeatable-record group");
-    expect(checklist).toContain("KQA does not currently support native repeat groups");
+    expect(constraints).toContain("KQA supports bounded native `repeat` groups");
+    expect(checklist).toContain("For native `repeat` groups");
+    expect(checklist).toContain("default analytics omit them and CSV exports do not include them");
+    expect(constraints).toContain("Routing supports choices, answer state, numbers, bounded scales, and calendar dates");
+    expect(constraints).not.toContain("does not compare free-text, numeric, date, or scale values");
     expect(guidance.sources.find((source) => source.name === "ODK: Form Logic and Repeat Groups")?.role).toContain("not direct usability evidence for KQA");
     expect(guidance.sources.find((source) => source.name === "GOV.UK Design System: Radios")?.url).toBe("https://design-system.service.gov.uk/components/radios/");
     expect(getDesignGuidance("host").reviewChecklist.join(" ")).not.toContain("Keep conditional reveals simple");

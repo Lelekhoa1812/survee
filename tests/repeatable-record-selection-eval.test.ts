@@ -25,18 +25,18 @@ describe("repeatable record selection benchmark", () => {
     expect(report.gateF1).toBe(1);
   });
 
-  it("rejects claims that repeat groups are currently supported", () => {
+  it("requires truthful support status for repeat groups", () => {
     const results = resultsFor((item) => ({
       ...item.gold,
-      ...(item.gold.pattern === "repeat_group" ? { formatStatus: "supported" } : {}),
+      ...(item.gold.pattern === "repeat_group" ? { formatStatus: "unsupported", fallbackPattern: "optional_longtext" } : {}),
     }));
-    expect(() => scoreResults(benchmark, results)).toThrow("repeat_group must be disclosed as unsupported");
+    expect(() => scoreResults(benchmark, results)).toThrow("repeat_group is supported in the current KQA format");
   });
 
   it("scores boundary and capability-gate failures as hard failures", () => {
     const results = resultsFor((item) => {
-      if (item.id === "hazard-and-isolation-report") return { ...item.gold, pattern: "repeat_group", formatStatus: "unsupported", fallbackPattern: "optional_longtext" };
-      if (item.id === "routine-handoff-episodes") return { ...item.gold, gates: item.gold.requiredGates.filter((gate: string) => gate !== "feature_unavailable_in_current_format") };
+      if (item.id === "hazard-and-isolation-report") return { ...item.gold, pattern: "repeat_group", formatStatus: "supported", fallbackPattern: null };
+      if (item.id === "routine-handoff-episodes") return { ...item.gold, gates: item.gold.requiredGates.filter((gate: string) => gate !== "respondent_pretest") };
       return item.gold;
     });
     const report = scoreResults(benchmark, results);

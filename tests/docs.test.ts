@@ -99,8 +99,8 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/8");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/8");
+    expect(packages).toContain("kqa-interview-packages/9");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/9");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {
@@ -165,9 +165,9 @@ describe("agent documentation bundle", () => {
     expect(DOCS.some((doc) => doc.slug === "repeatable-record-selection-benchmark" && doc.file === "evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md")).toBe(true);
     const benchmark = await readAsset("evals/repeatable-record-selection-cases.json");
     const schema = await readAsset("evals/repeatable-record-selection.schema.json");
-    expect(JSON.parse(benchmark!.body).benchmarkVersion).toBe("kqa-repeatable-record-selection/1");
+    expect(JSON.parse(benchmark!.body).benchmarkVersion).toBe("kqa-repeatable-record-selection/2");
     expect(JSON.parse(benchmark!.body).cases).toHaveLength(12);
-    expect(JSON.parse(schema!.body).properties.benchmarkVersion.const).toBe("kqa-repeatable-record-selection/1");
+    expect(JSON.parse(schema!.body).properties.benchmarkVersion.const).toBe("kqa-repeatable-record-selection/2");
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("<!-- evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md -->");
     expect(bundle).toContain("This is a public development set, not a held-out benchmark");
@@ -225,7 +225,7 @@ describe("agent documentation bundle", () => {
     expect(JSON.parse(corpus!.body).benchmarkVersion).toBe("kqa-questionnaire-review/1");
     const draftCases = await readAsset("evals/package-draft-cases.json");
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
-    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/8");
+    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/9");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
     expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/1");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
