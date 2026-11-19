@@ -311,7 +311,7 @@ const TOOLS: ToolDef[] = [
     async run() {
       const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
       if (!skill) return err("The questionnaire authoring skill is unavailable.", "docs_unavailable");
-      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "starter.kqa.html", "routed-follow-up.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
+      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "PACKAGE_DRAFT_BENCHMARK.md", "starter.kqa.html", "routed-follow-up.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
       const references = await Promise.all(referenceNames.map(async (name) => ({ path: `references/${name}`, content: await readDoc(`kqa-questionnaire-author/references/${name}`) })));
       if (references.some((reference) => reference.content === null)) return err("The questionnaire authoring skill references are incomplete.", "docs_unavailable");
       return ok({ source: "docs/kqa-questionnaire-author/SKILL.md", skill, files: [{ path: "SKILL.md", content: skill }, ...references] });

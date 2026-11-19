@@ -209,7 +209,8 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/kqa-questionnaire-author/SKILL.md");
     expect(body.result.structuredContent.skill).toContain("name: kqa-questionnaire-author");
     expect(body.result.structuredContent.skill).toContain("Do not use it for an unapproved draft");
-    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/starter.kqa.html", "references/routed-follow-up.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
+    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/PACKAGE_DRAFT_BENCHMARK.md", "references/starter.kqa.html", "references/routed-follow-up.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
+    expect(body.result.structuredContent.files.find((file) => file.path === "references/PACKAGE_DRAFT_BENCHMARK.md")?.content).toContain("two independent reviewers");
     expect(body.result.structuredContent.files.find((file) => file.path === "references/FORMAT.md")?.content).toContain('"presentation": "guided"');
     expect(listToolDefs(["interviews:read"]).map((tool) => tool.name)).toContain("get_questionnaire_authoring_skill");
     expect(listToolDefs(["analytics:read"]).map((tool) => tool.name)).not.toContain("get_questionnaire_authoring_skill");
