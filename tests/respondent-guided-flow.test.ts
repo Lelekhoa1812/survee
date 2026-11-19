@@ -74,4 +74,29 @@ describe("guided respondent sections", () => {
     await act(async () => host.querySelector<HTMLButtonElement>(".rs-guided-empty .btn")!.click());
     expect(host.querySelector("[role=dialog]")).not.toBeNull();
   });
+
+  it("blocks guided Continue for a partial non-empty minimum checkbox answer", async () => {
+    state.api.mockResolvedValueOnce({ ok: true, status: 200, data: {
+      ok: true,
+      participant: { name: "Ada", status: "in_progress" },
+      interview: { name: "Study", status: "open" },
+      version: 1,
+      title: "Study questions",
+      presentation: "guided",
+      sections: [{ id: "about", title: "About you" }, { id: "goals", title: "Your goals" }],
+      questions: [
+        { id: "channels", type: "multi", section: "about", label: "Which channels?", minSelections: 2, options: [{ value: "email", label: "Email" }, { value: "phone", label: "Phone" }, { value: "web", label: "Web" }] },
+        { id: "goal", type: "text", section: "goals", label: "Your goal" },
+      ],
+      answers: { channels: { value: ["email"], updatedAt: "now" } },
+      progress: { eligible: { channels: true, goal: true } },
+    } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const iframe = host.querySelector("iframe")!;
+    await act(async () => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "hello" }, origin: "null", source: iframe.contentWindow })));
+
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Continue")!.click());
+    expect(host.querySelector(".rs-guided-step")?.textContent).toContain("About you");
+    expect(host.querySelector(".rs-guided-error")?.textContent).toContain("Choose at least 2 options, or leave this question blank.");
+  });
 });
