@@ -48,7 +48,9 @@ describe("native text length feedback", () => {
     expect(status()?.textContent).toBe("Character limit approaching.");
     input.value = "1234567890";
     input.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-    expect(count()?.textContent).toBe("10 of 10 characters used");
+    expect(count()?.textContent).toBe("10 of 10 characters used — limit reached");
+    expect(count()?.style.color).toBe("var(--danger, currentColor)");
+    expect(count()?.style.fontWeight).toBe("600");
     expect(status()?.textContent).toBe("Character limit reached.");
     expect(count()?.getAttribute("aria-live")).toBe("off");
     input.value = "123";
@@ -67,7 +69,7 @@ describe("native text length feedback", () => {
     input.dispatchEvent(new page.window.CompositionEvent("compositionstart", { bubbles: true }));
     input.value = "1234567890";
     input.dispatchEvent(new page.window.InputEvent("input", { bubbles: true, isComposing: true, inputType: "insertCompositionText" }));
-    expect(page.window.document.querySelector('[data-kqa-length-counter="kqa-length-summary-answer"]')?.textContent).toBe("10 of 10 characters used");
+    expect(page.window.document.querySelector('[data-kqa-length-counter="kqa-length-summary-answer"]')?.textContent).toBe("10 of 10 characters used — limit reached");
     input.dispatchEvent(new page.window.CompositionEvent("compositionend", { bubbles: true }));
 
     const note = page.window.document.querySelector<HTMLTextAreaElement>("[data-kqa-note='summary']")!;

@@ -140,7 +140,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       counter.id = id;
       counter.setAttribute("data-kqa-length-counter", id);
       counter.setAttribute("aria-live", "off");
-      counter.style.cssText = "font-size:0.875em;margin:0.25rem 0 0;text-align:right;color:#475467";
+      counter.style.cssText = "font-size:0.875em;font-weight:400;margin:0.25rem 0 0;text-align:right;color:inherit";
       var anchor = el.closest ? el.closest("label") || el : el;
       anchor.insertAdjacentElement("afterend", counter);
       var status = document.createElement("span");
@@ -158,8 +158,9 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var visible = stage !== "below" && count > 0;
     counter.hidden = !visible;
     appendDescription(el, counter.id, visible);
-    counter.textContent = count + " of " + max + " characters used" + (stage === "over" ? " — over the limit" : "");
-    counter.style.color = stage === "limit" || stage === "over" ? "#b42318" : "#475467";
+    counter.textContent = count + " of " + max + " characters used" + (stage === "limit" ? " — limit reached" : stage === "over" ? " — over the limit" : "");
+    counter.style.color = stage === "limit" || stage === "over" ? "var(--danger, currentColor)" : "inherit";
+    counter.style.fontWeight = stage === "limit" || stage === "over" ? "600" : "400";
     if (statusNode) {
       var previous = statusNode.getAttribute("data-stage") || "below";
       if (announce && stage !== previous && (stage === "approaching" || stage === "limit" || stage === "over")) {
