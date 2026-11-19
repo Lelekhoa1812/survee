@@ -214,6 +214,27 @@ describe("MCP tools", () => {
     expect(Object.keys(body.result.structuredContent.people[0])).toEqual(["id", "name", "status", "submittedAt", "answers"]);
   });
 
+  it("labels current eligibility without discarding retained answers or repeat rows", async () => {
+    const manifest = { ...analyticsManifest, questions: [
+      { id: "gate", type: "single", label: "Gate", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+      { id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "name", label: "Name", type: "text" }], when: { all: [{ question: "gate", operator: "equals", value: "yes" }] } },
+      { id: "details", type: "text", label: "Details", when: { all: [{ question: "assets", operator: "answered" }] } },
+      { id: "missing", type: "text", label: "Unanswered" },
+    ] };
+    vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest } as never);
+    vi.mocked(listParticipants).mockResolvedValueOnce([
+      { id: personId, name: "Ada", status: "in_progress", answers: { gate: { value: "no" }, details: { value: "Retained" } }, recordGroups: { assets: [{ id: "r1", values: { name: "Pump" }, revision: 0, fieldRevisions: {} }] } },
+      { id: anotherPersonId, name: "Grace", status: "in_progress", answers: { gate: { value: "yes" }, details: { value: "Current" } }, recordGroups: { assets: [{ id: "r2", values: { name: "Valve" }, revision: 0, fieldRevisions: {} }] } },
+    ] as never);
+    const response = await call("get_answers", { interviewId });
+    const body = await response.json() as { result: { structuredContent: { people: { answers: { questionId: string; eligible: boolean; value: unknown }[]; recordGroups: Record<string, { id: string; values: Record<string, string> }[]> }[] } } };
+    const [inactive, active] = body.result.structuredContent.people;
+    expect(inactive.answers.map(({ questionId, eligible }) => [questionId, eligible])).toEqual([["gate", true], ["assets", false], ["details", false], ["missing", true]]);
+    expect(inactive.answers.find(({ questionId }) => questionId === "details")?.value).toBe("Retained");
+    expect(inactive.recordGroups.assets).toEqual([{ id: "r1", values: { name: "Pump" } }]);
+    expect(active.answers.map(({ eligible }) => eligible)).toEqual([true, true, true, true]);
+  });
+
   it("returns the interview package guide to interview readers", async () => {
     const res = await call("get_interview_packages", {});
     const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string; packageCatalog: { id: string; decisionFocus: string; respondents: string; useWhen: string; notFor: string; riskFlags: string[]; relatedPackages: string[]; interactionGuidance: { consider: { pattern: string; when: string; benefit: string; tradeoff: string }[]; avoid: { pattern: string; when: string; reason: string }[]; decisionChecks: string[] } }[] } } };

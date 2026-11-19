@@ -1,4 +1,4 @@
-import { displayValue, eligibilityQuestionIds, progress } from "../format/answers";
+import { displayValue, eligibilityQuestionIds, evaluateEligibility, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
 import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "../analytics/segments";
@@ -530,7 +530,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_answers",
-    description: "Read answers for review. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present. Assigned question-order groups are returned separately by survey version, including unanswered questions. There is no score.",
+    description: "Read answers for review. Each answer's eligible flag is inferred from the current survey rules and saved answers, not historical display; retained inactive values and repeat records are still returned. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present; use the matching question's eligible flag. Assigned question-order groups are returned separately by survey version, including unanswered questions. There is no score.",
     inputSchema: obj({ interviewId: str, personId: str, submittedOnly: bool }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -544,6 +544,7 @@ const TOOLS: ToolDef[] = [
       if (only) people = people.filter((p) => p.id === only);
       if (args.submittedOnly === true) people = people.filter((p) => p.status === "submitted");
       const rows = people.map((p) => {
+        const eligible = evaluateEligibility(version.manifest, p.answers, p.recordGroups);
         const recordGroups = Object.fromEntries(
           Object.entries(p.recordGroups ?? {})
             .filter(([, records]) => records.length > 0)
@@ -556,7 +557,7 @@ const TOOLS: ToolDef[] = [
           submittedAt: p.submittedAt ?? null,
           answers: version.manifest.questions.map((q) => {
             const stored = p.answers[q.id];
-            return { questionId: q.id, type: q.type, label: q.label, value: stored?.value ?? null, display: displayValue(q, stored?.value), note: stored?.note ?? null, updatedAt: stored?.updatedAt ?? null };
+            return { questionId: q.id, type: q.type, label: q.label, eligible: eligible[q.id], value: stored?.value ?? null, display: displayValue(q, stored?.value), note: stored?.note ?? null, updatedAt: stored?.updatedAt ?? null };
           }),
           ...(Object.keys(recordGroups).length ? { recordGroups } : {}),
           ...(p.questionOrderAssignments?.length ? { questionOrderAssignments: p.questionOrderAssignments } : {}),
