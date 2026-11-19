@@ -52,6 +52,7 @@ export function scoreResults(benchmark, results) {
   assert(Array.isArray(results.cases), "Results need a cases array.");
   const expected = new Map(benchmark.cases.map((c) => [c.id, c])); const actual = new Map();
   for (const row of results.cases) {
+    assert(row && typeof row === "object", "Each result row must be an object.");
     assert(expected.has(row.caseId), `Unknown result case id: ${row.caseId}`);
     assert(!actual.has(row.caseId), `Duplicate result case id: ${row.caseId}`);
     assert(row && row.decision && ACTIONS.has(row.decision.action), `${row.caseId}: invalid decision action.`);
@@ -103,7 +104,7 @@ export function scoreResults(benchmark, results) {
   }
   const precision = (tp, fp) => tp + fp ? tp / (tp + fp) : 0;
   const recall = (tp, fn) => tp + fn ? tp / (tp + fn) : null;
-  const f1 = (p, r) => p === null || r === null || p + r === 0 ? (p === null || r === null ? null : 0) : 2 * p * r / (p + r);
+  const f1 = (p, r) => p === null || r === null ? null : p + r === 0 ? 0 : 2 * p * r / (p + r);
   const candidatePrecision = precision(candidateTp, candidateFp);
   const candidateRecall = recall(candidateTp, candidateFn);
   const slotPrecision = precision(slotTp, slotFp);
@@ -116,9 +117,11 @@ export function scoreResults(benchmark, results) {
     clarificationCandidatePrecision: candidatePrecision,
     clarificationCandidateRecall: candidateRecall,
     clarificationCandidateF1: f1(candidatePrecision, candidateRecall),
+    clarificationCandidateAveraging: "micro across clarify cases",
     clarificationSlotPrecision: slotPrecision,
     clarificationSlotRecall: slotRecall,
     clarificationSlotF1: f1(slotPrecision, slotRecall),
+    clarificationSlotAveraging: "micro across clarify cases",
     hardGateFailures,
     hardGateFailureCases: gateFailureCases,
     interpretation: "Descriptive development metrics only; no universal pass score or validated-performance claim. Hard-gate failures must be reviewed individually and cannot be offset by other scores."

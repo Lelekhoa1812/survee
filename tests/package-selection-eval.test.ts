@@ -33,6 +33,8 @@ describe("package selection development benchmark", () => {
     expect(report.packageAccuracyAmongRecommendations).toBe(1);
     expect(report.clarificationCandidateF1).toBe(1);
     expect(report.clarificationSlotF1).toBe(1);
+    expect(report.clarificationCandidateAveraging).toContain("micro");
+    expect(report.clarificationSlotAveraging).toContain("micro");
     expect(report.hardGateFailures).toBe(0);
     expect(report.developmentOnly).toBe(true);
     expect(report.interpretation).toContain("no universal pass score");
@@ -119,5 +121,14 @@ describe("package selection development benchmark", () => {
     }));
     invalid.runDate = "2026-02-30";
     expect(() => scoreResults(benchmark, invalid)).toThrow("YYYY-MM-DD");
+  });
+
+  it("rejects malformed rows with a controlled validation message", () => {
+    const invalid = resultsFor((c: any) => decision(c.gold.action, c.gold.packageId, {
+      candidatePackageIds: c.gold.candidatePackageIds ?? [], clarificationSlots: c.gold.clarificationSlots,
+      gates: c.gold.requiredGates,
+    }));
+    invalid.cases[0] = null;
+    expect(() => scoreResults(benchmark, invalid)).toThrow("Each result row must be an object");
   });
 });
