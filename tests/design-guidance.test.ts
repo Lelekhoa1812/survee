@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/23");
+    expect(guidance.policyVersion).toBe("kqa-design/24");
     expect(guidance.principles.some((principle) => principle.id === "host-freshness")).toBe(true);
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
@@ -64,6 +64,7 @@ describe("design guidance package", () => {
     expect(guidance.reviewChecklist.join(" ")).toContain("commit-scoped JSON summary");
     expect(guidance.reviewChecklist.join(" ")).toContain("concise polite status announces the count without stealing focus");
     expect(guidance.principles.find((principle) => principle.id === "respondent-control")?.guidance).toContain("clear an answer from pre-submit review");
+    expect(guidance.principles.find((principle) => principle.id === "bounded-text-feedback")?.guidance).toContain("never announce every keystroke");
     expect(guidance.sources.find((source) => source.name === "WCAG 2.2 SC 4.1.3: Status Messages")?.url).toBe("https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html");
     expect(guidance.sources.find((source) => source.name === "axe-core")?.role).toContain("not a complete accessibility verdict");
     expect(guidance.principles.find((principle) => principle.id === "brief-specific-visuals")?.guidance).toContain("options rather than defaults");

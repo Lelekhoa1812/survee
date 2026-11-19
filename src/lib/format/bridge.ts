@@ -109,6 +109,71 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     for (var i = 0; i < all.length; i++) if (all[i].getAttribute("data-kqa-note") === id) out.push(all[i]);
     return out;
   }
+  function lengthLimit(question, isNote) {
+    if (isNote) {
+      var note = question.note;
+      return note && typeof note === "object" && typeof note.maxLength === "number" ? note.maxLength : 5000;
+    }
+    return typeof question.maxLength === "number" ? question.maxLength : (question.type === "text" ? 500 : 20000);
+  }
+  function appendDescription(el, id, include) {
+    var ids = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    var index = ids.indexOf(id);
+    if (include && index === -1) ids.push(id);
+    if (!include && index !== -1) ids.splice(index, 1);
+    if (ids.length) el.setAttribute("aria-describedby", ids.join(" "));
+    else el.removeAttribute("aria-describedby");
+  }
+  function lengthFeedback(el, question, isNote, announce) {
+    if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA")) return;
+    if (!isNote && question.type !== "text" && question.type !== "longtext") return;
+    var attr = isNote ? "data-kqa-note" : "data-kqa";
+    var key = el.getAttribute(attr) || question.id;
+    var kind = isNote ? "note" : "answer";
+    var id = el.getAttribute("data-kqa-length-id") || "kqa-length-" + key + "-" + kind;
+    var counter = document.querySelector('[data-kqa-length-counter="' + id + '"]');
+    if (!counter) {
+      var baseId = id;
+      var suffix = 1;
+      while (document.getElementById(id)) id = baseId + "-" + suffix++;
+      counter = document.createElement("p");
+      counter.id = id;
+      counter.setAttribute("data-kqa-length-counter", id);
+      counter.setAttribute("aria-live", "off");
+      counter.style.cssText = "font-size:0.875em;margin:0.25rem 0 0;text-align:right;color:#475467";
+      var anchor = el.closest ? el.closest("label") || el : el;
+      anchor.insertAdjacentElement("afterend", counter);
+      var status = document.createElement("span");
+      status.setAttribute("data-kqa-length-status", id);
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      status.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+      counter.insertAdjacentElement("afterend", status);
+      el.setAttribute("data-kqa-length-id", id);
+    }
+    var statusNode = document.querySelector('[data-kqa-length-status="' + counter.getAttribute("data-kqa-length-counter") + '"]');
+    var max = lengthLimit(question, isNote);
+    var count = el.value.length;
+    var stage = count > max ? "over" : count === max ? "limit" : count >= Math.ceil(max * 0.8) ? "approaching" : "below";
+    var visible = stage !== "below" && count > 0;
+    counter.hidden = !visible;
+    appendDescription(el, counter.id, visible);
+    counter.textContent = count + " of " + max + " characters used" + (stage === "over" ? " — over the limit" : "");
+    counter.style.color = stage === "limit" || stage === "over" ? "#b42318" : "#475467";
+    if (statusNode) {
+      var previous = statusNode.getAttribute("data-stage") || "below";
+      if (announce && stage !== previous && (stage === "approaching" || stage === "limit" || stage === "over")) {
+        statusNode.textContent = stage === "approaching" ? "Character limit approaching." : stage === "limit" ? "Character limit reached." : "Character limit exceeded.";
+      } else if (stage === "below") statusNode.textContent = "";
+      statusNode.setAttribute("data-stage", stage);
+    }
+  }
+  function updateLengthFeedback(id, announce) {
+    var question = q(id);
+    if (!question) return;
+    controls(id).forEach(function (el) { lengthFeedback(el, question, false, announce); });
+    noteControls(id).forEach(function (el) { lengthFeedback(el, question, true, announce); });
+  }
 
   // ---- reading a question's value from the page
   function readDom(id) {
@@ -158,6 +223,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     }
     var note = answerOf(id).note || "";
     noteControls(id).forEach(function (el) { if (el.value !== note) el.value = note; });
+    updateLengthFeedback(id, false);
     var statuses = document.querySelectorAll("[data-kqa-status]");
     for (var i = 0; i < statuses.length; i++) if (statuses[i].getAttribute("data-kqa-status") === id) statuses[i].setAttribute("data-state", isAnswered(id) ? "answered" : "empty");
     updateRankConfirmation(id);
@@ -578,6 +644,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var id = el.getAttribute("data-kqa");
     if (id !== null && q(id)) {
       var question = q(id);
+      updateLengthFeedback(id, true);
       var exclusiveAnnouncement = "";
       if (question.type === "multi" && el.type === "checkbox" && el.checked && (question.exclusiveOptions || []).length) {
         var exclusive = question.exclusiveOptions.indexOf(el.value) !== -1;
@@ -600,7 +667,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       return;
     }
     var nid = el.getAttribute("data-kqa-note");
-    if (nid !== null && q(nid)) commit(nid, { note: el.value }, "dom");
+    if (nid !== null && q(nid)) { updateLengthFeedback(nid, true); commit(nid, { note: el.value }, "dom"); }
   }
   document.addEventListener("input", onControl, true);
   document.addEventListener("change", onControl, true);
