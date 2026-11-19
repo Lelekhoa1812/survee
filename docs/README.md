@@ -14,7 +14,7 @@ The docs are part of KQA's authoring and operating interface. Keep the source co
 | Static checker findings | [DIAGNOSTICS.md](DIAGNOSTICS.md) | `src/lib/diagnostics/catalog.ts`, `src/lib/diagnostics/static.ts` |
 | Questionnaire authoring review evaluation | [Benchmark](evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | `tests/questionnaire-author-eval.test.ts`, `scripts/eval-questionnaire-author.mjs` |
 
-`docs/DIAGNOSTICS.md` and `docs/kqa-manifest.schema.json` are generated from code. Regenerate both with `npm run docs`; edit their source definitions rather than hand-editing generated output. Other guides are maintained prose and require review against implementation when related code changes. Dated files in `docs/plans/` preserve historical decisions; use the current references above for operational behavior.
+`docs/DIAGNOSTICS.md` and `docs/kqa-manifest.schema.json` are generated from code. `docs/kqa-questionnaire-author/references/` is also generated: it contains path-preserving copies of the canonical format, playbook, design system, package guide, MCP guide, authoring benchmark, starter, and routed example. Run `npm run docs` to regenerate all of these outputs. Edit canonical source documents, examples, templates, and code definitions rather than generated files. Tests compare the generated references with their canonical sources. Other guides are maintained prose and require review against implementation when related code changes. Dated files in `docs/plans/` preserve historical decisions; use the current references above for operational behavior.
 
 ## Update and verify
 

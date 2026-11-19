@@ -74,7 +74,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | Tool | What it does |
 |---|---|
 | `get_interview_packages` | Return the versioned domain package guide and safeguards; optional `packageId` returns the shared review guidance and a focused package |
-| `get_questionnaire_authoring_skill` | Return the portable Agent Skills workflow for planning, authoring, checking, and reviewing KQA questionnaires |
+| `get_questionnaire_authoring_skill` | Return the portable Agent Skills bundle: `SKILL.md` plus eight relative-path references for KQA authoring |
 | `get_analytics_guidance` | Return versioned interpretation principles, a review checklist, and primary sources for descriptive survey analysis |
 | `get_design_guidance` | Return KQA's versioned design principles, structured design plan, surface-specific visual profile, review checklist, and external sources |
 | `extract_design_profile` | Parse CSS custom properties, legacy token JSON, or a bounded Design Tokens Format Module 2025.10 subset into semantic proposals; unresolved `$extends`, resolver-file modes, and external references are reported |
@@ -120,7 +120,7 @@ When a valid questionnaire preview returns `review.available: true` and `review.
 
 `get_interview_packages` returns version `kqa-interview-packages/1`. Omit `packageId` for the whole `INTERVIEW_PACKAGES.md` library, or pass one of its 17 stable IDs to receive the catalog, shared operating/risk safeguards, sampling guidance, and the selected package's detailed content. Record the returned `packageVersion` and `packageId` in the authoring review. The material is deterministic reference guidance, not a validated instrument. Use it with `get_design_guidance`, the format, playbook, and checker; adapt prompts to the host's actual purpose and population.
 
-`get_questionnaire_authoring_skill` returns the portable `kqa-questionnaire-author` skill. Its workflow points back to the format, playbook, design system, domain packages, and this MCP guide as the source of truth. The skill is reusable instruction material, not a security boundary, a quality certification, or a substitute for respondent testing and accountable review.
+`get_questionnaire_authoring_skill` returns the portable `kqa-questionnaire-author` bundle: `SKILL.md` and eight reference files (format, playbook, design system, packages, MCP, authoring benchmark, starter, and routed example). Each item includes its relative path. Preserve those paths when installing the bundle so the skill's links resolve. The reference copies are version-matched to the running KQA release. The canonical project files remain the source of truth. The skill is reusable instruction material, not a security boundary, a quality certification, or a substitute for respondent testing and accountable review.
 
 `create_interview` has no separate draft, preview, or approval stage: after the static checker passes, it creates an open interview immediately. The tool description and destructive annotation flag this effect, but neither is a substitute for host approval. Run `check_questionnaire` first, review the exact HTML and intended use, and call `create_interview` only after the accountable host has approved fielding. A checker pass does not establish that the content is suitable or that a host has approved launch. KQA does not persist that approval evidence; do not use this tool to save an unapproved draft.
 

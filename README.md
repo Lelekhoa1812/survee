@@ -73,7 +73,7 @@ In development the legacy Axion owner login falls back to `admin@axion.local` / 
 | `npm test` | Unit tests (checker, validation, exports) |
 | `npm run typecheck` | TypeScript |
 | `npm run check -- file.html` | Run the checker from the terminal |
-| `npm run docs` | Regenerate `DIAGNOSTICS.md` and the JSON Schema from code |
+| `npm run docs` | Regenerate diagnostics, the manifest JSON Schema, and the portable author skill's reference copies |
 | `npm run a11y:audit` | Audit public pages at responsive widths with axe-core and the installed Chrome; see `docs/DESIGN_SYSTEM.md` for scope and limits |
 | `npm run audit:tenant-migration` | Run the owner-only Axion tenant migration audit; review its output before changing the legacy-fallback setting |
 | `npm run e2e -- <baseUrl> <token> <outDir>` | Real-Chrome end-to-end run of a respondent link |
@@ -90,7 +90,7 @@ The respondent E2E, offline, concurrency, security and state-screenshot checks c
 
 * Next.js 16 (App Router, TypeScript), React 19, plain CSS design tokens, IBM Plex.
 * MongoDB (Atlas) with the official driver. Tenant-owned collections include `interviews`, `survey_versions` (immutable per upload), `participants` (token, optional email, status, answers keyed by question id), `mail_messages` (invite send and delivery, never the message body), `events` (audit, 180-day TTL), and `api_keys` (name, note, hash, fingerprint, expiry, revoke). Accounts use `tenants`, `users`, `memberships`, and expiring signup, email-change and password-reset token collections.
-* The format definition (`src/lib/format/schema.ts`, Zod) feeds the checker, answer validation, and JSON Schema. `scripts/gen-docs.ts` generates `docs/kqa-manifest.schema.json` and `docs/DIAGNOSTICS.md`; the other guides are maintained separately and reviewed against the implementation.
+* The format definition (`src/lib/format/schema.ts`, Zod) feeds the checker, answer validation, and JSON Schema. `scripts/gen-docs.ts` generates `docs/kqa-manifest.schema.json`, `docs/DIAGNOSTICS.md`, and path-preserving reference copies under `docs/kqa-questionnaire-author/references/`. Edit canonical docs, examples, and templates, then run `npm run docs`; do not edit generated copies directly.
 * Exports: Excel workbook, CSV (one row per person, or one per answer), Markdown report, JSON.
 
 ### Security model
