@@ -19,7 +19,8 @@
       "type": "string",
       "enum": [
         "all",
-        "guided"
+        "guided",
+        "guided-question"
       ]
     },
     "sections": {

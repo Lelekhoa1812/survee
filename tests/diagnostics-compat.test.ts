@@ -5,6 +5,25 @@ import { compareVersions } from "../src/lib/diagnostics/compat";
 const manifest = (questions: Manifest["questions"]): Manifest => ({ format: "kqa/1", title: "Survey", questions });
 
 describe("compareVersions", () => {
+  it("warns when the respondent flow changes after answers are saved", () => {
+    const previous: Manifest = { ...manifest([{ id: "q", type: "text", label: "Prompt" }]), presentation: "all" };
+    const next: Manifest = { ...previous, presentation: "guided-question" };
+    const diagnostics = compareVersions({ previous, next, answers: [
+      { status: "open", answers: { q: { value: "A response", updatedAt: "now" } } },
+      { status: "submitted", answers: {} },
+    ] });
+    expect(diagnostics.filter((item) => item.code === "KQA710").map((item) => item.message)).toEqual([
+      'The respondent presentation changed from "all" to "guided-question" while 1 person has saved answers. Their data remains attached to the same questions, but the changed flow may affect context and burden.',
+    ]);
+  });
+
+  it("does not warn about a presentation change before anyone has answered", () => {
+    const previous: Manifest = { ...manifest([{ id: "q", type: "text", label: "Prompt" }]), presentation: "guided" };
+    const next: Manifest = { ...previous, presentation: "guided-question" };
+    const diagnostics = compareVersions({ previous, next, answers: [{ status: "open", answers: {} }] });
+    expect(diagnostics.some((item) => item.code === "KQA710")).toBe(false);
+  });
+
   it("warns when option presentation changes for answered questions", () => {
     const previous = manifest([{ id: "q", type: "single", label: "Choices", options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);
     const next = manifest([{ id: "q", type: "single", label: "Choices", randomizeOptions: true, fixedOptionValues: ["c"], options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);

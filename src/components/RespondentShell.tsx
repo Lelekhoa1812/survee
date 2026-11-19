@@ -21,7 +21,7 @@ interface Loaded {
   answers: AnswerMap;
   recordGroups?: RepeatRecordMap;
   progress: { eligible?: Record<string, boolean> };
-  presentation?: "all" | "guided";
+  presentation?: "all" | "guided" | "guided-question";
 }
 type Patch = Record<string, { value?: unknown; note?: unknown }>;
 type PendingRecordOperation = { operationId: string; operation: RepeatRecordOperation };
@@ -144,8 +144,10 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const [questionNavOpen, setQuestionNavOpen] = useState(false);
   const [guidedMode, setGuidedMode] = useState(false);
   const [guidedSectionId, setGuidedSectionId] = useState<string | null>(null);
+  const [guidedQuestionId, setGuidedQuestionId] = useState<string | null>(null);
   const [guidedError, setGuidedError] = useState(false);
   const [guidedAnnouncement, setGuidedAnnouncement] = useState("");
+  const [guidedQuestionAnnouncement, setGuidedQuestionAnnouncement] = useState<{ index: number; total: number; label: string; message: "questionAnnouncement" | "availableQuestionAnnouncement" } | null>(null);
   const [lengthDrafts, setLengthDrafts] = useState<Record<string, { question: Question; count: number; max: number }>>({});
   const [questionnaireLanguage, setQuestionnaireLanguage] = useState<string | undefined>();
 
@@ -222,9 +224,15 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
 
   const displayedQuestions = questionsInPresentationOrder(questions.current, data?.questionOrder);
   const questionGroups = buildQuestionNavigation(displayedQuestions, data?.sections ?? [], eligibility.current, t("otherQuestions"));
+  const questionGuidedMode = data?.presentation === "guided-question";
+  const guidedQuestions = displayedQuestions.filter((question) => eligibility.current[question.id] !== false);
+  const activeGuidedQuestion = guidedQuestions.find((question) => question.id === guidedQuestionId) ?? null;
+  const activeGuidedQuestionIndex = activeGuidedQuestion ? guidedQuestions.findIndex((question) => question.id === activeGuidedQuestion.id) : -1;
   const activeGuidedGroup = questionGroups.find((group) => group.id === guidedSectionId) ?? null;
   const activeGuidedIndex = activeGuidedGroup ? questionGroups.findIndex((group) => group.id === activeGuidedGroup.id) : -1;
-  const guidedStepIssues = activeGuidedGroup
+  const guidedStepIssues = questionGuidedMode
+    ? counts.needsAttention.filter((item) => item.question.id === guidedQuestionId)
+    : activeGuidedGroup
     ? counts.needsAttention.filter((item) => activeGuidedGroup.questions.some((question) => question.id === item.question.id))
     : [];
 
@@ -233,21 +241,65 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     const group = groups.find((item) => item.id === id);
     if (!group) return;
     setGuidedSectionId(group.id);
+    setGuidedQuestionId(null);
     setGuidedError(false);
     setGuidedAnnouncement(`${t("section", { index: groups.findIndex((item) => item.id === id) + 1, total: groups.length })}: ${group.title}`);
-    post({ type: "guided", enabled: true, section: group.id });
+    post({ type: "guided", enabled: true, section: group.id, questionMode: false });
     const target = focusId ?? group.questions[0]?.id;
     if (target) post({ type: "focus-question", id: target });
   }, [data?.questionOrder, data?.sections, locale, post]);
 
+  const goToGuidedQuestion = useCallback((id: string) => {
+    const question = questionsInPresentationOrder(questions.current, data?.questionOrder).find((item) => item.id === id && eligibility.current[item.id] !== false);
+    if (!question) return;
+    const groups = buildQuestionNavigation(questionsInPresentationOrder(questions.current, data?.questionOrder), data?.sections ?? [], eligibility.current, respondentMessage(locale, "otherQuestions"));
+    const orderedEligible = questionsInPresentationOrder(questions.current, data?.questionOrder).filter((item) => eligibility.current[item.id] !== false);
+    const index = orderedEligible.findIndex((item) => item.id === id);
+    setGuidedSectionId(question.section ?? "__unsectioned");
+    setGuidedQuestionId(id);
+    setGuidedError(false);
+    setGuidedQuestionAnnouncement({ index: index + 1, total: orderedEligible.length, label: question.label, message: "questionAnnouncement" });
+    post({ type: "guided", enabled: true, section: question.section ?? "__unsectioned", question: id, questionMode: true });
+    post({ type: "focus-question", id });
+  }, [data?.questionOrder, data?.sections, locale, post]);
+
   useEffect(() => {
-    if (data?.presentation !== "guided") return;
+    if (data?.presentation !== "guided" && data?.presentation !== "guided-question") return;
+    if (data.presentation === "guided-question") {
+      const first = questionsInPresentationOrder(questions.current, data.questionOrder).find((question) => eligibility.current[question.id] !== false);
+      if (first && !guidedQuestionId) {
+        setGuidedQuestionId(first.id);
+        setGuidedQuestionAnnouncement({ index: 1, total: questionsInPresentationOrder(questions.current, data.questionOrder).filter((question) => eligibility.current[question.id] !== false).length, label: first.label, message: "questionAnnouncement" });
+      }
+      if (first) setGuidedSectionId(first.section ?? "__unsectioned");
+      setGuidedMode(true);
+      return;
+    }
     const first = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current, t("otherQuestions"))[0];
     if (first && !guidedSectionId) setGuidedSectionId(first.id);
     setGuidedMode(true);
-  }, [data, guidedSectionId]);
+  }, [data, guidedQuestionId, guidedSectionId]);
 
   useEffect(() => {
+    if (questionGuidedMode && guidedMode && data) {
+      const orderedQuestions = questionsInPresentationOrder(questions.current, data.questionOrder);
+      const available = orderedQuestions.filter((question) => eligibility.current[question.id] !== false);
+      if (!available.length) return;
+      if (!available.some((question) => question.id === guidedQuestionId)) {
+        const previousIndex = orderedQuestions.findIndex((question) => question.id === guidedQuestionId);
+        const next = available.find((question) => orderedQuestions.findIndex((item) => item.id === question.id) > previousIndex) ?? available[available.length - 1];
+        setGuidedQuestionId(next.id);
+        setGuidedSectionId(next.section ?? "__unsectioned");
+        setGuidedError(false);
+        const index = available.findIndex((question) => question.id === next.id);
+        setGuidedQuestionAnnouncement({ index: index + 1, total: available.length, label: next.label, message: "availableQuestionAnnouncement" });
+        if (frameReady) {
+          post({ type: "guided", enabled: true, section: next.section ?? "__unsectioned", question: next.id, questionMode: true });
+          post({ type: "focus-question", id: next.id });
+        }
+      }
+      return;
+    }
     if (!guidedMode || !data) return;
     const groups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current, t("otherQuestions"));
     if (!groups.length) return;
@@ -258,21 +310,27 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       setGuidedAnnouncement(`${t("availableChanged")}: ${next.title}.`);
       if (frameReady) post({ type: "guided", enabled: true, section: next.id });
     }
-  }, [counts, data, frameReady, guidedMode, guidedSectionId, locale, post]);
+  }, [counts, data, frameReady, guidedMode, guidedSectionId, guidedQuestionId, locale, post, questionGuidedMode]);
 
   useEffect(() => {
+    if (questionGuidedMode && guidedMode && activeGuidedQuestion) {
+      post({ type: "guided", enabled: true, section: activeGuidedQuestion.section ?? "__unsectioned", question: activeGuidedQuestion.id, questionMode: true });
+      if (frameReady) post({ type: "focus-question", id: activeGuidedQuestion.id });
+      return;
+    }
     if (!guidedMode || !activeGuidedGroup) return;
     post({ type: "guided", enabled: true, section: activeGuidedGroup.id });
-  }, [activeGuidedGroup?.id, frameReady, guidedMode, post]);
+  }, [activeGuidedGroup?.id, activeGuidedQuestion?.id, frameReady, guidedMode, post, questionGuidedMode]);
 
   useEffect(() => {
     if (confirming || !focusQuestionAfterClose.current) return;
     const id = focusQuestionAfterClose.current;
     focusQuestionAfterClose.current = null;
     const targetQuestion = questions.current.find((question) => question.id === id);
-    if (guidedMode && targetQuestion?.section) goToGuidedGroup(targetQuestion.section, id);
+    if (guidedMode && questionGuidedMode) goToGuidedQuestion(id);
+    else if (guidedMode && targetQuestion?.section) goToGuidedGroup(targetQuestion.section, id);
     else post({ type: "focus-question", id });
-  }, [confirming, goToGuidedGroup, guidedMode, post]);
+  }, [confirming, goToGuidedGroup, goToGuidedQuestion, guidedMode, post, questionGuidedMode]);
 
   const applyLock = useCallback((v: boolean) => { lockedRef.current = v; setLocked(v); post({ type: "lock", locked: v }); }, [post]);
   const reloadLatestVersion = useCallback(() => {
@@ -463,7 +521,18 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         window.open(m.url, "_blank", "noopener,noreferrer");
       } else if (m.type === "hello") {
         if (typeof m.lang === "string" && m.lang) setQuestionnaireLanguage(m.lang);
-        post({ type: "init", questions: questions.current, questionOrderGroups: data?.questionOrderGroups ?? [], questionOrderAssignment: data?.questionOrderAssignment, answers: answers.current, recordGroups: recordGroupsRef.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided", guidedSection: guidedSectionId, locale, messages: respondentBridgeMessages(locale) });
+        const questionMode = data?.presentation === "guided-question";
+        const initialGuidedQuestion = questionMode
+          ? guidedQuestionId ?? questionsInPresentationOrder(questions.current, data?.questionOrder).find((question) => eligibility.current[question.id] !== false)?.id ?? null
+          : null;
+        const initialGuidedQuestionData = initialGuidedQuestion ? questions.current.find((question) => question.id === initialGuidedQuestion) : null;
+        if (questionMode && initialGuidedQuestion) {
+          setGuidedQuestionId(initialGuidedQuestion);
+          setGuidedSectionId(initialGuidedQuestionData?.section ?? "__unsectioned");
+          const orderedEligible = questionsInPresentationOrder(questions.current, data?.questionOrder).filter((question) => eligibility.current[question.id] !== false);
+          setGuidedQuestionAnnouncement({ index: orderedEligible.findIndex((question) => question.id === initialGuidedQuestion) + 1, total: orderedEligible.length, label: initialGuidedQuestionData?.label ?? "", message: "questionAnnouncement" });
+        }
+        post({ type: "init", questions: questions.current, questionOrderGroups: data?.questionOrderGroups ?? [], questionOrderAssignment: data?.questionOrderAssignment, answers: answers.current, recordGroups: recordGroupsRef.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided" || questionMode, guidedSection: initialGuidedQuestionData?.section ?? guidedSectionId, guidedQuestion: initialGuidedQuestion, guidedQuestionMode: questionMode, locale, messages: respondentBridgeMessages(locale) });
         setFrameReady(true);
       } else if (m.type === "set" && typeof m.id === "string") {
         const part: { value?: unknown; note?: unknown } = {};
@@ -494,7 +563,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [data, flush, guidedSectionId, locale, post, queue, recount]);
+  }, [data, flush, guidedQuestionId, guidedSectionId, locale, post, queue, recount]);
 
   useEffect(() => {
     if (frameReady) post({ type: "locale", locale, messages: respondentBridgeMessages(locale) });
@@ -622,6 +691,18 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   }, null, 2);
 
   function continueGuided() {
+    if (questionGuidedMode) {
+      if (!activeGuidedQuestion || Object.keys(lengthDrafts).length) return;
+      if (guidedStepIssues.length) {
+        setGuidedError(true);
+        window.setTimeout(() => guidedErrorRef.current?.focus(), 0);
+        return;
+      }
+      setGuidedError(false);
+      if (activeGuidedQuestionIndex >= guidedQuestions.length - 1) setConfirming(true);
+      else goToGuidedQuestion(guidedQuestions[activeGuidedQuestionIndex + 1].id);
+      return;
+    }
     if (!activeGuidedGroup) return;
     if (Object.keys(lengthDrafts).length) return;
     if (guidedStepIssues.length) {
@@ -657,7 +738,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const focusLengthDraft = () => {
     if (!firstLengthDraft || !lengthDraftFocusId) return;
     const target = questions.current.find((question) => question.id === lengthDraftFocusId);
-    if (guidedMode && target?.section) goToGuidedGroup(target.section, target.id);
+    if (guidedMode && questionGuidedMode) goToGuidedQuestion(target?.id ?? "");
+    else if (guidedMode && target?.section) goToGuidedGroup(target.section, target.id);
     else post({ type: "focus-question", id: lengthDraftFocusId });
   };
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? t("locked") : t("autosaveOn"), saving: t("saving"), saved: t("saved"), error: t("retrying"), failed: t("notSaved"), offline: hasUnsavedChanges ? t("offlinePending") : t("offline") };
@@ -742,7 +824,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
                                     className="rs-question-nav-item"
                                     onClick={() => {
                                       setQuestionNavOpen(false);
-                                      if (guidedMode) goToGuidedGroup(group.id, question.id);
+                                      if (guidedMode && questionGuidedMode) goToGuidedQuestion(question.id);
+                                      else if (guidedMode) goToGuidedGroup(group.id, question.id);
                                       else post({ type: "focus-question", id: question.id });
                                     }}
                                   >
@@ -778,17 +861,24 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         <section className="rs-guided" aria-label={t("questionnaireSections")}>
           <div className="rs-guided-step">
             <div>
-              <p className="rs-guided-count" aria-current="step">{t("section", { index: activeGuidedIndex + 1, total: questionGroups.length })}</p>
-              <h1><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedGroup.title}</bdi></h1>
-              {activeGuidedGroup.description && <p><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedGroup.description}</bdi></p>}
+              <p className="rs-guided-count" aria-current="step">{questionGuidedMode
+                ? activeGuidedQuestion ? t("questionPosition", { index: activeGuidedQuestionIndex + 1, total: guidedQuestions.length }) : t("questionPosition", { index: 0, total: guidedQuestions.length })
+                : t("section", { index: activeGuidedIndex + 1, total: questionGroups.length })}</p>
+              {questionGuidedMode
+                ? <><h1>{t("question")}</h1><p><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedQuestion?.section ? activeGuidedGroup.title : t("otherQuestions")}</bdi></p></>
+                : <><h1><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedGroup.title}</bdi></h1>{activeGuidedGroup.description && <p><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedGroup.description}</bdi></p>}</>}
             </div>
             <div className="rs-guided-actions">
-              <button className="btn" type="button" disabled={activeGuidedIndex <= 0 || locked} onClick={() => goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>{t("back")}</button>
-              <button className="btn accent" type="button" disabled={locked || !frameReady || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{activeGuidedIndex === questionGroups.length - 1 ? t("reviewAnswers") : t("continue")}</button>
+              <button className="btn" type="button" disabled={(questionGuidedMode ? activeGuidedQuestionIndex <= 0 : activeGuidedIndex <= 0) || locked} onClick={() => questionGuidedMode
+                ? activeGuidedQuestionIndex > 0 && goToGuidedQuestion(guidedQuestions[activeGuidedQuestionIndex - 1].id)
+                : activeGuidedIndex > 0 && goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>{t("back")}</button>
+              <button className="btn accent" type="button" disabled={locked || !frameReady || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{(questionGuidedMode ? activeGuidedQuestionIndex === guidedQuestions.length - 1 : activeGuidedIndex === questionGroups.length - 1) ? t("reviewAnswers") : t("continue")}</button>
               <button className="btn" type="button" disabled={locked} onClick={() => { setGuidedMode(false); setGuidedError(false); post({ type: "guided", enabled: false }); }}>{t("showAll")}</button>
             </div>
           </div>
-          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{guidedAnnouncement}</p>
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{guidedQuestionAnnouncement
+            ? <LocalizedMessage locale={locale} message={guidedQuestionAnnouncement.message} values={{ index: guidedQuestionAnnouncement.index, total: guidedQuestionAnnouncement.total, question: guidedQuestionAnnouncement.label }} valueLang={questionnaireLanguage} />
+            : guidedAnnouncement}</p>
           {guidedError && guidedStepIssues.length > 0 && (
             <div className="rs-guided-error" ref={guidedErrorRef} role="alert" tabIndex={-1} aria-labelledby="rs-guided-error-title">
               <h2 id="rs-guided-error-title">{t("checkSection")}</h2>
@@ -798,11 +888,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           )}
         </section>
       )}
-      {guidedMode && questionGroups.length === 0 && (
+      {guidedMode && (questionGuidedMode ? guidedQuestions.length === 0 : questionGroups.length === 0) && (
         <section className="rs-guided rs-guided-empty" aria-labelledby="rs-guided-empty-title">
           <div>
             <h1 id="rs-guided-empty-title">{t("noQuestions")}</h1>
-            <p>{t("noQuestionsDescription")}</p>
+            <p>{questionGuidedMode ? t("noEligibleQuestionsDescription") : t("noQuestionsDescription")}</p>
             <div className="rs-guided-actions">
               <button className="btn accent" type="button" onClick={() => setConfirming(true)}>{t("reviewAnswers")}</button>
             </div>

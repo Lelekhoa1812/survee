@@ -584,8 +584,8 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
   }
   str(raw.title, "title", m, { max: LIMITS.maxTitle, label: '"title"' });
   if (raw.description !== undefined) str(raw.description, "description", m, { max: LIMITS.maxDescription, label: '"description"', optional: true });
-  if (raw.presentation !== undefined && raw.presentation !== "all" && raw.presentation !== "guided") {
-    add(ctx, "KQA203", '"presentation" must be "all" or "guided".', undefined, { offset: m.at("presentation"), path: "presentation" });
+  if (raw.presentation !== undefined && raw.presentation !== "all" && raw.presentation !== "guided" && raw.presentation !== "guided-question") {
+    add(ctx, "KQA203", '"presentation" must be "all", "guided", or "guided-question".', undefined, { offset: m.at("presentation"), path: "presentation" });
   }
   if (raw.presentation === "guided" && (!Array.isArray(raw.sections) || raw.sections.length === 0)) {
     add(ctx, "KQA220", '"presentation": "guided" requires at least one declared section.', 'Add sections and assign every question to one of them, or use "presentation": "all".', { offset: m.at("presentation"), path: "presentation" });
@@ -877,7 +877,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       const questionIndexes = new Map<string, number>();
       for (const [index, item] of qs.entries()) if (isObj(item) && typeof item.id === "string") questionIndexes.set(item.id, index);
       if (groups.length > Math.floor(LIMITS.maxQuestions / 2)) add(ctx, "KQA224", `"questionOrderGroups" has ${groups.length} groups; the maximum is ${Math.floor(LIMITS.maxQuestions / 2)}.`, undefined, { offset: m.at(groupPath), path: groupPath });
-      if (raw.presentation === "guided") add(ctx, "KQA224", '"questionOrderGroups" is supported only when presentation is "all".', 'Remove questionOrderGroups or use the default full-page presentation; guided section navigation cannot be reordered.', { offset: m.at("presentation"), path: "presentation" });
+      if (raw.presentation === "guided" || raw.presentation === "guided-question") add(ctx, "KQA224", '"questionOrderGroups" is supported only when presentation is "all".', 'Remove questionOrderGroups or use the default full-page presentation; guided question presentation keeps authored order.', { offset: m.at("presentation"), path: "presentation" });
       groups.forEach((item, groupIndex) => {
         const path = `${groupPath}[${groupIndex}]`;
         if (!isObj(item)) return void add(ctx, "KQA224", `${path} must be an object with an id and questionIds.`, undefined, { offset: m.at(path), path });
@@ -991,11 +991,11 @@ function checkBindings(manifest: Manifest, b: BCtx) {
     return loc ? ctx.html.slice(loc.startOffset, loc.endOffset).replace(/\s+/g, " ") : `<${el.tagName}>`;
   };
 
-  if (manifest.presentation === "guided") {
+  if (manifest.presentation === "guided" || manifest.presentation === "guided-question") {
     const blockCounts = new Map<string, number>();
     for (const list of b.questionLists) {
       const sectionId = attr(list.el, "data-kqa-question-list") ?? "";
-      if (!(manifest.sections ?? []).some((section) => section.id === sectionId)) {
+      if ((sectionId === "" && manifest.presentation !== "guided-question") || (sectionId !== "" && !(manifest.sections ?? []).some((section) => section.id === sectionId))) {
         add(ctx, "KQA321", `data-kqa-question-list="${sectionId}" does not name a declared section.`, undefined, { offset: startOf(list.el), snippet: tagSrc(list.el) });
       }
     }
@@ -1009,8 +1009,9 @@ function checkBindings(manifest: Manifest, b: BCtx) {
       blockCounts.set(id, (blockCounts.get(id) ?? 0) + 1);
       const parent = block.ancestors[block.ancestors.length - 1];
       const parentListId = parent ? attr(parent, "data-kqa-question-list") : undefined;
-      if (parentListId !== question.section) {
-        add(ctx, "KQA321", `Question block "${id}" must be a direct child of data-kqa-question-list="${question.section}".`, `Wrap the question blocks for section "${question.section}" in one element marked data-kqa-question-list="${question.section}".`, { offset: startOf(block.el), snippet: tagSrc(block.el), questionId: id });
+      const expectedListId = question.section ?? "";
+      if (parentListId !== expectedListId) {
+        add(ctx, "KQA321", `Question block "${id}" must be a direct child of data-kqa-question-list="${expectedListId}".`, `Wrap the question in one element marked data-kqa-question-list="${expectedListId}" and keep its whole block under that list.`, { offset: startOf(block.el), snippet: tagSrc(block.el), questionId: id });
       }
     }
     for (const question of manifest.questions) {

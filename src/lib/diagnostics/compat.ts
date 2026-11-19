@@ -29,13 +29,16 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
   const peopleWithExclusiveConflicts = new Map<string, number>();
   const repeatDataChanges = new Map<string, Set<number>>();
   let submitted = 0;
+  let peopleWithAnyAnswers = 0;
 
   // Aggregate participant data once. Compatibility checks run both during admin previews and MCP
   // version changes, so scanning every participant again for each question/option is costly.
   for (const [personIndex, person] of answers.entries()) {
     if (person.status === "submitted") submitted += 1;
+    let personHasAnyAnswer = false;
     for (const [questionId, answer] of Object.entries(person.answers)) {
       if (answer.value !== undefined || !!answer.note) {
+        personHasAnyAnswer = true;
         answeredPeopleByQuestion.set(questionId, (answeredPeopleByQuestion.get(questionId) ?? 0) + 1);
       }
 
@@ -78,7 +81,10 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
     }
     for (const [questionId, rows] of Object.entries(person.recordGroups ?? {})) {
       const activeRows = rows.filter((row) => !row.deletedAt);
-      if (activeRows.length) answeredPeopleByQuestion.set(questionId, (answeredPeopleByQuestion.get(questionId) ?? 0) + 1);
+      if (activeRows.length) {
+        personHasAnyAnswer = true;
+        answeredPeopleByQuestion.set(questionId, (answeredPeopleByQuestion.get(questionId) ?? 0) + 1);
+      }
       const oldQuestion = prevById.get(questionId);
       const nextQuestion = nextById.get(questionId);
       if (oldQuestion?.type !== "repeat" || nextQuestion?.type !== "repeat" || activeRows.length === 0) continue;
@@ -98,6 +104,13 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
         repeatDataChanges.get(questionId)!.add(personIndex);
       }
     }
+    if (personHasAnyAnswer) peopleWithAnyAnswers += 1;
+  }
+
+  const previousPresentation = previous.presentation ?? "all";
+  const nextPresentation = next.presentation ?? "all";
+  if (previousPresentation !== nextPresentation && peopleWithAnyAnswers > 0) {
+    out.push(make("KQA710", `The respondent presentation changed from "${previousPresentation}" to "${nextPresentation}" while ${peopleWithAnyAnswers} ${peopleWithAnyAnswers === 1 ? "person has" : "people have"} saved answers. Their data remains attached to the same questions, but the changed flow may affect context and burden.`));
   }
 
   const nextByNewLabel = new Map<string, (typeof next.questions)[number]>();

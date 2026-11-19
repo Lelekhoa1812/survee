@@ -26,7 +26,7 @@ The everyday questions are a single choice (`single`), checkboxes (`multi`), a o
 3. The runtime reads the controls you marked with `data-kqa`, sends every change to the app, and fills the controls back in when the person returns. The app validates each value against your manifest and saves it.
 4. When the person presses **Review answers** in the app's top bar, KQA opens a **Check your answers** review. The respondent can see current eligible answers, notes, and any answer that needs attention, then return to edit a question. They can open the review even when required answers are still empty. Submitting locks answers; the host can reopen them. Questions inactive under current routing rules are omitted from the main review list. A collapsed **Previously answered hidden questions** section lets respondents inspect and clear retained answer values or optional notes without changing the answer that controls routing. Clearing a value leaves its note intact; clearing a note leaves its value intact. The section explains that remaining answers may reappear if a question becomes eligible again.
 
-Your file is therefore three things: a manifest, markup with bindings, and your own look. By default respondents see the whole eligible questionnaire on one page. You can opt into the KQA guided section flow with `"presentation": "guided"` (section markup requirements are below).
+Your file is therefore three things: a manifest, markup with bindings, and your own look. By default respondents see the whole eligible questionnaire on one page. You can opt into guided steps with `"presentation": "guided"` (one section per step) or `"presentation": "guided-question"` (one eligible root question per step). The markup requirements are below.
 
 ## 2. File rules
 
@@ -48,12 +48,12 @@ Treat language access as an end-to-end journey: include the invitation, consent/
 
 ### Question and section markers
 
-These markers let KQA identify each complete question block and its section list. In the default `all` presentation they are optional, except when you want source-preserving MCP edits. In `guided` presentation they are required so KQA can hide and reveal a complete section without hiding controls that belong to another question:
+These markers let KQA identify each complete question block and its containing list. In the default `all` presentation they are optional, except when you want source-preserving MCP edits. In either guided presentation they are required so KQA can hide and reveal a complete question without hiding controls that belong to another question:
 
 * Put `data-kqa-question-list="SECTION_ID"` on the element that directly contains a section's question blocks. Use an empty value (`data-kqa-question-list=""`) for questions without a section.
 * Put `data-kqa-question-id="QUESTION_ID"` on the single root element for each question block. That element must be a direct child of its matching marked list.
 
-In guided presentation, every manifest question must have exactly one `data-kqa-question-id` wrapper, that wrapper must be a direct child of a `data-kqa-question-list` matching its manifest section, and every list marker must name a declared section. The checker reports incomplete markup as KQA321. `preview_questionnaire_block_patch` also uses these markers for targeted edits and supports ordinary, non-custom questions only. It accepts one root element per added or replacement block and rejects scripts and inline event-handler attributes in those fragments. It can move a marked question between sections and place an added or moved question before or after an unchanged question in the same section. It does not infer custom JavaScript behavior. If markers are absent, duplicated, or out of sync with the manifest, use the complete-file preview and apply workflow in `MCP.md`.
+In either guided presentation, every manifest question must have exactly one `data-kqa-question-id` wrapper, that wrapper must be a direct child of a `data-kqa-question-list` matching its manifest section, and every non-empty list marker must name a declared section. `guided` requires at least one section and assigns every question to one. `guided-question` does not require sections; for an unsectioned question, use `data-kqa-question-list=""`. The checker reports incomplete markup as KQA321. `preview_questionnaire_block_patch` also uses these markers for targeted edits and supports ordinary, non-custom questions only. It accepts one root element per added or replacement block and rejects scripts and inline event-handler attributes in those fragments. It can move a marked question between sections and place an added or moved question before or after an unchanged question in the same section. It does not infer custom JavaScript behavior. If markers are absent, duplicated, or out of sync with the manifest, use the complete-file preview and apply workflow in `MCP.md`.
 
 ### What the sandbox allows
 
@@ -66,7 +66,7 @@ The page runs in an iframe with `sandbox="allow-scripts allow-forms"` and a stri
 * **No browser storage.** `localStorage`, `sessionStorage`, cookies and IndexedDB are unavailable because the frame has an opaque origin. Do not use them. Use `KQA.set` / `KQA.get`.
 * **No modal dialogs.** `alert`, `confirm`, `prompt` do not work in a sandboxed frame. Build inline UI.
 * **No file inputs, downloads, printing, clipboard access or `window.open`.** Copy-to-clipboard buttons do not work, so leave them out.
-* **Links:** a link to `https://`, `mailto:` or `tel:` opens in a new window through the app (with no connection back to the page), so ordinary `<a href="https://…">` links work. Links to other files do not. In `presentation: "all"`, `#section` links scroll within the page; in guided mode, links cannot reveal a different section, so use the shell's Back/Continue controls instead. Do not navigate the page with script (`location`, `history`).
+* **Links:** a link to `https://`, `mailto:` or `tel:` opens in a new window through the app (with no connection back to the page), so ordinary `<a href="https://…">` links work. Links to other files do not. In `presentation: "all"`, `#section` links scroll within the page; in guided mode, links cannot reveal a different step, so use the shell's Back/Continue controls instead. Do not navigate the page with script (`location`, `history`).
 
 The checker reports each of these before upload (codes KQA4xx).
 
@@ -124,12 +124,14 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `format` | yes | Exactly `"kqa/1"` |
 | `title` | yes | 1 to 120 characters. Shown in the app's top bar and exports |
 | `description` | no | Up to 500 characters |
-| `presentation` | no | `"all"` (default) or `"guided"`; guided shows one eligible section at a time and requires section assignments and question/list markers |
+| `presentation` | no | `"all"` (default), `"guided"` (one eligible section per step), or `"guided-question"` (one eligible root question per step); guided presentations require question/list markers |
 | `sections` | no | Up to 50. Groups and orders questions in exports and the answers view |
 | `questionOrderGroups` | no | Off by default. Explicit groups of adjacent, independent root questions whose respondent-facing order may vary; supported only with `presentation: "all"` |
 | `questions` | yes | 1 to 500 questions, in the order they should appear in exports |
 
 `questionOrderGroups` is a list of `{ "id", "questionIds" }` objects. Each group needs a stable id and at least two question ids in their authored manifest order. Members must form one contiguous run, share the same section (or all be unsectioned), use standard non-custom questions, and have no `when` condition. No question may use a group member as a routing source. The checker reports unsafe configurations as KQA224.
+
+Question-order groups work only with `presentation: "all"`. Neither guided mode can honor a respondent-specific reordering: `guided` follows the order sections first appear in the manifest questions, and `guided-question` follows manifest question order. Keep the authored order fixed in either guided flow.
 
 Each group member must have one whole-question `data-kqa-question-id` wrapper, including any instructions or supporting content for that item. The wrappers must be adjacent direct children of one `data-kqa-question-list` matching the group section; for unsectioned groups, use `data-kqa-question-list=""`. Keep explanatory content inside its question wrapper rather than between members. The checker reports incomplete or mismatched markup as KQA322. The runtime moves complete wrappers in the DOM, so visual, reading, and keyboard sequence follow the same assigned order. If runtime markup does not match, it keeps the authored order.
 
@@ -435,6 +437,7 @@ The host can upload a new version. The app compares it with the current one and 
 * An option that disappeared but was chosen (KQA702).
 * A question that looks renamed (KQA703).
 * A new required question when people have already submitted (KQA704).
+* A respondent presentation change after people have answered; question data remains attached, but step grouping may change context or burden (KQA710).
 
 So: **keep question ids and option values. Change labels, wording, layout and styling freely. Add questions freely. If you must remove or retype a question, say so in your reply.**
 
@@ -457,6 +460,7 @@ Class names are prefixed `kq-` so they never clash with your own. Use the kit un
 * Group long questionnaires into sections of about 5 to 8 questions with a contents rail.
 * With the default `presentation: "all"`, the respondent shell adds **Questions** navigation grouped by manifest sections. It shows answered counts and can focus a chosen, currently eligible question. Hidden questions are omitted; their saved answers remain retained and may reappear when eligible.
 * With `presentation: "guided"`, KQA shows one currently eligible section at a time with Back and Continue controls. Continue checks required answers and multi-select minimum/maximum limits in that section, preserves answers when navigating, and opens the normal answer review from the last section. A non-empty checkbox answer below `minSelections` blocks Continue and final submission; an optional blank remains a valid skip. Respondents can choose **Show all questions** at any time. Routing can change which sections are available; if the current section becomes empty, KQA moves to the first available section and announces the change without moving focus. If no section is eligible, KQA offers the answer review so the respondent can finish. Guided mode is opt-in and needs the markers above; the questionnaire still supplies the HTML and question styling.
+* With `presentation: "guided-question"`, KQA shows one eligible root question at a time in manifest order, with Back and Continue controls. Every question type, including a repeat group, is one root step. Continue checks that question's requiredness and answer constraints; optional unanswered questions can be skipped. Routing can make the current question inactive; KQA advances to an eligible question and announces the change while retaining the inactive answer. If no question is eligible, KQA offers the standard answer review. Sections remain optional organizational metadata; if used, each question's wrapper stays in its matching list. Guided-question mode is opt-in, uses the markers above, and cannot be combined with `questionOrderGroups`.
 * When an answer changes routing, the frame announces how many questions are shown or hidden through a concise polite status message; it does not move focus. Pre-submit review keeps inactive answers in a collapsed section so respondents can inspect and clear a retained value or optional note independently. The section is collapsed by default to avoid unexpectedly displaying previously hidden responses; all clear actions are disabled after submission.
 * Test at 390 px wide and in dark mode. No sideways scrolling.
 * Every interactive element reachable and usable by keyboard, with a visible focus ring.

@@ -241,7 +241,7 @@ export const manifestSchema = z.object({
   title: z.string().min(1).max(LIMITS.maxTitle),
   description: z.string().max(LIMITS.maxDescription).optional(),
   /** Opt-in step presentation. Omitted manifests retain the full-page experience. */
-  presentation: z.enum(["all", "guided"]).optional(),
+  presentation: z.enum(["all", "guided", "guided-question"]).optional(),
   sections: z.array(sectionSchema).max(LIMITS.maxSections).optional(),
   /** Off by default. The checker restricts groups to adjacent, independent root questions. */
   questionOrderGroups: z.array(questionOrderGroupSchema).max(Math.floor(LIMITS.maxQuestions / 2)).optional(),

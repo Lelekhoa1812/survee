@@ -22,8 +22,9 @@ describe("question-order group checker", () => {
     expect(report.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
   });
 
-  it("rejects guided presentation and non-contiguous groups", () => {
+  it("rejects either guided presentation and non-contiguous groups", () => {
     expect(checkHtml(html({ ...base, presentation: "guided" })).diagnostics.map((item) => item.code)).toContain("KQA224");
+    expect(checkHtml(html({ ...base, presentation: "guided-question" })).diagnostics.map((item) => item.code)).toContain("KQA224");
     const nonContiguous = { ...base, questionOrderGroups: [{ id: "context", questionIds: ["first", "anchor"] }] };
     expect(checkHtml(html(nonContiguous)).diagnostics.map((item) => item.code)).toContain("KQA224");
   });

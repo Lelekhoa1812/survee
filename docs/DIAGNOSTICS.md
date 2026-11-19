@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 94 codes. Severity is **error**, **warning** or **note**.
+There are 95 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -309,9 +309,9 @@ randomizeOptions applies only to unordered nominal single, multi, or select ques
 
 Severity: **error**
 
-Question-order groups must be explicit, disjoint runs of adjacent, independent standard questions. Routing dependencies and guided sections rely on the authored manifest order.
+Question-order groups must be explicit, disjoint runs of adjacent, independent standard questions. Routing dependencies and guided presentations rely on the authored manifest order.
 
-**How to fix:** Use groups of adjacent questions in the same section, list ids in manifest order, avoid custom or routed questions, and do not reference group questions from routing conditions. Keep guided presentation fixed.
+**How to fix:** Use groups of adjacent questions in the same section, list ids in manifest order, avoid custom or routed questions, and do not reference group questions from routing conditions. Keep either guided presentation fixed.
 
 ### KQA220: Guided presentation needs sections
 
@@ -323,13 +323,13 @@ Guided presentation needs declared sections and assigns every question to one of
 
 ## Controls and bindings (KQA3xx, KQA4xx)
 
-### KQA321: Guided section markup is incomplete
+### KQA321: Guided question markup is incomplete
 
 Severity: **error**
 
-Guided presentation hides inactive sections and needs one stable wrapper for every question, inside the matching section list. Without those markers KQA cannot safely switch sections.
+Guided presentations hide inactive question blocks and need one stable wrapper for every question, inside its matching question list. Without those markers KQA cannot safely switch steps.
 
-**How to fix:** Mark each section container with data-kqa-question-list="<section-id>" and each complete question wrapper with data-kqa-question-id="<question-id>" as a direct child.
+**How to fix:** Mark each question list with data-kqa-question-list="<section-id>" (or an empty value for unsectioned questions in guided-question mode) and each complete question wrapper with data-kqa-question-id="<question-id>" as a direct child.
 
 ### KQA322: Question-order group markup is incomplete
 
@@ -870,3 +870,11 @@ Severity: **warning**
 A repeated-record field or row limit changed while people had saved rows, so some stored values may not map to the new definition or may exceed its cap.
 
 **How to fix:** Keep stable repeat field ids and compatible types, or review affected saved records and respondent recovery before publishing.
+
+### KQA710: Respondent presentation changed
+
+Severity: **warning**
+
+The full-page, guided-section, or guided-question flow changed while people had saved answers. The answers remain attached to the same questions, but a change in grouping and progression may affect context, burden, or comparability.
+
+**How to fix:** Pretest the revised flow with intended respondents, notify active respondents where appropriate, and document the presentation change when comparing responses across versions.

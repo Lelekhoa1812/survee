@@ -46,7 +46,7 @@ Write the manifest before any markup. For each question decide:
 4. **`options`**: values are stable machine keys (`very-likely`), labels are human text ("Very likely"). Do not use the label as the value.
 5. **`required`**, **`note`**, **`help`**, **`section`** as needed.
 
-Group questions into sections of about 5 to 8. Give each section an `id`, `title` and a one-line `description`. Set `presentation` to `"guided"` only when a section-by-section journey suits the task; otherwise leave it out (the default is `"all"`). Guided mode requires every question to have a section and each question block to use the markers in `FORMAT.md`.
+Group related questions into sections of about 5 to 8. Give each section an `id`, `title` and a one-line `description`. Leave out `presentation` for the default full-page flow. Set it to `"guided"` when a section-by-section journey suits the task, or to `"guided-question"` when progressive focus on one question suits the task and the extra step changes are acceptable. Both modes require one marked whole-question wrapper per question as specified in `FORMAT.md`; section-based `guided` additionally requires every question to belong to a declared section. A guided-question questionnaire may use sections as organizational metadata or leave questions unsectioned.
 
 ### Review the question content
 
@@ -66,7 +66,7 @@ For a structured agent critique, follow the `kqa-question-review/1` contract ret
 
 For each questionnaire, document the target population and unit, sample frame/source, recruitment and selection method, who may be missed, eligibility rules, collection mode/language, and whether the purpose is qualitative learning or population estimation. Follow the sampling and reporting plan in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md#sampling-and-reporting-plan); do not claim representativeness or a margin of error the design cannot support.
 
-For a new or materially changed respondent flow, observe intended users completing the questionnaire end to end, then record task completion, hesitation, errors, recovery, and misunderstandings. This is different evidence from asking how a participant interprets one question. Cognitive probes and task observation can share a moderated session where practical; report the findings separately. If no representative task sessions occurred, report usability as untested; do not infer it from a prototype walkthrough, checker result, or screenshot.
+For a new or materially changed respondent flow, observe intended users completing the questionnaire end to end, then record task completion, hesitation, errors, recovery, and misunderstandings. This is different evidence from asking how a participant interprets one question. Cognitive probes and task observation can share a moderated session where practical; report the findings separately. For `guided-question`, specifically observe Back/Continue, optional skips, a required-answer correction, and the transition when routing makes the current question inactive. If no representative task sessions occurred, report usability as untested; do not infer it from a prototype walkthrough, checker result, or screenshot.
 
 Before fielding, include a host-approved respondent notice covering purpose, access to identifiable answers, use, retention/deletion expectations, and contact route. If a material fact is unresolved, stop and have the accountable owner resolve it. If human-subjects research may be involved, route the determination to the host's responsible ethics/HRPP/IRB office; the agent does not decide. See the [respondent notice and ethics gate](INTERVIEW_PACKAGES.md#respondent-notice-privacy-and-ethics).
 
@@ -166,7 +166,7 @@ Dropdown, number, scale, date, rank, and repeat use the same card. Copy those pa
 4. Update the contents rail (`.kq-rail`) so each link points at a section `id`.
 5. Do not add anything the sandbox blocks (FORMAT.md section 2).
 6. Keep the content and controls semantic HTML. KQA's injected runtime is required for saving, progress, locking, and conditional routing; the page is not an offline or no-JavaScript questionnaire. Page-authored scripts should add presentation or custom-control behavior only and must use the KQA API for answers.
-7. In guided mode, use the KQA section controls rather than building a competing pager in questionnaire HTML. Test every routing path: a conditional section can disappear or reappear, and its saved answers are retained. Continue validates the current step; final submission still uses the standard review and server validation.
+7. In either guided mode, use the KQA step controls rather than building a competing pager in questionnaire HTML. Section `guided` validates the current section step; `guided-question` validates the current eligible root question and keeps manifest order. Test every routing path: a current section or question can become unavailable, another step becomes active, and hidden answers stay retained. Question-order groups are unsupported in either guided mode. Final submission still uses the standard review and server validation.
 
 ## Step 4. Self-check before you reply
 

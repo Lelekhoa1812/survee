@@ -30,6 +30,55 @@ function start(answers: Record<string, { value: unknown; note?: string }> = {}) 
 }
 
 describe("questionnaire bridge conditional eligibility", () => {
+  it("shows one marked question at a time, preserves routing, follows focus requests, and clears the filter for show-all", () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <div data-kqa-question-list="a">
+        <section data-kqa-question-id="first"><input data-kqa="first"></section>
+        <section data-kqa-question-id="second"><input data-kqa="second"></section>
+      </div>
+      <div data-kqa-question-list="b">
+        <section data-kqa-question-id="conditional"><input data-kqa="conditional"></section>
+      </div>
+    </body></html>`, { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    const send = (data: Record<string, unknown>) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, ...data }, source: window }));
+    send({ type: "init", guided: true, guidedSection: "a", guidedQuestion: "first", guidedQuestionMode: true, questions: [
+      { id: "first", type: "text", label: "First", section: "a" },
+      { id: "second", type: "text", label: "Second", section: "a" },
+      { id: "conditional", type: "text", label: "Conditional", section: "b", when: { all: [{ question: "first", operator: "equals", value: "show" }] } },
+    ], answers: { first: { value: "Saved" }, conditional: { value: "Retained" } } });
+    const first = window.document.querySelector<HTMLElement>('[data-kqa-question-id="first"]')!;
+    const second = window.document.querySelector<HTMLElement>('[data-kqa-question-id="second"]')!;
+    const conditional = window.document.querySelector<HTMLElement>('[data-kqa-question-id="conditional"]')!;
+    expect(first.hidden).toBe(false);
+    expect(second.hidden).toBe(true);
+    expect(conditional.hidden).toBe(true);
+
+    send({ type: "guided", enabled: true, section: "a", question: "second", questionMode: true });
+    expect(first.hidden).toBe(true);
+    expect(second.hidden).toBe(false);
+    expect(conditional.hidden).toBe(true);
+    expect(window.KQA.get("conditional")).toBe("Retained");
+
+    send({ type: "focus-question", id: "conditional" });
+    expect(conditional.hidden).toBe(true); // Routing eligibility still wins over the active-question filter.
+    expect(second.hidden).toBe(true);
+    expect(window.KQA.get("conditional")).toBe("Retained");
+
+    window.KQA.set("first", "show");
+    expect(conditional.hidden).toBe(false); // The selected question becomes visible as soon as its route is satisfied.
+    send({ type: "guided", enabled: true, section: "b", question: "conditional", questionMode: true });
+    expect(conditional.hidden).toBe(false);
+    expect(window.KQA.get("conditional")).toBe("Retained");
+
+    send({ type: "guided", enabled: false });
+    expect(first.hidden).toBe(false);
+    expect(second.hidden).toBe(false);
+    expect(conditional.hidden).toBe(false);
+    window.close();
+  });
+
   it("switches guided sections while preserving conditional visibility and stored answers", () => {
     const dom = new JSDOM(`<!doctype html><html><body>
       <div data-kqa-question-list="a"><section data-kqa-question-id="mode"><input type="radio" data-kqa="mode" name="mode" value="other"></section></div>

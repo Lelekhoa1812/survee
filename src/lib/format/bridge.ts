@@ -13,7 +13,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   if (window.KQA) return;
 
   var listeners = { ready: [], change: [], lock: [], eligibility: [], validation: [] };
-  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, recordGroups: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false, guided: false, guidedSection: null, locale: "en-AU", messages: {} };
+  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, recordGroups: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false, guided: false, guidedSection: null, guidedQuestion: null, guidedQuestionMode: false, locale: "en-AU", messages: {} };
   var errors = [];
   var consoleErrors = [];
   var routingStatusNode = null;
@@ -630,7 +630,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         block.setAttribute("data-kqa-condition-aria-hidden", block.getAttribute("aria-hidden") === null ? "" : block.getAttribute("aria-hidden"));
         block.setAttribute("data-kqa-condition-inert", block.hasAttribute("inert") ? "1" : "0");
       }
-      var shouldHide = !eligible[question.id] || (state.guided && question.section !== state.guidedSection) || block.getAttribute("data-kqa-condition-hidden") === "1";
+      var questionIsInactiveStep = state.guidedQuestionMode ? question.id !== state.guidedQuestion : question.section !== state.guidedSection;
+      var shouldHide = !eligible[question.id] || (state.guided && questionIsInactiveStep) || block.getAttribute("data-kqa-condition-hidden") === "1";
       block.hidden = shouldHide;
       if (shouldHide) {
         block.setAttribute("aria-hidden", "true");
@@ -845,6 +846,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       state.preview = !!m.preview;
       state.guided = !!m.guided;
       state.guidedSection = typeof m.guidedSection === "string" ? m.guidedSection : null;
+      state.guidedQuestion = typeof m.guidedQuestion === "string" ? m.guidedQuestion : null;
+      state.guidedQuestionMode = !!m.guidedQuestionMode;
       state.locked = !!m.locked;
       state.ready = true;
       ensureRoutingStatus();
@@ -897,10 +900,16 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     } else if (m.type === "guided") {
       state.guided = !!m.enabled;
       state.guidedSection = typeof m.section === "string" ? m.section : null;
+      state.guidedQuestion = m.enabled && typeof m.question === "string" ? m.question : null;
+      state.guidedQuestionMode = m.enabled && !!m.questionMode;
       state.questions.forEach(function (question) { setConditionalVisibility(question, state.eligibility || {}); });
     } else if (m.type === "focus-question" && typeof m.id === "string") {
       var targetQuestion = q(m.id);
-      if (targetQuestion && state.guided && state.guidedSection !== targetQuestion.section) {
+      if (targetQuestion && state.guided && state.guidedQuestionMode) {
+        state.guidedQuestion = targetQuestion.id;
+        state.guidedSection = typeof targetQuestion.section === "string" ? targetQuestion.section : "__unsectioned";
+        state.questions.forEach(function (question) { setConditionalVisibility(question, state.eligibility || {}); });
+      } else if (targetQuestion && state.guided && state.guidedSection !== targetQuestion.section) {
         state.guidedSection = targetQuestion.section;
         state.questions.forEach(function (question) { setConditionalVisibility(question, state.eligibility || {}); });
       }
