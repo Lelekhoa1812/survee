@@ -68,11 +68,12 @@ describe("file level", () => {
 });
 
 describe("questionnaire language metadata", () => {
-  it("explains the English KQA shell for non-English questionnaires without treating it as an error", () => {
+  it("explains supported shell locales and the remaining language review gate without treating it as an error", () => {
     const report = checkHtml(STARTER.replace('<html lang="en-AU">', '<html lang="vi-VN">'));
     const diagnostic = find(report, "KQA505");
     expect(diagnostic?.severity).toBe("warning");
-    expect(diagnostic?.message).toContain("KQA's shell and built-in respondent controls remain in English");
+    expect(diagnostic?.message).toContain("Vietnamese, Spanish, and Arabic");
+    expect(diagnostic?.message).toContain("machine-drafted first release");
     expect(report.ok).toBe(true);
   });
 

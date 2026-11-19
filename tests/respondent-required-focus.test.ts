@@ -52,6 +52,31 @@ afterEach(() => {
 });
 
 describe("respondent required-answer recovery", () => {
+  it("switches shell locale and direction while initializing the authored questionnaire independently", async () => {
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token", initialLocale: "en-AU" }));
+      await Promise.resolve();
+    });
+    const shell = host.querySelector<HTMLElement>(".rs")!;
+    const selector = host.querySelector<HTMLSelectElement>(".rs-language select")!;
+    expect(shell.getAttribute("lang")).toBe("en-AU");
+    expect(shell.getAttribute("dir")).toBe("ltr");
+    selector.value = "ar";
+    await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(shell.getAttribute("lang")).toBe("ar");
+    expect(shell.getAttribute("dir")).toBe("rtl");
+    const frame = host.querySelector("iframe")!;
+    const postMessage = vi.spyOn(frame.contentWindow!, "postMessage");
+    await act(async () => window.dispatchEvent(new MessageEvent("message", {
+      data: { kqa: 1, type: "hello", lang: "fr-CA", dir: "ltr" }, origin: "null", source: frame.contentWindow,
+    })));
+    const init = postMessage.mock.calls.map(([message]) => message).find((message: any) => message.type === "init") as any;
+    expect(init.locale).toBe("ar");
+    expect(init.messages.rankConfirm).toBe("استخدام هذا الترتيب");
+    expect(init.messages.lengthCount).toContain("{count}");
+    expect(shell.getAttribute("lang")).toBe("ar");
+  });
+
   it("lets a respondent open the review when every required answer is empty", async () => {
     state.api.mockResolvedValueOnce({
       ok: true, status: 200, data: {

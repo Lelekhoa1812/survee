@@ -152,13 +152,13 @@ describe("questionnaire bridge conditional eligibility", () => {
 
     expect(status.getAttribute("aria-live")).toBe("polite");
     expect(status.getAttribute("aria-atomic")).toBe("true");
-    expect(status.textContent).toBe("1 question is now shown.");
+    expect(status.textContent).toBe("Questions shown: 1.");
     expect(page.window.document.activeElement).toBe(mode);
 
     page.window.KQA.set("mode", "standard");
-    expect(status.textContent).toBe("1 question is now hidden. Answers to hidden questions are retained.");
+    expect(status.textContent).toBe("Questions hidden: 1. Hidden answers are retained.");
     page.window.KQA.set("mode", "standard");
-    expect(status.textContent).toBe("1 question is now hidden. Answers to hidden questions are retained.");
+    expect(status.textContent).toBe("Questions hidden: 1. Hidden answers are retained.");
     page.dom.window.close();
   });
 

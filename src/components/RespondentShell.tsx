@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerMap, AnswerValue, Question, Section } from "@/lib/format/schema";
 import { displayValue } from "@/lib/format/answers";
+import { RESPONDENT_LOCALE_META, type RespondentLocale, type RespondentMessage, respondentBridgeMessages, respondentMessage, respondentTime } from "@/lib/respondent-locale";
 import { api, BrandMark, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 
 type Phase = "loading" | "ready" | "invalid" | "error";
@@ -28,7 +29,7 @@ function mergePatches(older: Patch, newer: Patch): Patch {
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v.trim() !== "" : true);
 
-export function buildQuestionNavigation(questions: Question[], sections: Section[], eligible: Record<string, boolean>) {
+export function buildQuestionNavigation(questions: Question[], sections: Section[], eligible: Record<string, boolean>, fallbackTitle = "Other questions") {
   const definitions = new Map(sections.map((section) => [section.id, section]));
   const groups: { id: string; title: string; description?: string; questions: Question[] }[] = [];
   const byId = new Map<string, (typeof groups)[number]>();
@@ -38,7 +39,7 @@ export function buildQuestionNavigation(questions: Question[], sections: Section
     let group = byId.get(id);
     if (!group) {
       const definition = definitions.get(id);
-      group = { id, title: definition?.title ?? "Other questions", description: definition?.description, questions: [] };
+      group = { id, title: definition?.title ?? fallbackTitle, description: definition?.description, questions: [] };
       byId.set(id, group);
       groups.push(group);
     }
@@ -47,8 +48,22 @@ export function buildQuestionNavigation(questions: Question[], sections: Section
   return groups;
 }
 
-export function RespondentShell({ token }: { token: string }) {
+function LocalePicker({ locale, label, onChange }: { locale: RespondentLocale; label: string; onChange: (value: string) => void }) {
+  return (
+    <label className="rs-language">
+      <span className="sr-only">{label}</span>
+      <select aria-label={label} value={locale} onChange={(event) => onChange(event.target.value)}>
+        {Object.entries(RESPONDENT_LOCALE_META).map(([value, item]) => <option key={value} value={value} lang={item.lang} dir={item.direction}>{item.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+export function RespondentShell({ token, initialLocale = "en-AU" }: { token: string; initialLocale?: RespondentLocale }) {
   const toast = useToast();
+  const [locale, setLocale] = useState<RespondentLocale>(initialLocale);
+  const localeRef = useRef<RespondentLocale>(initialLocale);
+  localeRef.current = locale;
   const [phase, setPhase] = useState<Phase>("loading");
   const [data, setData] = useState<Loaded | null>(null);
   const [save, setSave] = useState<SaveState>("idle");
@@ -70,6 +85,7 @@ export function RespondentShell({ token }: { token: string }) {
   const [guidedError, setGuidedError] = useState(false);
   const [guidedAnnouncement, setGuidedAnnouncement] = useState("");
   const [lengthDrafts, setLengthDrafts] = useState<Record<string, { question: Question; count: number; max: number }>>({});
+  const [questionnaireLanguage, setQuestionnaireLanguage] = useState<string | undefined>();
 
   const frame = useRef<HTMLIFrameElement>(null);
   const questionNavTrigger = useRef<HTMLButtonElement>(null);
@@ -87,6 +103,18 @@ export function RespondentShell({ token }: { token: string }) {
   const inflight = useRef(false);
   const lockedRef = useRef(false);
   const attempts = useRef(0);
+  const localeMeta = RESPONDENT_LOCALE_META[locale];
+  const t = (key: RespondentMessage, values: Record<string, string | number> = {}) => respondentMessage(locale, key, values);
+
+  const changeLocale = (value: string) => {
+    if (!(value in RESPONDENT_LOCALE_META)) return;
+    const next = value as RespondentLocale;
+    setLocale(next);
+    try {
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `kqa-respondent-locale=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    } catch { /* The current page still uses the selected locale if cookie storage is unavailable. */ }
+  };
 
   const recount = useCallback(() => {
     const qs = questions.current;
@@ -98,24 +126,25 @@ export function RespondentShell({ token }: { token: string }) {
       else needsAttention.push({ question, reason });
     };
     for (const question of active) {
-      if (question.required && !hasValue(answers.current[question.id]?.value)) addAttention(question, "Answer this required question.");
+      if (question.required && !hasValue(answers.current[question.id]?.value)) addAttention(question, respondentMessage(localeRef.current, "requiredError"));
       const value = answers.current[question.id]?.value;
       if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
-        addAttention(question, `Choose no more than ${question.maxSelections} ${question.maxSelections === 1 ? "option" : "options"}.`);
+        addAttention(question, respondentMessage(localeRef.current, "maxSelections", { count: question.maxSelections }));
       }
       if (question.type === "multi" && question.minSelections !== undefined && Array.isArray(value) && new Set(value).size > 0 && new Set(value).size < question.minSelections) {
-        addAttention(question, `Choose at least ${question.minSelections} ${question.minSelections === 1 ? "option" : "options"}, or leave this question blank.`);
+        addAttention(question, respondentMessage(localeRef.current, "minSelections", { count: question.minSelections }));
       }
       if (question.type === "multi" && Array.isArray(value) && value.some((item) => question.exclusiveOptions?.includes(item)) && new Set(value).size > 1) {
-        addAttention(question, "Choose an exclusive option by itself.");
+        addAttention(question, respondentMessage(localeRef.current, "exclusiveError"));
       }
     }
     setCounts({ answered: active.filter((q) => hasValue(answers.current[q.id]?.value)).length, total: active.length, needsAttention });
   }, []);
+  useEffect(() => { recount(); }, [locale, recount]);
 
   const post = useCallback((msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ kqa: 1, ...msg }, "*"), []);
 
-  const questionGroups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current);
+  const questionGroups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current, t("otherQuestions"));
   const activeGuidedGroup = questionGroups.find((group) => group.id === guidedSectionId) ?? null;
   const activeGuidedIndex = activeGuidedGroup ? questionGroups.findIndex((group) => group.id === activeGuidedGroup.id) : -1;
   const guidedStepIssues = activeGuidedGroup
@@ -123,36 +152,36 @@ export function RespondentShell({ token }: { token: string }) {
     : [];
 
   const goToGuidedGroup = useCallback((id: string, focusId?: string) => {
-    const groups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current);
+    const groups = buildQuestionNavigation(questions.current, data?.sections ?? [], eligibility.current, respondentMessage(locale, "otherQuestions"));
     const group = groups.find((item) => item.id === id);
     if (!group) return;
     setGuidedSectionId(group.id);
     setGuidedError(false);
-    setGuidedAnnouncement(`Section ${groups.findIndex((item) => item.id === id) + 1} of ${groups.length}: ${group.title}`);
+    setGuidedAnnouncement(`${t("section", { index: groups.findIndex((item) => item.id === id) + 1, total: groups.length })}: ${group.title}`);
     post({ type: "guided", enabled: true, section: group.id });
     const target = focusId ?? group.questions[0]?.id;
     if (target) post({ type: "focus-question", id: target });
-  }, [data?.sections, post]);
+  }, [data?.sections, locale, post]);
 
   useEffect(() => {
     if (data?.presentation !== "guided") return;
-    const first = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current)[0];
+    const first = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current, t("otherQuestions"))[0];
     if (first && !guidedSectionId) setGuidedSectionId(first.id);
     setGuidedMode(true);
   }, [data, guidedSectionId]);
 
   useEffect(() => {
     if (!guidedMode || !data) return;
-    const groups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
+    const groups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current, t("otherQuestions"));
     if (!groups.length) return;
     if (!groups.some((group) => group.id === guidedSectionId)) {
       const next = groups[0];
       setGuidedSectionId(next.id);
       setGuidedError(false);
-      setGuidedAnnouncement(`The available questions changed. Now showing ${next.title}.`);
+      setGuidedAnnouncement(`${t("availableChanged")}: ${next.title}.`);
       if (frameReady) post({ type: "guided", enabled: true, section: next.id });
     }
-  }, [counts, data, frameReady, guidedMode, guidedSectionId, post]);
+  }, [counts, data, frameReady, guidedMode, guidedSectionId, locale, post]);
 
   useEffect(() => {
     if (!guidedMode || !activeGuidedGroup) return;
@@ -246,13 +275,12 @@ export function RespondentShell({ token }: { token: string }) {
     if (res.status === 403 || res.status === 409) {
       setSave("idle");
       applyLock(true);
-      toast(res.data.error ?? "These answers are locked.", "err");
+      toast(t("lockedError"), "err", localeMeta);
       return;
     }
     // 400/404: the server refused a value. Show why, then put the page back to what is actually saved.
     setSave("error");
-    const why = res.data.details?.[0] ? `${res.data.details[0].reason}` : res.data.error;
-    toast(`Could not save that answer: ${why ?? "it was not accepted"}.`, "err");
+    toast(t("couldNotSave"), "err", localeMeta);
     const fresh = await api<Loaded>(`/api/p/${token}`);
     if (fresh.ok && fresh.data.answers) {
       answers.current = fresh.data.answers;
@@ -261,7 +289,7 @@ export function RespondentShell({ token }: { token: string }) {
       recount();
       setSave("saved");
     }
-  }, [token, applyLock, handleVersionConflict, post, recount, toast]);
+  }, [token, applyLock, handleVersionConflict, post, recount, toast, locale]);
 
   const queue = useCallback((id: string, part: { value?: unknown; note?: unknown }) => {
     if (lockedRef.current) return;
@@ -293,7 +321,8 @@ export function RespondentShell({ token }: { token: string }) {
       if (m.type === "open" && typeof m.url === "string" && /^(https?:|mailto:|tel:)/i.test(m.url)) {
         window.open(m.url, "_blank", "noopener,noreferrer");
       } else if (m.type === "hello") {
-        post({ type: "init", questions: questions.current, answers: answers.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided", guidedSection: guidedSectionId });
+        if (typeof m.lang === "string" && m.lang) setQuestionnaireLanguage(m.lang);
+        post({ type: "init", questions: questions.current, answers: answers.current, participant: { name: data?.participant.name }, locked: lockedRef.current, probe: false, preview: false, guided: data?.presentation === "guided", guidedSection: guidedSectionId, locale, messages: respondentBridgeMessages(locale) });
         setFrameReady(true);
       } else if (m.type === "set" && typeof m.id === "string") {
         const part: { value?: unknown; note?: unknown } = {};
@@ -313,7 +342,11 @@ export function RespondentShell({ token }: { token: string }) {
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [data, guidedSectionId, post, queue, recount]);
+  }, [data, guidedSectionId, locale, post, queue, recount]);
+
+  useEffect(() => {
+    if (frameReady) post({ type: "locale", locale, messages: respondentBridgeMessages(locale) });
+  }, [frameReady, locale, post]);
 
   // ---- connectivity and leaving the page
   useEffect(() => {
@@ -349,7 +382,7 @@ export function RespondentShell({ token }: { token: string }) {
           } else {
             setSave("failed");
             if (res.status === 403 || res.status === 409) applyLock(true);
-            if (document.visibilityState === "visible") toast(res.data.error ?? "The latest changes were not saved. Keep this page open and try again.", "err");
+            if (document.visibilityState === "visible") toast(t("notSavedYet"), "err", localeMeta);
           }
         });
       }
@@ -359,7 +392,7 @@ export function RespondentShell({ token }: { token: string }) {
     document.addEventListener("visibilitychange", hide);
     window.addEventListener("pagehide", hide);
     return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); document.removeEventListener("visibilitychange", hide); window.removeEventListener("pagehide", hide); clearTimeout(timer.current); clearTimeout(retry.current); };
-  }, [applyLock, flush, handleVersionConflict, post, token, toast]);
+  }, [applyLock, flush, handleVersionConflict, post, token, toast, locale]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || inflight.current || staleDraftRef.current.length || Object.keys(lengthDrafts).length) { e.preventDefault(); e.returnValue = ""; } };
@@ -376,7 +409,7 @@ export function RespondentShell({ token }: { token: string }) {
     await flush();
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     if (refreshRequiredRef.current) { setSubmitting(false); setConfirming(false); return; }
-    if (Object.keys(pending.current).length) { setSubmitting(false); toast("Your latest changes have not saved yet. Check your connection and try again.", "err"); return; }
+    if (Object.keys(pending.current).length) { setSubmitting(false); toast(t("notSavedYet"), "err", localeMeta); return; }
     const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
     setSubmitting(false);
     if (res.ok) {
@@ -394,18 +427,18 @@ export function RespondentShell({ token }: { token: string }) {
       }
       if (res.status === 422) {
         const problems: Record<string, string> = {};
-        for (const item of res.data.missing ?? []) problems[item.id] = "Answer this required question.";
-        for (const item of res.data.invalidSelections ?? []) problems[item.id] = `Choose no more than ${item.maximum} ${item.maximum === 1 ? "option" : "options"}.`;
-        for (const item of res.data.invalidMinimumSelections ?? []) problems[item.id] = `Choose at least ${item.minimum} ${item.minimum === 1 ? "option" : "options"}, or leave this question blank.`;
-        for (const item of res.data.invalidExclusiveSelections ?? []) problems[item.id] = "Choose an exclusive option by itself.";
-        for (const item of res.data.invalidRankSelections ?? []) problems[item.id] = "Rank every current option exactly once, then choose Use this order.";
+        for (const item of res.data.missing ?? []) problems[item.id] = t("requiredError");
+        for (const item of res.data.invalidSelections ?? []) problems[item.id] = t("maxSelections", { count: item.maximum });
+        for (const item of res.data.invalidMinimumSelections ?? []) problems[item.id] = t("minSelections", { count: item.minimum });
+        for (const item of res.data.invalidExclusiveSelections ?? []) problems[item.id] = t("exclusiveError");
+        for (const item of res.data.invalidRankSelections ?? []) problems[item.id] = t("rankError");
         setSubmitProblems(problems);
-        setSubmitError(res.data.error ?? "Some answers need attention before you can submit. Review the marked questions.");
+        setSubmitError(t("submitError"));
         recount();
         return;
       }
       setConfirming(false);
-      toast(res.data.error ?? "Could not submit.", "err");
+      toast(t("couldNotSubmit"), "err", localeMeta);
     }
   }
 
@@ -439,15 +472,15 @@ export function RespondentShell({ token }: { token: string }) {
   }
 
   // ---- states other than the questionnaire
-  if (phase === "loading") return <div className="center-page"><div className="row muted"><Spinner /> Opening your questionnaire…</div></div>;
+  if (phase === "loading") return <main className="center-page" lang={localeMeta.lang} dir={localeMeta.direction}><div className="hero"><LocalePicker locale={locale} label={t("language")} onChange={changeLocale} /><div className="row muted"><Spinner /> {t("loading")}</div></div></main>;
   if (phase === "invalid") {
     return (
-      <main className="center-page"><div className="hero"><BrandMark size={44} wordmark /><h1>This link is not valid</h1><p className="muted">It may have been mistyped, or your host may have replaced it with a new one. Ask your host to send the link again.</p></div></main>
+      <main className="center-page" lang={localeMeta.lang} dir={localeMeta.direction}><div className="hero"><LocalePicker locale={locale} label={t("language")} onChange={changeLocale} /><BrandMark size={44} wordmark /><h1>{t("invalidTitle")}</h1><p className="muted">{t("invalidDescription")}</p></div></main>
     );
   }
   if (phase === "error" || !data) {
     return (
-      <main className="center-page"><div className="hero"><BrandMark size={44} wordmark /><h1>We could not open this just now</h1><p className="muted">Check your connection and try again. Nothing you have already saved is lost.</p><button className="btn primary" onClick={() => void load()}>Try again</button></div></main>
+      <main className="center-page" lang={localeMeta.lang} dir={localeMeta.direction}><div className="hero"><LocalePicker locale={locale} label={t("language")} onChange={changeLocale} /><BrandMark size={44} wordmark /><h1>{t("errorTitle")}</h1><p className="muted">{t("errorDescription")}</p><button className="btn primary" onClick={() => void load()}>{t("retry")}</button></div></main>
     );
   }
 
@@ -464,33 +497,34 @@ export function RespondentShell({ token }: { token: string }) {
     if (guidedMode && target?.section) goToGuidedGroup(target.section, target.id);
     else post({ type: "focus-question", id: lengthDraftFocusId });
   };
-  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", failed: "Not saved", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
+  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? t("locked") : t("autosaveOn"), saving: t("saving"), saved: t("saved"), error: t("retrying"), failed: t("notSaved"), offline: hasUnsavedChanges ? t("offlinePending") : t("offline") };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
   const retainedAnswers = questions.current.filter((question) => eligibility.current[question.id] === false && (
     hasValue(answers.current[question.id]?.value) || Boolean(answers.current[question.id]?.note)
   ));
-  const currentQuestionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
+  const currentQuestionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current, t("otherQuestions"));
   const answeredInNavigation = reviewQuestions.filter((question) => hasValue(answers.current[question.id]?.value)).length;
 
   return (
-    <div className="rs">
+    <div className="rs" lang={localeMeta.lang} dir={localeMeta.direction}>
       <div className="rs-bar">
         <div className="rs-bar-in">
           <BrandMark />
-          <div className="rs-title"><b>{data.title}</b><span>Answering as {data.participant.name}</span></div>
+          <div className="rs-title"><b><bdi lang={questionnaireLanguage} dir="auto">{data.title}</bdi></b><span>{t("answerAs", { name: "" }).trim()} <bdi dir="auto">{data.participant.name}</bdi></span></div>
           <div className="right rs-bar-actions">
+            <LocalePicker locale={locale} label={t("language")} onChange={changeLocale} />
             <div
               className="rs-progress"
               role="progressbar"
-              aria-label="Questionnaire progress"
+              aria-label={t("progressLabel")}
               aria-valuemin={0}
               aria-valuemax={Math.max(counts.total, 1)}
               aria-valuenow={counts.answered}
-              aria-valuetext={`${counts.answered} of ${counts.total} questions answered`}
+              aria-valuetext={t("progressValue", { answered: counts.answered, total: counts.total })}
             >
               <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-              <small>{counts.answered}/{counts.total} answered</small>
+              <small>{t("countAnswered", { answered: counts.answered, total: counts.total })}</small>
             </div>
             <div className="rs-question-nav-wrap">
               <button
@@ -499,17 +533,17 @@ export function RespondentShell({ token }: { token: string }) {
                 type="button"
                 aria-expanded={questionNavOpen}
                 aria-controls="respondent-question-navigation"
-                aria-label={`Browse questions, ${answeredInNavigation} of ${reviewQuestions.length} answered`}
+                aria-label={`${t("browseQuestions")}, ${t("browseAnswered", { answered: answeredInNavigation, total: reviewQuestions.length })}`}
                 disabled={!frameReady || locked}
                 onClick={() => setQuestionNavOpen((open) => !open)}
               >
-                Questions
+                {t("questions")}
               </button>
               {questionNavOpen && (
                 <nav
                   id="respondent-question-navigation"
                   className="rs-question-nav"
-                  aria-label="Question navigation"
+                  aria-label={t("questionNavigation")}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
                       event.preventDefault();
@@ -519,9 +553,7 @@ export function RespondentShell({ token }: { token: string }) {
                   }}
                 >
                   <p className="rs-question-nav-hint">
-                    {hiddenQuestionCount
-                      ? `Questions hidden by your answers are omitted. Any saved answers are retained and may reappear if they become eligible.`
-                      : "Choose a question to go to it. Your answers will not change."}
+                    {hiddenQuestionCount ? t("hiddenHint") : t("navigationHint")}
                   </p>
                   <div className="rs-question-nav-groups">
                     {currentQuestionGroups.map((group) => {
@@ -529,10 +561,10 @@ export function RespondentShell({ token }: { token: string }) {
                       return (
                         <section className="rs-question-nav-group" key={group.id} aria-labelledby={`rs-nav-section-${group.id}`}>
                           <div className="rs-question-nav-section-head">
-                            <h2 id={`rs-nav-section-${group.id}`}>{group.title}</h2>
-                            <span>{answered} of {group.questions.length} answered</span>
+                            <h2 id={`rs-nav-section-${group.id}`}><bdi lang={questionnaireLanguage} dir="auto">{group.title}</bdi></h2>
+                            <span>{t("browseAnswered", { answered, total: group.questions.length })}</span>
                           </div>
-                          {group.description && <p className="rs-question-nav-description">{group.description}</p>}
+                          {group.description && <p className="rs-question-nav-description"><bdi lang={questionnaireLanguage} dir="auto">{group.description}</bdi></p>}
                           <ul>
                             {group.questions.map((question) => {
                               const isAnswered = hasValue(answers.current[question.id]?.value);
@@ -547,8 +579,8 @@ export function RespondentShell({ token }: { token: string }) {
                                       else post({ type: "focus-question", id: question.id });
                                     }}
                                   >
-                                    <span>{question.label}</span>
-                                    <small>{isAnswered ? "Answered" : question.required ? "Required" : "Not answered"}</small>
+                                    <span><bdi lang={questionnaireLanguage} dir="auto">{question.label}</bdi></span>
+                                    <small>{isAnswered ? t("answered") : question.required ? t("required") : t("notAnswered")}</small>
                                   </button>
                                 </li>
                               );
@@ -561,39 +593,39 @@ export function RespondentShell({ token }: { token: string }) {
                 </nav>
               )}
             </div>
-            <span className={`save-state ${firstLengthDraft ? "failed" : save}`} role="status" aria-live="polite" title={firstLengthDraft ? "This over-limit text is only on this page and has not been saved." : hasUnsavedChanges ? "These changes have not reached KQA. Keep this page open and check the save status before leaving." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{firstLengthDraft ? "Text not saved" : SAVE_LABEL[save]}</span></span>
-            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || Object.keys(lengthDrafts).length > 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>
+            <span className={`save-state ${firstLengthDraft ? "failed" : save}`} role="status" aria-live="polite" title={firstLengthDraft ? t("overLimitTitle") : hasUnsavedChanges ? t("unsavedTitle") : lastSaved ? t("lastSaved", { time: respondentTime(locale, lastSaved) }) : SAVE_LABEL[save]}><i /><span className="rs-save-label">{firstLengthDraft ? t("textNotSaved") : SAVE_LABEL[save]}</span></span>
+            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || Object.keys(lengthDrafts).length > 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> {t("submitted")}</> : t("reviewAnswers")}</button>
           </div>
         </div>
       </div>
 
       <div className={`rs-banner ${refreshRequired || (!submitted && closed) ? "warn" : submitted ? "ok" : "none"}`} role={refreshRequired ? "alert" : submitted || closed ? "status" : undefined}>
-        {refreshRequired && <><Icon name="lock" size={16} /> {staleDraft.length > 0 ? "This questionnaire changed while the page was open. Your confirmed answers remain saved; newer edits on this page were rejected. Review or copy them before reloading." : "This questionnaire changed while the page was open. Your confirmed answers remain saved. Reload to continue with the latest version."} <span className="row">{staleDraft.length > 0 && <button className="btn" onClick={() => setConflictDraftOpen(true)}>Review unsaved changes</button>}<button className="btn" onClick={reloadLatestVersion}>Reload questionnaire</button></span></>}
-        {submitted && <><Icon name="check" size={16} /> Submitted. Your answers are locked, and your host can reopen them if you need a change.</>}
-        {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> This interview is closed, so answers can no longer be changed.</>}
+        {refreshRequired && <><Icon name="lock" size={16} /> {staleDraft.length > 0 ? t("changedDraft") : t("changedSaved")} <span className="row">{staleDraft.length > 0 && <button className="btn" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button>}<button className="btn" onClick={reloadLatestVersion}>{t("reloadQuestionnaire")}</button></span></>}
+        {submitted && <><Icon name="check" size={16} /> {t("submittedMessage")}</>}
+        {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> {t("closedMessage")}</>}
       </div>
-      {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {lengthDraftHidden ? `“${firstLengthDraft.question.label}” is currently hidden. Its ${firstLengthDraft.count}-character draft is unsaved; change an earlier answer to show it, then shorten it to ${firstLengthDraft.max} characters before reviewing or submitting.` : `The response to “${firstLengthDraft.question.label}” has ${firstLengthDraft.count} characters; the limit is ${firstLengthDraft.max}. It has not been saved. Shorten it before reviewing or submitting.`} <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? "Review earlier answer" : "Edit response"}</button></div>}
+      {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {lengthDraftHidden ? t("lengthHidden", { question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max }) : t("lengthOver", { question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max })} <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? t("reviewEarlier") : t("editResponse")}</button></div>}
 
       {guidedMode && activeGuidedGroup && (
-        <section className="rs-guided" aria-label="Questionnaire sections">
+        <section className="rs-guided" aria-label={t("questionnaireSections")}>
           <div className="rs-guided-step">
             <div>
-              <p className="rs-guided-count" aria-current="step">Section {activeGuidedIndex + 1} of {questionGroups.length}</p>
-              <h1>{activeGuidedGroup.title}</h1>
-              {activeGuidedGroup.description && <p>{activeGuidedGroup.description}</p>}
+              <p className="rs-guided-count" aria-current="step">{t("section", { index: activeGuidedIndex + 1, total: questionGroups.length })}</p>
+              <h1><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedGroup.title}</bdi></h1>
+              {activeGuidedGroup.description && <p><bdi lang={questionnaireLanguage} dir="auto">{activeGuidedGroup.description}</bdi></p>}
             </div>
             <div className="rs-guided-actions">
-              <button className="btn" type="button" disabled={activeGuidedIndex <= 0 || locked} onClick={() => goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>Back</button>
-              <button className="btn accent" type="button" disabled={locked || !frameReady || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{activeGuidedIndex === questionGroups.length - 1 ? "Review answers" : "Continue"}</button>
-              <button className="btn" type="button" disabled={locked} onClick={() => { setGuidedMode(false); setGuidedError(false); post({ type: "guided", enabled: false }); }}>Show all questions</button>
+              <button className="btn" type="button" disabled={activeGuidedIndex <= 0 || locked} onClick={() => goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>{t("back")}</button>
+              <button className="btn accent" type="button" disabled={locked || !frameReady || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{activeGuidedIndex === questionGroups.length - 1 ? t("reviewAnswers") : t("continue")}</button>
+              <button className="btn" type="button" disabled={locked} onClick={() => { setGuidedMode(false); setGuidedError(false); post({ type: "guided", enabled: false }); }}>{t("showAll")}</button>
             </div>
           </div>
           <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{guidedAnnouncement}</p>
           {guidedError && guidedStepIssues.length > 0 && (
             <div className="rs-guided-error" ref={guidedErrorRef} role="alert" tabIndex={-1} aria-labelledby="rs-guided-error-title">
-              <h2 id="rs-guided-error-title">Check this section</h2>
-              <p>Resolve these answers before continuing:</p>
-              <ul>{guidedStepIssues.map(({ question, reason }) => <li key={question.id}><button type="button" onClick={() => post({ type: "focus-question", id: question.id })}>{question.label}: {reason}</button></li>)}</ul>
+              <h2 id="rs-guided-error-title">{t("checkSection")}</h2>
+              <p>{t("resolveBeforeContinue")}</p>
+              <ul>{guidedStepIssues.map(({ question, reason }) => <li key={question.id}><button type="button" onClick={() => post({ type: "focus-question", id: question.id })}><bdi lang={questionnaireLanguage} dir="auto">{question.label}</bdi>: {reason}</button></li>)}</ul>
             </div>
           )}
         </section>
@@ -601,17 +633,17 @@ export function RespondentShell({ token }: { token: string }) {
       {guidedMode && questionGroups.length === 0 && (
         <section className="rs-guided rs-guided-empty" aria-labelledby="rs-guided-empty-title">
           <div>
-            <h1 id="rs-guided-empty-title">No questions are available</h1>
-            <p>Your current answers leave no sections to complete. Open the review to finish.</p>
+            <h1 id="rs-guided-empty-title">{t("noQuestions")}</h1>
+            <p>{t("noQuestionsDescription")}</p>
             <div className="rs-guided-actions">
-              <button className="btn accent" type="button" onClick={() => setConfirming(true)}>Review answers</button>
+              <button className="btn accent" type="button" onClick={() => setConfirming(true)}>{t("reviewAnswers")}</button>
             </div>
           </div>
         </section>
       )}
 
       <div className="rs-frame">
-        {!frameReady && <div className="rs-loading"><span className="row"><Spinner /> Loading the questions…</span></div>}
+        {!frameReady && <div className="rs-loading"><span className="row"><Spinner /> {t("loadingQuestions")}</span></div>}
         <iframe
           ref={frame}
           src={`/api/frame/${token}`}
@@ -623,21 +655,21 @@ export function RespondentShell({ token }: { token: string }) {
 
       {confirming && (
         <Modal
-          title="Check your answers"
+          title={t("checkAnswers")}
           onClose={() => !submitting && setConfirming(false)}
           className="review-modal"
           actions={
             <>
-              <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>Keep editing</button>
-              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || Object.keys(lengthDrafts).length > 0} onClick={submit}>{submitting && <Spinner />} Submit answers</button>}
+              <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>{t("keepEditing")}</button>
+              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || Object.keys(lengthDrafts).length > 0} onClick={submit}>{submitting && <Spinner />} {t("submitAnswers")}</button>}
             </>
           }
         >
           <div className="review-content">
-            {firstLengthDraft && <div className="rs-guided-error" role="alert">The response to “{firstLengthDraft.question.label}” exceeds its {firstLengthDraft.max} character limit and has not been saved. <button type="button" onClick={focusLengthDraft}>Edit response</button></div>}
-            <p className="muted">Check the answers below. You can clear an answer here; any optional note stays saved. After submission, your answers are locked; your host can reopen them if you need a change.</p>
+            {firstLengthDraft && <div className="rs-guided-error" role="alert">{t("lengthReviewError", { question: firstLengthDraft.question.label, max: firstLengthDraft.max })} <button type="button" onClick={focusLengthDraft}>{t("editResponse")}</button></div>}
+            <p className="muted">{t("reviewInstruction")}</p>
             {counts.needsAttention.length || submitError ? (
-              <p className="review-problems" role="alert">{submitError || "Resolve the marked answers before submitting."} Choose Answer or Edit to return to that question.</p>
+              <p className="review-problems" role="alert">{submitError || t("resolveMarked")} {t("returnToQuestion")}</p>
             ) : null}
             <div className="review-list">
               {reviewQuestions.map((question) => {
@@ -648,14 +680,14 @@ export function RespondentShell({ token }: { token: string }) {
                 return (
                   <section className="review-entry" key={question.id}>
                     <div className="review-entry-copy">
-                      <h3>{question.label}</h3>
-                      <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{answered ? displayValue(question, answer?.value) : "Not answered"}</p>
-                      {answer?.note && <p className="review-note"><strong>Note:</strong> {answer.note}</p>}
+                    <h3><bdi lang={questionnaireLanguage} dir="auto">{question.label}</bdi></h3>
+                    <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{answered ? <bdi lang={questionnaireLanguage} dir="auto">{displayValue(question, answer?.value)}</bdi> : t("notAnsweredReview")}</p>
+                    {answer?.note && <p className="review-note"><strong>{t("note")}</strong> <bdi lang={questionnaireLanguage} dir="auto">{answer.note}</bdi></p>}
                       {problem && <p className="review-problem">{problem}</p>}
                     </div>
                     <div className="review-entry-actions">
-                      <button className="btn" disabled={submitting} onClick={() => { focusQuestionAfterClose.current = question.id; setConfirming(false); }}>{answered ? "Edit" : "Answer"}</button>
-                      {answered && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={`Clear answer to ${question.label}`} onClick={() => post({ type: "clear-answer", id: question.id })}>Clear</button>}
+                      <button className="btn" disabled={submitting} onClick={() => { focusQuestionAfterClose.current = question.id; setConfirming(false); }}>{answered ? t("edit") : t("answer")}</button>
+                      {answered && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={t("clearQuestionAnswer", { question: question.label })} onClick={() => post({ type: "clear-answer", id: question.id })}>{t("clear")}</button>}
                     </div>
                   </section>
                 );
@@ -663,8 +695,8 @@ export function RespondentShell({ token }: { token: string }) {
             </div>
             {hiddenQuestionCount > 0 && (
               <details className="review-retained">
-                <summary>Previously answered hidden questions ({retainedAnswers.length})</summary>
-                <p className="muted review-retention">These saved values are not part of your current answers. They may reappear if the question becomes eligible. You can clear a value or note here; clearing one does not change the answer that controls routing.</p>
+                <summary>{t("hiddenQuestions", { count: retainedAnswers.length })}</summary>
+                <p className="muted review-retention">{t("hiddenQuestionsDescription")}</p>
                 {retainedAnswers.length ? (
                   <div className="review-list review-retained-list">
                     {retainedAnswers.map((question) => {
@@ -673,19 +705,19 @@ export function RespondentShell({ token }: { token: string }) {
                       return (
                         <section className="review-entry" key={question.id}>
                           <div className="review-entry-copy">
-                            <h3>{question.label}</h3>
-                            {answered && <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{displayValue(question, answer?.value)}</p>}
-                            {answer?.note && <p className="review-note"><strong>Note:</strong> {answer.note}</p>}
+                            <h3><bdi lang={questionnaireLanguage} dir="auto">{question.label}</bdi></h3>
+                            {answered && <p className="review-value" style={{ whiteSpace: "pre-wrap" }}><bdi lang={questionnaireLanguage} dir="auto">{displayValue(question, answer?.value)}</bdi></p>}
+                            {answer?.note && <p className="review-note"><strong>{t("note")}</strong> <bdi lang={questionnaireLanguage} dir="auto">{answer.note}</bdi></p>}
                           </div>
                           <div className="review-entry-actions">
-                            {answered && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={`Clear saved answer to ${question.label}`} onClick={() => post({ type: "clear-answer", id: question.id })}>Clear answer</button>}
-                            {answer?.note && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={`Clear saved note for ${question.label}`} onClick={() => post({ type: "clear-note", id: question.id })}>Clear note</button>}
+                            {answered && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={t("clearSavedAnswer", { question: question.label })} onClick={() => post({ type: "clear-answer", id: question.id })}>{t("clearAnswer")}</button>}
+                            {answer?.note && <button className="btn" disabled={!frameReady || submitting || locked} aria-label={t("clearSavedNote", { question: question.label })} onClick={() => post({ type: "clear-note", id: question.id })}>{t("clearNote")}</button>}
                           </div>
                         </section>
                       );
                     })}
                   </div>
-                ) : <p className="muted">No answers or notes are currently saved for hidden questions.</p>}
+                ) : <p className="muted">{t("hiddenEmpty")}</p>}
               </details>
             )}
           </div>
@@ -694,30 +726,30 @@ export function RespondentShell({ token }: { token: string }) {
 
       {conflictDraftOpen && staleDraft.length > 0 && (
         <Modal
-          title="Unsaved changes"
+          title={t("conflictTitle")}
           onClose={() => setConflictDraftOpen(false)}
           className="review-modal"
           actions={
             <>
-              <button className="btn" onClick={() => setConflictDraftOpen(false)}>Keep reviewing this page</button>
-              <button className="btn accent" onClick={reloadLatestVersion}>Reload latest version</button>
+              <button className="btn" onClick={() => setConflictDraftOpen(false)}>{t("keepReviewing")}</button>
+              <button className="btn accent" onClick={reloadLatestVersion}>{t("reloadLatest")}</button>
             </>
           }
         >
           <div className="review-content">
-            <p className="muted">These edits were not saved because the questionnaire changed. They are available only in this open page. Copy them if you need a reference before reloading. KQA will not apply them to newer questions automatically.</p>
+            <p className="muted">{t("conflictDescription")}</p>
             <div className="review-list">
               {staleDraft.map(({ question, patch }) => (
                 <section className="review-entry" key={question.id}>
                   <div className="review-entry-copy">
-                    <h3>{question.label}</h3>
-                    {Object.prototype.hasOwnProperty.call(patch, "value") && <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{patch.value === null ? "Answer cleared" : displayValue(question, patch.value as AnswerValue)}</p>}
-                    {Object.prototype.hasOwnProperty.call(patch, "note") && <p className="review-note"><strong>Note:</strong> {patch.note === null ? "Note cleared" : String(patch.note)}</p>}
+                    <h3><bdi lang={questionnaireLanguage} dir="auto">{question.label}</bdi></h3>
+                    {Object.prototype.hasOwnProperty.call(patch, "value") && <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{patch.value === null ? t("answerCleared") : <bdi lang={questionnaireLanguage} dir="auto">{displayValue(question, patch.value as AnswerValue)}</bdi>}</p>}
+                    {Object.prototype.hasOwnProperty.call(patch, "note") && <p className="review-note"><strong>{t("note")}</strong> {patch.note === null ? t("noteCleared") : <bdi lang={questionnaireLanguage} dir="auto">{String(patch.note)}</bdi>}</p>}
                   </div>
                 </section>
               ))}
             </div>
-            <div className="row between"><label htmlFor="conflict-draft-copy">Copyable draft reference</label><CopyButton text={conflictDraftText} label="Copy draft" /></div>
+            <div className="row between"><label htmlFor="conflict-draft-copy">{t("copyableDraft")}</label><CopyButton text={conflictDraftText} label={t("copyDraft")} done={t("copied")} failure={t("copyBlocked")} toastMetadata={localeMeta} /></div>
             <textarea id="conflict-draft-copy" className="conflict-draft-copy" readOnly rows={8} value={conflictDraftText} />
           </div>
         </Modal>

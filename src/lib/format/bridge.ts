@@ -13,7 +13,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   if (window.KQA) return;
 
   var listeners = { ready: [], change: [], lock: [], eligibility: [], validation: [] };
-  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false, guided: false, guidedSection: null };
+  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false, guided: false, guidedSection: null, locale: "en-AU", messages: {} };
   var errors = [];
   var consoleErrors = [];
   var routingStatusNode = null;
@@ -25,6 +25,24 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function post(msg) {
     msg.kqa = 1;
     try { parent.postMessage(msg, "*"); } catch (e) {}
+  }
+  function localized(key, values) {
+    var template = state.messages && state.messages[key];
+    if (values && values.count === 1 && state.messages && typeof state.messages[key + "One"] === "string") template = state.messages[key + "One"];
+    if (typeof template !== "string") {
+      var defaults = { lengthCount: "{count} of {max} characters used", lengthLimitReached: "limit reached", lengthOverLimit: "over the limit", lengthApproaching: "Character limit approaching.", lengthReachedAnnouncement: "Character limit reached.", lengthExceededAnnouncement: "Character limit exceeded. This text has not been saved; shorten it to the limit.", maxSelections: "Choose no more than {count} options.", maxSelectionsOne: "Choose no more than {count} option.", minSelections: "Choose at least {count} options, or leave this question blank.", minSelectionsOne: "Choose at least {count} option, or leave this question blank.", exclusiveHelp: "Exclusive options must be chosen by themselves.", exclusiveError: "Choose an exclusive option by itself.", rankError: "Rank every option exactly once to continue.", rankMoveUp: "Move up", rankMoveDown: "Move down", rankConfirm: "Use this order", rankPosition: "Currently position {index} of {total}.", rankMoveLabel: "Move {label} {direction}", rankUseLabel: "Use this order for {label}", browseAnswered: "{answered} of {total} answered", questionShown: "Questions shown: {count}.", questionHidden: "Questions hidden: {count}. Hidden answers are retained.", rankMoved: "{label} moved to position {index} of {total}.", rankChanged: "This ranking's options changed. Rank every current option exactly once, then choose Use this order.", savedMaxSelections: "This saved answer has {selected} choices. Remove choices until no more than {maximum} remain.", removeChoices: "Remove {count} more choices to continue.", exclusiveSelected: "Exclusive option selected; other choices cleared.", exclusiveCleared: "Exclusive choice cleared." };
+      template = values && values.count === 1 ? defaults[key + "One"] || defaults[key] : defaults[key];
+      if (typeof template !== "string") return "";
+    }
+    return template.replace(/\{([a-zA-Z]+)\}/g, function (_, name) {
+      var value = values && values[name];
+      return typeof value === "number" ? new Intl.NumberFormat(state.locale || "en-AU").format(value) : String(value == null ? "" : value);
+    });
+  }
+  function markLocalized(el) {
+    if (!el) return;
+    el.lang = state.locale || "en-AU";
+    el.dir = state.locale === "ar" ? "rtl" : "ltr";
   }
   function emit(name, payload) {
     var list = listeners[name] || [];
@@ -164,6 +182,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var suffix = 1;
       while (document.getElementById(id)) id = baseId + "-" + suffix++;
       counter = document.createElement("p");
+      markLocalized(counter);
       counter.id = id;
       counter.setAttribute("data-kqa-length-counter", id);
       counter.setAttribute("aria-live", "off");
@@ -171,6 +190,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var anchor = el.closest ? el.closest("label") || el : el;
       anchor.insertAdjacentElement("afterend", counter);
       var status = document.createElement("span");
+      markLocalized(status);
       status.setAttribute("data-kqa-length-status", id);
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
@@ -179,19 +199,21 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       el.setAttribute("data-kqa-length-id", id);
     }
     var statusNode = document.querySelector('[data-kqa-length-status="' + counter.getAttribute("data-kqa-length-counter") + '"]');
+    markLocalized(counter);
+    markLocalized(statusNode);
     var max = lengthLimit(question, isNote);
     var count = el.value.length;
     var stage = count > max ? "over" : count === max ? "limit" : count >= Math.ceil(max * 0.8) ? "approaching" : "below";
     var visible = stage !== "below" && count > 0;
     counter.hidden = !visible;
     appendDescription(el, counter.id, visible);
-    counter.textContent = count + " of " + max + " characters used" + (stage === "limit" ? " — limit reached" : stage === "over" ? " — over the limit" : "");
+    counter.textContent = localized("lengthCount", { count: count, max: max }) + (stage === "limit" ? " — " + localized("lengthLimitReached") : stage === "over" ? " — " + localized("lengthOverLimit") : "");
     counter.style.color = stage === "limit" || stage === "over" ? "var(--danger, currentColor)" : "inherit";
     counter.style.fontWeight = stage === "limit" || stage === "over" ? "600" : "400";
     if (statusNode) {
       var previous = statusNode.getAttribute("data-stage") || "below";
       if (announce && stage !== previous && (stage === "approaching" || stage === "limit" || stage === "over")) {
-        statusNode.textContent = stage === "approaching" ? "Character limit approaching." : stage === "limit" ? "Character limit reached." : "Character limit exceeded. This text has not been saved; shorten it to the limit.";
+        statusNode.textContent = stage === "approaching" ? localized("lengthApproaching") : stage === "limit" ? localized("lengthReachedAnnouncement") : localized("lengthExceededAnnouncement");
       } else if (stage === "below") statusNode.textContent = "";
       statusNode.setAttribute("data-stage", stage);
     }
@@ -258,7 +280,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function writeAll() { state.questions.forEach(function (x) { writeDom(x.id); }); }
 
-  function selectionLimitMessage(question) { return "Choose no more than " + question.maxSelections + (question.maxSelections === 1 ? " option." : " options."); }
+  function selectionLimitMessage(question) { return localized("maxSelections", { count: question.maxSelections }); }
   function selectionLimitError(id, message) {
     var els = controls(id);
     var group = els.length && els[0].closest ? els[0].closest("fieldset") : null;
@@ -269,6 +291,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (!message) { if (feedback) feedback.remove(); return; }
     if (!feedback) {
       feedback = document.createElement("p");
+      markLocalized(feedback);
       feedback.setAttribute("data-kqa-selection-error", id);
       feedback.setAttribute("role", "alert");
       feedback.setAttribute("aria-live", "assertive");
@@ -285,12 +308,19 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (!els.length) return;
       var group = els[0].closest ? els[0].closest("fieldset") : null;
       var host = group && group.parentElement ? group.parentElement : els[0].parentElement;
-      if (!host || host.querySelector('[data-kqa-selection-limit="' + question.id + '"]')) return;
+      if (!host) return;
+      var existingHint = host.querySelector('[data-kqa-selection-limit="' + question.id + '"]');
+      if (existingHint) {
+        markLocalized(existingHint);
+        existingHint.textContent = (typeof question.minSelections === "number" ? localized("minSelections", { count: question.minSelections }) + " " : "") + (typeof question.maxSelections === "number" ? localized("maxSelections", { count: question.maxSelections }) + " " : "") + ((question.exclusiveOptions || []).length ? localized("exclusiveHelp") : "");
+        return;
+      }
       var hint = document.createElement("p");
+      markLocalized(hint);
       hint.id = "kqa-multi-guidance-" + question.id;
       hint.setAttribute("data-kqa-selection-limit", question.id);
       hint.className = "kq-help";
-      hint.textContent = (typeof question.minSelections === "number" ? "Choose at least " + question.minSelections + (question.minSelections === 1 ? " option, or leave this question blank. " : " options, or leave this question blank. ") : "") + (typeof question.maxSelections === "number" ? "Choose up to " + question.maxSelections + (question.maxSelections === 1 ? " option. " : " options. ") : "") + ((question.exclusiveOptions || []).length ? "Exclusive options must be chosen by themselves." : "");
+      hint.textContent = (typeof question.minSelections === "number" ? localized("minSelections", { count: question.minSelections }) + " " : "") + (typeof question.maxSelections === "number" ? localized("maxSelections", { count: question.maxSelections }) + " " : "") + ((question.exclusiveOptions || []).length ? localized("exclusiveHelp") : "");
       if (group) {
         var describedBy = (group.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
         if (describedBy.indexOf(hint.id) === -1) describedBy.push(hint.id);
@@ -299,6 +329,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       } else host.insertBefore(hint, els[0]);
       if ((question.exclusiveOptions || []).length && !host.querySelector('[data-kqa-exclusive-status="' + question.id + '"]')) {
         var liveStatus = document.createElement("span");
+        markLocalized(liveStatus);
         liveStatus.setAttribute("data-kqa-exclusive-status", question.id);
         liveStatus.setAttribute("role", "status");
         liveStatus.setAttribute("aria-live", "polite");
@@ -316,6 +347,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var status = host.querySelector('[data-kqa-exclusive-status="' + id + '"]');
     if (!status && conflicted) {
       status = document.createElement("p");
+      markLocalized(status);
       status.setAttribute("data-kqa-exclusive-status", id);
       status.setAttribute("role", "alert");
       status.setAttribute("aria-live", "assertive");
@@ -323,7 +355,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (group && group.parentElement === host) host.insertBefore(status, group.nextSibling); else host.appendChild(status);
     }
     if (status) {
-      if (conflicted) status.textContent = "Choose an exclusive option by itself. Change this saved answer before submitting.";
+      markLocalized(status);
+      if (conflicted) status.textContent = localized("exclusiveError");
       else if (status.getAttribute("role") === "alert") status.remove();
       else status.textContent = "";
     }
@@ -342,7 +375,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       for (var i = 0; i < buttons.length; i++) {
         var direction = buttons[i].getAttribute("data-kqa-rank-move");
         buttons[i].disabled = direction === "up" ? index === 0 : index === items.length - 1;
-        buttons[i].setAttribute("aria-label", "Move " + label + " " + direction + ". Currently position " + (index + 1) + " of " + items.length + ".");
+        buttons[i].setAttribute("aria-label", localized("rankMoveLabel", { label: label, direction: direction === "up" ? localized("rankMoveUp") : localized("rankMoveDown") }) + ". " + localized("rankPosition", { index: index + 1, total: items.length }));
       }
     });
   }
@@ -360,14 +393,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       rankItems(question.id).forEach(function (item) {
         var label = item.getAttribute("data-kqa-rank-label") || item.textContent.trim();
         item.setAttribute("data-kqa-rank-label", label);
-        if (item.querySelector("button[data-kqa-rank-move]")) return;
         ["up", "down"].forEach(function (direction) {
-          var button = document.createElement("button");
+          var button = item.querySelector('button[data-kqa-rank-move="' + direction + '"]') || document.createElement("button");
           button.type = "button";
+          markLocalized(button);
           button.setAttribute("data-kqa-rank-move", direction);
-          button.textContent = direction === "up" ? "Move up" : "Move down";
-          button.setAttribute("aria-label", "Move " + label + " " + direction);
-          item.appendChild(button);
+          button.textContent = direction === "up" ? localized("rankMoveUp") : localized("rankMoveDown");
+          button.setAttribute("aria-label", localized("rankMoveLabel", { label: label, direction: direction === "up" ? localized("rankMoveUp") : localized("rankMoveDown") }));
+          if (!button.parentElement) item.appendChild(button);
         });
       });
       var tools = lists[0].parentElement.querySelector('[data-kqa-rank-tools="' + question.id + '"]');
@@ -376,13 +409,15 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         tools.setAttribute("data-kqa-rank-tools", question.id);
         tools.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px";
         var confirm = document.createElement("button");
+        markLocalized(confirm);
         confirm.type = "button";
         confirm.setAttribute("data-kqa-rank-confirm", question.id);
-        confirm.textContent = "Use this order";
-        confirm.setAttribute("aria-label", "Use this order for " + question.label);
+        confirm.textContent = localized("rankConfirm");
+        confirm.setAttribute("aria-label", localized("rankUseLabel", { label: question.label }));
         confirm.style.cssText = "min-height:44px;padding:8px 12px;border:1px solid #8794a5;border-radius:6px;background:transparent;font:inherit;cursor:pointer";
         tools.appendChild(confirm);
         var status = document.createElement("span");
+        markLocalized(status);
         status.setAttribute("data-kqa-rank-status", question.id);
         status.setAttribute("role", "status");
         status.setAttribute("aria-live", "polite");
@@ -390,6 +425,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         status.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
         tools.appendChild(status);
         lists[0].parentElement.insertBefore(tools, lists[0].nextSibling);
+      }
+      var confirmButton = tools.querySelector('[data-kqa-rank-confirm="' + question.id + '"]');
+      if (confirmButton) {
+        markLocalized(confirmButton);
+        confirmButton.textContent = localized("rankConfirm");
+        confirmButton.setAttribute("aria-label", localized("rankUseLabel", { label: question.label }));
       }
       refreshRankControls(question.id);
       updateRankConfirmation(question.id);
@@ -443,7 +484,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         var rankOptions = (question.options || []).map(function (option) { return option.value; });
         var validRank = Array.isArray(nv) && nv.length === rankOptions.length && new Set(nv).size === rankOptions.length && nv.every(function (value) { return rankOptions.indexOf(value) !== -1; });
         if (!validRank) {
-          var rankMessage = "Rank every option exactly once to continue.";
+          var rankMessage = localized("rankError");
           if (source === "dom") writeDom(id);
           var rankLists = controls(id);
           var rankLive = rankLists.length && rankLists[0].parentElement.querySelector('[data-kqa-rank-status="' + id + '"]');
@@ -462,7 +503,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         };
         var conflict = exclusiveCount(nv);
         if (conflict > 0 && (source !== "dom" || conflict >= exclusiveCount(cur.value))) {
-          var exclusiveMessage = "Choose an exclusive option by itself.";
+          var exclusiveMessage = localized("exclusiveError");
           if (source === "dom") writeDom(id);
           exclusiveSelectionMessage(id, true);
           emit("validation", { id: id, valid: false, message: exclusiveMessage });
@@ -479,7 +520,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
           emit("validation", { id: id, valid: false, message: message });
           return false;
         }
-        var message = "Remove " + (selected - question.maxSelections) + " more " + ((selected - question.maxSelections) === 1 ? "choice" : "choices") + " to continue.";
+        var message = localized("removeChoices", { count: selected - question.maxSelections });
         selectionLimitError(id, message);
       } else {
         selectionLimitError(id, null);
@@ -642,13 +683,14 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (!shown && !hidden) return;
     var status = ensureRoutingStatus();
     var parts = [];
-    if (shown) parts.push(shown + " " + (shown === 1 ? "question is" : "questions are") + " now shown.");
-    if (hidden) parts.push(hidden + " " + (hidden === 1 ? "question is" : "questions are") + " now hidden. Answers to hidden questions are retained.");
+    if (shown) parts.push(localized("questionShown", { count: shown }));
+    if (hidden) parts.push(localized("questionHidden", { count: hidden }));
     status.textContent = parts.join(" ");
   }
   function ensureRoutingStatus() {
     if (routingStatusNode) return routingStatusNode;
     var status = document.createElement("div");
+    markLocalized(status);
     status.id = "kqa-routing-status";
     status.setAttribute("data-kqa-routing-status", "");
     status.setAttribute("role", "status");
@@ -687,7 +729,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
           if (exclusive || question.exclusiveOptions.indexOf(control.value) !== -1) { control.checked = false; changedOthers = true; }
         });
         if (changedOthers) {
-          exclusiveAnnouncement = exclusive ? "Exclusive option selected; other choices cleared." : "Exclusive choice cleared.";
+          exclusiveAnnouncement = exclusive ? localized("exclusiveSelected") : localized("exclusiveCleared");
         }
       }
       var accepted = commit(id, { value: readDom(id) }, "dom");
@@ -738,7 +780,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     refreshRankControls(id);
     var rankStatus = list.parentElement.querySelector('[data-kqa-rank-status="' + id + '"]');
     var position = rankItems(id).indexOf(item) + 1;
-    if (rankStatus) rankStatus.textContent = item.getAttribute("data-kqa-rank-label") + " moved to position " + position + " of " + rankItems(id).length + ".";
+    if (rankStatus) rankStatus.textContent = localized("rankMoved", { label: item.getAttribute("data-kqa-rank-label"), index: position, total: rankItems(id).length });
     commit(id, { value: readDom(id) }, "dom");
     var focusTarget = button;
     if (focusTarget.disabled) {
@@ -762,12 +804,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (question.type === "rank" && value !== undefined && value !== null && !isAnswered(question.id)) {
         var rankLists = controls(question.id);
         var rankLive = rankLists.length && rankLists[0].parentElement.querySelector('[data-kqa-rank-status="' + question.id + '"]');
-        if (rankLive) rankLive.textContent = "This ranking's options changed. Rank every current option exactly once, then confirm the order.";
-        emit("validation", { id: question.id, valid: false, message: "Rank every current option exactly once, then choose Use this order." });
+        if (rankLive) rankLive.textContent = localized("rankChanged");
+        emit("validation", { id: question.id, valid: false, message: localized("rankError") });
       }
       if (question.type === "multi" && Array.isArray(value)) exclusiveSelectionMessage(question.id, value.some(function (item) { return (question.exclusiveOptions || []).indexOf(item) !== -1; }) && new Set(value).size > 1);
       if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
-        var message = "This saved answer has " + new Set(value).size + " choices. Remove choices until no more than " + question.maxSelections + " remain.";
+        var message = localized("savedMaxSelections", { selected: new Set(value).size, maximum: question.maxSelections });
         selectionLimitError(question.id, message);
         emit("validation", { id: question.id, valid: false, message: message });
       }
@@ -778,6 +820,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var m = ev.data;
     if (!m || m.kqa !== 1) return;
     if (m.type === "init") {
+      state.locale = typeof m.locale === "string" ? m.locale : "en-AU";
+      state.messages = m.messages || {};
       state.questions = m.questions || [];
       state.qmap = {};
       state.questions.forEach(function (x) { state.qmap[x.id] = x; });
@@ -802,6 +846,23 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       readyResolve(snapshot());
       emit("ready", snapshot());
       if (state.probe) setTimeout(runProbe, 60);
+    } else if (m.type === "locale") {
+      state.locale = typeof m.locale === "string" ? m.locale : state.locale;
+      state.messages = m.messages || state.messages;
+      applySelectionLimitGuidance();
+      applyRankControls();
+      state.questions.forEach(function (question) {
+        updateLengthFeedback(question.id, false);
+        var value = answerOf(question.id).value;
+        var selected = Array.isArray(value) ? new Set(value).size : 0;
+        selectionLimitError(question.id, question.type === "multi" && question.maxSelections !== undefined && selected > question.maxSelections ? localized("savedMaxSelections", { selected: selected, maximum: question.maxSelections }) : null);
+        if (question.type === "multi") exclusiveSelectionMessage(question.id, Array.isArray(value) && value.some(function (item) { return (question.exclusiveOptions || []).indexOf(item) !== -1; }) && selected > 1);
+        if (question.type === "rank" && value !== undefined && value !== null && !isAnswered(question.id)) {
+          var rankLists = controls(question.id);
+          var rankLive = rankLists.length && rankLists[0].parentElement.querySelector('[data-kqa-rank-status="' + question.id + '"]');
+          if (rankLive) { markLocalized(rankLive); rankLive.textContent = localized("rankChanged"); }
+        }
+      });
     } else if (m.type === "answers") {
       applyAnswers(m.answers);
       restoreLengthDrafts();
@@ -926,7 +987,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var manifest = null;
     var el = document.getElementById("kqa-manifest");
     if (el) { try { manifest = JSON.parse(el.textContent || ""); } catch (e) { manifest = null; } }
-    post({ type: "hello", version: ${"1"}, manifest: manifest });
+    post({ type: "hello", version: ${"1"}, manifest: manifest, lang: document.documentElement.lang || "", dir: document.documentElement.dir || "" });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hello); else hello();
 

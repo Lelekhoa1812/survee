@@ -87,16 +87,17 @@ export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>,
 }
 
 // ------------------------------------------------------------------------------------------------ toasts
-interface ToastItem { id: number; text: string; kind: "ok" | "err" }
-const ToastCtx = createContext<(text: string, kind?: "ok" | "err") => void>(() => {});
+interface ToastItem { id: number; text: string; kind: "ok" | "err"; lang?: string; dir?: "ltr" | "rtl" }
+type ToastMetadata = { lang?: string; dir?: "ltr" | "rtl" };
+const ToastCtx = createContext<(text: string, kind?: "ok" | "err", metadata?: ToastMetadata) => void>(() => {});
 export const useToast = () => useContext(ToastCtx);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
-  const push = useCallback((text: string, kind: "ok" | "err" = "ok") => {
+  const push = useCallback((text: string, kind: "ok" | "err" = "ok", metadata?: ToastMetadata) => {
     const id = ++seq.current;
-    setItems((x) => [...x.slice(-2), { id, text, kind }]);
+    setItems((x) => [...x.slice(-2), { id, text, kind, ...metadata }]);
     setTimeout(() => setItems((x) => x.filter((t) => t.id !== id)), kind === "err" ? 6000 : 2800);
   }, []);
   return (
@@ -104,7 +105,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toasts" role="status" aria-live="polite">
         {items.map((t) => (
-          <div key={t.id} className={`toast ${t.kind === "err" ? "err" : ""}`}>
+          <div key={t.id} className={`toast ${t.kind === "err" ? "err" : ""}`} lang={t.lang} dir={t.dir}>
             <Icon name={t.kind === "err" ? "alert" : "check"} size={16} />
             {t.text}
           </div>
@@ -136,7 +137,7 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function CopyButton({ text, label = "Copy", done = "Copied", className = "btn sm", icon = true, getText, ariaLabel, disabled = false }: { text?: string; label?: string; done?: string; className?: string; icon?: boolean; getText?: () => string; ariaLabel?: string; disabled?: boolean }) {
+export function CopyButton({ text, label = "Copy", done = "Copied", failure = "Copy was blocked by the browser. Select the text and copy it by hand.", toastMetadata, className = "btn sm", icon = true, getText, ariaLabel, disabled = false }: { text?: string; label?: string; done?: string; failure?: string; toastMetadata?: ToastMetadata; className?: string; icon?: boolean; getText?: () => string; ariaLabel?: string; disabled?: boolean }) {
   const [ok, setOk] = useState(false);
   const toast = useToast();
   useEffect(() => {
@@ -153,7 +154,7 @@ export function CopyButton({ text, label = "Copy", done = "Copied", className = 
       onClick={async () => {
         const good = await copyText(getText ? getText() : (text ?? ""));
         if (good) setOk(true);
-        else toast("Copy was blocked by the browser. Select the text and copy it by hand.", "err");
+        else toast(failure, "err", toastMetadata);
       }}
     >
       {icon && <Icon name={ok ? "check" : "copy"} size={15} />}

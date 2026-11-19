@@ -80,7 +80,7 @@ describe("package draft development benchmark", () => {
     expect(personalLearning.sourceNotes).toContain("personal-interest learning");
     const languageMismatch = benchmark.cases.find((item: any) => item.id === "multilingual-public-consultation-language-equivalence");
     expect(languageMismatch.requiredIntents.map((intent: any) => intent.id)).toContain("whole-respondent-experience-language-fit");
-    expect(languageMismatch.hardGates.map((gate: any) => gate.id)).toContain("unlocalized-shell-blocks-language-access");
+    expect(languageMismatch.hardGates.map((gate: any) => gate.id)).toContain("unreviewed-shell-translation-used-for-fielding");
     const localizedControl = benchmark.cases.find((item: any) => item.id === "localized-consultation-journey-tested-control");
     expect(localizedControl.requiredIntents.map((intent: any) => intent.id)).toContain("localized-flow-evidence");
     expect(localizedControl.contextFacts.join(" ")).toContain("Vietnamese");

@@ -103,7 +103,7 @@ describe("native text length feedback", () => {
     const details = page.window.document.querySelector<HTMLTextAreaElement>("[data-kqa='details']")!;
     details.value = "x".repeat(16000);
     details.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-    expect(page.window.document.querySelector('[data-kqa-length-counter="kqa-length-details-answer"]')?.textContent).toBe("16000 of 10 characters used — over the limit");
+    expect(page.window.document.querySelector('[data-kqa-length-counter="kqa-length-details-answer"]')?.textContent).toBe("16,000 of 10 characters used — over the limit");
     page.window.close();
   });
 
@@ -131,8 +131,8 @@ describe("native text length feedback", () => {
       short: { value: "s".repeat(400) }, paragraph: { value: "p".repeat(16000) }, comment: { note: "n".repeat(4000) },
     } }, source: window }));
     expect(window.document.querySelector('[data-kqa-length-counter="kqa-length-short-answer"]')?.textContent).toBe("400 of 500 characters used");
-    expect(window.document.querySelector('[data-kqa-length-counter="kqa-length-paragraph-answer"]')?.textContent).toBe("16000 of 20000 characters used");
-    expect(window.document.querySelector('[data-kqa-length-counter="kqa-length-comment-note"]')?.textContent).toBe("4000 of 5000 characters used");
+    expect(window.document.querySelector('[data-kqa-length-counter="kqa-length-paragraph-answer"]')?.textContent).toBe("16,000 of 20,000 characters used");
+    expect(window.document.querySelector('[data-kqa-length-counter="kqa-length-comment-note"]')?.textContent).toBe("4,000 of 5,000 characters used");
     window.close();
   });
 });

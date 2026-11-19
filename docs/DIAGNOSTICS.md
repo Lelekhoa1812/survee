@@ -667,13 +667,13 @@ Screen readers and spell-check use <html lang> to identify the language of the q
 
 **How to fix:** Set <html lang> to a valid BCP 47 tag that matches the questionnaire, such as "en-AU", "fr-CA" or "vi".
 
-### KQA505: Questionnaire language differs from KQA's English interface
+### KQA505: Review the complete language journey
 
 Severity: **warning**
 
-The <html lang> value identifies the questionnaire document for assistive technology, but KQA's respondent shell and built-in controls remain in English. Translated questions alone therefore leave a mixed-language respondent journey and do not establish language access or field readiness.
+The <html lang> value declares the questionnaire content language for assistive technology. KQA's built-in shell currently supports en-AU, Vietnamese, Spanish, and Arabic, while the vi/es/ar interface wording is still a machine-drafted first release awaiting qualified native-speaker and in-context review. This setting does not translate questionnaire content, invitations, or host-provided notices.
 
-**How to fix:** Use a valid BCP 47 language tag for the questionnaire and mark passages in another language with their own lang attribute (and dir="rtl" when appropriate). Review invitations, notices, help, navigation, save and error states, review, submission, completion, and support. Test realistic tasks and error recovery in the intended language. Require a verified in-language journey or host-approved accessible alternative; block fielding when respondents cannot operate essential steps. Do not describe KQA's interface as translated.
+**How to fix:** Use an accurate BCP 47 language tag for the questionnaire and mark passages in another language with their own lang attribute (and dir="rtl" when appropriate). Select the intended shell language and review the complete journey: questions, notices, help, navigation, save and error states, review, submission, completion, and support. Test realistic tasks and error recovery with intended-language respondents. Arrange qualified review of machine-drafted shell translations before field use; block fielding when respondents cannot operate essential steps or understand the questionnaire.
 
 ### KQA502: Missing viewport meta
 

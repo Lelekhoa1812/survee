@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": "kqa-package-draft/6",
+  "benchmarkVersion": "kqa-package-draft/7",
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/8",
@@ -1510,7 +1510,7 @@
         "The languages, literacy needs, accessibility needs, digital access, and trusted participation channels of affected communities are unknown.",
         "No translation equivalence assessment, target-language cognitive pretest, accessibility review, or community testing has occurred.",
         "The consultation may inform but does not determine the authority's decision; decision scope, constraints, and report-back commitments are host facts requiring confirmation.",
-        "KQA serves its respondent shell and built-in status, navigation, validation, and review controls in English and left-to-right; translated questionnaire HTML does not translate those controls."
+        "KQA serves respondent shell navigation, save and error states, built-in controls, and answer review in en-AU, Vietnamese, Spanish, and Arabic; Vietnamese, Spanish, and Arabic wording is currently a machine-drafted first release awaiting qualified native-speaker and in-context review. The questionnaire HTML retains its own authored language and direction."
       ],
       "requiredIntents": [
         {
@@ -1523,7 +1523,7 @@
         },
         {
           "id": "whole-respondent-experience-language-fit",
-          "intent": "Treat KQA shell language and direction—including navigation, save/error status, accessible names, and answer review—as part of language access; identify that KQA is currently English/LTR and require the host to establish that intended-language respondents can understand and operate the complete journey or use a suitable alternative before fielding."
+          "intent": "Treat shell language and direction—including navigation, save/error status, accessible names, and answer review—as part of language access; recognize the available en-AU/vi/es/ar shell while requiring qualified native-speaker and in-context review of the machine-drafted vi/es/ar text and end-to-end respondent testing before relying on it."
         },
         {
           "id": "translation-equivalence-review",
@@ -1561,7 +1561,7 @@
         "The responses represent all affected people, establish consensus, constitute a referendum, or determine the outcome.",
         "Consultation is accessible or inclusive without tested language and non-digital access routes.",
         "Privacy, anonymity, or confidentiality guarantees that have not been confirmed by the host.",
-        "The complete respondent experience is available in a community language, fully localized, or suitable for RTL users when KQA built-in shell controls remain English/LTR and have not been tested for comprehension and operation."
+        "The current machine-drafted Vietnamese, Spanish, or Arabic shell wording is accurate, equivalent, reviewed, or suitable for field use before qualified language review and respondent testing."
       ],
       "hardGates": [
         {
@@ -1581,8 +1581,8 @@
           "description": "The draft claims representativeness, anonymity, or confidentiality without a sampling and data-handling basis."
         },
         {
-          "id": "unlocalized-shell-blocks-language-access",
-          "description": "The questionnaire is offered to respondents who cannot reliably understand or operate KQA’s English/LTR navigation, save/error states, validation, or review controls, without a tested accommodation or suitable alternative."
+          "id": "unreviewed-shell-translation-used-for-fielding",
+          "description": "The draft relies on machine-drafted Vietnamese, Spanish, or Arabic shell text as field-ready without qualified native-speaker and in-context review and end-to-end respondent testing, or does not provide a suitable alternative when intended respondents cannot operate essential controls."
         }
       ],
       "methodologySources": [
@@ -1632,7 +1632,7 @@
     {
       "id": "localized-consultation-journey-tested-control",
       "packageId": "community-consultation",
-      "brief": "A local authority is consulting people affected by a proposed public-space redesign. The source questionnaire, invitation, consent/privacy notice, help, navigation, validation and error messages, review, submission, completion, and support route are available in English and Vietnamese through a language selector. The Vietnamese version has versioned translator and independent reviewer sign-off, target-language cognitive testing, and observed end-to-end task testing with intended respondents, including correction after validation errors. The shell and HTML declare language correctly and have no RTL requirement. The authority has not supplied its decision owner, final options, data-access and retention rules, dates, or report-back plan.",
+      "brief": "A local authority is consulting people affected by a proposed public-space redesign. The source questionnaire, invitation, consent/privacy notice, help, navigation, validation and error messages, review, submission, completion, and support route are available in English and Vietnamese with qualified language review sign-off through a language selector. This is a hypothetical fully reviewed release: the Vietnamese version has versioned translator and independent reviewer sign-off, target-language cognitive testing, and observed end-to-end task testing with intended respondents, including correction after validation errors. The shell and HTML declare language correctly and have no RTL requirement. The authority has not supplied its decision owner, final options, data-access and retention rules, dates, or report-back plan.",
       "contextFacts": [
         "All essential participant-facing content and actions are available in selectable English and Vietnamese; language selection persists through the respondent flow.",
         "A qualified translator and independent language reviewer approved the Vietnamese version, and version records link each translation to the source version.",
@@ -1641,11 +1641,26 @@
         "The consultation is not a vote. The authority has not confirmed its final decision owner, options and constraints, privacy/access/retention rules, dates, or how it will report back."
       ],
       "requiredIntents": [
-        { "id": "localized-flow-evidence", "intent": "Recognize that the participant journey is localized and tested across content and controls; do not falsely fail it based on an obsolete assumption that KQA's shell is always English." },
-        { "id": "language-version-integrity", "intent": "Preserve language selection, correct language metadata, traceable source/translation versions, and independent review evidence." },
-        { "id": "complete-flow-testing", "intent": "Use the observed end-to-end and target-language cognitive test evidence as bounded support for readiness, while retaining its scope and limitations." },
-        { "id": "unresolved-host-decisions", "intent": "Keep decision ownership, options, privacy/access/retention, dates, and report-back unresolved until the authority supplies and approves them." },
-        { "id": "consultation-not-vote", "intent": "Explain that the consultation informs but does not determine the public-space decision; do not call it a binding vote or representative measure." }
+        {
+          "id": "localized-flow-evidence",
+          "intent": "Recognize that the participant journey is localized and tested across content and controls; do not falsely fail it based on an obsolete assumption that KQA's shell is always English."
+        },
+        {
+          "id": "language-version-integrity",
+          "intent": "Preserve language selection, correct language metadata, traceable source/translation versions, and independent review evidence."
+        },
+        {
+          "id": "complete-flow-testing",
+          "intent": "Use the observed end-to-end and target-language cognitive test evidence as bounded support for readiness, while retaining its scope and limitations."
+        },
+        {
+          "id": "unresolved-host-decisions",
+          "intent": "Keep decision ownership, options, privacy/access/retention, dates, and report-back unresolved until the authority supplies and approves them."
+        },
+        {
+          "id": "consultation-not-vote",
+          "intent": "Explain that the consultation informs but does not determine the public-space decision; do not call it a binding vote or representative measure."
+        }
       ],
       "acceptableAlternatives": [
         "Use the tested English or Vietnamese full journey, with a clear language selector and support route.",
@@ -1661,14 +1676,32 @@
         "The flow is universally accessible or legally compliant solely because testing was performed."
       ],
       "hardGates": [
-        { "id": "invented-consultation-or-data-policy", "description": "The draft invents the decision owner, final options, privacy or retention promises, dates, or report-back commitments instead of surfacing the missing host facts." },
-        { "id": "overstated-localization-evidence", "description": "The draft ignores the documented full-flow Vietnamese localization and testing, or overstates that evidence as universal accessibility, legal compliance, or representativeness." }
+        {
+          "id": "invented-consultation-or-data-policy",
+          "description": "The draft invents the decision owner, final options, privacy or retention promises, dates, or report-back commitments instead of surfacing the missing host facts."
+        },
+        {
+          "id": "overstated-localization-evidence",
+          "description": "The draft ignores the documented full-flow Vietnamese localization and testing, or overstates that evidence as universal accessibility, legal compliance, or representativeness."
+        }
       ],
       "methodologySources": [
-        { "name": "U.S. Census Bureau, Statistical Quality Standard A2", "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html" },
-        { "name": "GOV.UK Design System, Language navigation", "url": "https://design-system.service.gov.uk/components/language-navigation/" },
-        { "name": "UK Home Office Design System, Designing for users with limited English", "url": "https://design.homeoffice.gov.uk/design-and-content/content/designing-for-limited-english" },
-        { "name": "W3C Internationalization, Localization vs. Internationalization", "url": "https://www.w3.org/International/questions/qa-i18n.var" }
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standards/standarda2.html"
+        },
+        {
+          "name": "GOV.UK Design System, Language navigation",
+          "url": "https://design-system.service.gov.uk/components/language-navigation/"
+        },
+        {
+          "name": "UK Home Office Design System, Designing for users with limited English",
+          "url": "https://design.homeoffice.gov.uk/design-and-content/content/designing-for-limited-english"
+        },
+        {
+          "name": "W3C Internationalization, Localization vs. Internationalization",
+          "url": "https://www.w3.org/International/questions/qa-i18n.var"
+        }
       ],
       "sourceNotes": "This paired control checks that reviewers distinguish an unlocalized shell from a documented full-language journey and do not apply a blanket KQA-English assumption. Census A2, GOV.UK language navigation, Home Office limited-English guidance, and W3C localization guidance support evaluating the actual participant journey and bounded test evidence. The synthetic evidence does not establish universal accessibility, legal compliance, translation equivalence outside tested material, or representative sampling."
     },

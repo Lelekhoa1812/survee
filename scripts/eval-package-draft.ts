@@ -28,7 +28,7 @@ function unique(values: unknown, label: string): asserts values is string[] {
 }
 
 export function validateBenchmark(benchmark: any) {
-  assert(benchmark?.benchmarkVersion === "kqa-package-draft/6", "Unsupported package-draft benchmark version.");
+  assert(benchmark?.benchmarkVersion === "kqa-package-draft/7", "Unsupported package-draft benchmark version.");
   assert(benchmark.track === "package-draft-review", "Benchmark track must be package-draft-review.");
   assert(benchmark.packageLibraryVersion === INTERVIEW_PACKAGE_VERSION, "Benchmark package-library version does not match the current catalog.");
   unique(benchmark.dimensions, "dimensions");

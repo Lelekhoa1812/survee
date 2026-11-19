@@ -489,7 +489,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   const htmlLang = htmlEl ? attr(htmlEl, "lang")?.trim() : undefined;
   if (htmlEl && !htmlLang) add(ctx, "KQA501", "<html> has no non-empty lang value.", undefined, { offset: htmlEl.sourceCodeLocation?.startOffset });
   else if (htmlLang && !/^en(?:-|$)/i.test(htmlLang)) {
-    add(ctx, "KQA505", `The questionnaire declares lang=\"${htmlLang}\". This sets the language of the questionnaire document, but KQA's shell and built-in respondent controls remain in English. Translated questions alone do not establish language access or field readiness; test the complete journey and block fielding if respondents cannot operate essential steps.`, undefined, { offset: htmlEl?.sourceCodeLocation?.startOffset });
+    add(ctx, "KQA505", `The questionnaire declares lang="${htmlLang}". This identifies the language of the questionnaire for assistive technology. KQA's shell currently supports en-AU, Vietnamese, Spanish, and Arabic, but vi/es/ar wording is a machine-drafted first release awaiting qualified native-speaker and in-context review. The shell locale does not translate questionnaire content or host-provided notices. Review the full intended-language journey and arrange qualified language review before field use.`, undefined, { offset: htmlEl?.sourceCodeLocation?.startOffset });
   }
   if (!hasViewport) add(ctx, "KQA502", "No <meta name=\"viewport\"> was found.", undefined);
   if (!hasTitle) add(ctx, "KQA503", "No <title> was found.", undefined);
