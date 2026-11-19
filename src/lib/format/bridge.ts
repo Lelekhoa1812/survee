@@ -667,6 +667,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     switch (question.type) {
       case "single": case "select": return o.length ? o[0].value : null;
       case "multi": return o.slice(0, Math.min(question.maxSelections || 2, 2)).map(function (x) { return x.value; });
+      case "rank": return o.map(function (x) { return x.value; }).reverse();
       case "text": return "Probe text";
       case "longtext": return "Probe line one\nProbe line two";
       case "number": { var lo = question.min !== undefined ? question.min : 0; var hi = question.max !== undefined ? question.max : lo + 10; return Math.min(hi, Math.max(lo, lo + 1)); }

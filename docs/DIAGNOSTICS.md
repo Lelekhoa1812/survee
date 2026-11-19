@@ -305,7 +305,7 @@ Severity: **error**
 
 The manifest declares a question, but no element in the page carries data-kqa="<id>". Nobody could answer it.
 
-**How to fix:** Add the matching control with data-kqa="<id>", or set "custom": true if the page sets this answer from script with KQA.set().
+**How to fix:** Add the matching control with data-kqa="<id>" (a native rank question uses an ordered <ol>), or set "custom": true if the page sets this answer from script with KQA.set().
 
 Wrong:
 

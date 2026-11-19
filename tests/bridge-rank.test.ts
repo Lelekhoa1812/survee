@@ -11,14 +11,14 @@ const questions = [{ id: "priority", type: "rank", label: "Order these", options
   { value: "cost", label: "Cost" }, { value: "speed", label: "Speed" }, { value: "quality", label: "Quality" },
 ] }];
 
-function start(value?: string[]) {
+function start(value?: string[], probe = false) {
   const dom = new JSDOM(`<!doctype html><html><body><fieldset><legend>Order these</legend>
     <ol data-kqa="priority"><li data-value="cost">Cost</li><li data-value="speed">Speed</li><li data-value="quality">Quality</li></ol>
   </fieldset></body></html>`, { runScripts: "dangerously" });
   const { window } = dom;
   const post = vi.spyOn(window, "postMessage");
   window.eval(BRIDGE_SOURCE);
-  window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type: "init", questions, answers: value ? { priority: { value } } : {} }, source: window }));
+  window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type: "init", probe, questions, answers: value ? { priority: { value } } : {} }, source: window }));
   return { dom, window, post };
 }
 
@@ -55,6 +55,15 @@ describe("rank answer bridge", () => {
     expect(page.window.KQA.get("priority")).toEqual(["cost", "speed", "quality"]);
     expect(confirm.hidden).toBe(true);
     expect(page.window.document.activeElement).toBe(page.window.document.querySelector('li:first-child button[data-kqa-rank-move="down"]'));
+    page.window.close();
+  });
+
+  it("probes rank binding and restoration with a non-initial permutation", async () => {
+    const page = start(["cost", "speed", "quality"], true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const probe = page.post.mock.calls.map(([message]) => message).find((message) => message.type === "probe-result");
+    expect(probe).toMatchObject({ tested: 1, results: [] });
+    expect(page.window.KQA.get("priority")).toEqual(["cost", "speed", "quality"]);
     page.window.close();
   });
 });

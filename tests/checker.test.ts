@@ -82,6 +82,10 @@ describe("manifest rules", () => {
     expect(codes(checkHtml(RANK.replace('data-value="quality"', 'data-value="speed"')))).toContain("KQA304");
     expect(codes(checkHtml(RANK.replace(',"options":[{"value":"cost","label":"Cost"},{"value":"speed","label":"Speed"},{"value":"quality","label":"Quality"}]', "")))).toContain("KQA209");
   });
+  it("suggests ordered-list binding when a rank control is missing", () => {
+    const d = find(checkHtml(RANK.replace('<ol data-kqa="priority"><li data-value="cost">Cost</li><li data-value="speed">Speed</li><li data-value="quality">Quality</li></ol>', "")), "KQA300");
+    expect(d?.fix).toContain('<ol data-kqa="priority">');
+  });
   it("accepts guided presentation only with section and question block markers", () => {
     expect(codes(checkHtml(GUIDED))).not.toContain("KQA220");
     expect(codes(checkHtml(GUIDED))).not.toContain("KQA321");

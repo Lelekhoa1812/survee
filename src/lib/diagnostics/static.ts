@@ -876,7 +876,12 @@ function checkBindings(manifest: Manifest, b: BCtx) {
     if (list.length === 0) {
       if (!q.custom) {
         const near = closest(q.id, b.dataKqa.map((f) => attr(f.el, "data-kqa") ?? ""));
-        add(ctx, "KQA300", `Question "${q.id}" (${q.type}) has no element with data-kqa="${q.id}".${near && !byId.has(near) ? ` The page has data-kqa="${near}", which is probably a typo.` : ""}`, q.type === "single" ? `Add one radio per option: <input type="radio" name="${q.id}" data-kqa="${q.id}" value="…">.` : undefined, { path: `questions[${manifest.questions.indexOf(q)}]`, questionId: q.id, offset: b.at(`questions[${manifest.questions.indexOf(q)}]`) });
+        const fix = q.type === "single"
+          ? `Add one radio per option: <input type="radio" name="${q.id}" data-kqa="${q.id}" value="…">.`
+          : q.type === "rank"
+            ? `Add <ol data-kqa="${q.id}"> with one <li data-value="OPTION"> label for each option.`
+            : undefined;
+        add(ctx, "KQA300", `Question "${q.id}" (${q.type}) has no element with data-kqa="${q.id}".${near && !byId.has(near) ? ` The page has data-kqa="${near}", which is probably a typo.` : ""}`, fix, { path: `questions[${manifest.questions.indexOf(q)}]`, questionId: q.id, offset: b.at(`questions[${manifest.questions.indexOf(q)}]`) });
       } else b.stats.customQuestions++;
     } else {
       b.stats.boundQuestions++;
