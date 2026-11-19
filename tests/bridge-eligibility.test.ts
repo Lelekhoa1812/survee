@@ -30,6 +30,26 @@ function start(answers: Record<string, { value: unknown; note?: string }> = {}) 
 }
 
 describe("questionnaire bridge conditional eligibility", () => {
+  it("fails closed on negative choice conditions for empty retained values", () => {
+    const dom = new JSDOM("<!doctype html><html><body></body></html>", { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    const questions = [
+      { id: "choice", type: "single", label: "Choice", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] },
+      { id: "multi", type: "multi", label: "Choices", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] },
+      { id: "not-a", type: "text", label: "Not A", when: { all: [{ question: "choice", operator: "notEquals", value: "a" }] } },
+      { id: "without-a", type: "text", label: "Without A", when: { all: [{ question: "multi", operator: "notContains", value: "a" }] } },
+    ];
+    const send = (type: string, answers: object) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type, questions, answers }, source: window }));
+    send("init", { choice: { value: "" }, multi: { value: [] } });
+    expect(window.KQA.eligibility()).toEqual({ choice: true, multi: true, "not-a": false, "without-a": false });
+    send("answers", { choice: { value: "b" }, multi: { value: ["b"] } });
+    expect(window.KQA.eligibility()).toEqual({ choice: true, multi: true, "not-a": true, "without-a": true });
+    send("answers", { choice: { value: " " }, multi: { value: [] } });
+    expect(window.KQA.eligibility()).toEqual({ choice: true, multi: true, "not-a": false, "without-a": false });
+    window.close();
+  });
+
   it("shows one marked question at a time, preserves routing, follows focus requests, and clears the filter for show-all", () => {
     const dom = new JSDOM(`<!doctype html><html><body>
       <div data-kqa-question-list="a">

@@ -571,7 +571,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       : actual !== undefined && actual !== null && (Array.isArray(actual) ? actual.length > 0 : typeof actual === "string" ? actual.trim() !== "" : true);
     if (condition.operator === "answered") return answered;
     if (condition.operator === "notAnswered") return !answered;
-    if (actual === undefined || actual === null) return false;
+    if (!answered || (sourceQuestion && sourceQuestion.type === "repeat")) return false;
     var expected = condition.value;
     if (condition.operator === "lt" || condition.operator === "lte" || condition.operator === "gt" || condition.operator === "gte" || condition.operator === "eq" || condition.operator === "ne") {
       var source = q(condition.question);
