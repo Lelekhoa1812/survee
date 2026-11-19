@@ -8,7 +8,7 @@
     "model": { "type": "string", "minLength": 1 },
     "skillVersion": { "type": "string", "minLength": 1 },
     "promptVersion": { "type": "string", "minLength": 1 },
-    "packageLibraryVersion": { "const": "kqa-interview-packages/5" },
+    "packageLibraryVersion": { "const": "kqa-interview-packages/6" },
     "runDate": { "type": "string", "format": "date" },
     "outputs": {
       "type": "array",

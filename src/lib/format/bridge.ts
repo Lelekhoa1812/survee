@@ -425,6 +425,19 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (condition.operator === "notAnswered") return !answered;
     if (actual === undefined || actual === null) return false;
     var expected = condition.value;
+    if (condition.operator === "lt" || condition.operator === "lte" || condition.operator === "gt" || condition.operator === "gte" || condition.operator === "eq" || condition.operator === "ne") {
+      var source = q(condition.question);
+      if (!source || !typedValueIsUsable(source, actual, expected)) return false;
+      switch (condition.operator) {
+        case "lt": return actual < expected;
+        case "lte": return actual <= expected;
+        case "gt": return actual > expected;
+        case "gte": return actual >= expected;
+        case "eq": return actual === expected;
+        case "ne": return actual !== expected;
+      }
+      return false;
+    }
     switch (condition.operator) {
       case "equals": return equal(actual, expected);
       case "notEquals": return !equal(actual, expected);
@@ -436,6 +449,31 @@ export const BRIDGE_SOURCE = String.raw`(function () {
           : typeof actual === "string" && typeof expected === "string" ? actual.indexOf(expected) === -1 : false;
       default: return false;
     }
+  }
+  function isCalendarDate(value) {
+    if (typeof value !== "string") return false;
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    var days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1];
+  }
+  function typedValueIsUsable(question, actual, expected) {
+    if (question.type === "date") return isCalendarDate(actual) && isCalendarDate(expected);
+    if (question.type !== "number" && question.type !== "scale") return false;
+    if (typeof actual !== "number" || !isFinite(actual) || typeof expected !== "number" || !isFinite(expected)) return false;
+    if (question.type === "scale" && (!Number.isInteger(actual) || !Number.isInteger(expected))) return false;
+    if (typeof question.min === "number" && actual < question.min) return false;
+    if (typeof question.max === "number" && actual > question.max) return false;
+    if (question.type === "scale") {
+      var min = typeof question.min === "number" ? question.min : 1;
+      var max = typeof question.max === "number" ? question.max : 5;
+      return actual >= min && actual <= max && expected >= min && expected <= max;
+    }
+    return true;
   }
   function setConditionalVisibility(question, eligible) {
     var blocks = document.querySelectorAll("[data-kqa-question-id]");

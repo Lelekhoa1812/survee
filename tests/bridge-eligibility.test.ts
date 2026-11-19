@@ -78,6 +78,39 @@ describe("questionnaire bridge conditional eligibility", () => {
     window.close();
   });
 
+  it("matches server numeric, scale and calendar-date comparison semantics", () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <section data-kqa-question-id="amount"><input type="number" data-kqa="amount"></section>
+      <section data-kqa-question-id="rating"><input type="range" data-kqa="rating"></section>
+      <section data-kqa-question-id="start"><input type="date" data-kqa="start"></section>
+      <section data-kqa-question-id="zero-check"><input data-kqa="zero-check"></section>
+      <section data-kqa-question-id="scale-check"><input data-kqa="scale-check"></section>
+      <section data-kqa-question-id="date-check"><input data-kqa="date-check"></section>
+      <section data-kqa-question-id="not-equal-check"><input data-kqa="not-equal-check"></section>
+    </body></html>`, { runScripts: "dangerously" });
+    const { window } = dom;
+    window.eval(BRIDGE_SOURCE);
+    window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type: "init", questions: [
+      { id: "amount", type: "number", label: "Amount", min: -10, max: 10 },
+      { id: "rating", type: "scale", label: "Rating", min: 1, max: 5 },
+      { id: "start", type: "date", label: "Start" },
+      { id: "zero-check", type: "text", label: "Zero", when: { all: [{ question: "amount", operator: "gte", value: 0 }] } },
+      { id: "scale-check", type: "text", label: "Scale", when: { all: [{ question: "rating", operator: "eq", value: 4 }] } },
+      { id: "date-check", type: "text", label: "Date", when: { all: [{ question: "start", operator: "lt", value: "2000-03-01" }] } },
+      { id: "not-equal-check", type: "text", label: "Not equal", when: { all: [{ question: "amount", operator: "ne", value: 0 }] } },
+    ], answers: { amount: { value: 0 }, rating: { value: 4 }, start: { value: "2000-02-29" } } }, source: window }));
+    expect(window.KQA.eligibility()).toEqual({ amount: true, rating: true, start: true, "zero-check": true, "scale-check": true, "date-check": true, "not-equal-check": false });
+    window.KQA.set("amount", -0.25);
+    expect(window.KQA.isEligible("zero-check")).toBe(false);
+    expect(window.KQA.isEligible("not-equal-check")).toBe(true);
+    window.KQA.set("start", "2000-03-01");
+    expect(window.KQA.isEligible("date-check")).toBe(false);
+    window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, type: "answers", answers: { amount: { value: "0" }, rating: { value: 4 }, start: { value: "2000-02-30" } } }, source: window }));
+    expect(window.KQA.isEligible("not-equal-check")).toBe(false);
+    expect(window.KQA.isEligible("date-check")).toBe(false);
+    window.close();
+  });
+
   it("restores answers before evaluating conditions, hides ineligible blocks and reports eligibility", () => {
     const page = start({ mode: { value: "other" }, details: { value: "why here" }, nested: { value: "saved" } });
     expect(page.window.KQA.eligibility()).toEqual({ mode: true, details: true, nested: true });

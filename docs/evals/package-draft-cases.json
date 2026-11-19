@@ -2,7 +2,7 @@
   "benchmarkVersion": "kqa-package-draft/1",
   "track": "package-draft-review",
   "status": "public-development-only",
-  "packageLibraryVersion": "kqa-interview-packages/5",
+  "packageLibraryVersion": "kqa-interview-packages/6",
   "description": "Synthetic briefs for expert review of complete package-based KQA questionnaire drafts. Cases define intent and boundaries, not canonical question wording.",
   "dimensions": ["intent_coverage", "construct_and_question_design", "respondent_and_context_fit", "response_options_and_recall", "flow_and_burden", "privacy_and_risk", "analysis_and_interpretation", "review_record_and_evidence"],
   "ratingScale": {

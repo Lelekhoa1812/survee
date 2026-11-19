@@ -1,6 +1,6 @@
 import { readDoc } from "./docs";
 
-export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/5" as const;
+export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/6" as const;
 
 export const INTERVIEW_PACKAGES = [
   {

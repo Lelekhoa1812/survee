@@ -43,7 +43,7 @@ export const optionSchema = z.object({
   label: z.string().min(1).max(LIMITS.maxLabel),
 });
 
-/** Bounded predicates over an earlier choice answer or whether any typed value exists. */
+/** Bounded predicates over an earlier choice answer, typed value, or answer presence. */
 export const conditionSchema = z.discriminatedUnion("operator", [
   z.object({
     question: idString,
@@ -54,7 +54,24 @@ export const conditionSchema = z.discriminatedUnion("operator", [
     question: idString,
     operator: z.enum(["answered", "notAnswered"]),
   }),
+  z.object({
+    question: idString,
+    operator: z.enum(["lt", "lte", "gt", "gte", "eq", "ne"]),
+    value: z.union([z.number().finite(), z.string().max(10)]),
+  }),
 ]);
+
+/** Strict calendar-date validation shared by stored dates and date-routing operands. */
+export function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1];
+}
 
 export const whenSchema = z.object({
   all: z.array(conditionSchema).max(20).optional(),

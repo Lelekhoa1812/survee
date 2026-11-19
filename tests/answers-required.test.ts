@@ -125,6 +125,47 @@ describe("answered, without scores", () => {
     expect(evaluateEligibility(manifest, {})).toEqual({ channels: true, "email-only": false, "no-email": false });
   });
 
+  it("compares numeric and scale values at explicit inclusive and exclusive boundaries", () => {
+    const operators = ["lt", "lte", "gt", "gte", "eq", "ne"] as const;
+    const manifest: Manifest = { format: "kqa/1", title: "Typed routing", questions: [
+      { id: "amount", type: "number", label: "Amount", min: -10, max: 10 },
+      ...operators.map((operator) => ({ id: operator, type: "text" as const, label: operator, when: { all: [{ question: "amount", operator, value: 5 }] } })),
+      { id: "rating", type: "scale", label: "Rating", min: 1, max: 5 },
+      { id: "high-rating", type: "text", label: "High rating", when: { all: [{ question: "rating", operator: "gte" as const, value: 4 }] } },
+    ] };
+    const answers = { amount: { value: 5, updatedAt: "now" }, rating: { value: 4, updatedAt: "now" } };
+    expect(evaluateEligibility(manifest, answers)).toMatchObject({ lt: false, lte: true, gt: false, gte: true, eq: true, ne: false, "high-rating": true });
+    expect(evaluateEligibility(manifest, { amount: { value: 0, updatedAt: "now" }, rating: { value: 1, updatedAt: "now" } })).toMatchObject({ lt: true, lte: true, gt: false, gte: false, eq: false, ne: true, "high-rating": false });
+    expect(evaluateEligibility(manifest, { amount: { value: -3.25, updatedAt: "now" }, rating: { value: 5, updatedAt: "now" } })).toMatchObject({ lt: true, lte: true, gt: false, gte: false, eq: false, ne: true, "high-rating": true });
+  });
+
+  it("fails closed for missing, malformed, out-of-range or ineligible numeric sources, including ne", () => {
+    const manifest: Manifest = { format: "kqa/1", title: "Typed routing", questions: [
+      { id: "branch", type: "single", label: "Branch", options: [{ value: "open", label: "Open" }, { value: "closed", label: "Closed" }] },
+      { id: "amount", type: "number", label: "Amount", min: 0, max: 10, when: { all: [{ question: "branch", operator: "equals", value: "open" }] } },
+      { id: "follow-up", type: "text", label: "Follow-up", when: { all: [{ question: "amount", operator: "ne", value: 0 }] } },
+    ] };
+    expect(evaluateEligibility(manifest, {})).toEqual({ branch: true, amount: false, "follow-up": false });
+    expect(evaluateEligibility(manifest, { branch: { value: "open", updatedAt: "now" } })).toMatchObject({ amount: true, "follow-up": false });
+    expect(evaluateEligibility(manifest, { branch: { value: "closed", updatedAt: "now" }, amount: { value: 5, updatedAt: "now" } })).toMatchObject({ amount: false, "follow-up": false });
+    expect(evaluateEligibility(manifest, { branch: { value: "open", updatedAt: "now" }, amount: { value: "5" as unknown as number, updatedAt: "now" } })).toMatchObject({ amount: true, "follow-up": false });
+    expect(evaluateEligibility(manifest, { branch: { value: "open", updatedAt: "now" }, amount: { value: -1, updatedAt: "now" } })).toMatchObject({ amount: true, "follow-up": false });
+    expect(evaluateEligibility(manifest, { branch: { value: "open", updatedAt: "now" }, amount: { value: 0, updatedAt: "now" } })).toMatchObject({ amount: true, "follow-up": false });
+  });
+
+  it("compares dates as strict calendar values without timezone conversion", () => {
+    const manifest: Manifest = { format: "kqa/1", title: "Date routing", questions: [
+      { id: "start", type: "date", label: "Start date" },
+      { id: "before", type: "text", label: "Before", when: { all: [{ question: "start", operator: "lt", value: "2000-03-01" }] } },
+      { id: "on-or-after", type: "text", label: "On or after", when: { all: [{ question: "start", operator: "gte", value: "2000-03-01" }] } },
+      { id: "not-equal", type: "text", label: "Not equal", when: { all: [{ question: "start", operator: "ne", value: "2000-02-29" }] } },
+    ] };
+    expect(evaluateEligibility(manifest, { start: { value: "2000-02-29", updatedAt: "now" } })).toEqual({ start: true, before: true, "on-or-after": false, "not-equal": false });
+    expect(evaluateEligibility(manifest, { start: { value: "2000-03-01", updatedAt: "now" } })).toEqual({ start: true, before: false, "on-or-after": true, "not-equal": true });
+    expect(evaluateEligibility(manifest, { start: { value: "2000-02-30" as unknown as string, updatedAt: "now" } })).toEqual({ start: true, before: false, "on-or-after": false, "not-equal": false });
+    expect(evaluateEligibility(manifest, {})).toEqual({ start: true, before: false, "on-or-after": false, "not-equal": false });
+  });
+
   it("routes text and other answer types by answered state, excluding blank values and notes", () => {
     const manifest: Manifest = {
       format: "kqa/1", title: "Answer-state routing", questions: [

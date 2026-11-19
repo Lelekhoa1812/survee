@@ -1,4 +1,4 @@
-import { LIMITS, scaleBounds, type AnswerMap, type AnswerValue, type Manifest, type Question } from "./schema";
+import { LIMITS, isCalendarDate, scaleBounds, type AnswerMap, type AnswerValue, type Condition, type Manifest, type Question } from "./schema";
 
 export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string };
 
@@ -72,15 +72,7 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
     case "date": {
       if (typeof raw !== "string") return { ok: false, reason: `expected a date as YYYY-MM-DD, got ${describe(raw)}` };
       if (raw === "") return { ok: true, value: null };
-      // Date.parse normalises impossible days (for example, February 31) instead
-      // of rejecting them. Compare calendar parts explicitly, including leap years.
-      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-      const year = match ? Number(match[1]) : 0;
-      const month = match ? Number(match[2]) : 0;
-      const day = match ? Number(match[3]) : 0;
-      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-      const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-      if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return { ok: false, reason: `"${raw}" is not a valid YYYY-MM-DD date` };
+      if (!isCalendarDate(raw)) return { ok: false, reason: `"${raw}" is not a valid YYYY-MM-DD date` };
       return { ok: true, value: raw };
     }
   }
@@ -104,6 +96,7 @@ export function isAnswered(q: Question, answers: AnswerMap): boolean {
 /** Evaluate the current manifest's bounded routing rules in question order. */
 export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Record<string, boolean> {
   const eligible: Record<string, boolean> = {};
+  const questionById = new Map(manifest.questions.map((item) => [item.id, item]));
   for (const question of manifest.questions) {
     const when = question.when;
     if (!when) { eligible[question.id] = true; continue; }
@@ -114,6 +107,11 @@ export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Rec
       if (condition.operator === "answered") return answered;
       if (condition.operator === "notAnswered") return !answered;
       if (!answered || !("value" in condition)) return false;
+      if (isTypedComparison(condition)) {
+        const source = questionById.get(condition.question);
+        if (!source || !typedValueIsUsable(source, value, condition.value)) return false;
+        return compareTypedValue(value, condition.value, condition.operator);
+      }
       const has = Array.isArray(value) ? value.includes(condition.value) : value === condition.value;
       return condition.operator === "equals" || condition.operator === "contains" ? has : !has;
     };
@@ -122,6 +120,35 @@ export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Rec
     eligible[question.id] = (all.length === 0 || all.every(matches)) && (any.length === 0 || any.some(matches));
   }
   return eligible;
+}
+
+type TypedComparison = Extract<Condition, { operator: "lt" | "lte" | "gt" | "gte" | "eq" | "ne" }>;
+function isTypedComparison(condition: Condition): condition is TypedComparison {
+  return condition.operator === "lt" || condition.operator === "lte" || condition.operator === "gt" || condition.operator === "gte" || condition.operator === "eq" || condition.operator === "ne";
+}
+function typedValueIsUsable(question: Question, actual: unknown, expected: unknown): boolean {
+  if (question.type === "date") return typeof actual === "string" && isCalendarDate(actual) && typeof expected === "string" && isCalendarDate(expected);
+  if (question.type !== "number" && question.type !== "scale") return false;
+  if (typeof actual !== "number" || !Number.isFinite(actual) || typeof expected !== "number" || !Number.isFinite(expected)) return false;
+  if (question.type === "scale" && (!Number.isInteger(actual) || !Number.isInteger(expected))) return false;
+  if (question.min !== undefined && actual < question.min) return false;
+  if (question.max !== undefined && actual > question.max) return false;
+  if (question.type === "scale") {
+    const { min, max } = scaleBounds(question);
+    return actual >= min && actual <= max && expected >= min && expected <= max;
+  }
+  return true;
+}
+function compareTypedValue(actual: string | number | string[] | undefined, expected: string | number, operator: TypedComparison["operator"]): boolean {
+  if (actual === undefined || typeof actual !== typeof expected || Array.isArray(actual)) return false;
+  switch (operator) {
+    case "lt": return actual < expected;
+    case "lte": return actual <= expected;
+    case "gt": return actual > expected;
+    case "gte": return actual >= expected;
+    case "eq": return actual === expected;
+    case "ne": return actual !== expected;
+  }
 }
 
 /** Return requested question ids plus every transitive routing prerequisite needed to infer their current eligibility. */

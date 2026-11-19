@@ -229,6 +229,43 @@
                         "operator"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "lt",
+                            "lte",
+                            "gt",
+                            "gte",
+                            "eq",
+                            "ne"
+                          ]
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 10
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "operator",
+                        "value"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }
@@ -284,6 +321,43 @@
                       "required": [
                         "question",
                         "operator"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "lt",
+                            "lte",
+                            "gt",
+                            "gte",
+                            "eq",
+                            "ne"
+                          ]
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 10
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "question",
+                        "operator",
+                        "value"
                       ],
                       "additionalProperties": false
                     }

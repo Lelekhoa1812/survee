@@ -4,7 +4,7 @@
  */
 import { parse } from "parse5";
 import type { DefaultTreeAdapterMap, ParserError } from "parse5";
-import { FORMAT_ID, ID_RE, LIMITS, OPTION_TYPES, OPTION_VALUE_RE, QUESTION_TYPES, noteConfig, scaleBounds, type Manifest, type Question } from "../format/schema";
+import { FORMAT_ID, ID_RE, LIMITS, OPTION_TYPES, OPTION_VALUE_RE, QUESTION_TYPES, isCalendarDate, noteConfig, scaleBounds, type Manifest, type Question } from "../format/schema";
 import { entry } from "./catalog";
 import { parseJsonWithPositions } from "./jsonpos";
 import { CHECKER_VERSION, type CheckStats, type Diagnostic, type Report } from "./types";
@@ -618,7 +618,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
   if (qs.length === 0) add(ctx, "KQA205", '"questions" is empty.', undefined, { offset: m.at("questions"), path: "questions" });
   if (qs.length > LIMITS.maxQuestions) add(ctx, "KQA213", `There are ${qs.length} questions; the maximum is ${LIMITS.maxQuestions}.`, undefined, { offset: m.at("questions"), path: "questions" });
   const seen = new Map<string, number>();
-  const earlierQuestions = new Map<string, { type: unknown; values: Set<string> }>();
+  const earlierQuestions = new Map<string, { type: unknown; values: Set<string>; min?: unknown; max?: unknown }>();
   qs.forEach((q, i) => {
     const p = `questions[${i}]`;
     if (!isObj(q)) return void add(ctx, "KQA203", `${p} must be an object.`, undefined, { offset: m.at(p), path: p });
@@ -752,8 +752,9 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
             }
             const answerStateOp = op === "answered" || op === "notAnswered";
             const choiceOp = op === "equals" || op === "notEquals" || op === "contains" || op === "notContains";
-            if (!answerStateOp && !choiceOp) {
-              add(ctx, "KQA218", `${cp}.operator must be "equals", "notEquals", "contains", "notContains", "answered" or "notAnswered".`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
+            const typedOp = op === "lt" || op === "lte" || op === "gt" || op === "gte" || op === "eq" || op === "ne";
+            if (!answerStateOp && !choiceOp && !typedOp) {
+              add(ctx, "KQA218", `${cp}.operator must be a choice comparison, a typed comparison ("lt", "lte", "gt", "gte", "eq", "ne"), "answered" or "notAnswered".`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
             }
             if (answerStateOp && value !== undefined) {
               add(ctx, "KQA218", `${cp}.value is not used with "${op}".`, `Remove the value property from this answer-state condition.`, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
@@ -770,6 +771,22 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
                 add(ctx, "KQA218", `${cp}.value "${value}" is not an option of earlier question "${ref}".`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
               }
             }
+            if (typedOp && source) {
+              if (source.type === "number" || source.type === "scale") {
+                if (typeof value !== "number" || !Number.isFinite(value)) {
+                  add(ctx, "KQA218", `${cp}.value must be a finite number for a ${source.type} comparison.`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+                } else {
+                  if (source.type === "scale" && !Number.isInteger(value)) add(ctx, "KQA218", `${cp}.value must be a whole number for a scale comparison.`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+                  const min = source.type === "scale" ? (typeof source.min === "number" ? source.min : 1) : source.min;
+                  const max = source.type === "scale" ? (typeof source.max === "number" ? source.max : 5) : source.max;
+                  if (source.type === "scale" && (typeof min === "number" && value < min || typeof max === "number" && value > max)) add(ctx, "KQA218", `${cp}.value must be within the declared scale range.`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+                }
+              } else if (source.type === "date") {
+                if (typeof value !== "string" || !isCalendarDate(value)) add(ctx, "KQA218", `${cp}.value must be a real calendar date in YYYY-MM-DD form.`, undefined, { offset: m.at(`${cp}.value`), path: `${cp}.value`, questionId: qid });
+              } else {
+                add(ctx, "KQA218", `${cp} uses a typed comparison with ${String(source.type)}; typed comparisons require number, scale or date questions.`, undefined, { offset: m.at(`${cp}.operator`), path: `${cp}.operator`, questionId: qid });
+              }
+            }
           });
         }
       }
@@ -777,7 +794,7 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
     if (qid && !earlierQuestions.has(qid)) {
       const values = new Set<string>();
       if (Array.isArray(q.options)) for (const option of q.options) if (isObj(option) && typeof option.value === "string") values.add(option.value);
-      earlierQuestions.set(qid, { type, values });
+      earlierQuestions.set(qid, { type, values, min: q.min, max: q.max });
     }
   });
   for (const id of sectionIds) if (!usedSections.has(id)) add(ctx, "KQA217", `Section "${id}" has no questions.`, undefined, { offset: m.at(`sections[${(raw.sections as { id: string }[]).findIndex((s) => s.id === id)}]`), path: "sections" });

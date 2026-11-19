@@ -169,6 +169,23 @@ describe("manifest rules", () => {
     const html = swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "when": {"all":[{"question":"channels","operator":"equals","value":"missing"}]},');
     expect(codes(checkHtml(html)).filter((code) => code === "KQA218").length).toBeGreaterThanOrEqual(2);
   });
+  it("accepts typed number, scale and date comparisons only with matching values", () => {
+    const number = swap(STARTER, '"id": "confidence", "type": "scale",', '"id": "confidence", "type": "scale", "when": {"all":[{"question":"team-size","operator":"gte","value":5}]},');
+    const numberOutsideAnswerRange = swap(STARTER, '"id": "confidence", "type": "scale",', '"id": "confidence", "type": "scale", "when": {"all":[{"question":"team-size","operator":"lt","value":0}]},');
+    const scale = swap(STARTER, '"id": "start-date", "type": "date",', '"id": "start-date", "type": "date", "when": {"all":[{"question":"confidence","operator":"lt","value":4}]},');
+    const date = swap(STARTER, '"id": "tradeoffs", "type": "rank",', '"id": "tradeoffs", "type": "rank", "when": {"all":[{"question":"start-date","operator":"lte","value":"2000-02-29"}]},');
+    expect(codes(checkHtml(number))).not.toContain("KQA218");
+    expect(codes(checkHtml(numberOutsideAnswerRange))).not.toContain("KQA218");
+    expect(codes(checkHtml(scale))).not.toContain("KQA218");
+    expect(codes(checkHtml(date))).not.toContain("KQA218");
+  });
+  it("rejects typed comparison values outside the source type or declared range", () => {
+    const outOfRange = swap(STARTER, '"id": "start-date", "type": "date",', '"id": "start-date", "type": "date", "when": {"all":[{"question":"confidence","operator":"gt","value":6}]},');
+    const fractionalScale = swap(STARTER, '"id": "start-date", "type": "date",', '"id": "start-date", "type": "date", "when": {"all":[{"question":"confidence","operator":"gte","value":1.5}]},');
+    const invalidDate = swap(STARTER, '"id": "tradeoffs", "type": "rank",', '"id": "tradeoffs", "type": "rank", "when": {"all":[{"question":"start-date","operator":"eq","value":"2000-02-30"}]},');
+    const wrongType = swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "when": {"all":[{"question":"priority","operator":"gte","value":1}]},');
+    for (const html of [outOfRange, fractionalScale, invalidDate, wrongType]) expect(codes(checkHtml(html))).toContain("KQA218");
+  });
   it("rejects empty condition groups", () => {
     const html = swap(STARTER, '"id": "company", "type": "text",', '"id": "company", "type": "text", "when": {"all":[]},');
     expect(codes(checkHtml(html))).toContain("KQA218");
