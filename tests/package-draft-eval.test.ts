@@ -143,6 +143,26 @@ describe("package draft development benchmark", () => {
     expect(cleared.hardGateReview.reviewerFlags).toHaveLength(1);
   });
 
+  it("reports descriptive per-package case, intent, evidence and gate coverage without a readiness score", () => {
+    const results: any = resultsFor();
+    const item = benchmark.cases.find((candidate: any) => candidate.packageId === "community-consultation");
+    const rating = results.ratings.find((candidate: any) => candidate.caseId === item.id && candidate.reviewerId === "domain-1");
+    rating.intentCoverage[0].status = "missing";
+    rating.hardGateFindings = [{ gateId: item.hardGates[0].id, evidence: "The consultation purpose is absent from the draft." }];
+    results.evidenceStatus.find((record: any) => record.caseId === item.id).functional = { status: "passed", evidence: "Observed full submit and correction flow in browser." };
+    const report = scoreResults(benchmark, results);
+    const coverage = report.packageCoverage.byPackage["community-consultation"];
+    expect(coverage.caseCount).toBe(benchmark.cases.filter((candidate: any) => candidate.packageId === "community-consultation").length);
+    expect(coverage.reviewerRatingCount).toBe(coverage.caseCount * coverage.reviewerCount);
+    expect(coverage.requiredIntentStatusCounts.missing).toBe(1);
+    expect(coverage.casesWithMissingIntents).toContain(item.id);
+    expect(coverage.evidenceStatusCounts.functional.passed).toBe(1);
+    expect(coverage.hardGateReview.reviewerFlagCount).toBe(1);
+    expect(coverage.hardGateReview.unresolvedCaseIds).toContain(item.id);
+    expect(coverage).not.toHaveProperty("readinessScore");
+    expect(report.packageCoverage.interpretation).toContain("not package readiness");
+  });
+
   it("keeps KQA static format checks separate and hashes each submitted artifact", async () => {
     const results = resultsFor();
     const checks = await auditArtifacts(benchmark, results);

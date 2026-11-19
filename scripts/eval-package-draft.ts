@@ -229,6 +229,42 @@ export function scoreResults(benchmark: any, results: any, artifactChecks: any[]
   }
   const adjudicationMap = new Map<string, any>(validated.adjudications.map((record: any) => [`${record.caseId}\u0000${record.gateId}`, record]));
   const unresolvedHardGateFlags = hardGateFlags.filter((finding) => adjudicationMap.get(`${finding.caseId}\u0000${finding.gateId}`)?.outcome !== "cleared");
+  const packageCoverage = Object.fromEntries(INTERVIEW_PACKAGES.map((pkg) => {
+    const packageCases = benchmark.cases.filter((item: any) => item.packageId === pkg.id);
+    const packageCaseIds = new Set(packageCases.map((item: any) => item.id));
+    const packageFlags = hardGateFlags.filter((finding) => packageCaseIds.has(finding.caseId));
+    const packageUnresolved = unresolvedHardGateFlags.filter((finding) => packageCaseIds.has(finding.caseId));
+    const intentStatusCounts = { covered: 0, partial: 0, missing: 0, unsupported: 0 };
+    const casesWithMissingIntents = new Set<string>();
+    const casesWithUnsupportedIntents = new Set<string>();
+    for (const item of packageCases) for (const reviewer of validated.reviewers.values()) {
+      const rating = validated.ratingMap.get(`${item.id}\u0000${reviewer.id}`);
+      for (const intent of rating.intentCoverage) {
+        intentStatusCounts[intent.status as keyof typeof intentStatusCounts] += 1;
+        if (intent.status === "missing") casesWithMissingIntents.add(item.id);
+        if (intent.status === "unsupported") casesWithUnsupportedIntents.add(item.id);
+      }
+    }
+    const evidenceStatusCounts = Object.fromEntries(["functional", "accessibility", "respondentPretest"].map((lane) => [lane, Object.fromEntries([...EVIDENCE_STATUS].map((status) => [status, packageCases.filter((item: any) => validated.evidenceByCase.get(item.id)[lane].status === status).length]))]));
+    return [pkg.id, {
+      packageId: pkg.id,
+      title: pkg.title,
+      caseCount: packageCases.length,
+      caseIds: packageCases.map((item: any) => item.id),
+      reviewerCount: validated.reviewers.size,
+      reviewerRatingCount: packageCases.length * validated.reviewers.size,
+      requiredIntentStatusCounts: intentStatusCounts,
+      casesWithMissingIntents: [...casesWithMissingIntents],
+      casesWithUnsupportedIntents: [...casesWithUnsupportedIntents],
+      evidenceStatusCounts,
+      hardGateReview: {
+        reviewerFlagCount: packageFlags.length,
+        flaggedCaseCount: new Set(packageFlags.map((finding) => finding.caseId)).size,
+        unresolvedFlagCount: packageUnresolved.length,
+        unresolvedCaseIds: [...new Set(packageUnresolved.map((finding) => finding.caseId))],
+      },
+    }];
+  }));
   return {
     benchmarkVersion: benchmark.benchmarkVersion,
     resultsSchemaVersion: results.resultsSchemaVersion,
@@ -241,6 +277,10 @@ export function scoreResults(benchmark: any, results: any, artifactChecks: any[]
     }),
     dimensions: dimensionResults,
     requiredIntentStatusCounts: intentCounts,
+    packageCoverage: {
+      byPackage: packageCoverage,
+      interpretation: "Descriptive case and evidence coverage only. Uneven case counts and untested evidence lanes identify review gaps; they are not package readiness, validation, or reliability scores.",
+    },
     hardGateReview: { reviewerFlags: hardGateFlags, adjudications: validated.adjudications, unresolvedFlags: unresolvedHardGateFlags, unresolvedFlagCount: unresolvedHardGateFlags.length, flaggedCaseCount: new Set(hardGateFlags.map((finding) => finding.caseId)).size, interpretation: "A gate flag is a non-compensatory review trigger. A documented cleared outcome resolves that flag; confirmed or unresolved flags remain release blockers. High dimension scores cannot offset a gate." },
     staticFormatChecks: artifactChecks,
     limitations: [
