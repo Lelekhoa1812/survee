@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   context: {
     participant: { name: "Ada", status: "invited", revision: 0, answers: {} },
     interview: { name: "Study", status: "open" },
-    version: { version: 7, manifest: { title: "Study", questions: [] } },
+    version: { version: 7, manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] } },
   },
   loadByToken: vi.fn(),
   saveAnswers: vi.fn(),
@@ -51,7 +51,7 @@ describe("respondent questionnaire version routes", () => {
     const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study" });
+    await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }] });
   });
 
   it("requires and forwards the loaded version on answer saves", async () => {

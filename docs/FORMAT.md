@@ -220,10 +220,11 @@ The runtime sets `data-state="answered"` or `data-state="empty"`. Style it with 
 
 ### 4.3 Custom questions
 
-When the standard controls are not enough, set `"custom": true`, build your own UI, and talk to the runtime. Three rules make a custom control work: **write** with `KQA.set`, **read** with `KQA.get`, and **repaint** whenever `ready`, `change` or `lock` fires. The repaint rule matters most. It is how a person who returns to their link sees their earlier answer. `KQA.set` and `KQA.clear` return `false` when a value is rejected; listen for `KQA.on("validation", ...)` to show or clear field-level feedback. A custom `multi` control must enforce `maxSelections` itself and explain any rejection to the respondent.
+When the standard controls are not enough, set `"custom": true`, build your own UI, and talk to the runtime. Three rules make a custom control work: **write** with `KQA.set`, **read** with `KQA.get`, and **repaint** whenever `ready`, `change` or `lock` fires. The repaint rule matters most. It is how a person who returns to their link sees their earlier answer. `KQA.set` and `KQA.clear` return `false` when a value is rejected; listen for `KQA.on("validation", ...)` to show or clear field-level feedback. A custom `multi` control must enforce `maxSelections` itself and explain any rejection to the respondent. Wrap each custom question in one whole-question element with `data-kqa-question-id="QUESTION_ID"`; this lets routing hide the full question and the respondent shell's **Questions** menu focus its first visible enabled control. If the block has no focusable control, the runtime temporarily makes the block itself programmatically focusable for the jump.
 
 ```js
 // A five-star control for a custom question with id "stars" (type scale, min 1, max 5)
+const host = document.querySelector('[data-kqa-question-id="stars"]');
 const buttons = [1, 2, 3, 4, 5].map((n) => {
   const b = document.createElement("button");
   b.type = "button";
@@ -242,6 +243,12 @@ function paint() {                                          // read and show
 KQA.on("ready", paint);   // saved answers have arrived
 KQA.on("change", paint);  // any change, including one made by KQA.set below or by the app
 KQA.on("lock", paint);    // submitted or reopened
+```
+
+```html
+<section data-kqa-question-id="stars" aria-labelledby="stars-label">
+  <h2 id="stars-label">How confident are you?</h2>
+</section>
 ```
 
 * `KQA.set` fires `change` too, so a control repaints itself without calling `paint()` by hand.
@@ -353,6 +360,7 @@ Class names are prefixed `kq-` so they never clash with your own. Use the kit un
 * Put the instruction in `help`, not in the label.
 * Mark only genuinely necessary questions as `required`.
 * Group long questionnaires into sections of about 5 to 8 questions with a contents rail.
+* The KQA respondent shell adds **Questions** navigation grouped by manifest sections. It shows answered counts and can focus a chosen, currently eligible question. Hidden questions are omitted; their saved answers remain retained and may reappear when eligible. This is additional shell navigation; the shell does not move respondents automatically or control the questionnaire's visual sections.
 * Test at 390 px wide and in dark mode. No sideways scrolling.
 * Every interactive element reachable and usable by keyboard, with a visible focus ring.
 

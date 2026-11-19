@@ -5,7 +5,7 @@ import { getDesignGuidance } from "../src/lib/design/guidance";
 describe("design guidance package", () => {
   it("returns an actionable brief-to-review plan with explicit standards and heuristics", () => {
     const guidance = getDesignGuidance();
-    expect(guidance.policyVersion).toBe("kqa-design/19");
+    expect(guidance.policyVersion).toBe("kqa-design/20");
     expect(guidance.principles.some((principle) => principle.id === "host-freshness")).toBe(true);
     expect(guidance.designPlan.inputs).toContain("brand/theme references");
     expect(guidance.designPlan.steps.join(" ")).toContain("Build, then critique");
@@ -32,6 +32,15 @@ describe("design guidance package", () => {
     expect(guidance.designPlan.accessibilityEvaluationMethodology.status).toContain("not a normative WCAG success criterion");
     expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("realistic, neutral tasks");
     expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("label usability as untested");
+    expect(guidance.designPlan.taskBasedUsabilityMethodology.steps.join(" ")).toContain("one moderated session includes cognitive probes and usability tasks");
+    expect(guidance.designPlan.questionContentRubric.map((item) => item.dimension)).toContain("Answer form and options");
+    expect(guidance.designPlan.questionContentReviewMethodology.probeDimensions.map((item) => item.name)).toEqual([
+      "Comprehension", "Recall and retrieval", "Judgment", "Response selection",
+    ]);
+    expect(guidance.designPlan.questionContentReviewMethodology.steps.join(" ")).toContain("A moderated session may combine cognitive probes");
+    expect(guidance.designPlan.questionContentReviewMethodology.recordFields).toContain("participantFitAndGaps");
+    expect(guidance.designPlan.output.questionContentReview.instructions.join(" ")).toContain("even when one session supports multiple methods");
+    expect(guidance.designPlan.output.fields).toContain("questionContentReview");
     expect(guidance.designPlan.output.fields).toContain("observedUsabilityFindings");
     expect(guidance.designPlan.output.fields).toContain("usabilityLimitationsOrUntestedReason");
     expect(guidance.designPlan.steps.join(" ")).toContain("representative users");
@@ -39,6 +48,10 @@ describe("design guidance package", () => {
     expect(guidance.sources.find((source) => source.name === "WCAG Evaluation Methodology (WCAG-EM) 2.0")?.url).toBe("https://www.w3.org/TR/wcag-em-2/");
     expect(guidance.sources.find((source) => source.name === "U.S. Web Design System: Design principles")?.url).toBe("https://designsystem.digital.gov/design-principles/");
     expect(guidance.sources.find((source) => source.name === "GOV.UK Service Manual: Plan user research")?.url).toBe("https://www.gov.uk/service-manual/user-research/plan-user-research-for-your-service");
+    expect(guidance.sources.find((source) => source.name === "CDC/NCHS: Cognitive Interviewing")?.url).toBe("https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html");
+    expect(guidance.sources.find((source) => source.name === "U.S. Census Bureau: Statistical Quality Standard A2")?.url).toBe("https://www.census.gov/about/policies/quality/standards/standarda2.html");
+    expect(guidance.sources.find((source) => source.name === "W3C WAI: Multi-page Forms")?.url).toBe("https://www.w3.org/WAI/tutorials/forms/multi-page/");
+    expect(guidance.sources.find((source) => source.name === "ONS Design System: Hub and Spoke")?.url).toBe("https://service-manual.ons.gov.uk/design-system/patterns/hub-and-spoke");
     expect(guidance.reviewChecklist.join(" ")).toContain("npm run a11y:audit");
     expect(guidance.reviewChecklist.join(" ")).toContain("disposable local account");
     expect(guidance.reviewChecklist.join(" ")).toContain("commit-scoped JSON summary");
@@ -56,6 +69,8 @@ describe("design guidance package", () => {
   it("gives questionnaire authors conditional-reveal and retention review guidance", () => {
     const guidance = getDesignGuidance("questionnaire");
     const checklist = guidance.reviewChecklist.join(" ");
+    expect(checklist).toContain("section-aware question navigation");
+    expect(checklist).toContain("cognitive pretest protocol");
     expect(checklist).toContain("representative screen reader/browser combinations");
     expect(checklist).toContain("does not establish accessibility");
     expect(checklist).toContain("how a respondent can remove them");

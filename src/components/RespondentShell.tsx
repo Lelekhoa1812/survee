@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AnswerMap, Question } from "@/lib/format/schema";
+import type { AnswerMap, Question, Section } from "@/lib/format/schema";
 import { displayValue } from "@/lib/format/answers";
 import { api, BrandMark, Icon, Modal, Spinner, useToast } from "./ui";
 
@@ -12,6 +12,7 @@ interface Loaded {
   interview: { name: string; status: "open" | "closed" };
   version: number;
   title: string;
+  sections?: Section[];
   questions: Question[];
   answers: AnswerMap;
   progress: { eligible?: Record<string, boolean> };
@@ -19,6 +20,25 @@ interface Loaded {
 type Patch = Record<string, { value?: unknown; note?: unknown }>;
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v.trim() !== "" : true);
+
+export function buildQuestionNavigation(questions: Question[], sections: Section[], eligible: Record<string, boolean>) {
+  const definitions = new Map(sections.map((section) => [section.id, section]));
+  const groups: { id: string; title: string; description?: string; questions: Question[] }[] = [];
+  const byId = new Map<string, (typeof groups)[number]>();
+  for (const question of questions) {
+    if (eligible[question.id] === false) continue;
+    const id = question.section ?? "__unsectioned";
+    let group = byId.get(id);
+    if (!group) {
+      const definition = definitions.get(id);
+      group = { id, title: definition?.title ?? "Other questions", description: definition?.description, questions: [] };
+      byId.set(id, group);
+      groups.push(group);
+    }
+    group.questions.push(question);
+  }
+  return groups;
+}
 
 export function RespondentShell({ token }: { token: string }) {
   const toast = useToast();
@@ -35,8 +55,10 @@ export function RespondentShell({ token }: { token: string }) {
   const [submitError, setSubmitError] = useState("");
   const [frameReady, setFrameReady] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [questionNavOpen, setQuestionNavOpen] = useState(false);
 
   const frame = useRef<HTMLIFrameElement>(null);
+  const questionNavTrigger = useRef<HTMLButtonElement>(null);
   const answers = useRef<AnswerMap>({});
   const version = useRef(0);
   const refreshRequiredRef = useRef(false);
@@ -288,6 +310,9 @@ export function RespondentShell({ token }: { token: string }) {
   const hasUnsavedChanges = Object.keys(pending.current).length > 0;
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
+  const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
+  const questionGroups = buildQuestionNavigation(questions.current, data.sections ?? [], eligibility.current);
+  const answeredInNavigation = reviewQuestions.filter((question) => hasValue(answers.current[question.id]?.value)).length;
 
   return (
     <div className="rs">
@@ -307,6 +332,74 @@ export function RespondentShell({ token }: { token: string }) {
             >
               <div className="bar"><i style={{ width: `${pct}%` }} /></div>
               <small>{counts.answered}/{counts.total} answered</small>
+            </div>
+            <div className="rs-question-nav-wrap">
+              <button
+                ref={questionNavTrigger}
+                className="btn rs-question-nav-trigger"
+                type="button"
+                aria-expanded={questionNavOpen}
+                aria-controls="respondent-question-navigation"
+                aria-label={`Browse questions, ${answeredInNavigation} of ${reviewQuestions.length} answered`}
+                disabled={!frameReady || locked}
+                onClick={() => setQuestionNavOpen((open) => !open)}
+              >
+                Questions
+              </button>
+              {questionNavOpen && (
+                <nav
+                  id="respondent-question-navigation"
+                  className="rs-question-nav"
+                  aria-label="Question navigation"
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setQuestionNavOpen(false);
+                      questionNavTrigger.current?.focus();
+                    }
+                  }}
+                >
+                  <p className="rs-question-nav-hint">
+                    {hiddenQuestionCount
+                      ? `Questions hidden by your answers are omitted. Any saved answers are retained and may reappear if they become eligible.`
+                      : "Choose a question to go to it. Your answers will not change."}
+                  </p>
+                  <div className="rs-question-nav-groups">
+                    {questionGroups.map((group) => {
+                      const answered = group.questions.filter((question) => hasValue(answers.current[question.id]?.value)).length;
+                      return (
+                        <section className="rs-question-nav-group" key={group.id} aria-labelledby={`rs-nav-section-${group.id}`}>
+                          <div className="rs-question-nav-section-head">
+                            <h2 id={`rs-nav-section-${group.id}`}>{group.title}</h2>
+                            <span>{answered} of {group.questions.length} answered</span>
+                          </div>
+                          {group.description && <p className="rs-question-nav-description">{group.description}</p>}
+                          <ul>
+                            {group.questions.map((question) => {
+                              const isAnswered = hasValue(answers.current[question.id]?.value);
+                              return (
+                                <li key={question.id}>
+                                  <button
+                                    type="button"
+                                    className="rs-question-nav-item"
+                                    onClick={() => {
+                                      setQuestionNavOpen(false);
+                                      post({ type: "focus-question", id: question.id });
+                                    }}
+                                  >
+                                    <span>{question.label}</span>
+                                    <small>{isAnswered ? "Answered" : question.required ? "Required" : "Not answered"}</small>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </section>
+                      );
+                    })}
+                  </div>
+                </nav>
+              )}
             </div>
             <span className={`save-state ${save}`} role="status" aria-live="polite" title={save === "offline" && hasUnsavedChanges ? "These changes have not reached KQA. They will be retried when you reconnect; keep this page open until it shows Saved." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
             <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>

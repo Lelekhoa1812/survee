@@ -211,6 +211,83 @@ describe("respondent required-answer recovery", () => {
     expect(review.textContent).not.toContain("Retained answer");
   });
 
+  it("navigates eligible questions by section and focuses the chosen question", async () => {
+    state.api.mockResolvedValueOnce({
+      ok: true, status: 200, data: {
+        ok: true,
+        participant: { name: "Ada", status: "in_progress" },
+        interview: { name: "Study", status: "open" },
+        version: 7,
+        title: "Study questions",
+        sections: [{ id: "context", title: "About you", description: "A little context." }],
+        questions: [
+          { id: "role", type: "text", label: "Your role", section: "context" },
+          { id: "goal", type: "text", label: "Your goal", section: "context", required: true },
+          { id: "followup", type: "text", label: "Hidden follow-up", section: "context" },
+          { id: "closing", type: "longtext", label: "Anything else?" },
+        ],
+        answers: { role: { value: "Researcher", updatedAt: "now" } },
+        progress: { eligible: { role: true, goal: true, followup: false, closing: true } },
+      },
+    });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+
+    const trigger = host.querySelector<HTMLButtonElement>(".rs-question-nav-trigger")!;
+    expect(trigger.getAttribute("aria-label")).toBe("Browse questions, 1 of 3 answered");
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "hello" }, origin: "null", source: frame.contentWindow,
+      }));
+    });
+    expect(trigger.disabled).toBe(false);
+    await act(async () => trigger.click());
+    const nav = host.querySelector<HTMLElement>("#respondent-question-navigation")!;
+    expect(nav.textContent).toContain("About you");
+    expect(nav.textContent).toContain("1 of 2 answered");
+    expect(nav.textContent).toContain("Other questions");
+    expect(nav.textContent).toContain("Questions hidden by your answers are omitted");
+    expect(nav.textContent).not.toContain("Hidden follow-up");
+
+    const postMessage = vi.fn();
+    Object.defineProperty(frame.contentWindow, "postMessage", { configurable: true, value: postMessage });
+    vi.useFakeTimers();
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "set", id: "goal", value: "Improve access" },
+        origin: "null", source: frame.contentWindow,
+      }));
+    });
+    expect(trigger.getAttribute("aria-label")).toBe("Browse questions, 2 of 3 answered");
+    expect(nav.textContent).toContain("2 of 2 answered");
+    const jump = Array.from(nav.querySelectorAll("button")).find((button) => button.textContent?.includes("Your goal"))!;
+    await act(async () => jump.click());
+    expect(host.querySelector("#respondent-question-navigation")).toBeNull();
+    expect(postMessage).toHaveBeenCalledWith({ kqa: 1, type: "focus-question", id: "goal" }, "*");
+  });
+
+  it("closes question navigation with Escape and restores focus to its trigger", async () => {
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const trigger = host.querySelector<HTMLButtonElement>(".rs-question-nav-trigger")!;
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "hello" }, origin: "null", source: frame.contentWindow,
+      }));
+    });
+    await act(async () => trigger.click());
+    const nav = host.querySelector<HTMLElement>("#respondent-question-navigation")!;
+    await act(async () => nav.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(host.querySelector("#respondent-question-navigation")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("locks a stale questionnaire and explains that unsaved edits need a reload", async () => {
     vi.useFakeTimers();
     state.api.mockImplementation(async (url: string) => {

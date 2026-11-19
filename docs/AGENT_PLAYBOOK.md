@@ -50,9 +50,11 @@ Before writing markup, check that each item asks one clear thing in familiar, ne
 
 For closed questions, make the options distinct and cover the reasonable answers. Keep scale labels balanced and in a consistent direction. Add choices such as "not applicable", "not sure", "prefer not to answer", or "other" only when they fit the question. Keep option values stable across versions so existing answers remain interpretable.
 
-When the questionnaire is new or a question could materially affect a decision, pretest it with people like the intended respondents. Ask them to explain what they think the item means and how they chose an answer. The KQA checker validates structure and supported markup; it cannot judge wording quality or replace pretesting. See the sourced question-content rubric in `get_design_guidance`.
+When the questionnaire is new or a question could materially affect a decision, pretest it with people like the intended respondents. Use the question-content rubric and cognitive pretest protocol in `get_design_guidance`: probe comprehension, recall, judgment, and response selection; record participant fit, item and context tested, findings, severity, revisions, and unresolved issues. The KQA checker validates structure and supported markup; it cannot judge wording quality or replace pretesting. A moderated session may include both cognitive probes and full-flow tasks, but record their evidence separately.
 
-For a new or materially changed respondent flow, plan a separate task-based usability session: ask representative participants to complete the questionnaire end to end, then record task completion, hesitation, errors, recovery, and misunderstandings. This is different from asking how a participant interprets one question. If no representative sessions occurred, report usability as untested; do not infer it from a prototype walkthrough, checker result, or screenshot.
+For each questionnaire, document the target population and unit, sample frame/source, recruitment and selection method, who may be missed, eligibility rules, collection mode/language, and whether the purpose is qualitative learning or population estimation. Follow the sampling and reporting plan in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md#sampling-and-reporting-plan); do not claim representativeness or a margin of error the design cannot support.
+
+For a new or materially changed respondent flow, observe intended users completing the questionnaire end to end, then record task completion, hesitation, errors, recovery, and misunderstandings. This is different evidence from asking how a participant interprets one question. Cognitive probes and task observation can share a moderated session where practical; report the findings separately. If no representative task sessions occurred, report usability as untested; do not infer it from a prototype walkthrough, checker result, or screenshot.
 
 ### Mapping common survey shapes
 
@@ -131,7 +133,7 @@ Dropdown, number, scale, and date use the same card. Copy those patterns from `t
 
 ## Step 4. Self-check before you reply
 
-Walk this list. It catches roughly nine problems in ten.
+Walk this list to catch common markup, binding, accessibility, and sandbox issues. It is a practical review aid, not a measured guarantee of questionnaire quality or respondent outcomes.
 
 - [ ] Exactly one `<script type="application/json" id="kqa-manifest">`, strict JSON, `"format": "kqa/1"`.
 - [ ] Count the questions in the manifest. Count the distinct `data-kqa` values in the markup. They are equal (plus any `custom` ones).

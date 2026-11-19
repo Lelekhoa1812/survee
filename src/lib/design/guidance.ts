@@ -5,10 +5,10 @@ const PRINCIPLES = [
   { id: "host-freshness", surfaces: ["all", "host"], title: "Make live status freshness clear", guidance: "Participant progress and activity are snapshots, not a live stream. Provide a clear manual refresh where live status matters, identify what it refreshes, and do not imply automatic or real-time updates." },
   { id: "theme-fit", surfaces: ["all", "questionnaire", "host"], title: "Fit the intended theme", guidance: "Use the supplied brand, audience, and tone as constraints. Define a small set of semantic color, type, spacing, and shape tokens, then reuse them. Keep contrast and focus indicators legible when the theme changes; do not encode meaning by color alone." },
   { id: "brief-specific-visuals", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make visual choices specific to the brief", guidance: "Choose palette, type, layout, and motion for this product, audience, and task. Treat familiar product patterns as options rather than defaults; keep a distinctive motif only when it supports the brief and remove decoration that adds no meaning. The user's direction takes precedence over this heuristic." },
-  { id: "respondent-control", surfaces: ["all", "questionnaire"], title: "Keep respondents oriented and in control", guidance: "Use clear section titles, concise progress, save state, and submission consequences. Make optional and required questions distinct. Preserve stable question and option ids across versions, and disclose when a change can affect stored answers." },
+  { id: "respondent-control", surfaces: ["all", "questionnaire"], title: "Keep respondents oriented and in control", guidance: "Use clear section titles, concise progress, save state, and submission consequences. For long forms, make section-aware question navigation available and keep movement respondent-controlled. Make optional and required questions distinct. Preserve stable question and option ids across versions, and disclose when a change can affect stored answers." },
   { id: "question-clarity", surfaces: ["all", "questionnaire"], title: "Ask clear, neutral questions", guidance: "Ask one thing at a time in familiar, audience-appropriate language. Avoid leading assumptions, ambiguous terms, double negatives, and questions that combine multiple ideas. Give a specific reference period when asking about time-bound behavior, and make instructions match the answer the respondent is expected to provide." },
   { id: "response-options", surfaces: ["all", "questionnaire"], title: "Make response options fit the question", guidance: "For closed questions, make options distinct and cover reasonable answers. Use balanced scale labels with a consistent direction; include a neutral point, 'not applicable', 'not sure', 'prefer not to answer', or 'other' only when it fits the construct. Keep option order intentional and stable when comparing versions." },
-  { id: "pretest", surfaces: ["all", "questionnaire"], title: "Pretest with intended respondents", guidance: "For new or high-impact questionnaires, ask people like the intended respondents to explain what they think a question means and how they chose an answer. Revise confusing items before fielding. This content review requires human or agent judgment and respondent research; the static KQA checker cannot perform or certify it." },
+  { id: "pretest", surfaces: ["all", "questionnaire"], title: "Pretest with intended respondents", guidance: "For new or high-impact questions, apply the question-content rubric and cognitive pretest protocol below with people like the intended respondents. Probe comprehension, recall, judgment, and response selection; revise confusing items before fielding. Keep cognitive findings distinct from usability and accessibility evidence, even when one session covers more than one method. The static KQA checker cannot perform or certify this work." },
   { id: "task-usability", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Test complete tasks with representative users", guidance: "For new or materially changed flows, observe people who represent the intended users completing realistic end-to-end tasks. Note task completion, hesitation, errors, recovery, and content misunderstandings; report who was represented, which tasks and success criteria were used, what was observed, and the limitations. If sessions were not run, say usability is untested. Keep task-based usability research distinct from question-item cognitive pretesting and WCAG evaluation." },
   { id: "accessible-interaction", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Make every interaction operable", guidance: "Prefer native semantic controls with programmatic labels and keyboard behavior. Custom radio groups must follow the WAI-ARIA APG keyboard pattern. Keep focused controls fully visible, including around fixed or sticky UI (WCAG 2.4.11), and provide a non-drag alternative for dragging interactions (WCAG 2.5.7). Make errors identify the affected field and give a clear correction; announce status and errors to assistive technology. Meet WCAG 2.2 AA, including target size: pointer targets should be at least 24 × 24 CSS px or meet a WCAG exception such as sufficient spacing. Test keyboard and assistive technology behavior rather than treating static markup checks as proof." },
   { id: "responsive", surfaces: ["all", "questionnaire", "host", "analytics"], title: "Design for narrow screens and long content", guidance: "Reflow without two-dimensional page scrolling at 320 CSS pixels where WCAG requires it; KQA questionnaires must also work from 360 px and should be checked at 390 px. Test long labels, errors, empty states, tables, and zoom, not only the happy-path screenshot." },
@@ -39,7 +39,7 @@ const TASK_BASED_USABILITY_METHOD = {
     "Define the intended user roles and recruit participants who reflect the relevant experience, access needs, devices, and context. State important groups that are not represented.",
     "Write realistic, neutral tasks and observable success criteria before the session. Do not coach participants through the intended interface path.",
     "Observe task completion, hesitation, errors, workarounds, recovery, and misunderstandings. Ask about expectations after the task rather than leading participants toward a preferred answer.",
-    "Report the participant context, tasks, success criteria, observed outcomes, critical friction, changes made, and remaining uncertainty. Keep task results separate from item-level cognitive pretesting and WCAG evaluation.",
+    "Report the participant context, tasks, success criteria, observed outcomes, critical friction, changes made, and remaining uncertainty. Keep task results separate from item-level cognitive pretesting and WCAG evaluation, even when one moderated session includes cognitive probes and usability tasks.",
     "If sessions were not run, label usability as untested and explain the reason. A prototype walkthrough, team review, automated scan, or analytics metric is not a substitute for observation with representative users.",
   ],
 } as const;
@@ -55,6 +55,8 @@ const REVIEW_CHECKLIST_ITEMS: { surfaces: Exclude<DesignSurface, "all">[]; text:
   { surfaces: ["questionnaire", "host", "analytics"], text: "Check empty, loading, saving, success, error, submitted, long-content, dark-theme, and reduced-motion states." },
   { surfaces: ["questionnaire"], text: "Review question wording for one clear idea, neutral language, specific reference periods, and respondent-appropriate terms; this is a content judgment, not a static checker result." },
   { surfaces: ["questionnaire"], text: "For closed questions, check options are distinct and cover reasonable answers, scales read consistently, and option ordering is intentional." },
+  { surfaces: ["questionnaire"], text: "Use the question-content rubric and cognitive pretest protocol for new or high-impact items. Record participant fit, items and context tested, probe dimensions, findings, revisions, severity, and unresolved issues; keep this evidence distinct from usability findings." },
+  { surfaces: ["questionnaire"], text: "For long forms, test the shell's section-aware question navigation with keyboard and narrow screens. Confirm it follows current eligibility, announces section answer counts, and never moves respondents automatically." },
   { surfaces: ["questionnaire"], text: "Pretest new or high-impact questions with people like the intended respondents when feasible; record uncertainty that remains." },
   { surfaces: ["questionnaire", "host", "analytics"], text: "For new or materially changed flows, observe representative users completing realistic end-to-end tasks. Record task success, hesitation, errors, recovery, content misunderstandings, participant context, and limitations; mark usability untested when sessions were not run. This is distinct from item pretesting and WCAG evaluation." },
   { surfaces: ["questionnaire"], text: "Check question and option ids remain stable, answer-changing edits are explained, and no required state is hidden." },
@@ -80,17 +82,52 @@ const SOURCES = [
   { name: "WAI Forms Tutorial: User Notifications", url: "https://www.w3.org/WAI/tutorials/forms/notifications/", role: "Guidance for concise, understandable form errors and status messages." },
   { name: "WCAG 2.2 SC 3.2.2: On Input", url: "https://www.w3.org/WAI/WCAG22/Understanding/on-input", role: "Explains predictable behavior and advance notice of changes of context caused by changing an input; a content change is not necessarily a context change." },
   { name: "GOV.UK Design System: Radios", url: "https://design-system.service.gov.uk/components/radios/", role: "Recommends simple conditional questions and documents a known assistive-technology notification issue in its conditional reveal component; it does not establish accessibility of KQA's implementation." },
+  { name: "CDC/NCHS: Cognitive Interviewing", url: "https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html", role: "Describes cognitive probes for comprehension, retrieval, judgment, and response selection; KQA adapts these as qualitative item-level evidence, not a population estimate." },
+  { name: "U.S. Census Bureau: Statistical Quality Standard A2", url: "https://www.census.gov/about/policies/quality/standards/standarda2.html", role: "Federal survey-instrument standard covering respondent pretesting, functional verification, and development documentation; a methods reference, not a claim that KQA meets Census requirements." },
+  { name: "U.S. Census Bureau: Appendix A2", url: "https://www.census.gov/about/policies/quality/standards/appendixa2.html", role: "Describes questionnaire testing methods and distinctions among respondent pretesting, expert review, usability, and instrument testing." },
+  { name: "UK Government Analysis Function: Questionnaire Design Guidance", url: "https://analysisfunction.civilservice.gov.uk/policy-store/questionnaire-design-guidance/", role: "Explains cognitive question testing and usability testing, including their interaction; findings remain distinct even when tested in an integrated session." },
   { name: "ICO: Data minimisation", url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/data-minimisation/", role: "Explains limiting personal data to what is needed for its specified purpose; apply applicable local requirements and context." },
   { name: "ICO: Storage limitation", url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-protection-principles/a-guide-to-the-data-protection-principles/storage-limitation/", role: "Explains retention and erasure considerations for personal data; apply applicable local requirements and context." },
   { name: "GitHub Primer Product Design", url: "https://primer.style/product/", role: "First-party design-system reference for product principles, components, and tokens." },
   { name: "GOV.UK Design System", url: "https://design-system.service.gov.uk/", role: "Research-informed service design and content patterns; localize UK-specific conventions." },
   { name: "GOV.UK Service Manual: User research", url: "https://www.gov.uk/service-manual/user-research", role: "Methods for observing representative users doing realistic tasks; research evidence complements automated checks." },
   { name: "GOV.UK Service Manual: Plan user research", url: "https://www.gov.uk/service-manual/user-research/plan-user-research-for-your-service", role: "Plan research activities for each development phase and update the plan as evidence about users and the service changes." },
+  { name: "W3C WAI: Multi-page Forms", url: "https://www.w3.org/WAI/tutorials/forms/multi-page/", role: "Recommends dividing long forms into logical groups or stages and communicating progress; the KQA shell navigator is a supplemental jump menu, not a multi-page flow." },
+  { name: "ONS Design System: Hub and Spoke", url: "https://service-manual.ons.gov.uk/design-system/patterns/hub-and-spoke", role: "Survey navigation pattern for completing related questionnaire sections in a respondent-controlled order; adapt its sectioning principle to KQA's single-page HTML flow." },
   { name: "U.S. Web Design System: Design principles", url: "https://designsystem.digital.gov/design-principles/", role: "Official federal design principles call for starting from real user needs and regularly testing assumptions and products with real people." },
   { name: "Pew Research Center: Writing Survey Questions", url: "https://www.pewresearch.org/writing-survey-questions/", role: "Survey question wording, response-option design, order effects, and pretesting; apply the research principles to KQA's supported formats." },
   { name: "AAPOR: Best Practices for Survey Research", url: "https://aapor.org/standards-and-ethics/best-practices/", role: "Professional survey research and reporting practices; use with context and do not treat the static checker as a methods review." },
   { name: "Anthropic frontend-design skill", url: "https://raw.githubusercontent.com/anthropics/skills/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/frontend-design/SKILL.md", revision: "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f", reviewedAt: "2026-11-16", contentSha256: "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3", role: "Optional subjective design-process inspiration reviewed at this immutable Git revision; not a standard and not an authority over the user's brief, WCAG, or KQA policy." },
 ];
+
+const QUESTION_CONTENT_RUBRIC = [
+  { dimension: "Decision and construct", checks: ["Name the decision or learning need and the information that would credibly inform it.", "Each question has a clear purpose, answer interpretation, and owner; remove items with no use."] },
+  { dimension: "Wording and recall", checks: ["Ask one thing at a time in familiar, neutral language; define terms and reference periods.", "Avoid assumptions, leading wording, double negatives, and recall demands respondents cannot reasonably meet."] },
+  { dimension: "Answer form and options", checks: ["Choose an answer type that fits the information needed.", "For closed items, make options mutually distinct and broad enough for plausible answers; add uncertainty, non-applicability, or decline options only when they fit.", "Label scales clearly and consistently; avoid implying precision or measurement the construct cannot support."] },
+  { dimension: "Context, routing, and burden", checks: ["Review order, instructions, surrounding questions, route conditions, navigation, and expected time together.", "Ask only for the minimum information needed; consider sensitivity, accessibility, language, and the ability to skip."] },
+  { dimension: "Evidence and claims", checks: ["State what content and population were reviewed, what changed, and what remains uncertain.", "Do not treat a checker pass, expert opinion, or a small qualitative pretest as proof of validity, accessibility, usability, or population-level response patterns."] },
+] as const;
+
+const QUESTION_CONTENT_REVIEW_METHOD = {
+  name: "Cognitive pretesting for questionnaire content",
+  status: "Qualitative evidence about how intended respondents understand and answer selected items; it is not a statistical estimate or a substitute for usability, accessibility, or domain review.",
+  when: "Use for new or materially changed questions, high-impact decisions, unfamiliar terms or response options, sensitive topics, and routing that affects what respondents see. Sample people like the intended population purposefully; do not claim representativeness from this qualitative sample.",
+  probeDimensions: [
+    { name: "Comprehension", prompts: ["In your own words, what is this question asking?", "What does [term or reference period] mean to you?"] },
+    { name: "Recall and retrieval", prompts: ["How did you remember or work out your answer?", "Was the time period easy to recall?"] },
+    { name: "Judgment", prompts: ["What did you consider before choosing?", "Was anything difficult to include or leave out?"] },
+    { name: "Response selection", prompts: ["How did you choose this option?", "Was there an answer that fit but was missing, or options that seemed to overlap?"] },
+  ],
+  steps: [
+    "Select the items and surrounding context to test; prioritize questions with high consequences, unclear meaning, difficult recall, sensitive content, or branching.",
+    "Recruit a small, purposeful set of people who resemble the intended respondents in relevant language, experience, access needs, and setting. Record who is represented and who is missing.",
+    "Ask participants to answer naturally, then use neutral probes for comprehension, recall/retrieval, judgment, and response selection. Inspect wording, response categories, order, instructions, routing, and burden in context.",
+    "Record item and version, context shown, participant fit, probe, observed interpretation or difficulty, severity, revision/action, and unresolved issue. Do not record unnecessary identifying details.",
+    "Revise and retest material misunderstandings before fielding when feasible. If the item was not tested, label the evidence not tested and explain why.",
+    "A moderated session may combine cognitive probes with end-to-end usability tasks when practical. Report item-level cognitive findings separately from task completion/usability findings and accessibility evaluation.",
+  ],
+  recordFields: ["itemIdAndVersion", "itemAndContextTested", "participantFitAndGaps", "probeDimensionAndPrompt", "observedInterpretationOrDifficulty", "severity", "revisionOrAction", "unresolvedIssue", "evidenceAndLimitations"],
+} as const;
 
 const DESIGN_PLAN = {
   purpose: "A repeatable brief-to-build-to-review contract for the connected agent. Treat the user's stated visual direction and constraints as authoritative; ask only when a missing choice would materially change the result.",
@@ -102,6 +139,7 @@ const DESIGN_PLAN = {
     "Before building, check whether the main choices could fit almost any unrelated product. Revise generic defaults unless the brief specifically supports them, and explain why the selected visual motif belongs here.",
     "Map semantic color, typography, spacing, shape, and elevation roles to the applicable visual profile. Reuse existing tokens where available; document any deliberate extension rather than scattering literal values.",
     "Describe information hierarchy, layout at narrow and wide widths, key components, and loading, empty, error, success, and disabled states relevant to the task.",
+    "Apply the question-content rubric and cognitive pretest protocol to new or high-impact questionnaire items; record findings and revisions separately from usability and accessibility evidence.",
     "Use motion only when it clarifies a user action or state change; preserve the same meaning with prefers-reduced-motion enabled.",
     "For a new or materially changed flow, plan task-based usability sessions with representative users. Define realistic tasks and success criteria, then observe completion, hesitation, errors, recovery, and misunderstandings. If sessions are not feasible, identify usability as untested.",
     "Build, then critique against the brief and review checklist. Inspect rendered narrow and wide layouts, keyboard operation, focus, contrast, and relevant non-happy-path states. When sessions are run, report the represented users, tasks, success criteria, observations, and limits; do not imply a session occurred when it did not.",
@@ -109,8 +147,20 @@ const DESIGN_PLAN = {
   ],
   accessibilityEvaluationMethodology: ACCESSIBILITY_EVALUATION_METHOD,
   taskBasedUsabilityMethodology: TASK_BASED_USABILITY_METHOD,
+  questionContentRubric: QUESTION_CONTENT_RUBRIC,
+  questionContentReviewMethodology: QUESTION_CONTENT_REVIEW_METHOD,
   output: {
-    fields: ["briefSummary", "visualDirection", "tokenMapping", "designProfileProposalAndReview", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
+    fields: ["briefSummary", "visualDirection", "tokenMapping", "designProfileProposalAndReview", "layoutAndHierarchy", "componentAndStatePlan", "responsivePlan", "motionPlan", "questionContentReview", "usabilityEvaluationScope", "representativeUserProfiles", "realisticTasksAndSuccessCriteria", "observedUsabilityFindings", "usabilityLimitationsOrUntestedReason", "accessibilityEvaluationScope", "representativeSamplesAndStates", "reviewEvidence", "openQuestions"],
+    questionContentReview: {
+      requiredWhen: "New or materially changed/high-impact questions; otherwise state why not applicable.",
+      statuses: ["passed", "issues found", "not tested", "not applicable"],
+      fields: QUESTION_CONTENT_REVIEW_METHOD.recordFields,
+      instructions: [
+        "Use participant fit and intended respondent context, not convenience alone, to select interviewees.",
+        "Keep question-item cognition findings separate from full-task usability and WCAG evaluation, even when one session supports multiple methods.",
+        "Describe evidence and limitations; do not imply that qualitative item pretesting validates a scale or estimates population response patterns.",
+      ],
+    },
     reviewEvidenceMatrix: {
       required: true,
       columns: [
@@ -147,6 +197,7 @@ const DESIGN_PLAN = {
     "Do not add motion, gradients, cards, display type, or decorative labels merely because a design heuristic suggests them; use only when justified by this brief and task.",
     "Treat common dashboard and landing-page treatments as choices to justify, not a default kit. Let the user's supplied direction override any subjective anti-pattern heuristic.",
     "Do not invent brand facts or claim user research occurred when it did not.",
+    "Do not describe questionnaire content as pretested unless relevant respondents actually answered the items and cognitive evidence was recorded.",
   ],
   surfaceInstructions: {
     host: "Use the host visual profile below as the source of truth for existing tokens. Add or change tokens centrally and check both light and dark themes.",
@@ -213,7 +264,7 @@ export function getDesignGuidance(surface: DesignSurface = "all") {
     ? { ...DESIGN_PLAN.surfaceInstructions }
     : { [surface]: DESIGN_PLAN.surfaceInstructions[surface] };
   return {
-    policyVersion: "kqa-design/19",
+    policyVersion: "kqa-design/20",
     surface,
     summary: "Design for clarity, respondent control, theme fit, accessible interaction, and honest interpretation. KQA does not embed an LLM; this package is deterministic guidance for the connected agent to apply and review.",
     productConstraints: [

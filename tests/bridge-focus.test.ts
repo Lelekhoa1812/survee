@@ -43,6 +43,41 @@ describe("questionnaire bridge focus requests", () => {
     dom.window.close();
   });
 
+  it("focuses a script-backed custom question through its marked block", () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <section data-kqa-question-id="required"><h2>Custom question</h2><button type="button">One</button></section>
+    </body></html>`, { runScripts: "dangerously", pretendToBeVisual: true });
+    const target = dom.window.document.querySelector<HTMLButtonElement>("[data-kqa-question-id='required'] button")!;
+    Object.defineProperty(target, "getClientRects", { value: () => [{ width: 100, height: 20 }] });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(target, "scrollIntoView", { value: scrollIntoView });
+
+    startBridge(dom);
+    dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
+      data: { kqa: 1, type: "focus-question", id: "required" },
+      source: dom.window,
+    }));
+
+    expect(dom.window.document.activeElement).toBe(target);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+    dom.window.close();
+  });
+
+  it("makes a custom block programmatically focusable when it has no controls", () => {
+    const dom = new JSDOM(`<!doctype html><html><body><section data-kqa-question-id="required">Custom content</section></body></html>`, { runScripts: "dangerously", pretendToBeVisual: true });
+    const block = dom.window.document.querySelector<HTMLElement>("[data-kqa-question-id='required']")!;
+    Object.defineProperty(block, "getClientRects", { value: () => [{ width: 100, height: 20 }] });
+    startBridge(dom);
+    dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
+      data: { kqa: 1, type: "focus-question", id: "required" },
+      source: dom.window,
+    }));
+
+    expect(block.getAttribute("tabindex")).toBe("-1");
+    expect(dom.window.document.activeElement).toBe(block);
+    dom.window.close();
+  });
+
   it("does nothing when the question has no visible enabled control", () => {
     const dom = new JSDOM(`<!doctype html><html><body><input data-kqa="required" disabled></body></html>`, { runScripts: "dangerously" });
     startBridge(dom);

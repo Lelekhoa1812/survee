@@ -28,7 +28,7 @@ describe("agent documentation bundle", () => {
     expect(rows.filter(([, , type]) => type === "Sector module")).toHaveLength(10);
     expect(packages).toContain("### Program evaluation");
     expect(packages).toContain("### Community consultation");
-    expect(packages).toContain("Do not claim representativeness or report margins of error unless the sampling design supports it.");
+    expect(packages).toContain("do not report a conventional margin of error or claim representativeness");
     expect(packages).toContain("jurisdiction-specific assessment and legal review");
     expect(packages).toContain("not an emergency or statutory reporting channel");
   });
@@ -42,6 +42,31 @@ describe("agent documentation bundle", () => {
     expect(packages).toContain("expert or method review does not replace pretesting");
   });
 
+  it("defines a sampling plan and a transparent, appropriately bounded report", async () => {
+    const packages = await readDoc("INTERVIEW_PACKAGES.md");
+    expect(packages).toContain("## Sampling and reporting plan");
+    expect(packages).toContain("target population and unit");
+    expect(packages).toContain("who could be missed");
+    expect(packages).toContain("whether the purpose is qualitative learning or population estimation");
+    expect(packages).toContain("Do not invent sample or response counts");
+    expect(packages).toContain("do not report a conventional margin of error or claim representativeness");
+    expect(packages).toContain("AAPOR's Transparency Initiative");
+    expect(packages).toContain("ABS [sample design guide]");
+  });
+
+  it("documents respondent navigation and custom-question focus targets once", async () => {
+    const format = await readDoc("FORMAT.md");
+    expect(format).toContain('data-kqa-question-id="QUESTION_ID"');
+    expect(format).toContain("focus its first visible enabled control");
+    expect(format?.match(/KQA respondent shell adds \*\*Questions\*\* navigation/g)).toHaveLength(1);
+  });
+
+  it("keeps authoring and README quality claims bounded to verified evidence", async () => {
+    const playbook = await readDoc("AGENT_PLAYBOOK.md");
+    expect(playbook).not.toContain("nine problems in ten");
+    expect(playbook).toContain("not a measured guarantee of questionnaire quality");
+  });
+
   it("publishes the portable questionnaire author skill and includes it in the bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-author-skill" && doc.file === "kqa-questionnaire-author/SKILL.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
@@ -50,6 +75,8 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("`create_interview` tool immediately creates an open interview");
     expect(bundle).not.toContain("legacy `create_interview`");
     expect(bundle).toContain("risk-based release gate");
+    expect(bundle).toContain("question-content rubric and cognitive pretest protocol");
+    expect(bundle).toContain("sample plan");
     expect(bundle).toContain("KQA's pre-submit **Check your answers** review");
     expect(bundle).toContain("does not simulate respondent input");
   });

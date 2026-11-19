@@ -48,8 +48,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     for (var i = 0; i < all.length; i++) if (all[i].getAttribute("data-kqa") === id) out.push(all[i]);
     return out;
   }
-  function canFocus(el) {
-    if (!el || !el.isConnected || el.disabled || el.type === "hidden" || el.tabIndex < 0) return false;
+  function canFocus(el, allowProgrammatic) {
+    if (!el || !el.isConnected || el.disabled || el.type === "hidden" || (el.tabIndex < 0 && !allowProgrammatic)) return false;
     var node = el;
     while (node && node.nodeType === 1) {
       if (node.hidden || node.inert || node.getAttribute("aria-hidden") === "true") return false;
@@ -62,15 +62,39 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   function focusQuestion(id) {
     if (!q(id)) return;
     var els = controls(id);
+    var block = null;
+    var programmaticBlock = false;
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
       if (!canFocus(el)) continue;
-      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
-      if (typeof el.scrollIntoView === "function") {
-        var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+      block = el;
+      break;
+    }
+    // Script-backed custom questions have no [data-kqa] control. Their marked
+    // question block provides a stable jump target and a fallback focus scope.
+    if (!block) {
+      var blocks = document.querySelectorAll("[data-kqa-question-id]");
+      for (var j = 0; j < blocks.length; j++) {
+        if (blocks[j].getAttribute("data-kqa-question-id") === id) { block = blocks[j]; break; }
       }
-      return;
+      if (block) {
+        var candidates = block.querySelectorAll("button, input, select, textarea, a[href], [tabindex]");
+        var target = null;
+        for (var k = 0; k < candidates.length; k++) {
+          if (canFocus(candidates[k])) { target = candidates[k]; break; }
+        }
+        if (target) block = target;
+        else if (!block.hasAttribute("tabindex")) {
+          block.setAttribute("tabindex", "-1");
+          programmaticBlock = true;
+        }
+      }
+    }
+    if (!block || !canFocus(block, programmaticBlock || block.tabIndex < 0)) return;
+    try { block.focus({ preventScroll: true }); } catch (e) { block.focus(); }
+    if (typeof block.scrollIntoView === "function") {
+      var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      block.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
     }
   }
   function noteControls(id) {

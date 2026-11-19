@@ -4,12 +4,12 @@ Host-run interviews. Upload an HTML questionnaire with optional reusable workspa
 
 | Portal | Address | For |
 |---|---|---|
-| Respondent | `https://{base_url}/{token}` | The person answering. No account. Autosaves while online; keep the page open until **Saved** after reconnecting. Submit locks it |
+| Respondent | `https://{base_url}/{token}` | The person answering. No account. Autosaves while online; section-aware question navigation supports long interviews. Keep the page open until **Saved** after reconnecting. Submit locks it |
 | Host | `https://{base_url}/admin` | Create interviews, upload files, add people, refresh live progress snapshots, analyze response patterns, review answers, export |
 
 ## Why it exists
 
-Interactive HTML questionnaires are great to design but lose answers when they keep state in the browser. KQA keeps the design and moves the state to a database. The HTML runs exactly as designed inside a sandboxed frame; a small runtime binds its controls to the answer store.
+Interactive HTML questionnaires are great to design but lose answers when they keep state in the browser. KQA keeps the design and moves the state to a database. KQA renders the authored questionnaire in a sandboxed frame, subject to the format's documented sandbox limits; a small runtime binds its controls to the answer store.
 
 ## The format, for people and for AI agents
 
@@ -84,7 +84,7 @@ The respondent E2E, offline, concurrency, security and state-screenshot checks c
 
 * Next.js 16 (App Router, TypeScript), React 19, plain CSS design tokens, IBM Plex.
 * MongoDB (Atlas) with the official driver. Tenant-owned collections include `interviews`, `survey_versions` (immutable per upload), `participants` (token, optional email, status, answers keyed by question id), `mail_messages` (invite send and delivery, never the message body), `events` (audit, 180-day TTL), and `api_keys` (name, note, hash, fingerprint, expiry, revoke). Accounts use `tenants`, `users`, `memberships`, and expiring signup, email-change and password-reset token collections.
-* One definition of the format (`src/lib/format/schema.ts`, zod) feeds the checker, the answer validation, the JSON Schema and the docs, so they cannot drift.
+* The format definition (`src/lib/format/schema.ts`, Zod) feeds the checker, answer validation, and JSON Schema. `scripts/gen-docs.ts` generates `docs/kqa-manifest.schema.json` and `docs/DIAGNOSTICS.md`; the other guides are maintained separately and reviewed against the implementation.
 * Exports: Excel workbook, CSV (one row per person, or one per answer), Markdown report, JSON.
 
 ### Security model
