@@ -6,6 +6,8 @@ KQA gives every respondent a private link, renders your HTML inside a sandboxed 
 
 Autosave requires a connection. While offline, new edits remain only in the open page and retry when the connection returns; they are not saved on the device. The status says when changes are waiting to sync. Keep the page open until it reports **Saved**; the best-effort page-exit request is not a confirmed save.
 
+If the host publishes a new questionnaire while your page is open, KQA rejects writes from the old version and locks that page. Confirmed answers remain saved. KQA keeps rejected edits in memory on the open page and lets you review or copy them before reloading; it never transfers them automatically because the questions or their meaning may have changed. Reload to continue with the latest version. Transient page-exit save failures stay marked as not saved and are retried while the page remains open; other failures remain marked so you can review them.
+
 The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, dates, and full-order ranking (`rank`) are supported as well. Section 3.4 is the full list. KQA does not score answers or rank people. A required checkbox is answered when at least one box is ticked; a required ranking is answered when every option is present in the saved order. Text that is only spaces is empty.
 
 ## 1. How it works

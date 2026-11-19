@@ -336,7 +336,7 @@ describe("respondent required-answer recovery", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  it("locks a stale questionnaire and explains that unsaved edits need a reload", async () => {
+  it("locks a stale questionnaire and offers a copyable unsaved draft before reload", async () => {
     vi.useFakeTimers();
     state.api.mockImplementation(async (url: string) => {
       if (url.endsWith("/answers")) return { ok: false, status: 409, data: { ok: false, error: "updated", code: "questionnaire_version_changed" } };
@@ -360,6 +360,8 @@ describe("respondent required-answer recovery", () => {
       await Promise.resolve();
     });
     const frame = host.querySelector("iframe")!;
+    const framePost = vi.fn();
+    Object.defineProperty(frame.contentWindow, "postMessage", { configurable: true, value: framePost });
 
     await act(async () => {
       window.dispatchEvent(new MessageEvent("message", {
@@ -371,10 +373,125 @@ describe("respondent required-answer recovery", () => {
     });
 
     const alert = host.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("Changes made since the last save were not saved");
+    expect(alert?.textContent).toContain("newer edits on this page were rejected");
+    expect(alert?.textContent).toContain("Review unsaved changes");
     expect(alert?.textContent).toContain("Reload questionnaire");
+    expect(framePost).toHaveBeenCalledWith({ kqa: 1, type: "lock", locked: true }, "*");
     const answerSave = state.api.mock.calls.find(([url]) => String(url).endsWith("/answers"));
     expect(answerSave?.[1]).toMatchObject({ body: { version: 7, answers: { answer: { value: "unsaved edit" } } } });
+    const leave = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leave);
+    expect(leave.defaultPrevented).toBe(true);
+    await act(async () => Array.from(alert!.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    const recovery = host.querySelector('[role="dialog"]')!;
+    expect(recovery.textContent).toContain("Answer");
+    expect(recovery.textContent).toContain("unsaved edit");
+    expect(recovery.textContent).toContain("not apply them to newer questions automatically");
+    expect(recovery.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain('"value": "unsaved edit"');
+    vi.useRealTimers();
+  });
+
+  it("keeps the newest in-flight edits and separate question changes in the recovery snapshot", async () => {
+    vi.useFakeTimers();
+    let resolveSave!: (value: { ok: boolean; status: number; data: { error: string; code: string } }) => void;
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) return new Promise((resolve) => { resolveSave = resolve; });
+      return Promise.resolve({ ok: true, status: 200, data: {
+        ok: true,
+        participant: { name: "Ada", status: "in_progress" },
+        interview: { name: "Study", status: "open" },
+        version: 7,
+        title: "Study questions",
+        questions: [
+          { id: "answer", type: "text", label: "Answer", note: true },
+          { id: "other", type: "text", label: "Another answer" },
+        ],
+        answers: {},
+      } });
+    });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const frame = host.querySelector("iframe")!;
+    const send = (id: string, part: Record<string, unknown>) => window.dispatchEvent(new MessageEvent("message", {
+      data: { kqa: 1, type: "set", id, ...part }, origin: "null", source: frame.contentWindow,
+    }));
+
+    await act(async () => {
+      send("answer", { value: "first draft" });
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(1);
+
+    await act(async () => {
+      send("answer", { value: "newer draft", note: "newer note" });
+      send("other", { value: "separate draft" });
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    await act(async () => {
+      resolveSave({ ok: false, status: 409, data: { error: "updated", code: "questionnaire_version_changed" } });
+      await Promise.resolve();
+    });
+    const banner = host.querySelector('[role="alert"]')!;
+    await act(async () => Array.from(banner.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    const draft = host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")!.value;
+    expect(draft).toContain('"value": "newer draft"');
+    expect(draft).toContain('"note": "newer note"');
+    expect(draft).toContain('"value": "separate draft"');
+    expect(draft).not.toContain("first draft");
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it("keeps page-exit edits pending after an HTTP failure and warns while the request is in flight", async () => {
+    vi.useFakeTimers();
+    let resolveExit!: (value: { ok: boolean; status: number; data: { error: string } }) => void;
+    let answerRequests = 0;
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) {
+        answerRequests += 1;
+        if (answerRequests === 1) return new Promise((resolve) => { resolveExit = resolve; });
+        return Promise.resolve({ ok: true, status: 200, data: { savedAt: "2026-11-19T00:00:00.000Z" } });
+      }
+      return Promise.resolve({ ok: true, status: 200, data: {
+        ok: true,
+        participant: { name: "Ada", status: "in_progress" },
+        interview: { name: "Study", status: "open" },
+        version: 7,
+        title: "Study questions",
+        questions: [{ id: "answer", type: "text", label: "Answer" }],
+        answers: {},
+      } });
+    });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "set", id: "answer", value: "page-exit draft" }, origin: "null", source: frame.contentWindow,
+      }));
+    });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    expect(state.api.mock.calls.find(([url]) => String(url).endsWith("/answers"))?.[1]).toMatchObject({ keepalive: true, body: { version: 7, answers: { answer: { value: "page-exit draft" } } } });
+    const leave = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leave);
+    expect(leave.defaultPrevented).toBe(true);
+
+    await act(async () => {
+      resolveExit({ ok: false, status: 503, data: { error: "temporarily unavailable" } });
+      await Promise.resolve();
+    });
+    await act(async () => { window.dispatchEvent(new Event("offline")); });
+    expect(host.querySelector(".save-state")?.textContent).toContain("Offline — changes waiting to sync");
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); });
+    expect(answerRequests).toBe(2);
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))[1]?.[1]).toMatchObject({ body: { answers: { answer: { value: "page-exit draft" } } } });
+    expect(host.querySelector(".save-state")?.textContent).toContain("Saved");
     vi.useRealTimers();
   });
 });

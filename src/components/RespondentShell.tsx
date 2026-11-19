@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AnswerMap, Question, Section } from "@/lib/format/schema";
+import type { AnswerMap, AnswerValue, Question, Section } from "@/lib/format/schema";
 import { displayValue } from "@/lib/format/answers";
-import { api, BrandMark, Icon, Modal, Spinner, useToast } from "./ui";
+import { api, BrandMark, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 
 type Phase = "loading" | "ready" | "invalid" | "error";
-type SaveState = "idle" | "saving" | "saved" | "error" | "offline";
+type SaveState = "idle" | "saving" | "saved" | "error" | "failed" | "offline";
 interface Loaded {
   participant: { name: string; status: "invited" | "in_progress" | "submitted"; submittedAt?: string };
   interview: { name: string; status: "open" | "closed" };
@@ -19,6 +19,12 @@ interface Loaded {
   presentation?: "all" | "guided";
 }
 type Patch = Record<string, { value?: unknown; note?: unknown }>;
+
+function mergePatches(older: Patch, newer: Patch): Patch {
+  const merged = { ...older };
+  for (const [id, patch] of Object.entries(newer)) merged[id] = { ...merged[id], ...patch };
+  return merged;
+}
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v.trim() !== "" : true);
 
@@ -49,6 +55,8 @@ export function RespondentShell({ token }: { token: string }) {
   const [locked, setLocked] = useState(false);
   const [closed, setClosed] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
+  const [staleDraft, setStaleDraft] = useState<{ question: Question; patch: Patch[string] }[]>([]);
+  const [conflictDraftOpen, setConflictDraftOpen] = useState(false);
   const [counts, setCounts] = useState({ answered: 0, total: 0, needsAttention: [] as { question: Question; reason: string }[] });
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +76,7 @@ export function RespondentShell({ token }: { token: string }) {
   const answers = useRef<AnswerMap>({});
   const version = useRef(0);
   const refreshRequiredRef = useRef(false);
+  const staleDraftRef = useRef<{ question: Question; patch: Patch[string] }[]>([]);
   const questions = useRef<Question[]>([]);
   const eligibility = useRef<Record<string, boolean>>({});
   const pending = useRef<Patch>({});
@@ -156,6 +165,26 @@ export function RespondentShell({ token }: { token: string }) {
   }, [confirming, goToGuidedGroup, guidedMode, post]);
 
   const applyLock = useCallback((v: boolean) => { lockedRef.current = v; setLocked(v); post({ type: "lock", locked: v }); }, [post]);
+  const reloadLatestVersion = useCallback(() => {
+    staleDraftRef.current = [];
+    window.location.reload();
+  }, []);
+  const handleVersionConflict = useCallback((failedBatch: Patch = {}) => {
+    const rejected = mergePatches(failedBatch, pending.current);
+    const draft = Object.entries(rejected).flatMap(([id, patch]) => {
+      const question = questions.current.find((item) => item.id === id);
+      return question ? [{ question, patch }] : [];
+    });
+    staleDraftRef.current = draft;
+    setStaleDraft(draft);
+    pending.current = {};
+    clearTimeout(timer.current);
+    clearTimeout(retry.current);
+    refreshRequiredRef.current = true;
+    setRefreshRequired(true);
+    setSave("idle");
+    applyLock(true);
+  }, [applyLock]);
 
   // ---- load
   const load = useCallback(async () => {
@@ -165,6 +194,9 @@ export function RespondentShell({ token }: { token: string }) {
     if (!res.ok || !res.data.questions) { setPhase("error"); return; }
     version.current = res.data.version;
     refreshRequiredRef.current = false;
+    staleDraftRef.current = [];
+    setStaleDraft([]);
+    setConflictDraftOpen(false);
     setRefreshRequired(false);
     answers.current = res.data.answers ?? {};
     questions.current = res.data.questions;
@@ -197,20 +229,14 @@ export function RespondentShell({ token }: { token: string }) {
     }
     if (res.status === 0 || res.status >= 500 || res.status === 429) {
       // Network or server trouble: keep the changes and try again, newest edits winning.
-      pending.current = { ...batch, ...Object.fromEntries(Object.entries(pending.current).map(([k, v]) => [k, { ...batch[k], ...v }])) };
+      pending.current = mergePatches(batch, pending.current);
       setSave(navigator.onLine ? "error" : "offline");
       attempts.current += 1;
       retry.current = setTimeout(flush, Math.min(30000, 1500 * 2 ** Math.min(attempts.current, 5)));
       return;
     }
     if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
-      pending.current = {};
-      clearTimeout(retry.current);
-      refreshRequiredRef.current = true;
-      setRefreshRequired(true);
-      setSave("idle");
-      applyLock(true);
-      toast("This questionnaire was updated. Reload to continue; your earlier saved answers are safe, but recent changes on this page were not saved.", "err");
+      handleVersionConflict(batch);
       return;
     }
     if (res.status === 403 || res.status === 409) {
@@ -231,7 +257,7 @@ export function RespondentShell({ token }: { token: string }) {
       recount();
       setSave("saved");
     }
-  }, [token, applyLock, post, recount, toast]);
+  }, [token, applyLock, handleVersionConflict, post, recount, toast]);
 
   const queue = useCallback((id: string, part: { value?: unknown; note?: unknown }) => {
     if (lockedRef.current) return;
@@ -287,8 +313,37 @@ export function RespondentShell({ token }: { token: string }) {
     const offline = () => { post({ type: "offline", offline: true }); setSave("offline"); };
     const hide = () => {
       if (document.visibilityState === "hidden" && Object.keys(pending.current).length && !inflight.current) {
-        const batch = pending.current; pending.current = {};
-        void fetch(`/api/p/${token}/answers`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: version.current, answers: batch }), keepalive: true }).catch(() => { pending.current = { ...batch, ...pending.current }; });
+        clearTimeout(timer.current);
+        const batch = pending.current;
+        pending.current = {};
+        inflight.current = true;
+        setSave("saving");
+        void api<{ savedAt?: string; code?: string }>(`/api/p/${token}/answers`, {
+          method: "PUT", body: { version: version.current, answers: batch }, keepalive: true,
+        }).then((res) => {
+          inflight.current = false;
+          if (res.ok) {
+            attempts.current = 0;
+            if (res.data.savedAt) setLastSaved(new Date(res.data.savedAt));
+            if (Object.keys(pending.current).length) { setSave("saving"); timer.current = setTimeout(flush, 350); }
+            else setSave("saved");
+            return;
+          }
+          if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
+            handleVersionConflict(batch);
+            return;
+          }
+          pending.current = mergePatches(batch, pending.current);
+          if (res.status === 0 || res.status >= 500 || res.status === 429) {
+            setSave(navigator.onLine ? "error" : "offline");
+            attempts.current += 1;
+            retry.current = setTimeout(flush, Math.min(30000, 1500 * 2 ** Math.min(attempts.current, 5)));
+          } else {
+            setSave("failed");
+            if (res.status === 403 || res.status === 409) applyLock(true);
+            if (document.visibilityState === "visible") toast(res.data.error ?? "The latest changes were not saved. Keep this page open and try again.", "err");
+          }
+        });
       }
     };
     window.addEventListener("online", online);
@@ -296,10 +351,10 @@ export function RespondentShell({ token }: { token: string }) {
     document.addEventListener("visibilitychange", hide);
     window.addEventListener("pagehide", hide);
     return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); document.removeEventListener("visibilitychange", hide); window.removeEventListener("pagehide", hide); clearTimeout(timer.current); clearTimeout(retry.current); };
-  }, [flush, post, token]);
+  }, [applyLock, flush, handleVersionConflict, post, token, toast]);
 
   useEffect(() => {
-    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || inflight.current) { e.preventDefault(); e.returnValue = ""; } };
+    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || inflight.current || staleDraftRef.current.length) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
@@ -325,12 +380,7 @@ export function RespondentShell({ token }: { token: string }) {
     } else {
       if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
         setConfirming(false);
-        pending.current = {};
-        refreshRequiredRef.current = true;
-        setRefreshRequired(true);
-        setSave("idle");
-        applyLock(true);
-        toast("This questionnaire was updated. Reload to continue; your saved answers are safe.", "err");
+        handleVersionConflict();
         return;
       }
       if (res.status === 422) {
@@ -348,6 +398,22 @@ export function RespondentShell({ token }: { token: string }) {
       toast(res.data.error ?? "Could not submit.", "err");
     }
   }
+
+  const conflictDraftText = JSON.stringify({
+    format: "kqa-unsaved-draft/1",
+    questionnaireVersion: version.current,
+    warning: "Reference only. These rejected changes are not saved and must not be automatically applied to a newer questionnaire version.",
+    changes: staleDraft.map(({ question, patch }) => ({
+      questionId: question.id,
+      question: question.label,
+      type: question.type,
+      ...(Object.prototype.hasOwnProperty.call(patch, "value") ? {
+        value: patch.value,
+        displayValue: patch.value === null ? "Answer cleared" : displayValue(question, patch.value as AnswerValue),
+      } : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "note") ? { note: patch.note, displayNote: patch.note === null ? "Note cleared" : patch.note } : {}),
+    })),
+  }, null, 2);
 
   function continueGuided() {
     if (!activeGuidedGroup) return;
@@ -377,7 +443,7 @@ export function RespondentShell({ token }: { token: string }) {
   const submitted = data.participant.status === "submitted";
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
   const hasUnsavedChanges = Object.keys(pending.current).length > 0;
-  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
+  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", failed: "Not saved", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
   const retainedAnswers = questions.current.filter((question) => eligibility.current[question.id] === false && (
@@ -474,14 +540,14 @@ export function RespondentShell({ token }: { token: string }) {
                 </nav>
               )}
             </div>
-            <span className={`save-state ${save}`} role="status" aria-live="polite" title={save === "offline" && hasUnsavedChanges ? "These changes have not reached KQA. They will be retried when you reconnect; keep this page open until it shows Saved." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
+            <span className={`save-state ${save}`} role="status" aria-live="polite" title={hasUnsavedChanges ? "These changes have not reached KQA. Keep this page open and check the save status before leaving." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
             <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>
           </div>
         </div>
       </div>
 
       <div className={`rs-banner ${refreshRequired || (!submitted && closed) ? "warn" : submitted ? "ok" : "none"}`} role={refreshRequired ? "alert" : submitted || closed ? "status" : undefined}>
-        {refreshRequired && <><Icon name="lock" size={16} /> This questionnaire changed while the page was open. Changes made since the last save were not saved. Reload to continue with the latest version. <button className="btn" onClick={() => window.location.reload()}>Reload questionnaire</button></>}
+        {refreshRequired && <><Icon name="lock" size={16} /> {staleDraft.length > 0 ? "This questionnaire changed while the page was open. Your confirmed answers remain saved; newer edits on this page were rejected. Review or copy them before reloading." : "This questionnaire changed while the page was open. Your confirmed answers remain saved. Reload to continue with the latest version."} <span className="row">{staleDraft.length > 0 && <button className="btn" onClick={() => setConflictDraftOpen(true)}>Review unsaved changes</button>}<button className="btn" onClick={reloadLatestVersion}>Reload questionnaire</button></span></>}
         {submitted && <><Icon name="check" size={16} /> Submitted. Your answers are locked, and your host can reopen them if you need a change.</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> This interview is closed, so answers can no longer be changed.</>}
       </div>
@@ -599,6 +665,37 @@ export function RespondentShell({ token }: { token: string }) {
                 ) : <p className="muted">No answers or notes are currently saved for hidden questions.</p>}
               </details>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {conflictDraftOpen && staleDraft.length > 0 && (
+        <Modal
+          title="Unsaved changes"
+          onClose={() => setConflictDraftOpen(false)}
+          className="review-modal"
+          actions={
+            <>
+              <button className="btn" onClick={() => setConflictDraftOpen(false)}>Keep reviewing this page</button>
+              <button className="btn accent" onClick={reloadLatestVersion}>Reload latest version</button>
+            </>
+          }
+        >
+          <div className="review-content">
+            <p className="muted">These edits were not saved because the questionnaire changed. They are available only in this open page. Copy them if you need a reference before reloading. KQA will not apply them to newer questions automatically.</p>
+            <div className="review-list">
+              {staleDraft.map(({ question, patch }) => (
+                <section className="review-entry" key={question.id}>
+                  <div className="review-entry-copy">
+                    <h3>{question.label}</h3>
+                    {Object.prototype.hasOwnProperty.call(patch, "value") && <p className="review-value" style={{ whiteSpace: "pre-wrap" }}>{patch.value === null ? "Answer cleared" : displayValue(question, patch.value as AnswerValue)}</p>}
+                    {Object.prototype.hasOwnProperty.call(patch, "note") && <p className="review-note"><strong>Note:</strong> {patch.note === null ? "Note cleared" : String(patch.note)}</p>}
+                  </div>
+                </section>
+              ))}
+            </div>
+            <div className="row between"><label htmlFor="conflict-draft-copy">Copyable draft reference</label><CopyButton text={conflictDraftText} label="Copy draft" /></div>
+            <textarea id="conflict-draft-copy" className="conflict-draft-copy" readOnly rows={8} value={conflictDraftText} />
           </div>
         </Modal>
       )}

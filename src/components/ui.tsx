@@ -264,7 +264,7 @@ export function Badge({ kind = "", children, plain }: { kind?: "ok" | "warn" | "
   return <span className={`badge ${kind} ${plain ? "plain" : ""}`}>{children}</span>;
 }
 
-export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string> }): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
+export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string>; keepalive?: boolean }): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
   try {
     const headers = { ...(init?.headers ?? {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) };
     const res = await fetch(url, {
@@ -272,6 +272,7 @@ export async function api<T = Record<string, unknown>>(url: string, init?: { met
       headers: Object.keys(headers).length ? headers : undefined,
       body: init?.body ? JSON.stringify(init.body) : undefined,
       credentials: "same-origin",
+      keepalive: init?.keepalive,
     });
     const data = (await res.json().catch(() => ({}))) as T & { error?: string };
     return { ok: res.ok, status: res.status, data };

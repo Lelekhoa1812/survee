@@ -483,6 +483,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .modal.review-modal { width: min(760px, 100%); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
 .review-modal > .review-content { min-height: 0; max-height: min(72dvh, 760px); overflow-y: auto; overscroll-behavior: contain; }
 .review-modal > .review-content > .review-list { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.conflict-draft-copy { width: 100%; min-height: 140px; margin-top: 8px; resize: vertical; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
 .review-entry { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 16px 4px; border-bottom: 1px solid var(--line); }
 .review-entry:last-child { border-bottom: 0; }
 .review-entry-copy { min-width: 0; }
@@ -652,8 +653,8 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .save-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--field); }
 .save-state.saved i { background: var(--accent); }
 .save-state.saving i { background: var(--info); animation: pulse 1s ease-in-out infinite; }
-.save-state.error { color: var(--danger); }
-.save-state.error i { background: var(--danger); }
+.save-state.error, .save-state.failed { color: var(--danger); }
+.save-state.error i, .save-state.failed i { background: var(--danger); }
 .save-state.offline { color: var(--warn); }
 .save-state.offline i { background: #c58a00; }
 @keyframes pulse { 50% { opacity: .35; } }
