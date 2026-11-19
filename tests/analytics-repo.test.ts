@@ -36,6 +36,7 @@ describe("analytics participant query", () => {
             fit: { value: "yes", note: "Private note text", updatedAt: "2026-11-15T00:00:00Z" },
             unrelated: { value: "raw unrelated answer", updatedAt: "2026-11-15T00:00:00Z" },
           },
+          recordGroups: { fit: [{ id: "private-row", values: { detail: "private record value" } }], unrelated: [{ values: { detail: "unrelated record" } }] },
         };
       },
     };
@@ -55,15 +56,17 @@ describe("analytics participant query", () => {
 
     expect(mongoMocks.find).toHaveBeenCalledWith(
       tenantFilter("axion", { interviewId, status: { $in: ["invited", "in_progress", "submitted"] } }),
-      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
+      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1, "recordGroups.fit.deletedAt": 1 } },
     );
     expect(cursor.batchSize).toHaveBeenCalledWith(250);
     expect(cursor.close).toHaveBeenCalledOnce();
-    expect(rows).toEqual([{ status: "submitted", answers: { fit: { value: "yes", note: "present", updatedAt: "" } } }]);
+    expect(rows).toEqual([{ status: "submitted", answers: { fit: { value: "yes", note: "present", updatedAt: "" } }, recordGroups: { fit: [{ id: "present", values: {}, revision: 0, fieldRevisions: {} }] } }]);
     expect(JSON.stringify(rows)).not.toContain("private-link-token");
     expect(JSON.stringify(rows)).not.toContain("private@example.com");
     expect(JSON.stringify(rows)).not.toContain("Private note text");
     expect(JSON.stringify(rows)).not.toContain("raw unrelated answer");
+    expect(JSON.stringify(rows)).not.toContain("private-row");
+    expect(JSON.stringify(rows)).not.toContain("private record value");
   });
 
   it("filters submitted respondents in Mongo", async () => {
@@ -72,7 +75,7 @@ describe("analytics participant query", () => {
     });
     expect(mongoMocks.find).toHaveBeenCalledWith(
       tenantFilter("axion", { interviewId, status: "submitted" }),
-      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
+      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1, "recordGroups.fit.deletedAt": 1 } },
     );
   });
 
@@ -82,7 +85,7 @@ describe("analytics participant query", () => {
     });
     expect(mongoMocks.find).toHaveBeenCalledWith(
       tenantFilter("axion", { interviewId, status: { $in: ["invited", "in_progress"] } }),
-      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1 } },
+      { projection: { _id: 0, status: 1, "answers.fit.value": 1, "answers.fit.note": 1, "recordGroups.fit.deletedAt": 1 } },
     );
   });
 });

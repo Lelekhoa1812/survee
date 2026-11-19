@@ -43,6 +43,21 @@ function interviewData(mode: "single" | "multi", withRetainedGroup = false): Int
 }
 
 describe("repeat-group host review", () => {
+  it("excludes inactive retained answers from question totals while keeping them visible", () => {
+    const data = interviewData("multi");
+    data.manifest.questions.push({
+      id: "followup", type: "single", label: "Condition follow-up", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }],
+      when: { all: [{ question: "assets", operator: "answered" }] },
+    });
+    data.people[0].answers.followup = { value: "yes", updatedAt: "now" };
+    data.people[1].answers.followup = { value: "no", updatedAt: "now" };
+    const html = renderToStaticMarkup(createElement(AnswersTab, { data }));
+    expect(html).toContain("1 of 1 eligible people answered");
+    expect(html).toContain("inactive under current routing");
+    expect(html).toContain("Counts and percentages among 1 valid answers");
+    expect(html).toContain("Alex Kim");
+  });
+
   it("shows ordered record rows with field labels and choice labels in question view", () => {
     const html = renderToStaticMarkup(createElement(AnswersTab, { data: interviewData("multi") }));
     expect(html).toContain("Equipment items");

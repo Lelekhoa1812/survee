@@ -244,7 +244,7 @@ function previewTokenError(code: QuestionnairePreviewFailure) {
 function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[]) {
   const mail = currentMail(person, rows);
   const link = inviteLink(person.token);
-  const pr = manifest ? progress(manifest, person.answers) : null;
+  const pr = manifest ? progress(manifest, person.answers, person.recordGroups) : null;
   return {
     id: person.id,
     interviewId: person.interviewId,

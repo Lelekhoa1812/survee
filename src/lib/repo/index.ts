@@ -283,6 +283,7 @@ export async function ensureQuestionOrderAssignment(input: {
 export interface AnalyticsParticipant {
   status: ParticipantStatus;
   answers: AnswerMap;
+  recordGroups?: RepeatRecordMap;
 }
 
 export interface AnalyticsParticipantScope {
@@ -361,6 +362,7 @@ export async function* iterateAnalyticsParticipants(
   for (const questionId of selectedQuestionIds) {
     projection[`answers.${questionId}.value`] = 1;
     projection[`answers.${questionId}.note`] = 1;
+    projection[`recordGroups.${questionId}.deletedAt`] = 1;
   }
   const defaultStatuses: ParticipantStatus[] = ["invited", "in_progress", "submitted"];
   const statuses = typeof scope === "boolean"
@@ -383,7 +385,14 @@ export async function* iterateAnalyticsParticipants(
           updatedAt: "",
         };
       }
-      yield { status: participant.status, answers };
+      const recordGroups: RepeatRecordMap = {};
+      for (const questionId of selectedQuestionIds) {
+        if (participant.recordGroups?.[questionId]?.some((row) => !row.deletedAt)) {
+          // Only existence affects routing; do not expose row IDs or field values to analytics.
+          recordGroups[questionId] = [{ id: "present", values: {}, revision: 0, fieldRevisions: {} }];
+        }
+      }
+      yield { status: participant.status, answers, ...(Object.keys(recordGroups).length ? { recordGroups } : {}) };
     }
   } finally {
     await cursor.close();
@@ -616,18 +625,6 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       if (merged.value === undefined && merged.note === undefined) delete next[id];
       else next[id] = merged;
     }
-    const eligible = evaluateEligibility(ctx.version.manifest, next);
-    for (const id of ids) {
-      if (eligible[id] !== false) continue;
-      const entry = patch[id] ?? {};
-      const q = byId.get(id);
-      if (!q) continue;
-      const submittedValue = "value" in entry ? validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" }) : null;
-      const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
-      const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
-      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
-    }
-
     const groups: RepeatRecordMap = { ...(current.recordGroups ?? {}) };
     const touched = new Set<string>();
     const conflict = (questionId: string, rowId: string, fieldId?: string): SaveResult => ({
@@ -638,7 +635,6 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     for (const operation of operations) {
       const q = byId.get(operation.questionId);
       if (!q || q.type !== "repeat") { recordErrors.push({ questionId: operation.questionId, reason: "not a repeat question in this interview" }); continue; }
-      if (eligible[q.id] === false) { recordErrors.push({ questionId: q.id, reason: "this question is not available for the answers currently selected" }); continue; }
       if (!ID_RE.test(operation.rowId)) { recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "row id is invalid" }); continue; }
       const rows = [...(groups[q.id] ?? [])];
       let rowIndex = rows.findIndex((row) => row.id === operation.rowId && !row.deletedAt);
@@ -707,6 +703,22 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       }
       groups[q.id] = rows;
       touched.add(q.id);
+    }
+    // Evaluate the final candidate, including repeat operations in this batch. A repeat
+    // answer can make later scalar or repeat questions eligible (or ineligible).
+    const eligible = evaluateEligibility(ctx.version.manifest, next, groups);
+    for (const id of ids) {
+      if (eligible[id] !== false) continue;
+      const entry = patch[id] ?? {};
+      const q = byId.get(id);
+      if (!q) continue;
+      const submittedValue = "value" in entry ? validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" }) : null;
+      const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
+      const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
+      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
+    }
+    for (const id of new Set(operations.map((operation) => operation.questionId))) {
+      if (eligible[id] === false && byId.get(id)?.type === "repeat") recordErrors.push({ questionId: id, reason: "this question is not available for the answers currently selected" });
     }
     if (problems.length || recordErrors.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems, recordErrors };
     if (JSON.stringify({ answers: next, recordGroups: groups }).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };

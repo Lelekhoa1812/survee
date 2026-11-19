@@ -419,6 +419,54 @@ describe("repeat record exports", () => {
     }],
   };
 
+  it("uses active repeat rows for routed eligibility and participant progress in every export", async () => {
+    const routed: ExportInput = {
+      ...repeatInput,
+      manifest: { ...repeatManifest, questions: [
+        repeatManifest.questions.at(-1)!,
+        { id: "followup", type: "text", label: "Follow-up", required: true, when: { all: [{ question: "assets", operator: "answered" }] } },
+        { id: "empty", type: "text", label: "No assets", when: { all: [{ question: "assets", operator: "notAnswered" }] } },
+      ] },
+      participants: [{ ...repeatInput.participants[0], answers: { followup: { value: "Reviewed", updatedAt: T } } }],
+    };
+    const doc = JSON.parse(jsonExport(routed).body as string);
+    expect(doc.participants[0].eligibility).toEqual({ assets: "eligible", followup: "eligible", empty: "inactive" });
+    expect(doc.participants[0].progress).toMatchObject({ answered: 2, total: 2, inactive: 1, requiredAnswered: 1, requiredTotal: 1 });
+    const wide = wideTable(routed);
+    expect(wide.rows[0][wide.header.indexOf("followup | eligibility")]).toBe("eligible");
+    expect(wide.rows[0][wide.header.indexOf("empty | eligibility")]).toBe("inactive");
+    const long = longTable(routed);
+    expect(long.rows.find((row) => row[3] === "followup")?.[6]).toBe("eligible");
+    expect(long.rows.find((row) => row[3] === "empty")?.[6]).toBe("inactive");
+    expect(markdownExport(routed).body).toContain("| Ben Okafor | in\\_progress | 2/2 |");
+    expect(markdownExport(routed).body).toContain("Repeated records are not included in this report.");
+    const workbook = new Workbook();
+    await workbook.xlsx.load((await xlsxExport(routed)).body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
+    const summary = workbook.getWorksheet("Summary")!;
+    const summaryRows = summary.getSheetValues() as unknown[][];
+    expect(summaryRows.find((row) => row?.[1] === "assets")?.slice(4, 7)).toEqual([1, 0, 1]);
+    expect(summaryRows.find((row) => row?.[1] === "followup")?.slice(4, 7)).toEqual([1, 0, 1]);
+    expect((workbook.getWorksheet("People")!.getRow(2).values as unknown[]).slice(1, 9)).toEqual(["Ben Okafor", "Joined late", "in_progress", 2, 2, 1, 1, 1]);
+  });
+
+  it("treats deleted repeat rows as unanswered when inferring exported routes", () => {
+    const routed: ExportInput = {
+      ...repeatInput,
+      manifest: { ...repeatManifest, questions: [
+        repeatManifest.questions.at(-1)!,
+        { id: "followup", type: "text", label: "Follow-up", required: true, when: { all: [{ question: "assets", operator: "answered" }] } },
+        { id: "empty", type: "text", label: "No assets", when: { all: [{ question: "assets", operator: "notAnswered" }] } },
+      ] },
+      participants: [{ ...repeatInput.participants[0], answers: {}, recordGroups: { assets: [{ id: "deleted", values: {}, revision: 1, fieldRevisions: {}, deletedAt: T }] } }],
+    };
+    const person = JSON.parse(jsonExport(routed).body as string).participants[0];
+    expect(person.eligibility).toEqual({ assets: "eligible", followup: "inactive", empty: "eligible" });
+    expect(person.progress).toMatchObject({ answered: 0, total: 2, inactive: 1, requiredTotal: 0 });
+    const wide = wideTable(routed);
+    expect(wide.rows[0][wide.header.indexOf("followup | eligibility")]).toBe("inactive");
+    expect(wide.rows[0][wide.header.indexOf("empty | eligibility")]).toBe("eligible");
+  });
+
   it("creates one normalized row per declared field, preserving order and value presence", () => {
     const table = recordTable(repeatInput);
     expect(table.header).toEqual(["Person id", "Person", "Person status", "Question id", "Question", "Row id", "Row order", "Field id", "Field", "Field type", "Value present", "Value"]);

@@ -56,11 +56,12 @@ function groupQuestions(input: ExportInput): Group[] {
 
 /** Bullets for one question: one per participant who answered, plus notes, then one "No answer" line. */
 function questionBody(q: Question, people: ExportParticipant[], manifest: ExportInput["manifest"]): string[] {
+  if (q.type === "repeat") return ["Repeated records are not included in this report. Use the JSON or Excel export to review them.", ""];
   const bullets: string[] = [];
   const unanswered: string[] = [];
   const inactive: string[] = [];
   for (const p of people) {
-    const isEligible = evaluateEligibility(manifest, p.answers)[q.id] !== false;
+    const isEligible = evaluateEligibility(manifest, p.answers, p.recordGroups)[q.id] !== false;
     const answered = isAnswered(q, p.answers);
     const note = p.answers[q.id]?.note ?? "";
     const hasNote = note.trim() !== "";
@@ -120,7 +121,7 @@ export function markdownExport(input: ExportInput): ExportFile {
   out.push("## People", "");
   out.push("| Name | Status | Answered | Submitted |", "| --- | --- | --- | --- |");
   for (const p of people) {
-    const pr = progress(input.manifest, p.answers);
+    const pr = progress(input.manifest, p.answers, p.recordGroups);
     out.push(`| ${cell(p.name)} | ${cell(p.status)} | ${pr.answered}/${pr.total} | ${cell(p.submittedAt ?? "")} |`);
   }
   out.push("");

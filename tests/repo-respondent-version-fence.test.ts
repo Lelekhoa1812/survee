@@ -310,6 +310,25 @@ describe("respondent version fence", () => {
     expect(age).toMatchObject({ ok: true, recordGroups: { people: [{ id: "row-1", values: { name: "Ada", age: 42 }, revision: 2, fieldRevisions: { name: 1, age: 1 } }] } });
   });
 
+  it("validates follow-ups against saved and same-batch repeat rows", async () => {
+    mocks.versionManifest.questions = [
+      { id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "name", type: "text", label: "Name" }] },
+      { id: "details", type: "text", label: "Details", when: { all: [{ question: "assets", operator: "answered" }] } },
+      { id: "none", type: "text", label: "No assets", when: { all: [{ question: "assets", operator: "notAnswered" }] } },
+      { id: "extra", type: "repeat", label: "Extra records", maxRows: 1, fields: [{ id: "name", type: "text", label: "Name" }], when: { all: [{ question: "assets", operator: "answered" }] } },
+    ];
+    expect(await asAxion(() => saveAnswers(token, 4, { details: { value: "unavailable" } }))).toMatchObject({ ok: false, status: 400 });
+    expect(await asAxion(() => saveAnswers(token, 4, { details: { value: "same batch" } }, [
+      { op: "add", questionId: "assets", rowId: "asset-1" },
+      { op: "add", questionId: "extra", rowId: "extra-1" },
+    ]))).toMatchObject({ ok: true });
+    expect(await asAxion(() => saveAnswers(token, 4, { details: { value: "saved row" } }))).toMatchObject({ ok: true });
+    expect(await asAxion(() => saveAnswers(token, 4, { none: { value: "incorrect" } }))).toMatchObject({ ok: false, status: 400 });
+    expect(await asAxion(() => saveAnswers(token, 4, { details: { value: "hidden" } }, [{ op: "remove", questionId: "assets", rowId: "asset-1", expectedRowRevision: 0 }]))).toMatchObject({ ok: false, status: 400 });
+    expect(mocks.participant.recordGroups.assets[0].deletedAt).toBeUndefined();
+    expect(await asAxion(() => saveAnswers(token, 4, { none: { value: "now empty" } }, [{ op: "remove", questionId: "assets", rowId: "asset-1", expectedRowRevision: 0 }]))).toMatchObject({ ok: true });
+  });
+
   it("rejects stale same-field writes, stale row removals, and adds above maxRows", async () => {
     mocks.versionManifest.questions = [{ id: "items", type: "repeat", label: "Items", maxRows: 1, fields: [{ id: "label", type: "text", label: "Label" }] }];
     await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-1" }]));

@@ -56,7 +56,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     publicOrigin: base.ok ? base.origin : null,
     ...(analysis ? { analysis } : {}),
     people: people.map((p) => {
-      const pr = progress(current.manifest, p.answers);
+      const pr = progress(current.manifest, p.answers, p.recordGroups);
       const mail = currentMail(p, mailByPerson.get(p.id) ?? []);
       return {
         id: p.id, token: p.token, name: p.name, email: p.email, note: p.note, status: p.status,

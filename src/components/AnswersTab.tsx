@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { displayValue, isAnswered } from "@/lib/format/answers";
+import { displayValue, evaluateEligibility, isAnswered } from "@/lib/format/answers";
 import type { Question, RepeatField, RepeatRecordRow } from "@/lib/format/schema";
 import type { InterviewData, PersonRow } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
@@ -86,9 +86,10 @@ export function AnswersTab({ data }: { data: InterviewData }) {
   const [only, setOnly] = useState<"all" | "submitted">("all");
   const [viewing, setViewing] = useState<PersonRow | null>(null);
   const people = useMemo(() => data.people.filter((p) => (only === "submitted" ? p.status === "submitted" : true)), [data.people, only]);
+  const peopleWithEligibility = useMemo(() => people.map((person) => ({ ...person, eligibility: evaluateEligibility(data.manifest, person.answers, person.recordGroups) })), [data.manifest, people]);
   const { questions, sections } = data.manifest;
   const anyAnswers = data.people.some((p) => p.answered > 0 || Object.values(p.answers).some((answer) => !!answer.note?.trim()) || Object.values(p.recordGroups ?? {}).some((records) => records.length > 0));
-  const summaries = useMemo(() => new Map(questions.filter((q) => q.type !== "repeat").map((q) => [q.id, summarizeQuestion(q, people)])), [questions, people]);
+  const summaries = useMemo(() => new Map(questions.filter((q) => q.type !== "repeat").map((q) => [q.id, summarizeQuestion(q, peopleWithEligibility)])), [questions, peopleWithEligibility]);
 
   const groups = useMemo(() => {
     const out: { id: string; title: string; description?: string; qs: Question[] }[] = [];
@@ -144,9 +145,9 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                         {q.help && <p className="muted" style={{ fontSize: 13.5 }}>{q.help}</p>}
                       </div>
                       <div className="stack" style={{ gap: 10 }}>
-                        {people.map((p) => (
+                        {peopleWithEligibility.map((p) => (
                           <div key={p.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-                            <div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}</div>
+                            <div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}{p.eligibility[q.id] === false && <span className="muted" style={{ fontWeight: 400 }}> · inactive under current routing</span>}</div>
                             <RecordEntries fields={q.fields ?? []} records={p.recordGroups?.[q.id] ?? []} />
                           </div>
                         ))}
@@ -156,25 +157,27 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                   );
                 }
                 const summary = summaries.get(q.id)!;
-                const answeredBy = people.filter((p) => isAnswered(q, p.answers));
-                const noteOnly = people.filter((p) => !isAnswered(q, p.answers) && p.answers[q.id]?.note);
-                const missing = people.length - answeredBy.length;
+                const eligiblePeople = peopleWithEligibility.filter((p) => p.eligibility[q.id] !== false);
+                const answeredBy = eligiblePeople.filter((p) => isAnswered(q, p.answers));
+                const noteOnly = eligiblePeople.filter((p) => !isAnswered(q, p.answers) && p.answers[q.id]?.note);
+                const inactiveRetained = peopleWithEligibility.filter((p) => p.eligibility[q.id] === false && (isAnswered(q, p.answers) || p.answers[q.id]?.note));
+                const missing = eligiblePeople.length - answeredBy.length;
                 return (
                   <div key={q.id} className="q-card">
                     <div>
                       <h4>{q.label}</h4>
-                      <div className="meta"><span className="code-chip">{q.id}</span><span>{q.type}</span>{q.required && <Badge kind="info" plain>Required</Badge>}<span>{answeredBy.length} of {people.length} answered</span></div>
+                      <div className="meta"><span className="code-chip">{q.id}</span><span>{q.type}</span>{q.required && <Badge kind="info" plain>Required</Badge>}<span>{answeredBy.length} of {eligiblePeople.length} eligible people answered</span></div>
                     </div>
                     <Tally q={q} summary={summary} />
                     {summary.numeric && <p className="question-stats">Numeric summary for n={summary.numeric.n}: minimum {fmtNumber(summary.numeric.min)} · median {fmtNumber(summary.numeric.median)} · mean {fmtNumber(summary.numeric.mean)} · maximum {fmtNumber(summary.numeric.max)}. Descriptive only. {describeNumericQuantiles(summary.numeric)}</p>}
                     {summary.scaleMedianRange !== null && <p className="question-stats">{summary.scaleMedianRange.lower === summary.scaleMedianRange.upper ? "Median category" : "Median categories"}: {fmtScaleMedianRange(summary.scaleMedianRange)} · valid n={summary.distributionDenominator}. These are observed ordinal categories; codes are not averaged and no mean is calculated.</p>}
                     {summary.unmappedResponseCount > 0 && <p className="question-warning">{summary.unmappedResponseCount} stored {summary.unmappedResponseCount === 1 ? "answer does" : "answers do"} not match this survey version's options or range and {summary.unmappedResponseCount === 1 ? "is" : "are"} excluded from the summary.</p>}
                     <div className="stack" style={{ gap: 8 }}>
-                      {[...answeredBy, ...noteOnly].map((p) => {
+                      {[...answeredBy, ...noteOnly, ...inactiveRetained].map((p) => {
                         const a = p.answers[q.id];
                         return (
                           <div key={p.id} className="ans">
-                            <div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}</div>
+                            <div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}{p.eligibility[q.id] === false && <span className="muted" style={{ fontWeight: 400 }}> · inactive under current routing</span>}</div>
                             <div>
                               {a?.value !== undefined && <div className="val">{displayValue(q, a.value)}</div>}
                               {a?.note && <div className="note">{a.note}</div>}
@@ -183,7 +186,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                         );
                       })}
                       {missing > 0 && answeredBy.length > 0 && <p className="muted" style={{ fontSize: 13 }}>{missing} {missing === 1 ? "person has" : "people have"} not answered this yet.</p>}
-                      {answeredBy.length === 0 && noteOnly.length === 0 && <p className="muted" style={{ fontSize: 13.5 }}>No answers yet.</p>}
+                      {answeredBy.length === 0 && noteOnly.length === 0 && inactiveRetained.length === 0 && <p className="muted" style={{ fontSize: 13.5 }}>No answers yet.</p>}
                     </div>
                   </div>
                 );
@@ -199,7 +202,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                 <div key={questionId} className="q-card">
                   <div><h4>Retained repeat group</h4><div className="meta"><span className="code-chip">{questionId}</span></div></div>
                   <div className="stack" style={{ gap: 10 }}>
-                    {people.map((p) => {
+          {peopleWithEligibility.map((p) => {
                       const records = p.recordGroups?.[questionId] ?? [];
                       if (!records.length) return null;
                       return <div key={p.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}><div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}</div><RecordEntries fields={[]} records={records} /></div>;
@@ -214,7 +217,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
       ) : (
         <div className="card">
           {people.length === 0 && <div className="card-pad muted">Nobody has submitted yet.</div>}
-          {people.map((p, idx) => {
+          {peopleWithEligibility.map((p, idx) => {
             const s = STATUS[p.status];
             const pct = p.total ? Math.round((p.answered / p.total) * 100) : 0;
             return (
@@ -249,7 +252,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                     if (q.type === "repeat") {
                       return (
                         <div key={q.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-                          <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>{q.label}<span className="code-chip" style={{ marginLeft: 8 }}>{q.id}</span></div>
+                          <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>{q.label}<span className="code-chip" style={{ marginLeft: 8 }}>{q.id}</span>{p.eligibility[q.id] === false && <span className="muted"> · inactive under current routing</span>}</div>
                           <RecordEntries fields={q.fields ?? []} records={p.recordGroups?.[q.id] ?? []} />
                         </div>
                       );
@@ -259,7 +262,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                     if (!has && !a?.note) return null;
                     return (
                       <div key={q.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-                        <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>{q.label}</div>
+                        <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>{q.label}{p.eligibility[q.id] === false && <span className="muted"> · inactive under current routing</span>}</div>
                         <div>
                           {has && <div className="val" style={{ fontWeight: 500 }}>{displayValue(q, a?.value)}</div>}
                           {a?.note && <div className="note">{a.note}</div>}

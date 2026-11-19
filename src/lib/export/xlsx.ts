@@ -98,9 +98,9 @@ function writeSummary(wb: Workbook, input: ExportInput, people: ExportParticipan
   const tableHeaderRow = ws.rowCount + 1;
   const header = ["Question id", "Question", "Type", "Eligible", "Inactive", "Answered", "Share of eligible with stored answer"];
   ws.addRow(header);
-  const personState = people.map((p) => ({ p, eligibility: evaluateEligibility(input.manifest, p.answers) }));
+  const personState = people.map((p) => ({ p, eligibility: evaluateEligibility(input.manifest, p.answers, p.recordGroups) }));
   for (const q of input.manifest.questions) {
-    const status = personState.map(({ p, eligibility }) => ({ eligible: eligibility[q.id] !== false, answered: isAnswered(q, p.answers) }));
+    const status = personState.map(({ p, eligibility }) => ({ eligible: eligibility[q.id] !== false, answered: isAnswered(q, p.answers, p.recordGroups) }));
     const eligible = status.filter((item) => item.eligible).length;
     const inactive = status.length - eligible;
     const answered = status.filter((item) => item.eligible && item.answered).length;
@@ -133,7 +133,7 @@ function writePeople(wb: Workbook, input: ExportInput, people: ExportParticipant
     "Submitted",
   ];
   const rows: CellValue[][] = people.map((p) => {
-    const pr = progress(input.manifest, p.answers);
+    const pr = progress(input.manifest, p.answers, p.recordGroups);
     return [
       p.name,
       p.note ?? "",

@@ -36,7 +36,7 @@ export function wideColumns(manifest: Manifest, surveyVersion: number): WideColu
   const currentEligibility = (p: ExportParticipant, questionId: string) => {
     let eligibility = eligibilityByParticipant.get(p);
     if (!eligibility) {
-      eligibility = evaluateEligibility(manifest, p.answers);
+      eligibility = evaluateEligibility(manifest, p.answers, p.recordGroups);
       eligibilityByParticipant.set(p, eligibility);
     }
     return eligibility[questionId] !== false;
@@ -109,7 +109,7 @@ export function longTable(input: ExportInput): Table {
   const sectionTitles = new Map((input.manifest.sections ?? []).map((s) => [s.id, s.title]));
   const rows: string[][] = [];
   for (const p of sortedParticipants(input)) {
-    const eligibility = evaluateEligibility(input.manifest, p.answers);
+    const eligibility = evaluateEligibility(input.manifest, p.answers, p.recordGroups);
     for (const q of input.manifest.questions) {
       const a = p.answers[q.id];
       const note = a?.note ?? "";

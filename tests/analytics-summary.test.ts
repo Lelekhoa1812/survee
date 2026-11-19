@@ -105,6 +105,24 @@ describe("descriptive question summaries", () => {
     expect(respondentWithEligibility.eligibility).toMatchObject({ start: true, middle: false, target: false });
   });
 
+  it("infers repeat-dependent routes from active rows, excluding deleted rows", async () => {
+    const manifest = {
+      format: "kqa/1" as const, title: "Records", questions: [
+        { id: "items", type: "repeat" as const, label: "Items", fields: [{ id: "name", type: "text" as const, label: "Name" }] },
+        { id: "followup", type: "text" as const, label: "Follow-up", when: { all: [{ question: "items", operator: "answered" as const }] } },
+        { id: "empty", type: "text" as const, label: "No records", when: { all: [{ question: "items", operator: "notAnswered" as const }] } },
+      ],
+    };
+    const row = { id: "r", values: {}, revision: 0, fieldRevisions: {} };
+    async function* people() {
+      yield { answers: {}, recordGroups: { items: [row] } };
+      yield { answers: {}, recordGroups: { items: [{ ...row, deletedAt: at }] } };
+    }
+    const eligibility = [];
+    for await (const person of withCurrentEligibility(manifest, people())) eligibility.push(person.eligibility);
+    expect(eligibility).toEqual([{ items: true, followup: true, empty: false }, { items: true, followup: false, empty: true }]);
+  });
+
   it("uses respondent shares for multi-select options", () => {
     const q: Question = { id: "q", type: "multi", label: "Channels", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] };
     const summary = summarizeQuestion(q, [respondent(["a", "b"]), respondent(["a"]), respondent("b"), respondent([])]);

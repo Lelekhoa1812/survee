@@ -169,6 +169,21 @@ beforeEach(() => {
 });
 
 describe("MCP tools", () => {
+  it("reports progress using repeat records and their dependent questions", async () => {
+    const manifest = { ...analyticsManifest, questions: [
+      { id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "name", label: "Name", type: "text" }] },
+      { id: "details", type: "text", label: "Details", required: true, when: { all: [{ question: "assets", operator: "answered" }] } },
+    ] };
+    vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest } as never);
+    vi.mocked(listParticipants).mockResolvedValueOnce([{
+      id: personId, interviewId, token: "person-token", name: "Ada", status: "in_progress", answers: {},
+      recordGroups: { assets: [{ id: "r1", values: {}, revision: 0, fieldRevisions: {} }] },
+    }] as never);
+    const response = await call("list_people", { interviewId });
+    const body = await response.json() as { result: { structuredContent: { people: { answered: number; total: number; requiredMissing: number }[] } } };
+    expect(body.result.structuredContent.people[0]).toMatchObject({ answered: 1, total: 2, requiredMissing: 1 });
+  });
+
   it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {
     const repeatManifest = {
       ...analyticsManifest,

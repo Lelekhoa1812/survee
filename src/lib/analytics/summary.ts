@@ -1,11 +1,12 @@
 import { evaluateEligibility, isAnswered, validateAnswer } from "../format/answers";
-import { LIMITS, scaleBounds, type AnswerMap, type Manifest, type Question } from "../format/schema";
+import { LIMITS, scaleBounds, type AnswerMap, type Manifest, type Question, type RepeatRecordMap } from "../format/schema";
 import { LogCollapsingHighestDenseDDSketch } from "@datadog/sketches-js";
 import { ANALYTICS_COHORTS, ANALYTICS_STATUSES, type AnalyticsCohortKey } from "./cohorts";
 import type { ParticipantStatus } from "../repo/types";
 
 export interface AnalyticsRespondent {
   answers: AnswerMap;
+  recordGroups?: RepeatRecordMap;
   /** Eligibility inferred from the current manifest rules, not a record of what was rendered. */
   eligibility?: Record<string, boolean>;
 }
@@ -142,7 +143,7 @@ export interface CohortAnalyticsRespondent extends AnalyticsRespondent {
 /** Attach current-rule eligibility to an analytics stream. This is inferred from answers, not historical display telemetry. */
 export async function* withCurrentEligibility<T extends AnalyticsRespondent>(manifest: Manifest, respondents: AsyncIterable<T>): AsyncGenerator<T & { eligibility: Record<string, boolean> }> {
   for await (const respondent of respondents) {
-    yield { ...respondent, eligibility: evaluateEligibility(manifest, respondent.answers) };
+    yield { ...respondent, eligibility: evaluateEligibility(manifest, respondent.answers, respondent.recordGroups) };
   }
 }
 
