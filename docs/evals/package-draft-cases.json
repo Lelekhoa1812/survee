@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": "kqa-package-draft/3",
+  "benchmarkVersion": "kqa-package-draft/4",
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/8",
@@ -423,6 +423,107 @@
           "url": "https://www.osha.gov/safety-management/worker-participation"
         }
       ]
+    },
+    {
+      "id": "industrial-maintenance-improvement-rating-not-ranking",
+      "packageId": "industrial-operations",
+      "brief": "A multi-shift manufacturing site wants a short questionnaire for operators and maintenance staff who took part in routine equipment handoffs during the last 30 days. The host lists five candidate workflow improvements—clearer work-order status, parts availability, handoff notes, access to maintenance windows, and coordination between operations and maintenance—and asks respondents to rank every improvement from most to least important. The stated decision is to identify process areas for investigation next quarter; there is no fixed budget or single-winner decision. Respondents may consider several improvements equally important, may not have direct experience with every area, and each area can be improved independently. This is not hazard or incident reporting, formal management of change, or employee performance review.",
+      "contextFacts": [
+        "The actual decision is to identify areas for further investigation, not to select one mutually exclusive option or allocate a fixed resource.",
+        "Respondents have different roles and shifts; experience with each candidate area, preferred language, device access, private completion conditions, and the sample frame are unknown.",
+        "The five candidate improvement areas are host suggestions and may not be exhaustive; no work-area, language, access, privacy, raw-answer access, retention, or reporting plan has been supplied.",
+        "No operator/maintenance representative review, questionnaire testing, accessibility assessment, or respondent pretest has occurred.",
+        "The site has not supplied verified wording for its urgent hazard and incident route. No active hazard, near miss, emergency, or formal process-change report belongs in this feedback questionnaire."
+      ],
+      "requiredIntents": [
+        {
+          "id": "decision-and-unit-fit",
+          "intent": "Map each question to the decision to identify routine process areas for future investigation; do not turn the survey into a forced single-winner or budget-allocation instrument."
+        },
+        {
+          "id": "independent-assessment",
+          "intent": "Assess each candidate improvement independently so respondents can rate several items equally; use a clear, balanced, fully labeled scale and do not derive an unsupported combined score."
+        },
+        {
+          "id": "exposure-and-applicability",
+          "intent": "Let respondents indicate that they lack enough recent experience or that an area is outside their work; do not require ranking or rating an unfamiliar area as if they know it."
+        },
+        {
+          "id": "complete-but-open-set",
+          "intent": "Treat the host list as candidate areas rather than a verified exhaustive set; include an optional way to identify a missing routine process issue."
+        },
+        {
+          "id": "operational-safety-boundary",
+          "intent": "Keep routine improvement feedback separate from hazard, near-miss, incident, emergency, and formal MOC processes; do not invent a site reporting channel and block fielding until the host verifies the urgent route."
+        },
+        {
+          "id": "workforce-privacy-and-access",
+          "intent": "Surface worker/contractor participation, shift and language coverage, private access, raw-answer access, retention, and small-cell reporting as unresolved; do not promise anonymity or solicit names."
+        },
+        {
+          "id": "review-and-testing",
+          "intent": "Require accountable site and worker review, functional and accessibility checks, and respondent pretesting across relevant roles/shifts/languages before fielding; state that the draft is not safety-validated or ready to launch."
+        }
+      ],
+      "acceptableAlternatives": [
+        "Use one concise scale item per improvement area with common, fully labeled response choices that allow equal ratings, plus an explicit “not enough recent experience / not part of my work” response for each area.",
+        "If a separate applicability question and routed rating follow-up are used, justify the added burden and test the route, answer retention, and interpretation.",
+        "Include an optional open response for a routine improvement area missing from the host list; do not ask for urgent incident narratives."
+      ],
+      "prohibitedAsks": [
+        "A forced full ordering of all five areas when respondents may regard areas as equally important or lack direct experience with some of them.",
+        "Names or ratings of coworkers, supervisors, specific teams, or identifiable blame narratives.",
+        "Detailed security-sensitive facility, process, or hazardous-material information that does not inform routine handoff improvement.",
+        "Active hazard, near-miss, injury, incident, emergency, or formal MOC narratives in this improvement questionnaire."
+      ],
+      "prohibitedClaims": [
+        "Rank positions show absolute importance, distance between priorities, independent item ratings, or a validated score.",
+        "Ratings alone select a funded improvement or establish a single winner when the host supplied no allocation rule or fixed resource constraint.",
+        "The results represent all workers, shifts, contractors, or sites, establish consensus, or show that operations are safe or compliant.",
+        "Answers are anonymous or urgent concerns are monitored when the host has not verified those controls and routes.",
+        "The draft is safety-validated, legally applicable, or ready for fielding without site-specific review and respondent testing."
+      ],
+      "hardGates": [
+        {
+          "id": "forced-order-despite-ties-and-inapplicability",
+          "description": "The draft requires a full order or a single judgment over all candidate areas despite the stated possibility of equal importance and no direct experience."
+        },
+        {
+          "id": "winner-or-budget-inference",
+          "description": "The analysis treats descriptive ratings or rankings as a binding investment, funding, or single-winner decision without a defined decision rule and resource constraint."
+        },
+        {
+          "id": "invented-or-conflated-safety-route",
+          "description": "The draft solicits urgent hazard or incident information without a host-verified channel, invents a reporting route, or frames questionnaire completion as a safety response."
+        },
+        {
+          "id": "false-anonymity-or-identifiable-blame",
+          "description": "The draft promises anonymity without verified controls or asks for details that identify and blame an individual worker in this context."
+        },
+        {
+          "id": "unresolved-site-owner-or-fielding-readiness",
+          "description": "The draft is presented as ready to field while the accountable owner, participation/access plan, privacy/reporting facts, or required reviews remain unresolved."
+        }
+      ],
+      "methodologySources": [
+        {
+          "name": "Australian Bureau of Statistics, Forms Design Standards 2023: Question type",
+          "url": "https://www.abs.gov.au/statistics/standards/abs-forms-design-standards/2023/general-forms-design-principles-question-type"
+        },
+        {
+          "name": "Smyth, Olson, and Burke, Comparing survey ranking question formats in mail surveys (2018)",
+          "url": "https://digitalcommons.unl.edu/sociologyfacpub/542/"
+        },
+        {
+          "name": "OSHA, Worker Participation",
+          "url": "https://www.osha.gov/safety-management/worker-participation"
+        },
+        {
+          "name": "U.S. Census Bureau, Statistical Quality Standard A2",
+          "url": "https://www.census.gov/about/policies/quality/standarda2.html"
+        }
+      ],
+      "sourceNotes": "ABS question-type guidance informs the distinction between forced rankings and independent ratings when ties or non-applicability matter. Smyth, Olson, and Burke report cognitive and instruction-following challenges in one mail-survey experiment; that evidence supports pretesting but does not establish a universal web-survey effect. OSHA worker-participation guidance informs the need to plan participation and access with workers; it does not guarantee anonymity or establish site-specific legal duties. Census A2 supports documented questionnaire testing. These sources shape the case and do not validate an output or replace qualified site review."
     },
     {
       "id": "capital-project-scope-discovery",
