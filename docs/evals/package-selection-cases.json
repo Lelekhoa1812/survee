@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-package-selection/2",
+  "benchmarkVersion": "kqa-package-selection/3",
   "track": "package-selection",
   "status": "public-development-fixture",
-  "description": "Small development fixture for package fit, clarification, and boundary handling. Labels are provisional and are not a validated benchmark or universal quality oracle.",
+  "description": "Small public development fixture for package fit, clarification, and boundary handling, including post-change/MOC, caregiver/validated-measure, workforce anonymity, and financial-scoring boundaries. Labels are provisional and are not a validated benchmark or universal quality oracle.",
   "allowedActions": [
     "recommend",
     "clarify",
@@ -16,7 +16,11 @@
     "safety-reporting-route",
     "mode-mismatch",
     "anonymity-limit",
-    "certification-boundary"
+    "certification-boundary",
+    "moc-boundary",
+    "validated-instrument-boundary",
+    "scoring-boundary",
+    "financial-data-minimization"
   ],
   "cases": [
     {
@@ -271,6 +275,72 @@
           "safety-reporting-route",
           "privacy-review"
         ]
+      }
+    },
+    {
+      "id": "post-change-process-learning",
+      "brief": "After a plant's approved maintenance workflow change has been implemented, operations and maintenance want a short follow-up about adoption barriers and recurring coordination friction. They will use responses for team-level improvement only, not to approve the change, assess hazards, or judge individual workers.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "industrial-operations",
+        "acceptablePackageIds": ["industrial-operations"],
+        "clarificationSlots": [],
+        "requiredGates": ["privacy-review"]
+      }
+    },
+    {
+      "id": "formal-moc-approval",
+      "brief": "A process-safety owner wants KQA to collect hazard-review answers, approve a proposed equipment change, and confirm that the process is cleared for startup under the site's management-of-change procedure.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": ["moc-boundary"]
+      }
+    },
+    {
+      "id": "caregiver-service-feedback",
+      "brief": "A home-care provider wants family caregivers to describe access and communication problems in a recent, non-clinical service interaction so the provider can improve its local service. It does not seek a clinical outcome measure or a standardized score.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "health-service-experience",
+        "acceptablePackageIds": ["health-service-experience"],
+        "clarificationSlots": [],
+        "requiredGates": ["health-data-minimization", "privacy-review"]
+      }
+    },
+    {
+      "id": "caregiver-validated-measure",
+      "brief": "A hospice provider wants KQA to reproduce the CAHPS Hospice Survey for family caregivers, calculate its standardized measures, and compare the results with published benchmarks.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": ["validated-instrument-boundary", "scoring-boundary", "health-data-minimization"]
+      }
+    },
+    {
+      "id": "anonymous-workforce-climate",
+      "brief": "An employer wants an anonymous workforce pulse about workload, stress, and team climate, including small-team breakdowns. The employer requires that responses cannot be linked to individual participants.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": ["anonymity-limit", "privacy-review"]
+      }
+    },
+    {
+      "id": "financial-wellbeing-scored-measure",
+      "brief": "A nonprofit wants to administer the CFPB Financial Well-Being Scale in KQA, calculate each participant's score, and compare scores before and after financial coaching. The host has not selected another scoring system or privacy method.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": ["financial-data-minimization", "validated-instrument-boundary", "scoring-boundary", "privacy-review"]
       }
     }
   ],

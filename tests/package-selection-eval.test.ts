@@ -16,10 +16,19 @@ const resultsFor = (fn: (c: any) => any) => ({
 
 describe("package selection development benchmark", () => {
   it("validates the audit scenarios with distinct fit, clarification, and boundary decisions", () => {
-    expect(validateBenchmark(benchmark).cases).toHaveLength(17);
+    expect(validateBenchmark(benchmark).cases).toHaveLength(23);
     expect(new Set(benchmark.packageIds)).toEqual(new Set(INTERVIEW_PACKAGES.map((p) => p.id)));
     expect(benchmark.cases.filter((c: any) => c.gold.action === "clarify")).toHaveLength(3);
-    expect(benchmark.cases.filter((c: any) => c.gold.action === "out_of_scope")).toHaveLength(3);
+    expect(benchmark.cases.filter((c: any) => c.gold.action === "out_of_scope")).toHaveLength(7);
+    expect(benchmark.cases.map((c: any) => c.id)).toEqual(expect.arrayContaining([
+      "post-change-process-learning", "formal-moc-approval", "caregiver-service-feedback",
+      "caregiver-validated-measure", "anonymous-workforce-climate", "financial-wellbeing-scored-measure",
+    ]));
+    const requiredGates = Object.fromEntries(benchmark.cases.map((c: any) => [c.id, c.gold.requiredGates]));
+    expect(requiredGates["formal-moc-approval"]).toContain("moc-boundary");
+    expect(requiredGates["caregiver-validated-measure"]).toEqual(expect.arrayContaining(["validated-instrument-boundary", "scoring-boundary"]));
+    expect(requiredGates["anonymous-workforce-climate"]).toContain("anonymity-limit");
+    expect(requiredGates["financial-wellbeing-scored-measure"]).toEqual(expect.arrayContaining(["financial-data-minimization", "validated-instrument-boundary", "scoring-boundary"]));
   });
 
   it("scores an all-gold synthetic run and keeps the development-only caveat", () => {

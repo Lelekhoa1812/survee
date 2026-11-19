@@ -1,6 +1,8 @@
 # Package selection development benchmark
 
-This is a second, separate authoring-evaluation track. The fixture at [`package-selection-cases.json`](package-selection-cases.json) contains 17 synthetic briefs spanning package fit, adjacent-package ambiguity, missing prerequisites, and boundaries where KQA must decline or clarify. It includes a non-decisional industrial-process improvement brief alongside safety-reporting and other boundary cases. Cases are development examples only: labels are provisional, the set is small and public, and it is neither a held-out test set nor evidence that a package, prompt, or agent is validated. There is no universal pass score.
+This is a second, separate authoring-evaluation track. Version `kqa-package-selection/3` at [`package-selection-cases.json`](package-selection-cases.json) contains 23 synthetic briefs spanning package fit, adjacent-package ambiguity, missing prerequisites, and boundaries where KQA must decline or clarify. New cases distinguish post-change process learning from formal management of change (MOC), local caregiver service feedback from use of a validated CAHPS measure, person-linked workforce climate feedback from a required anonymous collection, and financial-wellbeing reflection from a request to score the CFPB Financial Well-Being Scale. Cases are development examples only: labels are provisional, the set is small and public, and it is neither a held-out test set nor evidence that a package, prompt, or agent is validated. There is no universal pass score.
+
+The added hard gates are narrow boundary labels: `moc-boundary` means KQA must not replace a site's formal MOC hazard review or startup authorization; `validated-instrument-boundary` means do not claim to reproduce or validate an established measure; `scoring-boundary` means KQA does not calculate answer scores; and `financial-data-minimization` calls for collecting only necessary financial information with qualified privacy/domain review. These labels do not determine legal or regulatory applicability. For covered process safety matters, qualified site owners must determine the applicable MOC process. The cited primary references include [OSHA's Process Safety Management standard](https://www.osha.gov/node/45918), [AHRQ's CAHPS Hospice Survey development and guidance](https://www.ahrq.gov/cahps/surveys-guidance/hospice/index.html), [CFPB's Financial Well-Being Scale guidance](https://www.consumerfinance.gov/data-research/research-reports/financial-well-being-scale/), and [OSHA worker-participation guidance](https://www.osha.gov/safety-management/worker-participation).
 
 The cases encode three actions:
 
@@ -20,7 +22,7 @@ Example result:
 
 ```json
 {
-  "benchmarkVersion": "kqa-package-selection/2",
+  "benchmarkVersion": "kqa-package-selection/3",
   "model": "provider/model snapshot",
   "runDate": "2026-11-19",
   "promptVersion": "prompt hash or release",
