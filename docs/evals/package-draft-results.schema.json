@@ -4,8 +4,8 @@
   "type": "object",
   "required": ["resultsSchemaVersion", "benchmarkVersion", "model", "skillVersion", "promptVersion", "runProvenance", "packageLibraryVersion", "runDate", "outputs", "reviewers", "ratings", "evidenceStatus"],
   "properties": {
-    "resultsSchemaVersion": { "const": "kqa-package-draft-results/2" },
-    "benchmarkVersion": { "const": "kqa-package-draft/11" },
+    "resultsSchemaVersion": { "const": "kqa-package-draft-results/3" },
+    "benchmarkVersion": { "const": "kqa-package-draft/12" },
     "model": { "type": "string", "minLength": 1 },
     "skillVersion": { "type": "string", "minLength": 1 },
     "promptVersion": { "type": "string", "minLength": 1 },
@@ -68,7 +68,7 @@
           "reviewerId": { "type": "string", "minLength": 1 },
           "dimensions": {
             "type": "object",
-            "required": ["intent_coverage", "construct_and_question_design", "respondent_and_context_fit", "response_options_and_recall", "flow_and_burden", "privacy_and_risk", "analysis_and_interpretation", "review_record_and_evidence"],
+            "required": ["intent_coverage", "construct_and_question_design", "respondent_and_context_fit", "response_options_and_recall", "flow_and_burden", "privacy_and_risk", "analysis_and_interpretation", "sampling_and_inference", "review_record_and_evidence"],
             "properties": {
               "intent_coverage": { "$ref": "#/$defs/rating" },
               "construct_and_question_design": { "$ref": "#/$defs/rating" },
@@ -77,6 +77,7 @@
               "flow_and_burden": { "$ref": "#/$defs/rating" },
               "privacy_and_risk": { "$ref": "#/$defs/rating" },
               "analysis_and_interpretation": { "$ref": "#/$defs/rating" },
+              "sampling_and_inference": { "$ref": "#/$defs/rating" },
               "review_record_and_evidence": { "$ref": "#/$defs/rating" }
             },
             "additionalProperties": false

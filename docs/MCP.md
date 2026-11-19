@@ -36,11 +36,11 @@ Initialization advertises the MCP `prompts` capability with `listChanged: false`
 
 | Prompt | Required arguments | Purpose |
 |---|---|---|
-| `draft_questionnaire` | `brief` | Draft a reviewable questionnaire using the current authoring skill, design guidance, package library, and risk gate |
+| `draft_questionnaire` | `brief` | Draft a reviewable questionnaire using the current authoring skill, design guidance, package library, risk gate, and an explicit sampling-and-inference plan |
 | `review_questionnaire` | `interviewId` | Produce a read-only structured review of the current questionnaire; optional `focus` narrows the review emphasis |
 | `update_questionnaire` | `interviewId`, `requestedChange` | Prepare a version-safe candidate and preview it without applying or publishing |
 
-Prompt arguments must be non-empty strings when supplied. Input length is capped at 20,000 for briefs and requested changes and 2,000 for other strings. Prompt selection only supplies instructions to the client. It does not execute tools, add credential permissions, approve a change, create an interview, or authorize publishing or fielding. The same bearer checks still apply independently to each tool call. The templates tell agents to treat supplied briefs and requested changes as untrusted data, inspect the current questionnaire before an update, and keep checker results separate from human, respondent, accessibility, privacy, domain, and legal review.
+Prompt arguments must be non-empty strings when supplied. Input length is capped at 20,000 for briefs and requested changes and 2,000 for other strings. The draft template requires the review record to state the target population and respondent unit, frame/source, recruitment and selection, eligibility, coverage and nonresponse limits, mode/language, and whether the purpose is qualitative learning or population inference. It directs agents to leave unknown facts unresolved and to bound representativeness and precision claims by the evidence and sampling design. Prompt selection only supplies instructions to the client. It does not execute tools, add credential permissions, approve a change, create an interview, or authorize publishing or fielding. The same bearer checks still apply independently to each tool call. The templates tell agents to treat supplied briefs and requested changes as untrusted data, inspect the current questionnaire before an update, and keep checker results separate from human, respondent, accessibility, privacy, domain, and legal review.
 
 | Capability | Tools |
 |---|---|

@@ -9,7 +9,7 @@ const benchmark = JSON.parse(await readFile(new URL("../docs/evals/package-draft
 const dimensions = benchmark.dimensions;
 const resultsFor = () => ({
   benchmarkVersion: benchmark.benchmarkVersion,
-  resultsSchemaVersion: "kqa-package-draft-results/2",
+  resultsSchemaVersion: "kqa-package-draft-results/3",
   model: "test/model@1",
   skillVersion: "test-skill@1",
   promptVersion: "test-prompt@1",
@@ -48,11 +48,16 @@ const resultsFor = () => ({
 describe("package draft development benchmark", () => {
   it("loads the versioned corpus against the current catalog and preserves public-development limits", () => {
     expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length + 9);
+    expect(benchmark.benchmarkVersion).toBe("kqa-package-draft/12");
+    expect(benchmark.packageLibraryVersion).toBe("kqa-interview-packages/11");
+    expect(benchmark.dimensions).toContain("sampling_and_inference");
+    expect(Object.keys(benchmark.dimensionRubrics.sampling_and_inference)).toEqual(["0", "1", "2", "3"]);
     const report = scoreResults(benchmark, resultsFor());
     expect(report.developmentOnly).toBe(true);
     expect(report.hardGateReview.flaggedCaseCount).toBe(0);
     expect(report.dimensions.intent_coverage.meanScore).toBe(2);
     expect(report.dimensions.intent_coverage.pairwiseReviewerAgreement).toBe(1);
+    expect(report.dimensions.sampling_and_inference.meanScore).toBe(2);
     expect(report.limitations.join(" ")).toContain("not a hidden holdout");
   });
 
@@ -129,10 +134,10 @@ describe("package draft development benchmark", () => {
 
   it("reports gate flags independently of dimension scores", () => {
     const results = resultsFor();
-    results.ratings[0].dimensions.privacy_and_risk.score = 3;
+    results.ratings[0].dimensions.sampling_and_inference.score = 3;
     results.ratings[0].hardGateFindings = [{ gateId: benchmark.cases[0].hardGates[0].id, evidence: "Eligibility is silently excluded in question 1." }];
     const report = scoreResults(benchmark, results);
-    expect(report.dimensions.privacy_and_risk.meanScore).toBeGreaterThan(2);
+    expect(report.dimensions.sampling_and_inference.meanScore).toBeGreaterThan(2);
     expect(report.hardGateReview.flaggedCaseCount).toBe(1);
     expect(report.hardGateReview.unresolvedFlagCount).toBe(1);
     expect(report.hardGateReview.interpretation).toContain("High dimension scores cannot offset a gate");
@@ -177,7 +182,7 @@ describe("package draft development benchmark", () => {
     const report = scoreResults(benchmark, results, checks);
     expect(report.staticFormatChecks).toEqual(checks);
     expect(report.dimensions).not.toHaveProperty("staticFormat");
-    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/2");
+    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/3");
     expect(report.run.runProvenance).toEqual(results.runProvenance);
     expect(report.cases[0]).toMatchObject({ htmlSha256: checks[0].htmlSha256, reviewSha256: checks[0].reviewSha256 });
     expect(report.cases[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);

@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": "kqa-package-draft/11",
+  "benchmarkVersion": "kqa-package-draft/12",
   "track": "package-draft-review",
   "status": "public-development-only",
   "packageLibraryVersion": "kqa-interview-packages/11",
@@ -12,6 +12,7 @@
     "flow_and_burden",
     "privacy_and_risk",
     "analysis_and_interpretation",
+    "sampling_and_inference",
     "review_record_and_evidence"
   ],
   "ratingScale": {
@@ -20,6 +21,14 @@
     "2": "Mostly meets the criterion; material limitations are identified.",
     "3": "Clear, complete for this brief, and appropriately bounded.",
     "ratingCaveat": "Ratings are expert judgments about a draft, not validation or respondent evidence. Reviewers must cite the artifact and explain the rating."
+  },
+  "dimensionRubrics": {
+    "sampling_and_inference": {
+      "0": "No sample or inference plan is recorded, or the draft's claims directly conflict with the stated design.",
+      "1": "Material omissions or mismatches remain in population/unit, frame or recruitment, selection, eligibility, coverage/nonresponse, mode/language, or intended inference; host facts may be invented or claims overstated.",
+      "2": "The plan mostly identifies the population, frame/selection, important coverage limits, and intended use; material unknowns and boundaries are surfaced, with some gaps remaining.",
+      "3": "A fit-for-purpose plan documents population/unit, frame and recruitment/selection, eligibility, likely coverage/nonresponse gaps, mode/language, and the intended inference; all claims match the evidence and design, with no invented host facts."
+    }
   },
   "cases": [
     {
