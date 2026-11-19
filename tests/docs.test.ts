@@ -33,12 +33,23 @@ describe("agent documentation bundle", () => {
     expect(packages).toContain("not an emergency or statutory reporting channel");
   });
 
+  it("defines distinct, risk-based release evidence and launch blockers", async () => {
+    const packages = await readDoc("INTERVIEW_PACKAGES.md");
+    expect(packages).toContain("## Risk-based release gate");
+    expect(packages).toContain("Consequential individual use");
+    expect(packages).toContain("Do not combine areas into an average score");
+    expect(packages).toContain("Unresolved issues in a required review block fielding");
+    expect(packages).toContain("expert or method review does not replace pretesting");
+  });
+
   it("publishes the portable questionnaire author skill and includes it in the bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "questionnaire-author-skill" && doc.file === "kqa-questionnaire-author/SKILL.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
     expect(bundle).toContain("name: kqa-questionnaire-author");
     expect(bundle).toContain("## Workflow");
-    expect(bundle).toContain("create_interview` operation immediately creates an open interview");
+    expect(bundle).toContain("`create_interview` tool immediately creates an open interview");
+    expect(bundle).not.toContain("legacy `create_interview`");
+    expect(bundle).toContain("risk-based release gate");
     expect(bundle).toContain("KQA's pre-submit **Check your answers** review");
     expect(bundle).toContain("does not simulate respondent input");
   });

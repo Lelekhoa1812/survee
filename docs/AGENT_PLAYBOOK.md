@@ -28,6 +28,8 @@ Use `get_design_guidance` with `surface: "questionnaire"` when available, or rea
 
 For a domain-specific brief, use `get_interview_packages` when available or adapt the relevant starting point in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md). These packages are prompts and review aids, not validated instruments or substitutes for domain expertise.
 
+Before drafting, classify the intended use with the accountable host and follow the [risk-based release gate](INTERVIEW_PACKAGES.md#risk-based-release-gate). Agents can flag risks but cannot certify the classification. Do not use KQA as the decision instrument for consequential individual decisions, diagnosis, compliance certification, or incident/emergency reporting. A checker pass alone is not approval to field.
+
 When the host supplies brand CSS custom properties or token JSON, use `extract_design_profile` to inspect the values and obtain a scoped proposal. Treat mappings and contrast checks as candidates, review ambiguous/unmapped values and actual rendered states, and never treat the generated overlay as already applied. KQA parses only the supplied token text; it does not fetch linked stylesheets or modify code. Apply reviewed questionnaire changes through the complete-file preview/apply workflow.
 
 ## Step 2. Design the manifest first
