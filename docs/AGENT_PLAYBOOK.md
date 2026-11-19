@@ -74,7 +74,7 @@ Before fielding, include a host-approved respondent notice covering purpose, acc
 | 1 to 5 or 1 to 10 rating | `scale` with `min` and `max`. Add end labels in `help` |
 | NPS (0 to 10) | `scale`, `min: 0`, `max: 10` |
 | Matrix: rate items A, B, C | One question per row, same options. Ids like `fit-speed`, `fit-cost`, `fit-quality` |
-| Ranking | KQA has no native ranking type. Separate ratings permit ties and are not a ranking. If a strict order is essential, a custom text answer can encode it, but the author must build an accessible interaction and validate its ordering; the server does not enforce a permutation. Otherwise ask a different question and explain the tradeoff. |
+| Ranking options | Use native `rank` to require a complete order of all 2–8 options; the saved answer is a full permutation. Do not use it to rank people. Separate ratings permit ties and are not rankings; use `multi` when choices are unordered. |
 | Conditional follow-up | Prefer manifest `when` rules for supported choice comparisons or `answered`/`notAnswered` checks. A required routed question is required only while eligible. Eligibility is inferred from current answers and rules, not a record of what was actually displayed. Inactive answers are retained, excluded from progress and analysis, and labelled inactive in exports. Disclose this behavior, test the route changes and restored answers, and keep reveals simple. |
 | A "comments" box at the end | `longtext` with an id like `anything-else` |
 | Respondent details (name, company) | `text` questions. The app already knows the respondent's name, so only ask for what you actually need |
@@ -135,7 +135,7 @@ Free text. `text` is one line (a name, a company). `longtext` is a paragraph. Wh
 </article>
 ```
 
-Dropdown, number, scale, and date use the same card. Copy those patterns from `template/starter.kqa.html`.
+Dropdown, number, scale, date, and rank use the same card. Copy those patterns from `template/starter.kqa.html`. For `rank`, provide an `<ol data-kqa="ID">` containing one `<li data-value="OPTION">OPTION LABEL</li>` for each manifest option. The runtime supplies accessible Move up/Move down buttons; retain a semantic ordered list, avoid drag-only interaction, and explain that respondents must order every option.
 
 4. Update the contents rail (`.kq-rail`) so each link points at a section `id`.
 5. Do not add anything the sandbox blocks (FORMAT.md section 2).

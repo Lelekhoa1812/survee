@@ -6,7 +6,7 @@ KQA gives every respondent a private link, renders your HTML inside a sandboxed 
 
 Autosave requires a connection. While offline, new edits remain only in the open page and retry when the connection returns; they are not saved on the device. The status says when changes are waiting to sync. Keep the page open until it reports **Saved**; the best-effort page-exit request is not a confirmed save.
 
-The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, and dates are supported as well. Section 3.4 is the full list. KQA does not score answers. A required checkbox is answered when at least one box is ticked. Text that is only spaces is empty.
+The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, dates, and full-order ranking (`rank`) are supported as well. Section 3.4 is the full list. KQA does not score answers or rank people. A required checkbox is answered when at least one box is ticked; a required ranking is answered when every option is present in the saved order. Text that is only spaces is empty.
 
 ## 1. How it works
 
@@ -120,13 +120,14 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | Field | Required | Applies to | Rule |
 |---|---|---|---|
 | `id` | yes | all | Same pattern as section ids. **Unique across the manifest. Never rename once people have answered** |
-| `type` | yes | all | `single`, `multi`, `select`, `text`, `longtext`, `number`, `scale`, `date` |
+| `type` | yes | all | `single`, `multi`, `select`, `text`, `longtext`, `number`, `scale`, `date`, `rank` |
 | `label` | yes | all | The question text. Up to 300 characters. Used in the host's answers view and every export |
 | `help` | no | all | Up to 1000 characters |
 | `section` | no | all | Must be the `id` of a declared section |
 | `required` | no | all | `true` blocks Submit until answered. Default `false` |
-| `options` | yes for `single`, `multi`, `select` | those three | 2 to 50 items of `{ "value", "label" }`. Not allowed on other types |
+| `options` | yes for `single`, `multi`, `select`, `rank` | those four | 2 to 50 items of `{ "value", "label" }`; `rank` requires 2 to 8. Not allowed on other types |
 | `maxSelections` | no | `multi` | Maximum distinct checked options, from 1 through the number of options. Omit for no maximum. It does not set a minimum or change requiredness |
+| Full-order contract | — | `rank` | A non-empty answer contains every declared option exactly once; partial rankings are invalid. The stored value is an array of option values in respondent-chosen order. An optional rank may remain unanswered. |
 | `note` | no | all | `true`, or `{ "label", "placeholder", "maxLength" }`. Enables an optional free-text note stored beside the answer. Up to 5000 characters |
 | `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and uses safely representable whole-number bounds, with `min` below `max` and a span of at most 20 steps |
 | `step` | no | `number`, `scale` | Positive number |
@@ -166,9 +167,10 @@ For a capped checkbox group, set `maxSelections` and state the same limit in `he
 | A quantity | `number` | `<input type="number">` |
 | A rating, such as 1 to 5 | `scale` | numbered radios, or `<input type="range">` |
 | A calendar date | `date` | `<input type="date">` |
-| Anything else (ranking, drag and drop, matrix, sliders with custom UI) | any type + `custom: true` | your own markup that calls `KQA.set` |
+| Order every option from highest to lowest priority | `rank` | an ordered list (`<ol>`) with one item per option |
+| Anything else (custom drag and drop, matrix, sliders with custom UI) | any type + `custom: true` | your own markup that calls `KQA.set` |
 
-A matrix such as "rate each of these five items" is **five questions**, one per row, usually `scale` or `single` with the same options. KQA has no native ranking type, and `multi` does not preserve rank order. If a strict order is essential, a `custom` question may store a documented representation such as `"a>c>b"`; the author must provide an accessible interaction and validate the ordering because KQA does not enforce a permutation. Otherwise, ask a different question and explain the tradeoff.
+A matrix such as "rate each of these five items" is **five questions**, one per row, usually `scale` or `single` with the same options. Use `rank` when respondents must put every option in order; it is a complete permutation, not a partial top-N list. Use `multi` when choices are unordered. Ranking options is not a way to rank people, candidates, employees, patients, or other individuals.
 
 ## 4. Binding controls
 
@@ -184,16 +186,18 @@ Bind a control to a question by giving it `data-kqa="<question id>"`. The runtim
 | `number` | `<input type="number" data-kqa="ID" min max step>` | finite number within `min`/`max` |
 | `scale` | `<input type="radio" data-kqa="ID" name="ID" value="1">` … one radio per integer, or `<input type="range" data-kqa="ID" min max step>` | integer within the scale |
 | `date` | `<input type="date" data-kqa="ID">` | real calendar date as `YYYY-MM-DD`, years 0001–9999 |
+| `rank` | `<ol data-kqa="ID"><li data-value="OPTION">OPTION LABEL</li>…</ol>` | array containing every option value exactly once, in the respondent-chosen order |
 
 Rules the checker enforces:
 
 * **Every manifest question needs a control**, unless it is `custom: true` (KQA300).
 * **Every `data-kqa` must name a manifest question** (KQA301). A typo here means the answer is never saved.
-* **The control type must match the question type** (KQA302). A `single` question cannot be a text box.
+* **The control type must match the question type** (KQA302). A `single` question cannot be a text box. For `rank`, bind one ordered list whose list items map one-to-one to the manifest options.
 * **Every option value in the page must exist in the manifest, and every manifest option must have a control** (KQA303, KQA304). Compare them character for character, including case.
+* For `rank`, the bound `<ol>` contains one `<li data-value="OPTION">` for each manifest option. Values are unique, labels correspond to those values, and the initial list order is the starting order. The runtime decorates the list with accessible Move up/Move down buttons; do not add drag-only behavior or authored rank buttons. The answer is saved as the full ordered array.
 * Radios of one question share one `name`, and radios of different questions never share a name (KQA307, KQA319).
 * Radio and checkbox controls that carry `data-kqa` need a `value` attribute (KQA312). Unbound inputs (a filter toggle, a presentation-only slider) are ignored by the checker and may be used freely, but they save nothing.
-* `data-kqa` goes on `input`, `select` or `textarea`, not on a `div` or `label` (KQA309).
+* `data-kqa` goes on `input`, `select` or `textarea`, not on a `div` or `label` (KQA309), except that a native `rank` question binds its `<ol>` as specified above.
 * Bound controls must not be `disabled` or `readonly` in the markup (KQA310). KQA locks them itself after Submit.
 * Do not pre-select anything in the markup (`checked`, `selected`, `value="…"`). Defaults would never be saved (KQA320).
 * Give every control an accessible name: a wrapping `<label>`, `<label for>`, `aria-label` or `aria-labelledby` (KQA308). Wrap radio and checkbox groups in `<fieldset>` with a `<legend>` (can be visually hidden), or give the container `role="radiogroup"` (or `group`) with `aria-labelledby` (KQA318).
