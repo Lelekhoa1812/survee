@@ -2,7 +2,37 @@ import { LIMITS, isCalendarDate, scaleBounds, type AnswerMap, type AnswerValue, 
 
 export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string };
 
-export interface RepeatAnswerIssue { questionId: string; rowId?: string; fieldId?: string; reason: string }
+export type RepeatIssueCode = "stale_revision" | "invalid_question" | "invalid_row_id" | "history_limit" | "max_rows" | "invalid_field" | "inactive_question" | "min_rows" | "required_field" | "invalid_option" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "expected_scale" | "outside_scale" | "invalid_date" | "nonempty_scalar";
+export interface RepeatAnswerIssue { questionId: string; rowId?: string; fieldId?: string; reason: string; code: RepeatIssueCode; params?: { minimum?: number; maximum?: number } }
+
+type RepeatFieldResult = { ok: true; value: string | number } | { ok: false; reason: string; code: RepeatIssueCode; params?: { minimum?: number; maximum?: number } };
+
+/** Keep scalar validation authoritative while exposing stable, value-free metadata for repeat fields. */
+export function validateRepeatFieldValue(field: RepeatField, raw: unknown): RepeatFieldResult {
+  const result = validateAnswer({ ...field, required: false } as Question, raw);
+  if (result.ok) {
+    if (result.value === null || Array.isArray(result.value)) return { ok: false, reason: "a non-empty scalar value is required", code: "nonempty_scalar" };
+    return { ok: true, value: result.value };
+  }
+  const reason = result.reason;
+  switch (field.type) {
+    case "single": case "select": return { ok: false, reason, code: "invalid_option" };
+    case "text": case "longtext":
+      return typeof raw !== "string" ? { ok: false, reason, code: "expected_text" } : { ok: false, reason, code: "max_length", params: { maximum: field.maxLength ?? (field.type === "text" ? LIMITS.textMax : LIMITS.longtextMax) } };
+    case "number": {
+      const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
+      if (typeof n !== "number" || !Number.isFinite(n)) return { ok: false, reason, code: "expected_number" };
+      if (field.min !== undefined && n < field.min) return { ok: false, reason, code: "below_minimum", params: { minimum: field.min } };
+      return { ok: false, reason, code: "above_maximum", params: { maximum: field.max } };
+    }
+    case "scale": {
+      const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
+      const { min, max } = scaleBounds(field as Question);
+      return { ok: false, reason, code: typeof n !== "number" || !Number.isInteger(n) ? "expected_scale" : "outside_scale", params: { minimum: min, maximum: max } };
+    }
+    case "date": return { ok: false, reason, code: "invalid_date" };
+  }
+}
 
 export function exclusiveConflictCount(q: Question, value: unknown): number {
   if (q.type !== "multi" || !Array.isArray(value)) return 0;
@@ -237,31 +267,27 @@ export function validateRecordGroups(manifest: Manifest, recordGroups: RepeatRec
     if (question.type !== "repeat" || eligible[question.id] === false) continue;
     const rows = (recordGroups[question.id] ?? []).filter((row) => !row.deletedAt);
     const minRows = Math.max(question.minRows ?? 0, question.required ? 1 : 0);
-    if (rows.length < minRows) issues.push({ questionId: question.id, reason: `add at least ${minRows} record${minRows === 1 ? "" : "s"}` });
+    if (rows.length < minRows) issues.push({ questionId: question.id, reason: `add at least ${minRows} record${minRows === 1 ? "" : "s"}`, code: "min_rows", params: { minimum: minRows } });
     const fields = new Map((question.fields ?? []).map((field) => [field.id, field]));
     for (const row of rows) {
       for (const field of question.fields ?? []) {
         const value = row.values?.[field.id];
         const hasValue = value !== undefined && !(typeof value === "string" && value.trim() === "");
         if (field.required && !hasValue) {
-          issues.push({ questionId: question.id, rowId: row.id, fieldId: field.id, reason: "this field is required in each retained record" });
+          issues.push({ questionId: question.id, rowId: row.id, fieldId: field.id, reason: "this field is required in each retained record", code: "required_field" });
           continue;
         }
         if (hasValue) {
           const validation = validateRepeatFieldValue(field, value);
-          if (!validation.ok) issues.push({ questionId: question.id, rowId: row.id, fieldId: field.id, reason: validation.reason });
+          if (!validation.ok) issues.push({ questionId: question.id, rowId: row.id, fieldId: field.id, reason: validation.reason, code: validation.code, ...(validation.params ? { params: validation.params } : {}) });
         }
       }
       for (const fieldId of Object.keys(row.values ?? {})) {
-        if (!fields.has(fieldId)) issues.push({ questionId: question.id, rowId: row.id, fieldId, reason: "this field is not in the current questionnaire" });
+        if (!fields.has(fieldId)) issues.push({ questionId: question.id, rowId: row.id, fieldId, reason: "this field is not in the current questionnaire", code: "invalid_field" });
       }
     }
   }
   return issues;
-}
-
-function validateRepeatFieldValue(field: RepeatField, value: unknown): ValidateResult {
-  return validateAnswer({ ...field, required: false } as Question, value);
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

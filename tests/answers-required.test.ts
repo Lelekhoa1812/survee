@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayValue, eligibilityQuestionIds, evaluateEligibility, isAnswered, progress, validateAnswer } from "../src/lib/format/answers";
+import { displayValue, eligibilityQuestionIds, evaluateEligibility, isAnswered, progress, validateAnswer, validateRepeatFieldValue } from "../src/lib/format/answers";
 import type { Manifest, Question, RepeatRecordMap } from "../src/lib/format/schema";
 
 const checkbox: Question = {
@@ -225,16 +225,36 @@ describe("answered, without scores", () => {
       { id: "follow", type: "text", label: "Follow up", when: { all: [{ question: "jobs", operator: "answered" }] } },
     ] };
     const empty = progress(manifest, {});
-    expect(empty).toMatchObject({ total: 1, answered: 0, missingRequired: ["jobs"], repeatErrors: [{ questionId: "jobs", reason: "add at least 1 record" }] });
+    expect(empty).toMatchObject({ total: 1, answered: 0, missingRequired: ["jobs"], repeatErrors: [{ questionId: "jobs", reason: "add at least 1 record", code: "min_rows", params: { minimum: 1 } }] });
     const groups: RepeatRecordMap = { jobs: [
       { id: "job-1", values: {}, revision: 0, fieldRevisions: {} },
       { id: "job-2", values: { title: "Research", start: "2024-02-30" }, revision: 1, fieldRevisions: { title: 1, start: 1 } },
     ] };
     const current = progress(manifest, {}, groups);
     expect(current).toMatchObject({ total: 2, answered: 1, requiredAnswered: 1, repeatErrors: [
-      { questionId: "jobs", rowId: "job-1", fieldId: "title" },
-      { questionId: "jobs", rowId: "job-2", fieldId: "start" },
+      { questionId: "jobs", rowId: "job-1", fieldId: "title", code: "required_field" },
+      { questionId: "jobs", rowId: "job-2", fieldId: "start", code: "invalid_date" },
     ] });
+  });
+
+  it("supplies stable repeat-field issues without copying submitted values into parameters", () => {
+    const cases = [
+      [{ id: "x", label: "X", type: "single", options: [{ value: "ok", label: "OK" }] }, "secret", "invalid_option", undefined],
+      [{ id: "x", label: "X", type: "text", maxLength: 2 }, "secret", "max_length", { maximum: 2 }],
+      [{ id: "x", label: "X", type: "text" }, 4, "expected_text", undefined],
+      [{ id: "x", label: "X", type: "number", min: 2, max: 4 }, 1, "below_minimum", { minimum: 2 }],
+      [{ id: "x", label: "X", type: "number", min: 2, max: 4 }, 5, "above_maximum", { maximum: 4 }],
+      [{ id: "x", label: "X", type: "number" }, "secret", "expected_number", undefined],
+      [{ id: "x", label: "X", type: "scale", min: 1, max: 5 }, 1.5, "expected_scale", { minimum: 1, maximum: 5 }],
+      [{ id: "x", label: "X", type: "scale", min: 1, max: 5 }, 6, "outside_scale", { minimum: 1, maximum: 5 }],
+      [{ id: "x", label: "X", type: "date" }, "secret", "invalid_date", undefined],
+      [{ id: "x", label: "X", type: "text" }, "", "nonempty_scalar", undefined],
+    ] as const;
+    for (const [field, value, code, params] of cases) {
+      const result = validateRepeatFieldValue(field as Parameters<typeof validateRepeatFieldValue>[0], value);
+      expect(result).toMatchObject({ ok: false, code });
+      if (!result.ok) expect(result.params).toEqual(params);
+    }
   });
 
   it("does not accept repeat data in scalar AnswerValue validation", () => {

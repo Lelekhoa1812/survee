@@ -1130,7 +1130,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var draftKey = question.id + "/" + rowData.id + "/" + field.id;
       var draft = recordDrafts[draftKey];
       writeRecordField(field, controls, draft ? draft.value : rowData.values && rowData.values[field.id]);
-      if (draft) showRecordFieldError(row, field.id, draft.message || localized("repeatFieldInvalid"));
+      if (draft) showRecordFieldError(row, field.id, localized(draft.messageKey || "repeatFieldInvalid", draft.messageValues));
     });
     var remove = document.createElement("button");
     remove.type = "button";
@@ -1168,7 +1168,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       status.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
       list.appendChild(status);
     }
-    if (recordAnnouncements[question.id]) status.textContent = recordAnnouncements[question.id];
+    if (recordAnnouncements[question.id]) { markLocalized(status); status.textContent = localized(recordAnnouncements[question.id].key, recordAnnouncements[question.id].values); }
     var add = template.parentNode.querySelector('[data-kqa-record-add="' + question.id + '"]');
     if (!add) {
       add = document.createElement("button");
@@ -1189,9 +1189,16 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var rows = recordRows(question.id);
       var add = document.querySelector('[data-kqa-record-add="' + question.id + '"]');
       if (add) { markLocalized(add); add.textContent = localized("repeatAdd", { item: itemLabel(question) }); add.setAttribute("aria-label", add.textContent); }
+      var announcement = recordAnnouncements[question.id];
+      var status = document.querySelector('[data-kqa-record-status="' + question.id + '"]');
+      if (status && announcement) { markLocalized(status); status.textContent = localized(announcement.key, announcement.values); }
       rows.forEach(function (row, index) {
         var node = document.querySelector('fieldset[data-kqa-record-question="' + question.id + '"][data-kqa-record-row="' + row.id + '"]');
         if (!node) return;
+        (question.fields || []).forEach(function (field) {
+          var draft = recordDrafts[question.id + "/" + row.id + "/" + field.id];
+          if (draft) showRecordFieldError(node, field.id, localized(draft.messageKey || "repeatFieldInvalid", draft.messageValues));
+        });
         var label = localized("repeatRowLabel", { item: itemLabel(question), index: index + 1 });
         var legend = node.querySelector("legend");
         if (legend) { markLocalized(legend); legend.textContent = label; }
@@ -1237,8 +1244,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         if (row.revision > operation.expectedRowRevision) {
           var list = document.querySelector('[data-kqa-record-list="' + operation.questionId + '"]');
           var status = list && list.querySelector('[data-kqa-record-status="' + operation.questionId + '"]');
-          recordAnnouncements[operation.questionId] = localized("repeatConflict", { item: itemLabel(q(operation.questionId)) });
-          if (status) status.textContent = recordAnnouncements[operation.questionId];
+          recordAnnouncements[operation.questionId] = { key: "repeatConflict", values: { item: itemLabel(q(operation.questionId)) } };
+          if (status) { markLocalized(status); status.textContent = localized(recordAnnouncements[operation.questionId].key, recordAnnouncements[operation.questionId].values); }
           return;
         }
         rows.splice(rows.indexOf(row), 1);
@@ -1248,11 +1255,11 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         var serverFieldRevision = Number(row.fieldRevisions[operation.fieldId]) || 0;
         if (serverFieldRevision > operation.expectedFieldRevision) {
           var draftKey = operation.questionId + "/" + operation.rowId + "/" + operation.fieldId;
-          recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, message: localized("repeatConflict", { item: itemLabel(q(operation.questionId)) }) };
+          recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, messageKey: "repeatConflict", messageValues: { item: itemLabel(q(operation.questionId)) } };
           var list = document.querySelector('[data-kqa-record-list="' + operation.questionId + '"]');
           var status = list && list.querySelector('[data-kqa-record-status="' + operation.questionId + '"]');
-          recordAnnouncements[operation.questionId] = localized("repeatConflict", { item: itemLabel(q(operation.questionId)) });
-          if (status) status.textContent = recordAnnouncements[operation.questionId];
+          recordAnnouncements[operation.questionId] = { key: "repeatConflict", values: { item: itemLabel(q(operation.questionId)) } };
+          if (status) { markLocalized(status); status.textContent = localized(recordAnnouncements[operation.questionId].key, recordAnnouncements[operation.questionId].values); }
           return;
         }
         if (operation.op === "clear") delete row.values[operation.fieldId]; else row.values[operation.fieldId] = operation.value;
@@ -1282,16 +1289,13 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function rejectRecordOperations(message) {
     var rejected = Array.isArray(message.rejectedOperationIds) ? message.rejectedOperationIds : [];
-    var errors = Array.isArray(message.recordErrors) ? message.recordErrors : [];
     pendingRecordOperations.forEach(function (operation) {
       if (!operation.operationId || rejected.indexOf(operation.operationId) < 0) return;
-      var issue = errors.find(function (item) { return item.questionId === operation.questionId && (!item.rowId || item.rowId === operation.rowId) && (!item.fieldId || item.fieldId === operation.fieldId); });
       if (operation.op === "set" || operation.op === "clear") {
         var draftKey = operation.questionId + "/" + operation.rowId + "/" + operation.fieldId;
-        recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, message: localized("repeatFieldInvalid") };
+        recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, messageKey: "repeatFieldInvalid" };
       }
-      recordAnnouncements[operation.questionId] = localized("repeatConflict", { item: itemLabel(q(operation.questionId)) });
-      if (issue && issue.reason && operation.op === "set") recordDrafts[operation.questionId + "/" + operation.rowId + "/" + operation.fieldId].message = localized("repeatFieldInvalid");
+      recordAnnouncements[operation.questionId] = { key: "repeatConflict", values: { item: itemLabel(q(operation.questionId)) } };
     });
     pendingRecordOperations = pendingRecordOperations.filter(function (operation) { return !operation.operationId || rejected.indexOf(operation.operationId) < 0; });
     applyRecordGroups(message.recordGroups || {});
@@ -1315,7 +1319,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var first = list && list.querySelector('[data-kqa-repeat-row="' + row.id + '"]');
     if (first) first.focus();
     var status = list && list.querySelector('[data-kqa-record-status="' + question.id + '"]');
-    if (status) { recordAnnouncements[question.id] = localized("repeatRowAdded", { item: itemLabel(question), index: rows.length }); status.textContent = recordAnnouncements[question.id]; }
+    if (status) { recordAnnouncements[question.id] = { key: "repeatRowAdded", values: { item: itemLabel(question), index: rows.length } }; markLocalized(status); status.textContent = localized(recordAnnouncements[question.id].key, recordAnnouncements[question.id].values); }
   }
   function removeRecordRow(question, rowId) {
     var rows = recordRows(question.id);
@@ -1332,7 +1336,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var target = remaining && (remaining[Math.min(index, remaining.length - 1)] || document.querySelector('[data-kqa-record-add="' + question.id + '"]'));
     if (target && target.focus) target.focus();
     var status = list && list.querySelector('[data-kqa-record-status="' + question.id + '"]');
-    if (status) { recordAnnouncements[question.id] = localized("repeatRowRemoved", { item: itemLabel(question) }); status.textContent = recordAnnouncements[question.id]; }
+    if (status) { recordAnnouncements[question.id] = { key: "repeatRowRemoved", values: { item: itemLabel(question) } }; markLocalized(status); status.textContent = localized(recordAnnouncements[question.id].key, recordAnnouncements[question.id].values); }
   }
   function validateRecordValue(field, value) {
     if (value === null || value === undefined || value === "") return true;
@@ -1375,8 +1379,8 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       showRecordFieldError(rowNode, fieldId, localized("repeatFieldInvalid"));
       var invalidList = document.querySelector('[data-kqa-record-list="' + questionId + '"]');
       var invalidStatus = invalidList && invalidList.querySelector('[data-kqa-record-status="' + questionId + '"]');
-      recordAnnouncements[questionId] = localized("repeatFieldInvalid");
-      if (invalidStatus) invalidStatus.textContent = recordAnnouncements[questionId];
+      recordAnnouncements[questionId] = { key: "repeatFieldInvalid" };
+      if (invalidStatus) { markLocalized(invalidStatus); invalidStatus.textContent = localized("repeatFieldInvalid"); }
       return;
     }
     delete recordDrafts[draftKey];

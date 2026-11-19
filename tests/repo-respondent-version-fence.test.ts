@@ -333,10 +333,17 @@ describe("respondent version fence", () => {
     mocks.versionManifest.questions = [{ id: "items", type: "repeat", label: "Items", maxRows: 1, fields: [{ id: "label", type: "text", label: "Label" }] }];
     await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-1" }]));
     await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "items", rowId: "row-1", fieldId: "label", expectedFieldRevision: 0, value: "first" }]));
-    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "items", rowId: "row-1", fieldId: "label", expectedFieldRevision: 0, value: "stale" }]))).toMatchObject({ ok: false, status: 409, code: "record_field_conflict" });
-    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-2" }]))).toMatchObject({ ok: false, status: 400, recordErrors: [{ questionId: "items", rowId: "row-2" }] });
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "items", rowId: "row-1", fieldId: "label", expectedFieldRevision: 0, value: "stale" }]))).toMatchObject({ ok: false, status: 409, code: "record_field_conflict", recordErrors: [{ code: "stale_revision" }] });
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-2" }]))).toMatchObject({ ok: false, status: 400, recordErrors: [{ questionId: "items", rowId: "row-2", code: "max_rows", params: { maximum: 1 } }] });
     expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "remove", questionId: "items", rowId: "row-1", expectedRowRevision: 0 }]))).toMatchObject({ ok: false, status: 409, code: "record_row_conflict" });
     expect(mocks.participant.recordGroups?.items).toHaveLength(1);
+  });
+
+  it("returns stable repeat-field save issues without exposing the input in parameters", async () => {
+    mocks.versionManifest.questions = [{ id: "items", type: "repeat", label: "Items", maxRows: 2, fields: [{ id: "count", type: "number", label: "Count", min: 3 }] }];
+    await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-1" }]));
+    const result = await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "items", rowId: "row-1", fieldId: "count", expectedFieldRevision: 0, value: 1 }]));
+    expect(result).toMatchObject({ ok: false, status: 400, recordErrors: [{ questionId: "items", rowId: "row-1", fieldId: "count", reason: "1 is below the minimum 3", code: "below_minimum", params: { minimum: 3 } }] });
   });
 
   it("makes committed record operations idempotent while retaining non-reusable row tombstones", async () => {
@@ -361,7 +368,7 @@ describe("respondent version fence", () => {
       fields: [{ id: "title", type: "text", label: "Title", required: true }],
     }];
     await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "jobs", rowId: "job-1" }]));
-    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: false, status: 422, repeatErrors: [{ questionId: "jobs", rowId: "job-1", fieldId: "title" }] });
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: false, status: 422, repeatErrors: [{ questionId: "jobs", rowId: "job-1", fieldId: "title", code: "required_field", reason: "this field is required in each retained record" }] });
     await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "jobs", rowId: "job-1", fieldId: "title", expectedFieldRevision: 0, value: "Research" }]));
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
   });

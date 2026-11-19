@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditRespondentLocales, RESPONDENT_LOCALES, RESPONDENT_LOCALE_META, isRespondentLocale, resolveRespondentLocale, respondentBridgeMessages, respondentMessage, respondentMessageParts, respondentTime } from "../src/lib/respondent-locale";
+import { auditRespondentLocales, RESPONDENT_LOCALES, RESPONDENT_LOCALE_META, isRespondentLocale, resolveRespondentLocale, respondentBridgeMessages, respondentMessage, respondentMessageParts, respondentRepeatIssue, respondentTime } from "../src/lib/respondent-locale";
 
 describe("respondent shell locales", () => {
   it("uses a saved supported choice before browser preferences", () => {
@@ -50,6 +50,23 @@ describe("respondent shell locales", () => {
       { kind: "isolate", text: "English: What changed?" },
       { kind: "text", text: `» من ${new Intl.NumberFormat("ar").format(22)} حرفًا، والحد الأقصى هو ${new Intl.NumberFormat("ar").format(20)}. لم تُحفظ. اختصرها قبل المراجعة أو الإرسال.` },
     ]);
+  });
+
+  it("translates repeat issue codes and safely handles unknown and legacy errors", () => {
+    for (const locale of RESPONDENT_LOCALES) {
+      const generic = respondentRepeatIssue(locale);
+      expect(respondentRepeatIssue(locale, { code: "__proto__" })).toBe(generic);
+      expect(respondentRepeatIssue(locale, { code: "future_code" })).toBe(generic);
+      expect(respondentRepeatIssue(locale, { code: "required_field" })).not.toBe(generic);
+      expect(respondentRepeatIssue(locale, { code: "max_rows" })).toBe(generic);
+      for (const code of ["min_rows", "max_rows", "max_length", "below_minimum", "above_maximum", "expected_scale", "outside_scale"]) {
+        expect(respondentRepeatIssue(locale, { code, params: { minimum: 2, maximum: 9 } })).not.toBe(generic);
+        expect(respondentRepeatIssue(locale, { code, params: { minimum: NaN, maximum: Infinity } })).toBe(generic);
+      }
+      expect(respondentRepeatIssue(locale, { code: "outside_scale", params: { minimum: 2, maximum: 9 } })).toContain(new Intl.NumberFormat(locale).format(9));
+    }
+    expect(respondentRepeatIssue("es", { code: "required_field" })).toBe("Completa este campo obligatorio.");
+    expect(respondentRepeatIssue("ar", { code: "required_field" })).toBe("أكمل هذا الحقل المطلوب.");
   });
 
   it("uses Arabic plural categories for selection limits", () => {

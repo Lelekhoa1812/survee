@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
-import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer } from "../format/answers";
+import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer, validateRepeatFieldValue, type RepeatAnswerIssue } from "../format/answers";
 import { orderOptions } from "../format/option-order";
-import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question, type RepeatField, type RepeatRecordMap, type RepeatRecordOperation } from "../format/schema";
+import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question, type RepeatRecordMap, type RepeatRecordOperation } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
@@ -532,12 +532,7 @@ export interface AnswerPatch {
   [questionId: string]: { value?: unknown; note?: unknown };
 }
 
-export interface RepeatRecordIssue {
-  questionId: string;
-  rowId?: string;
-  fieldId?: string;
-  reason: string;
-}
+export type RepeatRecordIssue = RepeatAnswerIssue;
 
 type FenceFailure = { ok: false; status: 403 | 404 | 409; error: string; code?: string };
 
@@ -630,12 +625,12 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     const conflict = (questionId: string, rowId: string, fieldId?: string): SaveResult => ({
       ok: false, status: 409, code: fieldId ? "record_field_conflict" : "record_row_conflict",
       error: fieldId ? "This record field changed in another window. Reload the record before editing it again." : "This record changed in another window. Reload the record before editing it again.",
-      recordErrors: [{ questionId, rowId, fieldId, reason: "the expected revision is stale" }],
+      recordErrors: [{ questionId, rowId, fieldId, reason: "the expected revision is stale", code: "stale_revision" }],
     });
     for (const operation of operations) {
       const q = byId.get(operation.questionId);
-      if (!q || q.type !== "repeat") { recordErrors.push({ questionId: operation.questionId, reason: "not a repeat question in this interview" }); continue; }
-      if (!ID_RE.test(operation.rowId)) { recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "row id is invalid" }); continue; }
+      if (!q || q.type !== "repeat") { recordErrors.push({ questionId: operation.questionId, reason: "not a repeat question in this interview", code: "invalid_question" }); continue; }
+      if (!ID_RE.test(operation.rowId)) { recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "row id is invalid", code: "invalid_row_id" }); continue; }
       const rows = [...(groups[q.id] ?? [])];
       let rowIndex = rows.findIndex((row) => row.id === operation.rowId && !row.deletedAt);
       if (operation.op === "add") {
@@ -648,11 +643,11 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
         if (existing?.deletedAt) return conflict(q.id, operation.rowId);
         const participantRowHistory = Object.values(groups).reduce((count, groupRows) => count + groupRows.length, 0);
         if (participantRowHistory >= MAX_REPEAT_ROW_HISTORY_PER_PARTICIPANT) {
-          recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "the record history limit has been reached" });
+          recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "the record history limit has been reached", code: "history_limit" });
           continue;
         }
         if (rows.filter((row) => !row.deletedAt).length >= (q.maxRows ?? LIMITS.maxRepeatRows)) {
-          recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: `no more than ${q.maxRows ?? LIMITS.maxRepeatRows} records may be added` });
+          recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: `no more than ${q.maxRows ?? LIMITS.maxRepeatRows} records may be added`, code: "max_rows", params: { maximum: q.maxRows ?? LIMITS.maxRepeatRows } });
           continue;
         }
         rows.push({ id: operation.rowId, values: {}, revision: 0, fieldRevisions: {} });
@@ -675,7 +670,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
           rows[rowIndex] = row;
         } else {
           const field = (q.fields ?? []).find((item) => item.id === operation.fieldId);
-          if (!field) { recordErrors.push({ questionId: q.id, rowId: row.id, fieldId: operation.fieldId, reason: "not a field in this record" }); continue; }
+          if (!field) { recordErrors.push({ questionId: q.id, rowId: row.id, fieldId: operation.fieldId, reason: "not a field in this record", code: "invalid_field" }); continue; }
           const fieldRevision = row.fieldRevisions[field.id] ?? 0;
           if (fieldRevision === operation.expectedFieldRevision + 1) {
             if (operation.op === "clear" && !Object.hasOwn(row.values, field.id)) {
@@ -683,7 +678,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
               continue;
             }
             if (operation.op === "set") {
-              const replayValidation = validateRepeatField(field, operation.value);
+              const replayValidation = validateRepeatFieldValue(field, operation.value);
               if (replayValidation.ok && Object.is(row.values[field.id], replayValidation.value)) {
                 touched.add(q.id);
                 continue;
@@ -692,8 +687,8 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
           }
           if (!Number.isSafeInteger(operation.expectedFieldRevision) || operation.expectedFieldRevision !== fieldRevision) return conflict(q.id, row.id, field.id);
           if (operation.op === "set") {
-            const validation = validateRepeatField(field, operation.value);
-            if (!validation.ok) { recordErrors.push({ questionId: q.id, rowId: row.id, fieldId: field.id, reason: validation.reason }); continue; }
+            const validation = validateRepeatFieldValue(field, operation.value);
+            if (!validation.ok) { recordErrors.push({ questionId: q.id, rowId: row.id, fieldId: field.id, reason: validation.reason, code: validation.code, ...(validation.params ? { params: validation.params } : {}) }); continue; }
             row.values[field.id] = validation.value;
           } else delete row.values[field.id];
           row.fieldRevisions[field.id] = fieldRevision + 1;
@@ -718,7 +713,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
     }
     for (const id of new Set(operations.map((operation) => operation.questionId))) {
-      if (eligible[id] === false && byId.get(id)?.type === "repeat") recordErrors.push({ questionId: id, reason: "this question is not available for the answers currently selected" });
+      if (eligible[id] === false && byId.get(id)?.type === "repeat") recordErrors.push({ questionId: id, reason: "this question is not available for the answers currently selected", code: "inactive_question" });
     }
     if (problems.length || recordErrors.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems, recordErrors };
     if (JSON.stringify({ answers: next, recordGroups: groups }).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };
@@ -741,14 +736,6 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   });
   if (result.ok) logEvent(ctx.tenantId, new ObjectId(ctx.interview.id), "save", new ObjectId(ctx.participant.id), { ids: ids.slice(0, 20) });
   return result;
-}
-
-function validateRepeatField(field: RepeatField, raw: unknown): { ok: true; value: string | number } | { ok: false; reason: string } {
-  // Reuse the same scalar validators as ordinary questions, without accepting a repeat value array.
-  const result = validateAnswer({ ...field, required: false } as Question, raw);
-  if (!result.ok) return result;
-  if (result.value === null || Array.isArray(result.value)) return { ok: false, reason: "a non-empty scalar value is required" };
-  return { ok: true, value: result.value };
 }
 
 export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RepeatRecordIssue[] };

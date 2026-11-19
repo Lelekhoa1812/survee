@@ -694,9 +694,113 @@ describe("respondent required-answer recovery", () => {
     expect(rejected).toContain("record-after-failed-refresh");
     expect(rejected).toContain("other-question-op");
     expect(rejected).toContain("record-after-second-failed-refresh");
-    const banner = host.querySelector('[role="alert"]')!;
+    const banner = Array.from(host.querySelectorAll('[role="alert"]')).find((alert) => alert.textContent?.includes("Review unsaved changes"))!;
     await act(async () => Array.from(banner.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
     expect(host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain("record-after-failed-refresh");
+    vi.useRealTimers();
+  });
+
+  it.each([false, true])("keeps the autosave timer through a render and locale change (change locale: %s)", async (changeLocale) => {
+    vi.useFakeTimers();
+    state.api.mockImplementation(async (url: string) => url.endsWith("/answers")
+      ? { ok: true, status: 200, data: { savedAt: "2026-11-20T00:00:00.000Z" } }
+      : { ok: true, status: 200, data: {
+        participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7,
+        title: "Study", questions: [{ id: "answer", type: "text", label: "Answer" }], answers: {},
+      } });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "Pending autosave" }, origin: "null", source: frame.contentWindow }));
+    });
+    expect(host.textContent).toContain("Saving");
+    if (changeLocale) {
+      const selector = host.querySelector<HTMLSelectElement>(".rs-language select")!;
+      selector.value = "es";
+      await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
+      expect(host.querySelector(".rs")?.getAttribute("lang")).toBe("es");
+    }
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))).toHaveLength(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(650); });
+    const writes = state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"));
+    expect(writes).toHaveLength(1);
+    expect(writes[0][1].body.answers).toEqual({ answer: { value: "Pending autosave" } });
+    vi.useRealTimers();
+  });
+
+  it("blocks submission after discarded drafts until a successful retry refreshes the reviewed records", async () => {
+    vi.useFakeTimers();
+    let loads = 0;
+    const saved = (name: string) => ({ ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+      questions: [{ id: "records", type: "repeat", label: "Records", fields: [{ id: "name", type: "text", label: "Name" }], maxRows: 3 }, { id: "answer", type: "text", label: "Answer" }],
+      answers: {}, recordGroups: { records: [{ id: "r1", values: { name }, revision: 1, fieldRevisions: { name: 1 } }] },
+    } });
+    state.api.mockImplementation(async (url: string, options?: any) => {
+      if (url.endsWith("/answers")) return options?.body?.recordOperations?.length ? { ok: false, status: 409, data: { code: "record_field_conflict", recordErrors: [] } } : { ok: true, status: 200, data: { savedAt: "2026-11-20T00:00:00.000Z" } };
+      if (url.endsWith("/submit")) return { ok: true, status: 200, data: { submittedAt: "2026-11-20T00:00:00.000Z" } };
+      loads += 1;
+      return loads === 1 ? saved("Old value") : loads < 4 ? { ok: false, status: 503, data: {} } : saved("Latest value");
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "record-operation", operationId: "draft", operation: { op: "set", questionId: "records", rowId: "r1", fieldId: "name", value: "Draft", expectedFieldRevision: 1 } }, origin: "null", source: frame.contentWindow }));
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    expect(host.textContent).toContain("Submission is blocked");
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Some record changes were not saved")!.click());
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Discard draft")!.click());
+    const submit = () => Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!;
+    expect(submit().disabled).toBe(true);
+    await act(async () => submit().click());
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Keep editing")!.click());
+    const retry = () => Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Retry loading records")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "Pending scalar" }, origin: "null", source: frame.contentWindow }));
+      retry().click();
+      await Promise.resolve();
+    });
+    expect(loads).toBe(2);
+    expect(state.toast).toHaveBeenCalledWith(expect.stringContaining("not saved yet"), "err", expect.anything());
+    await act(async () => { window.dispatchEvent(new Event("online")); await Promise.resolve(); });
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers")).at(-1)?.[1].body.answers).toEqual({ answer: { value: "Pending scalar" } });
+    await act(async () => { retry().click(); await Promise.resolve(); });
+    expect(host.textContent).toContain("Submission is blocked");
+    await act(async () => { retry().click(); await Promise.resolve(); });
+    expect(host.textContent).not.toContain("Submission is blocked");
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!.click());
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Latest value");
+    expect(submit().disabled).toBe(false);
+    await act(async () => { submit().click(); await Promise.resolve(); });
+    expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it("preserves rejected repeat drafts if the questionnaire changes during refresh retry", async () => {
+    vi.useFakeTimers();
+    let loads = 0;
+    const loaded = (version: number) => ({ ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version, title: "Study",
+      questions: [{ id: "records", type: "repeat", label: "Records", fields: [], maxRows: 3 }], answers: {}, recordGroups: { records: [] },
+    } });
+    state.api.mockImplementation(async (url: string) => {
+      if (url.endsWith("/answers")) return { ok: false, status: 409, data: { code: "record_row_conflict", recordErrors: [] } };
+      loads += 1;
+      return loads === 1 ? loaded(7) : loads === 2 ? { ok: false, status: 503, data: {} } : loaded(8);
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "record-operation", operationId: "draft-version", operation: { op: "add", questionId: "records", rowId: "row-draft" } }, origin: "null", source: frame.contentWindow }));
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    await act(async () => { Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Retry loading records")!.click(); await Promise.resolve(); });
+    expect(host.textContent).toContain("This questionnaire changed");
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    expect(host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain("draft-version");
+    expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
     vi.useRealTimers();
   });
 
@@ -768,11 +872,36 @@ describe("respondent required-answer recovery", () => {
     expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
     const submit = Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!;
     expect(submit.disabled).toBe(true);
-    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Record conflict");
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("This record needs attention.");
+    expect(host.querySelector("[role=dialog]")?.textContent).not.toContain("Record conflict");
+    const selector = host.querySelector<HTMLSelectElement>(".rs-language select")!;
+    selector.value = "ar";
+    await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("يحتاج هذا السجل إلى مراجعة");
+    selector.value = "en-AU";
+    await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
     await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Discard draft")!.click());
     expect(submit.disabled).toBe(false);
     await act(async () => { submit.click(); await Promise.resolve(); });
     expect(state.api.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
+  });
+
+  it("retranslates server repeat submission issues when the shell language changes", async () => {
+    state.api.mockImplementation((url: string) => url.endsWith("/submit")
+      ? Promise.resolve({ ok: false, status: 422, data: { repeatErrors: [{ questionId: "records", code: "required_field", reason: "Raw server message" }] } })
+      : Promise.resolve({ ok: true, status: 200, data: {
+        participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7,
+        title: "Study", questions: [{ id: "records", type: "repeat", label: "Records", fields: [], maxRows: 3 }], answers: {}, recordGroups: {},
+      } }));
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    await act(async () => Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Review answers")!.click());
+    await act(async () => { Array.from(host.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes("Submit answers"))!.click(); await Promise.resolve(); });
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Complete this required field.");
+    expect(host.querySelector("[role=dialog]")?.textContent).not.toContain("Raw server message");
+    const selector = host.querySelector<HTMLSelectElement>(".rs-language select")!;
+    selector.value = "es";
+    await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Completa este campo obligatorio.");
   });
 
   it.each([false, true])("retains pending record drafts on version conflict (in-flight record: %s)", async (inFlightRecord) => {
