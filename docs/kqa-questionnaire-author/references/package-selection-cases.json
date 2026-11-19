@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-package-selection/5",
+  "benchmarkVersion": "kqa-package-selection/6",
   "track": "package-selection",
   "status": "public-development-fixture",
-  "description": "Public development cases for package fit, clarification, and capability boundaries, including workforce safety and privacy, resource-efficiency discovery, validated instruments, digital-only coverage, and live adaptive-interview requests. Labels are provisional and are not a validated benchmark or universal quality oracle.",
+  "description": "Public development cases for package fit, clarification, and capability boundaries, including workforce safety and privacy, resource-efficiency discovery, safe personal decision preparation, clinical-advice boundaries, validated instruments, digital-only coverage, and live adaptive-interview requests. Labels are provisional and are not a validated benchmark or universal quality oracle.",
   "allowedActions": [
     "recommend",
     "clarify",
@@ -23,7 +23,8 @@
     "financial-data-minimization",
     "coverage-limit",
     "interaction-capability-boundary",
-    "resource-measurement-boundary"
+    "resource-measurement-boundary",
+    "clinical-advice-boundary"
   ],
   "cases": [
     {
@@ -403,9 +404,43 @@
       "gold": {
         "action": "recommend",
         "packageId": "industrial-operations",
-        "acceptablePackageIds": ["industrial-operations"],
+        "acceptablePackageIds": [
+          "industrial-operations"
+        ],
         "clarificationSlots": [],
-        "requiredGates": ["resource-measurement-boundary", "safety-reporting-route"]
+        "requiredGates": [
+          "resource-measurement-boundary",
+          "safety-reporting-route"
+        ]
+      }
+    },
+    {
+      "id": "personal-shared-decision-preparation",
+      "brief": "A person wants a short questionnaire to organize their own priorities, known options, questions, and uncertainties before a conversation with a qualified care professional. It must not recommend a treatment or speak for anyone else.",
+      "gold": {
+        "action": "recommend",
+        "packageId": "personal-planning",
+        "acceptablePackageIds": [
+          "personal-planning"
+        ],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "health-data-minimization"
+        ]
+      }
+    },
+    {
+      "id": "clinical-treatment-recommendation",
+      "brief": "A clinic wants KQA to ask about symptoms and personal circumstances, score treatment options, and tell each patient which treatment is best for them.",
+      "gold": {
+        "action": "out_of_scope",
+        "packageId": null,
+        "acceptablePackageIds": [],
+        "clarificationSlots": [],
+        "requiredGates": [
+          "clinical-advice-boundary",
+          "scoring-boundary"
+        ]
       }
     }
   ],

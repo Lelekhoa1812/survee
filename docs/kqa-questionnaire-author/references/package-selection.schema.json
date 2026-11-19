@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kqa.invalid/schemas/package-selection-benchmark-v3.json",
+  "$id": "https://kqa.invalid/schemas/package-selection-benchmark-v4.json",
   "title": "KQA package selection benchmark result",
   "type": "object",
   "required": ["benchmarkVersion", "model", "runDate", "promptVersion", "packageLibraryVersion", "cases"],
   "properties": {
-    "benchmarkVersion": { "const": "kqa-package-selection/5" },
+    "benchmarkVersion": { "const": "kqa-package-selection/6" },
     "model": { "type": "string", "minLength": 1 },
     "runDate": { "type": "string", "format": "date" },
     "promptVersion": { "type": "string", "minLength": 1 },

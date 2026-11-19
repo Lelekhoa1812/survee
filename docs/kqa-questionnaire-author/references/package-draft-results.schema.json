@@ -5,7 +5,7 @@
   "required": ["resultsSchemaVersion", "benchmarkVersion", "model", "skillVersion", "promptVersion", "runProvenance", "packageLibraryVersion", "runDate", "outputs", "reviewers", "ratings", "evidenceStatus"],
   "properties": {
     "resultsSchemaVersion": { "const": "kqa-package-draft-results/2" },
-    "benchmarkVersion": { "const": "kqa-package-draft/10" },
+    "benchmarkVersion": { "const": "kqa-package-draft/11" },
     "model": { "type": "string", "minLength": 1 },
     "skillVersion": { "type": "string", "minLength": 1 },
     "promptVersion": { "type": "string", "minLength": 1 },
@@ -33,7 +33,7 @@
       },
       "additionalProperties": false
     },
-    "packageLibraryVersion": { "const": "kqa-interview-packages/10" },
+    "packageLibraryVersion": { "const": "kqa-interview-packages/11" },
     "runDate": { "type": "string", "format": "date" },
     "outputs": {
       "type": "array",

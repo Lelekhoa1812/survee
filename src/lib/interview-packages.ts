@@ -1,6 +1,6 @@
 import { readDoc } from "./docs";
 
-export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/10" as const;
+export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/11" as const;
 
 export const INTERVIEW_PACKAGES = [
   {
@@ -63,9 +63,9 @@ export const INTERVIEW_PACKAGES = [
     id: "personal-planning", title: "Personal planning", level: 2,
     decisionFocus: "Help a person define a self-chosen goal and practical next step.",
     respondents: "An individual or household member choosing whether to reflect on a change.",
-    useWhen: "The person wants to articulate goals, resources, or next steps without prescribed advice.",
-    notFor: "Professional financial, legal, medical, therapeutic, or crisis advice.",
-    riskFlags: ["personal disclosure minimization"], relatedPackages: ["personal-wellbeing-reflection"],
+    useWhen: "The person wants to articulate goals, resources, or next steps without prescribed advice, including preparing their own priorities and questions for a later conversation with a qualified professional.",
+    notFor: "Professional financial, legal, medical, therapeutic, or crisis advice; assessing treatment options or recommending a clinical choice.",
+    riskFlags: ["personal disclosure minimization", "health-data minimization", "clinical-advice boundary"], relatedPackages: ["personal-wellbeing-reflection"],
   },
   {
     id: "candidate-experience", title: "Candidate experience", level: 3,
@@ -173,7 +173,7 @@ export async function getInterviewPackage(packageId?: InterviewPackageId, option
   const packageCatalog = INTERVIEW_PACKAGES.map(({ id, title, decisionFocus, respondents, useWhen, notFor, riskFlags, relatedPackages }) => ({
     id, title, decisionFocus, respondents, useWhen, notFor, riskFlags, relatedPackages,
   }));
-  const selectionGuidance = "Choose by the decision to be informed, respondent group, and collection context—not industry label alone. These are KQA self-completed questionnaire starting points, not moderated interview guides. Compare related packages when a brief overlaps. Carer support-service feedback can fit health-service experience; formal caregiver needs assessment, eligibility, safeguarding, and care planning remain outside scope. If purpose, audience, modality, or risk boundary is unclear, return the candidates and ask a concise clarifying question; do not invent a fit score or imply that a package is validated.";
+  const selectionGuidance = "Choose by the decision to be informed, respondent group, and collection context—not industry label alone. These are KQA self-completed questionnaire starting points, not moderated interview guides. Compare related packages when a brief overlaps. Carer support-service feedback can fit health-service experience; formal caregiver needs assessment, eligibility, safeguarding, and care planning remain outside scope. Personal planning may help a respondent organize their own priorities and questions before a professional conversation; clinical treatment assessment, scoring, or recommendations are outside scope. If purpose, audience, modality, or risk boundary is unclear, return the candidates and ask a concise clarifying question; do not invent a fit score or imply that a package is validated.";
   if (options.catalogOnly) {
     if (packageId) return null;
     return { packageId: null, packageVersion: INTERVIEW_PACKAGE_VERSION, packageCatalog, selectionGuidance, catalogOnly: true };

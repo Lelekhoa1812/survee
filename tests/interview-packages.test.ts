@@ -3,7 +3,7 @@ import { getInterviewPackage, INTERVIEW_PACKAGES, INTERVIEW_PACKAGE_VERSION } fr
 
 describe("addressable interview package modules", () => {
   it("returns the exact detailed module for every stable catalog ID", async () => {
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/10");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/11");
     for (const item of INTERVIEW_PACKAGES) {
       const result = await getInterviewPackage(item.id);
       expect(result?.packageId, item.id).toBe(item.id);
@@ -45,5 +45,17 @@ describe("addressable interview package modules", () => {
       decisionFocus: expect.stringContaining("resource-efficiency opportunities"),
       notFor: expect.stringContaining("verified savings estimates"),
     });
+  });
+
+  it("bounds shared-decision preparation to the respondent's own questions and preferences", async () => {
+    const result = await getInterviewPackage("personal-planning");
+    expect(result?.packages).toContain("Optional shared-decision preparation module");
+    expect(result?.packages).toContain("does not compare or recommend clinical options");
+    expect(result?.packages).toContain("Do not ask them to speak for a partner or household");
+    expect(result?.packageCatalog.find((item) => item.id === "personal-planning")).toMatchObject({
+      notFor: expect.stringContaining("recommending a clinical choice"),
+      riskFlags: expect.arrayContaining(["clinical-advice boundary"]),
+    });
+    expect(result?.selectionGuidance).toContain("clinical treatment assessment, scoring, or recommendations are outside scope");
   });
 });
