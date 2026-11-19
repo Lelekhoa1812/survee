@@ -325,6 +325,53 @@ describe("JSON", () => {
   });
 });
 
+describe("full-order rank exports", () => {
+  const rankManifest: Manifest = {
+    ...manifest,
+    questions: [...manifest.questions, {
+      id: "priorities",
+      type: "rank",
+      label: "Order priorities",
+      options: [{ value: "quality", label: "Quality" }, { value: "speed", label: "Speed" }, { value: "cost", label: "Cost" }],
+    }],
+  };
+  const rankInput: ExportInput = {
+    ...input,
+    manifest: rankManifest,
+    participants: [{
+      id: "p-rank", name: "Rank respondent", status: "submitted", createdAt: T,
+      answers: { priorities: { value: ["cost", "quality", "speed"], updatedAt: T } },
+    }],
+  };
+
+  it("preserves the selected permutation in human-readable and raw JSON/CSV values", () => {
+    const wide = wideTable(rankInput);
+    const rankCell = wide.rows[0][wide.header.indexOf("priorities | Order priorities")];
+    expect(rankCell).toBe("1. Cost; 2. Quality; 3. Speed");
+    const longRow = longTable(rankInput).rows.find((row) => row[3] === "priorities")!;
+    expect(longRow[7]).toBe("1. Cost; 2. Quality; 3. Speed");
+    expect(longRow[8]).toBe("cost;quality;speed");
+    const json = JSON.parse(jsonExport(rankInput).body as string);
+    expect(json.participants[0].answers.priorities).toMatchObject({ value: ["cost", "quality", "speed"], display: "1. Cost; 2. Quality; 3. Speed" });
+    expect(csvWide(rankInput).body).toContain("1. Cost; 2. Quality; 3. Speed");
+    expect(csvLong(rankInput).body).toContain("cost;quality;speed");
+  });
+
+  it("retains the complete rank order in XLSX wide and long sheets", async () => {
+    const file = await xlsxExport(rankInput);
+    const workbook = new Workbook();
+    await workbook.xlsx.load(file.body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
+    const wide = workbook.getWorksheet("Wide")!;
+    const wideHeaders = (wide.getRow(1).values as unknown[]).slice(1);
+    const answerColumn = wideHeaders.indexOf("priorities | Order priorities") + 1;
+    expect(wide.getRow(2).getCell(answerColumn).value).toBe("1. Cost; 2. Quality; 3. Speed");
+    const long = workbook.getWorksheet("Long")!;
+    const dataRow = Array.from({ length: long.rowCount - 1 }, (_, index) => long.getRow(index + 2)).find((row) => row.getCell(4).value === "priorities")!;
+    expect(dataRow.getCell(8).value).toBe("1. Cost; 2. Quality; 3. Speed");
+    expect(dataRow.getCell(9).value).toBe("cost;quality;speed");
+  });
+});
+
 describe("XLSX", () => {
   it("writes four sheets with the expected headers and frozen header rows", async () => {
     const file = await xlsxExport(input);
