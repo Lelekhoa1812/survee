@@ -23,6 +23,7 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -106,6 +107,26 @@ describe("respondent required-answer recovery", () => {
     expect(review.querySelector('[role="alert"]')?.textContent).toContain("Some answers need attention.");
     expect(review.textContent).toContain("Choose no more than 1 option.");
     expect(review.textContent).toContain("Email; Phone");
+  });
+
+  it("states that offline edits have not synced", async () => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token" }));
+      await Promise.resolve();
+    });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { kqa: 1, type: "set", id: "already-answered", value: "Unsynced edit" },
+        origin: "null",
+        source: frame.contentWindow,
+      }));
+      window.dispatchEvent(new Event("offline"));
+    });
+    const status = host.querySelector(".save-state")!;
+    expect(status.textContent).toContain("Offline — changes waiting to sync");
+    expect(status.getAttribute("title")).toContain("These changes have not reached KQA");
   });
 
   it("lists a saved multi-select answer that exceeds its current cap", async () => {

@@ -285,7 +285,8 @@ export function RespondentShell({ token }: { token: string }) {
 
   const submitted = data.participant.status === "submitted";
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
-  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: "Offline, will save" };
+  const hasUnsavedChanges = Object.keys(pending.current).length > 0;
+  const SAVE_LABEL: Record<SaveState, string> = { idle: submitted ? "Locked" : "Autosave on", saving: "Saving…", saved: "Saved", error: "Retrying…", offline: hasUnsavedChanges ? "Offline — changes waiting to sync" : "Offline" };
   const reviewQuestions = questions.current.filter((question) => eligibility.current[question.id] !== false);
 
   return (
@@ -307,7 +308,7 @@ export function RespondentShell({ token }: { token: string }) {
               <div className="bar"><i style={{ width: `${pct}%` }} /></div>
               <small>{counts.answered}/{counts.total} answered</small>
             </div>
-            <span className={`save-state ${save}`} role="status" aria-live="polite" title={lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
+            <span className={`save-state ${save}`} role="status" aria-live="polite" title={save === "offline" && hasUnsavedChanges ? "These changes have not reached KQA. They will be retried when you reconnect; keep this page open until it shows Saved." : lastSaved ? `Last saved ${lastSaved.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}` : SAVE_LABEL[save]}><i /><span className="rs-save-label">{SAVE_LABEL[save]}</span></span>
             <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> Submitted</> : "Review answers"}</button>
           </div>
         </div>

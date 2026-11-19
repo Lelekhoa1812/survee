@@ -4,6 +4,8 @@ This is the complete specification for the HTML file you upload to KQA. If you a
 
 KQA gives every respondent a private link, renders your HTML inside a sandboxed frame with the KQA respondent shell and runtime, saves each answer to MongoDB as they go, and lets the host review and export everything. Your file does not talk to the database, and it does not send email. It declares its questions, marks which controls hold which answer, and the KQA runtime does the rest.
 
+Autosave requires a connection. While offline, new edits remain only in the open page and retry when the connection returns; they are not saved on the device. The status says when changes are waiting to sync. Keep the page open until it reports **Saved**; the best-effort page-exit request is not a confirmed save.
+
 The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, and dates are supported as well. Section 3.4 is the full list. KQA does not score answers. A required checkbox is answered when at least one box is ticked. Text that is only spaces is empty.
 
 ## 1. How it works

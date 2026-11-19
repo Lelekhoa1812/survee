@@ -4,7 +4,7 @@ Host-run interviews. Upload an HTML questionnaire with optional reusable workspa
 
 | Portal | Address | For |
 |---|---|---|
-| Respondent | `https://{base_url}/{token}` | The person answering. No account. Autosaves. Submit locks it |
+| Respondent | `https://{base_url}/{token}` | The person answering. No account. Autosaves while online; keep the page open until **Saved** after reconnecting. Submit locks it |
 | Host | `https://{base_url}/admin` | Create interviews, upload files, add people, analyze response patterns, review answers, export |
 
 ## Why it exists
