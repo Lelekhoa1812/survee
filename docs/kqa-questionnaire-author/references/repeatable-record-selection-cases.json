@@ -1,0 +1,156 @@
+{
+  "benchmarkVersion": "kqa-repeatable-record-selection/2",
+  "track": "repeatable-record-selection",
+  "status": "public-development-fixture",
+  "description": "Synthetic development cases testing when bounded native repeat records fit, when ordinary question patterns fit better, when clarification is needed, and when a use is out of scope.",
+  "allowedPatterns": ["fixed_questions", "multi", "optional_longtext", "repeat_group", "clarify", "out_of_scope"],
+  "allowedFormatStatuses": ["supported", "unsupported", "not_applicable"],
+  "allowedFallbackPatterns": ["fixed_questions", "multi", "optional_longtext"],
+  "allowedGates": [
+    "finite_cap_and_period",
+    "subset_rule_at_cap",
+    "shared_fields_and_unit",
+    "zero_rows_can_be_valid",
+    "respondent_pretest",
+    "no_third_party_inference",
+    "minimize_sensitive_data",
+    "not_a_live_log",
+    "not_safety_or_incident_reporting",
+    "not_individual_performance_use",
+    "separate_ratings_not_forced_rank"
+  ],
+  "cases": [
+    {
+      "id": "routine-handoff-episodes",
+      "brief": "A plant wants to learn where routine maintenance handoffs recently lost time. A technician may recall a few distinct episodes from the last two weeks. The same short fields fit each episode: process stage, coordination barrier, approximate delay band, and possible improvement. The host wants process changes, not a safety log or evaluation of individual workers.",
+      "gold": {
+        "pattern": "repeat_group",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "not_a_live_log", "not_safety_or_incident_reporting", "not_individual_performance_use"]
+      }
+    },
+    {
+      "id": "personal-self-chosen-goals",
+      "brief": "A person preparing for a coaching conversation may want to note several self-chosen goals. Each goal uses the same optional fields: what matters about it, one available support, and a next step or decision to defer. No other person's preferences are being collected.",
+      "gold": {
+        "pattern": "repeat_group",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "no_third_party_inference"]
+      }
+    },
+    {
+      "id": "one-unusual-work-story",
+      "brief": "A worker wants to describe one unusual, non-urgent process problem from last month. The details may not fit a predictable set of fields, and the host needs the worker's own account rather than comparable event records.",
+      "gold": {
+        "pattern": "optional_longtext",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": []
+      }
+    },
+    {
+      "id": "rate-known-service-factors",
+      "brief": "A service team needs separate judgments about access, clarity, timeliness, and follow-up. People may rate each differently or skip items that do not apply; there is no forced priority decision.",
+      "gold": {
+        "pattern": "fixed_questions",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["separate_ratings_not_forced_rank"]
+      }
+    },
+    {
+      "id": "unclear-repeated-experiences",
+      "brief": "A manager says, 'Ask staff about all their work problems.' No reference period, repeated unit, decision, or common fields are defined.",
+      "gold": {
+        "pattern": "clarify",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": ["decision_focus", "reference_period", "repeated_unit"],
+        "requiredGates": ["shared_fields_and_unit"]
+      }
+    },
+    {
+      "id": "many-events-exceed-cap",
+      "brief": "A utility wants to collect a separate record for every service interruption a customer experienced during the past year. Some people may have dozens. It has not said whether a sample of events is acceptable or how respondents should choose one.",
+      "gold": {
+        "pattern": "clarify",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": ["decision_focus", "reference_period", "event_selection_rule"],
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "minimize_sensitive_data"]
+      }
+    },
+    {
+      "id": "live-shift-status-log",
+      "brief": "Operations wants every worker to add a row whenever a maintenance item changes state during a shift, and expects the form to alert the incoming crew when an item is still open.",
+      "gold": {
+        "pattern": "out_of_scope",
+        "formatStatus": "not_applicable",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["not_a_live_log"]
+      }
+    },
+    {
+      "id": "hazard-and-isolation-report",
+      "brief": "A site wants repeatable entries for active hazards, exact equipment identifiers, isolation status, and immediate containment so the host can decide whether crews may restart work.",
+      "gold": {
+        "pattern": "out_of_scope",
+        "formatStatus": "not_applicable",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["not_a_live_log", "not_safety_or_incident_reporting"]
+      }
+    },
+    {
+      "id": "supplier-delivery-improvement",
+      "brief": "A procurement team wants to understand a supplier's recent delivery delays over one quarter. Respondents may have a few similar examples, and the same non-identifying fields apply to each: broad delivery stage, delay band, operational effect, and improvement idea. The goal is process improvement, not supplier scoring or contract decisions.",
+      "gold": {
+        "pattern": "repeat_group",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["finite_cap_and_period", "subset_rule_at_cap", "shared_fields_and_unit", "zero_rows_can_be_valid", "respondent_pretest", "not_individual_performance_use"]
+      }
+    },
+    {
+      "id": "household-preferences-for-each-person",
+      "brief": "A person asks for a repeatable list to record what each household member wants from a shared decision, including reasons they have not directly shared with the respondent.",
+      "gold": {
+        "pattern": "out_of_scope",
+        "formatStatus": "not_applicable",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["no_third_party_inference"]
+      }
+    },
+    {
+      "id": "patient-encounter-history",
+      "brief": "A clinic wants a patient to add a record for every recent care encounter, including names, diagnoses, and staff-specific judgments. The intended decision, data access, privacy basis, and whether the clinic is asking for service feedback or a clinical diary are unclear.",
+      "gold": {
+        "pattern": "clarify",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": ["decision_focus", "data_minimization", "access_and_retention", "service_feedback_or_clinical_record"],
+        "requiredGates": ["minimize_sensitive_data"]
+      }
+    },
+    {
+      "id": "unranked-choice-priority",
+      "brief": "A community group wants people to consider five possible improvements. People may see several as equally important; the goal is to understand support for each, not force a complete ordered list.",
+      "gold": {
+        "pattern": "fixed_questions",
+        "formatStatus": "supported",
+        "fallbackPattern": null,
+        "clarificationSlots": [],
+        "requiredGates": ["separate_ratings_not_forced_rank"]
+      }
+    }
+  ]
+}

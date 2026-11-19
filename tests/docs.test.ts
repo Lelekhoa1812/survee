@@ -17,6 +17,9 @@ describe("agent documentation bundle", () => {
     ["PACKAGE_SELECTION_BENCHMARK.md", "evals/PACKAGE_SELECTION_BENCHMARK.md"],
     ["package-selection-cases.json", "evals/package-selection-cases.json"],
     ["package-selection.schema.json", "evals/package-selection.schema.json"],
+    ["REPEATABLE_RECORD_SELECTION_BENCHMARK.md", "evals/REPEATABLE_RECORD_SELECTION_BENCHMARK.md"],
+    ["repeatable-record-selection-cases.json", "evals/repeatable-record-selection-cases.json"],
+    ["repeatable-record-selection.schema.json", "evals/repeatable-record-selection.schema.json"],
     ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
     ["package-draft-cases.json", "evals/package-draft-cases.json"],
     ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
@@ -176,12 +179,22 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("This is a public development set, not a held-out benchmark");
   });
 
+  it("documents package and repeat-pattern evaluation in the portable skill", async () => {
+    const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
+    expect(skill).toContain("PACKAGE_SELECTION_BENCHMARK.md");
+    expect(skill).toContain("REPEATABLE_RECORD_SELECTION_BENCHMARK.md");
+    expect(await readDoc("kqa-questionnaire-author/references/package-selection-cases.json")).toContain('"benchmarkVersion": "kqa-package-selection/6"');
+    expect(await readDoc("kqa-questionnaire-author/references/repeatable-record-selection-cases.json")).toContain('"benchmarkVersion": "kqa-repeatable-record-selection/2"');
+  });
+
   it("ships version-matched references for the standalone questionnaire author skill", async () => {
     const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
     expect(skill).toContain("references/FORMAT.md");
     expect(skill).toContain("install each item at its supplied relative path");
     expect(skill).toContain("references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md");
     expect(skill).toContain("references/PACKAGE_DRAFT_BENCHMARK.md");
+    expect(skill).toContain("references/PACKAGE_SELECTION_BENCHMARK.md");
+    expect(skill).toContain("references/REPEATABLE_RECORD_SELECTION_BENCHMARK.md");
     expect(skill).toContain("references/AUTHORING_TRUST_BOUNDARY_EVAL.md");
     expect(skill).toContain("references/QUESTION_BLUEPRINT.md");
     expect(skill).toContain("references/REPEATABLE_RECORDS_DESIGN.md");
