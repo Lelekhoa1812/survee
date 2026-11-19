@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
-import { evaluateEligibility, progress, validateAnswer } from "../format/answers";
+import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer } from "../format/answers";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
@@ -512,7 +512,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     const cur = next[id] ?? { updatedAt: nowIso };
     const merged = { ...cur, updatedAt: nowIso };
     if ("value" in entry) {
-      const v = validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi" });
+      const v = validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi" });
       if (!v.ok) {
         problems.push({ id, reason: v.reason });
         continue;
@@ -522,6 +522,13 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
         const previousCount = Array.isArray(previous) ? new Set(previous).size : 0;
         if (previousCount <= q.maxSelections || v.value.length >= previousCount) {
           problems.push({ id, reason: `choose no more than ${q.maxSelections} options; remove choices from your saved answer before adding any` });
+          continue;
+        }
+      }
+      if (q.type === "multi" && exclusiveConflictCount(q, v.value) > 0) {
+        const previous = ctx.participant.answers[id]?.value;
+        if (exclusiveConflictCount(q, v.value) >= exclusiveConflictCount(q, previous)) {
+          problems.push({ id, reason: "choose an exclusive option by itself; remove conflicting choices before saving" });
           continue;
         }
       }
@@ -553,7 +560,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       if (eligible[id] !== false) continue;
       const entry = patch[id] ?? {};
       const question = byId.get(id)!;
-      const submittedValue = "value" in entry ? validateAnswer(question, entry.value, { allowOverLimit: question.type === "multi" }) : null;
+      const submittedValue = "value" in entry ? validateAnswer(question, entry.value, { allowOverLimit: question.type === "multi", allowExclusiveConflict: question.type === "multi" }) : null;
       const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
       const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
       if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
@@ -585,7 +592,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   return result;
 }
 
-export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[] };
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidExclusiveSelections?: { id: string }[] };
 
 export async function submitAnswers(token: string, expectedVersion: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
@@ -604,9 +611,9 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
     if (!current) return { ok: false, status: 404, error: "This link is not valid." };
     if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
     const pr = progress(ctx.version.manifest, current.answers);
-    if (pr.missingRequired.length || pr.invalidSelections.length) {
+    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidExclusiveSelections.length) {
       const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
-      const issues = pr.missingRequired.length + pr.invalidSelections.length;
+      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidExclusiveSelections.length;
       return {
         ok: false,
         status: 422,
@@ -614,6 +621,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
         error: `${issues} ${issues === 1 ? "answer needs" : "answers need"} attention before submission.`,
         missing: pr.missingRequired.map((id) => ({ id, label: label.get(id) ?? id })),
         invalidSelections: pr.invalidSelections,
+        invalidExclusiveSelections: pr.invalidExclusiveSelections,
       };
     }
     const now = new Date();

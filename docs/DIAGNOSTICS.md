@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 85 codes. Severity is **error**, **warning** or **note**.
+There are 87 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -280,6 +280,14 @@ Severity: **error**
 maxSelections only applies to multi questions and must be a whole number no greater than the number of declared options.
 
 **How to fix:** Use maxSelections on a multi question and set it from 1 through the number of declared options.
+
+### KQA221: Invalid exclusive checkbox options
+
+Severity: **error**
+
+exclusiveOptions applies only to multi questions and must name unique values declared in that question.
+
+**How to fix:** Use a non-empty list of declared option values, such as ["none"], on a multi question.
 
 ### KQA220: Guided presentation needs sections
 
@@ -798,3 +806,11 @@ Severity: **warning**
 Some saved answers contain more choices than the new maxSelections permits. KQA keeps those choices visible and lets respondents remove them; submission stays blocked until each eligible answer is within the cap.
 
 **How to fix:** Keep the existing limit, choose a cap that fits saved answers, or proceed only after reviewing the correction burden and respondent communication.
+
+### KQA706: Saved answers conflict with exclusive checkbox options
+
+Severity: **warning**
+
+Some saved multi-select answers combine a newly exclusive option with other choices. KQA preserves those answers; affected respondents must resolve the conflict before submitting.
+
+**How to fix:** Keep the option non-exclusive, choose different options, or proceed only after reviewing the correction burden and respondent communication.

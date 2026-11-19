@@ -181,7 +181,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function applySelectionLimitGuidance() {
     state.questions.forEach(function (question) {
-      if (question.type !== "multi" || typeof question.maxSelections !== "number") return;
+      if (question.type !== "multi" || (typeof question.maxSelections !== "number" && !(question.exclusiveOptions || []).length)) return;
       var els = controls(question.id);
       if (!els.length) return;
       var group = els[0].closest ? els[0].closest("fieldset") : null;
@@ -191,14 +191,43 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       hint.id = "kqa-max-selections-" + question.id;
       hint.setAttribute("data-kqa-selection-limit", question.id);
       hint.className = "kq-help";
-      hint.textContent = "Choose up to " + question.maxSelections + (question.maxSelections === 1 ? " option." : " options.");
+      hint.textContent = (typeof question.maxSelections === "number" ? "Choose up to " + question.maxSelections + (question.maxSelections === 1 ? " option. " : " options. ") : "") + ((question.exclusiveOptions || []).length ? "Exclusive options must be chosen by themselves." : "");
       if (group) {
         var describedBy = (group.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
         if (describedBy.indexOf(hint.id) === -1) describedBy.push(hint.id);
         group.setAttribute("aria-describedby", describedBy.join(" "));
         host.insertBefore(hint, group);
       } else host.insertBefore(hint, els[0]);
+      if ((question.exclusiveOptions || []).length && !host.querySelector('[data-kqa-exclusive-status="' + question.id + '"]')) {
+        var liveStatus = document.createElement("span");
+        liveStatus.setAttribute("data-kqa-exclusive-status", question.id);
+        liveStatus.setAttribute("role", "status");
+        liveStatus.setAttribute("aria-live", "polite");
+        liveStatus.setAttribute("aria-atomic", "true");
+        liveStatus.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+        host.appendChild(liveStatus);
+      }
     });
+  }
+  function exclusiveSelectionMessage(id, conflicted) {
+    var els = controls(id);
+    var group = els.length && els[0].closest ? els[0].closest("fieldset") : null;
+    var host = group && group.parentElement ? group.parentElement : (els[0] && els[0].parentElement);
+    if (!host) return;
+    var status = host.querySelector('[data-kqa-exclusive-status="' + id + '"]');
+    if (!status && conflicted) {
+      status = document.createElement("p");
+      status.setAttribute("data-kqa-exclusive-status", id);
+      status.setAttribute("role", "alert");
+      status.setAttribute("aria-live", "assertive");
+      status.className = "kq-selection-limit-error";
+      if (group && group.parentElement === host) host.insertBefore(status, group.nextSibling); else host.appendChild(status);
+    }
+    if (status) {
+      if (conflicted) status.textContent = "Choose an exclusive option by itself. Change this saved answer before submitting.";
+      else if (status.getAttribute("role") === "alert") status.remove();
+      else status.textContent = "";
+    }
   }
   function rankItems(id) {
     var els = controls(id);
@@ -324,6 +353,23 @@ export const BRIDGE_SOURCE = String.raw`(function () {
           return false;
         }
       }
+      if (question.type === "multi" && nv !== null && (question.exclusiveOptions || []).length) {
+        var exclusiveValues = question.exclusiveOptions || [];
+        var exclusiveCount = function (value) {
+          if (!Array.isArray(value)) return 0;
+          var unique = Array.from(new Set(value));
+          var count = unique.filter(function (item) { return exclusiveValues.indexOf(item) !== -1; }).length;
+          return count * (unique.length - 1);
+        };
+        var conflict = exclusiveCount(nv);
+        if (conflict > 0 && (source !== "dom" || conflict >= exclusiveCount(cur.value))) {
+          var exclusiveMessage = "Choose an exclusive option by itself.";
+          if (source === "dom") writeDom(id);
+          exclusiveSelectionMessage(id, true);
+          emit("validation", { id: id, valid: false, message: exclusiveMessage });
+          return false;
+        }
+      }
       var selected = Array.isArray(nv) ? new Set(nv).size : 0;
       if (question.type === "multi" && question.maxSelections !== undefined && selected > question.maxSelections) {
         var previousSelected = Array.isArray(cur.value) ? new Set(cur.value).size : 0;
@@ -348,6 +394,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     if (!changed) return true;
     if (next.value === undefined && next.note === undefined) delete state.answers[id]; else state.answers[id] = next;
     if (source !== "dom") writeDom(id); else writeStatus(id);
+    if (question.type === "multi") exclusiveSelectionMessage(id, Array.isArray(next.value) && next.value.some(function (item) { return (question.exclusiveOptions || []).indexOf(item) !== -1; }) && new Set(next.value).size > 1);
     var msg = { type: "set", id: id };
     if ("value" in patch) msg.value = next.value === undefined ? null : next.value;
     if ("note" in patch) msg.note = next.note === undefined ? null : next.note;
@@ -486,7 +533,29 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var el = ev.target;
     if (!el || !el.getAttribute) return;
     var id = el.getAttribute("data-kqa");
-    if (id !== null && q(id)) { commit(id, { value: readDom(id) }, "dom"); return; }
+    if (id !== null && q(id)) {
+      var question = q(id);
+      var exclusiveAnnouncement = "";
+      if (question.type === "multi" && el.type === "checkbox" && el.checked && (question.exclusiveOptions || []).length) {
+        var exclusive = question.exclusiveOptions.indexOf(el.value) !== -1;
+        var changedOthers = false;
+        controls(id).forEach(function (control) {
+          if (!control.checked || control === el) return;
+          if (exclusive || question.exclusiveOptions.indexOf(control.value) !== -1) { control.checked = false; changedOthers = true; }
+        });
+        if (changedOthers) {
+          exclusiveAnnouncement = exclusive ? "Exclusive option selected; other choices cleared." : "Exclusive choice cleared.";
+        }
+      }
+      commit(id, { value: readDom(id) }, "dom");
+      if (exclusiveAnnouncement) {
+        var statusEls = controls(id);
+        var host = statusEls[0] && statusEls[0].closest ? statusEls[0].closest("fieldset") : null;
+        var live = host && host.parentElement && host.parentElement.querySelector('[data-kqa-exclusive-status="' + id + '"]');
+        if (live) { live.textContent = exclusiveAnnouncement; setTimeout(function () { if (live && live.getAttribute("role") === "status") live.textContent = ""; }, 2500); }
+      }
+      return;
+    }
     var nid = el.getAttribute("data-kqa-note");
     if (nid !== null && q(nid)) commit(nid, { note: el.value }, "dom");
   }
@@ -535,6 +604,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     writeAll();
     state.questions.forEach(function (question) {
       var value = answerOf(question.id).value;
+      if (question.type === "multi" && Array.isArray(value)) exclusiveSelectionMessage(question.id, value.some(function (item) { return (question.exclusiveOptions || []).indexOf(item) !== -1; }) && new Set(value).size > 1);
       if (question.type === "multi" && question.maxSelections !== undefined && Array.isArray(value) && new Set(value).size > question.maxSelections) {
         var message = "This saved answer has " + new Set(value).size + " choices. Remove choices until no more than " + question.maxSelections + " remain.";
         selectionLimitError(question.id, message);

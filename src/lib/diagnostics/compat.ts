@@ -25,6 +25,7 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
   const answeredPeopleByQuestion = new Map<string, number>();
   const optionUsageByQuestion = new Map<string, Map<string, number>>();
   const peopleOverNewSelectionLimit = new Map<string, number>();
+  const peopleWithExclusiveConflicts = new Map<string, number>();
   let submitted = 0;
 
   // Aggregate participant data once. Compatibility checks run both during admin previews and MCP
@@ -48,6 +49,14 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
         const retainedSelections = new Set(answer.value.filter((value) => retained.has(value)));
         if (retainedSelections.size > nextQuestion.maxSelections) {
           peopleOverNewSelectionLimit.set(questionId, (peopleOverNewSelectionLimit.get(questionId) ?? 0) + 1);
+        }
+      }
+      if (nextQuestion?.type === "multi" && Array.isArray(answer.value)) {
+        const retained = new Set(nextQuestion.options?.map((option) => option.value) ?? []);
+        const retainedSelections = new Set(answer.value.filter((value) => retained.has(value)));
+        const exclusive = new Set(nextQuestion.exclusiveOptions ?? []);
+        if ([...retainedSelections].some((value) => exclusive.has(value)) && retainedSelections.size > 1) {
+          peopleWithExclusiveConflicts.set(questionId, (peopleWithExclusiveConflicts.get(questionId) ?? 0) + 1);
         }
       }
       let counts = optionUsageByQuestion.get(questionId);
@@ -94,6 +103,10 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
       if (peopleOverLimit > 0) {
         out.push(make("KQA705", `Question "${q.id}" now allows at most ${n.maxSelections} choices, but ${peopleOverLimit} ${peopleOverLimit === 1 ? "person has" : "people have"} already saved more.`, undefined, q.id));
       }
+    }
+    if (n.type === "multi") {
+      const peopleWithConflicts = peopleWithExclusiveConflicts.get(q.id) ?? 0;
+      if (peopleWithConflicts > 0) out.push(make("KQA706", `Question "${q.id}" now has exclusive options, but ${peopleWithConflicts} ${peopleWithConflicts === 1 ? "person has" : "people have"} already saved conflicting choices.`, undefined, q.id));
     }
   }
   if (submitted > 0) {

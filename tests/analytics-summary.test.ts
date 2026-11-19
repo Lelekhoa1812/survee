@@ -104,6 +104,15 @@ describe("descriptive question summaries", () => {
     expect(summary.disclosureRisk).toMatchObject({ singletonDistributionDenominator: false, singletonDistributionValues: ["b"] });
   });
 
+  it("excludes legacy answers that violate exclusive checkbox options", () => {
+    const q: Question = { id: "q", type: "multi", label: "Choices", exclusiveOptions: ["none"], options: [
+      { value: "none", label: "None" }, { value: "a", label: "A" }, { value: "b", label: "B" },
+    ] };
+    const summary = summarizeQuestion(q, [respondent(["none", "a"]), respondent(["a"])]);
+    expect(summary).toMatchObject({ answeredCount: 2, unmappedResponseCount: 1, distributionDenominator: 1 });
+    expect(summary.distribution.map((item) => item.count)).toEqual([0, 1, 0]);
+  });
+
   it("reports number summaries while retaining non-numeric legacy values as unmapped", () => {
     const q: Question = { id: "q", type: "number", label: "Budget" };
     const summary = summarizeQuestion(q, [respondent(1), respondent(2), respondent(3), respondent("unknown"), respondent()]);

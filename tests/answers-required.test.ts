@@ -32,6 +32,16 @@ describe("answered, without scores", () => {
     expect(validateAnswer(capped, ["email", "phone", "email", "phone"], { allowOverLimit: true })).toEqual({ ok: true, value: ["email", "phone"] });
   });
 
+  it("requires exclusive checkbox options to stand alone and blocks legacy conflicts from progress", () => {
+    const exclusive = { ...checkbox, exclusiveOptions: ["email"] };
+    expect(validateAnswer(exclusive, ["email"])).toEqual({ ok: true, value: ["email"] });
+    expect(validateAnswer(exclusive, ["email", "phone"]).ok).toBe(false);
+    expect(validateAnswer(exclusive, ["email", "phone"], { allowExclusiveConflict: true })).toEqual({ ok: true, value: ["email", "phone"] });
+    expect(progress({ format: "kqa/1", title: "Exclusive", questions: [exclusive] }, {
+      channels: { value: ["email", "phone"], updatedAt: "now" },
+    }).invalidExclusiveSelections).toEqual([{ id: "channels" }]);
+  });
+
   it("validates a complete rank permutation while preserving respondent order", () => {
     const rank: Question = { id: "priorities", type: "rank", label: "Order these", options: [
       { value: "cost", label: "Cost" }, { value: "speed", label: "Speed" }, { value: "quality", label: "Quality" },

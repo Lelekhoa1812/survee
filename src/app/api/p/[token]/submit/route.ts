@@ -13,5 +13,5 @@ export async function POST(req: Request, { params }: Ctx) {
     return fail(409, "This questionnaire version is missing. Reload the page to continue.", { code: "questionnaire_version_changed" });
   }
   const result = await submitAnswers(token, body.data.version);
-  return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, missing: result.missing, invalidSelections: result.invalidSelections });
+  return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, missing: result.missing, invalidSelections: result.invalidSelections, invalidExclusiveSelections: result.invalidExclusiveSelections });
 }

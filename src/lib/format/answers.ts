@@ -2,11 +2,18 @@ import { LIMITS, scaleBounds, type AnswerMap, type AnswerValue, type Manifest, t
 
 export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string };
 
+export function exclusiveConflictCount(q: Question, value: unknown): number {
+  if (q.type !== "multi" || !Array.isArray(value)) return 0;
+  const unique = [...new Set(value.filter((item): item is string => typeof item === "string"))];
+  const exclusiveCount = unique.filter((item) => q.exclusiveOptions?.includes(item)).length;
+  return exclusiveCount * (unique.length - 1);
+}
+
 /**
  * Validate and normalise a value for a question. `null` means "clear the answer".
  * Used by the answer API (server side), the probe and the importer, so there is one definition of "valid".
  */
-export function validateAnswer(q: Question, raw: unknown, options: { allowOverLimit?: boolean } = {}): ValidateResult {
+export function validateAnswer(q: Question, raw: unknown, options: { allowOverLimit?: boolean; allowExclusiveConflict?: boolean } = {}): ValidateResult {
   if (raw === null || raw === undefined) return { ok: true, value: null };
   switch (q.type) {
     case "single":
@@ -24,6 +31,8 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
       if (bad.length) return { ok: false, reason: `not option values: ${bad.map((b) => `"${b}"`).join(", ")}` };
       const unique = [...new Set(raw)];
       if (!options.allowOverLimit && q.maxSelections !== undefined && unique.length > q.maxSelections) return { ok: false, reason: `choose no more than ${q.maxSelections} options` };
+      const exclusive = new Set(q.exclusiveOptions ?? []);
+      if (!options.allowExclusiveConflict && unique.some((value) => exclusive.has(value)) && unique.length > 1) return { ok: false, reason: "choose an exclusive option by itself" };
       // Keep the manifest's order so exports and comparisons are stable.
       const order = (q.options ?? []).map((o) => o.value);
       unique.sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -136,6 +145,7 @@ export interface Progress {
   requiredAnswered: number;
   missingRequired: string[];
   invalidSelections: { id: string; selected: number; maximum: number }[];
+  invalidExclusiveSelections: { id: string }[];
   eligible: Record<string, boolean>;
   inactive: number;
 }
@@ -146,6 +156,7 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
   let requiredAnswered = 0;
   const missingRequired: string[] = [];
   const invalidSelections: Progress["invalidSelections"] = [];
+  const invalidExclusiveSelections: Progress["invalidExclusiveSelections"] = [];
   const eligible = evaluateEligibility(manifest, answers);
   let total = 0;
   for (const q of manifest.questions) {
@@ -158,13 +169,14 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
       const selected = new Set(value).size;
       if (selected > q.maxSelections) invalidSelections.push({ id: q.id, selected, maximum: q.maxSelections });
     }
+    if (q.type === "multi" && Array.isArray(value) && value.some((item) => q.exclusiveOptions?.includes(item)) && new Set(value).size > 1) invalidExclusiveSelections.push({ id: q.id });
     if (q.required) {
       requiredTotal += 1;
       if (done) requiredAnswered += 1;
       else missingRequired.push(q.id);
     }
   }
-  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, eligible, inactive: manifest.questions.length - total };
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidExclusiveSelections, eligible, inactive: manifest.questions.length - total };
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

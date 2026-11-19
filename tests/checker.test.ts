@@ -31,6 +31,14 @@ describe("starter template", () => {
   });
 });
 
+describe("exclusive checkbox options", () => {
+  it("accepts declared exclusive values and rejects undeclared ones", () => {
+    const html = `<!doctype html><html lang="en"><head><title>Test</title><script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Test","questions":[{"id":"choices","type":"multi","label":"Choose","exclusiveOptions":["none"],"options":[{"value":"none","label":"None"},{"value":"one","label":"One"}]}]}</script></head><body><fieldset><legend>Choose</legend><label><input type="checkbox" data-kqa="choices" value="none">None</label><label><input type="checkbox" data-kqa="choices" value="one">One</label></fieldset></body></html>`;
+    expect(codes(checkHtml(html))).not.toContain("KQA221");
+    expect(codes(checkHtml(html.replace('"exclusiveOptions":["none"]', '"exclusiveOptions":["missing"]')))).toContain("KQA221");
+  });
+});
+
 describe("file level", () => {
   it("rejects an empty file", () => expect(codes(checkHtml("  \n"))).toContain("KQA100"));
   it("reports a missing manifest", () => {

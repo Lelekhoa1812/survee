@@ -123,6 +123,20 @@ describe("respondent version fence", () => {
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
   });
 
+  it("rejects new exclusive conflicts, preserves legacy data, and permits correction", async () => {
+    const options = ["none", "a", "b"].map((value) => ({ value, label: value }));
+    mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "multi", label: "Choices", options, exclusiveOptions: ["none"] }] };
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: ["none", "a"] } }))).toMatchObject({ ok: false, status: 400 });
+
+    mocks.participant.answers = { q1: { value: ["none", "a"], updatedAt: "now" } };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: false, status: 422, invalidExclusiveSelections: [{ id: "q1" }] });
+    const reduce = await asAxion(() => saveAnswers(token, 4, { q1: { value: ["none"] } }));
+    expect(reduce).toMatchObject({ ok: true });
+    expect(mocks.participant.answers.q1.value).toEqual(["none", "a"]); // Existing answer is not silently rewritten.
+    const savedSet = mocks.participantUpdate.mock.calls.at(-1)?.[1].$set;
+    expect(savedSet["answers.q1"].value).toEqual(["none"]);
+  });
+
   it("saves full rank permutations in respondent order and rejects partial orders", async () => {
     const options = ["a", "b", "c"].map((value) => ({ value, label: value.toUpperCase() }));
     mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "rank", label: "Order options", required: true, options }] };

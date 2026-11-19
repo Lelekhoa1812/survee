@@ -17,7 +17,7 @@ Do not invent question types, routing rules, host actions, privacy promises, or 
 
 Use `rank` only when respondents should order every one of 2–8 options; it stores a full permutation, not a partial top-N. The semantic `<ol>` with one `<li data-value>` per option is decorated by the runtime with accessible Move up/Move down controls and a Use this order confirmation for the starting order. Do not add drag-only interaction, claim that KQA scores the order, or use an option-ranking question to rank people.
 
-For bounded checkbox questions, use `maxSelections` only when the decision requires a fixed upper bound, reflect it in respondent help ("Choose up to N"), and treat it separately from requiredness. Custom controls must handle a rejected `KQA.set` result and the `validation` event. Never remove saved choices silently when a live questionnaire's cap is lowered.
+For bounded checkbox questions, use `maxSelections` only when the decision requires a fixed upper bound, reflect it in respondent help ("Choose up to N"), and treat it separately from requiredness. Use `exclusiveOptions` for declared choices that must stand alone (such as “None of these”) and only when that is logically correct. Custom controls must enforce exclusivity, handle a rejected `KQA.set` result and the `validation` event, and explain the correction. Never remove saved choices silently when a live questionnaire's cap or exclusivity rules change.
 
 ## Workflow
 

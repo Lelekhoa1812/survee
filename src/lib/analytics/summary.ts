@@ -318,8 +318,9 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
       const raw = answer?.value;
       const values = Array.isArray(raw) ? [...new Set(raw)] : [raw];
       const normalized = values.map((value) => q.type === "scale" ? numericValue(value) : value);
+      const validation = validateAnswer(q, raw);
       const shapeValid = q.type === "multi" ? Array.isArray(raw) : !Array.isArray(raw);
-      const valid = shapeValid && normalized.every((value) => value !== null && byValue.has(String(value)));
+      const valid = validation.ok && shapeValid && normalized.every((value) => value !== null && byValue.has(String(value)));
       if (!valid) distributionUnmappedResponseCount += 1;
       else {
         distributionDenominator += 1;

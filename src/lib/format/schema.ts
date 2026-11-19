@@ -86,6 +86,8 @@ export const questionSchema = z.object({
   options: z.array(optionSchema).min(2).max(LIMITS.maxOptions).optional(),
   /** Optional maximum number of distinct options for a multi question. */
   maxSelections: z.number().int().min(1).max(LIMITS.maxOptions).optional(),
+  /** Option values that cannot be selected with any other option in this multi question. */
+  exclusiveOptions: z.array(z.string().regex(OPTION_VALUE_RE)).min(1).optional(),
   note: noteSchema.optional(),
   min: z.number().finite().optional(),
   max: z.number().finite().optional(),
@@ -99,6 +101,14 @@ export const questionSchema = z.object({
   if (question.type === "rank") {
     if ((question.options?.length ?? 0) < 2) ctx.addIssue({ code: "custom", path: ["options"], message: "rank questions need at least two options" });
     if ((question.options?.length ?? 0) > LIMITS.maxRankOptions) ctx.addIssue({ code: "custom", path: ["options"], message: `rank questions support at most ${LIMITS.maxRankOptions} options` });
+  }
+  if (question.exclusiveOptions !== undefined) {
+    if (question.type !== "multi") ctx.addIssue({ code: "custom", path: ["exclusiveOptions"], message: "exclusiveOptions only applies to multi questions" });
+    if (new Set(question.exclusiveOptions).size !== question.exclusiveOptions.length) ctx.addIssue({ code: "custom", path: ["exclusiveOptions"], message: "exclusiveOptions must not contain duplicates" });
+    const optionValues = new Set(question.options?.map((option) => option.value) ?? []);
+    question.exclusiveOptions.forEach((value, index) => {
+      if (!optionValues.has(value)) ctx.addIssue({ code: "custom", path: ["exclusiveOptions", index], message: `exclusive option "${value}" must match a declared option value` });
+    });
   }
 });
 
@@ -151,10 +161,18 @@ export function manifestJsonSchema(): unknown {
   };
   const item = schema.properties?.questions?.items;
   if (item) {
-    item.allOf = [{
-      if: { properties: { type: { const: "rank" } }, required: ["type"] },
-      then: { properties: { options: { maxItems: LIMITS.maxRankOptions } }, required: ["options"] },
-    }];
+    const properties = item.properties as Record<string, Record<string, unknown> | undefined> | undefined;
+    if (properties?.exclusiveOptions?.items) properties.exclusiveOptions.uniqueItems = true;
+    item.allOf = [
+      {
+        if: { properties: { type: { const: "rank" } }, required: ["type"] },
+        then: { properties: { options: { maxItems: LIMITS.maxRankOptions } }, required: ["options"] },
+      },
+      {
+        if: { required: ["exclusiveOptions"] },
+        then: { properties: { type: { const: "multi" } } },
+      },
+    ];
   }
   return schema;
 }

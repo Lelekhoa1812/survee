@@ -119,6 +119,15 @@
             "minimum": 1,
             "maximum": 50
           },
+          "exclusiveOptions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+            },
+            "uniqueItems": true
+          },
           "note": {
             "anyOf": [
               {
@@ -312,6 +321,20 @@
               "required": [
                 "options"
               ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "exclusiveOptions"
+              ]
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "const": "multi"
+                }
+              }
             }
           }
         ]

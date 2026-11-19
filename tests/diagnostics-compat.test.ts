@@ -5,6 +5,18 @@ import { compareVersions } from "../src/lib/diagnostics/compat";
 const manifest = (questions: Manifest["questions"]): Manifest => ({ format: "kqa/1", title: "Survey", questions });
 
 describe("compareVersions", () => {
+  it("warns when newly exclusive options conflict with retained answers", () => {
+    const previous = manifest([{ id: "q", type: "multi", label: "Choices", options: ["none", "one", "two"].map((value) => ({ value, label: value })) }]);
+    const next = manifest([{ id: "q", type: "multi", label: "Choices", exclusiveOptions: ["none"], options: ["none", "one", "two"].map((value) => ({ value, label: value })) }]);
+    const diagnostics = compareVersions({ previous, next, answers: [
+      { status: "open", answers: { q: { value: ["none", "one"], updatedAt: "now" } } },
+      { status: "submitted", answers: { q: { value: ["one", "two"], updatedAt: "now" } } },
+    ] });
+    expect(diagnostics.filter((item) => item.code === "KQA706").map((item) => item.message)).toEqual([
+      'Question "q" now has exclusive options, but 1 person has already saved conflicting choices.',
+    ]);
+  });
+
   it("warns once per person when retained multi answers exceed a lowered cap", () => {
     const previous = manifest([{ id: "q", type: "multi", label: "Choices", options: ["a", "b", "c", "d"].map((value) => ({ value, label: value })) }]);
     const next = manifest([{ id: "q", type: "multi", label: "Choices", maxSelections: 2, options: ["a", "b", "c"].map((value) => ({ value, label: value })) }]);

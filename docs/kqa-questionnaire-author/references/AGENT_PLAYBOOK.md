@@ -104,7 +104,7 @@ Single choice (`single`). Help text is "Pick one." Nothing is pre-checked.
 </article>
 ```
 
-Checkboxes (`multi`). Use "Tick all that apply" when there is no cap. If the question has a meaningful upper bound, set `maxSelections` and say "Choose up to N" in help text. A required checkbox is answered when at least one box is ticked; `maxSelections` never imposes a minimum.
+Checkboxes (`multi`). Use "Tick all that apply" when there is no cap. If the question has a meaningful upper bound, set `maxSelections` and say "Choose up to N" in help text. For a declared option such as “None of these” that cannot combine with another choice, add its value to `exclusiveOptions`; KQA enforces that rule and announces automatic clearing. A required checkbox is answered when at least one box is ticked; `maxSelections` and `exclusiveOptions` never impose a minimum. Do not add “None”, “Not sure”, or “Prefer not to answer” unless it is appropriate to the question.
 
 ```html
 <article class="kq-q" id="q-ID">

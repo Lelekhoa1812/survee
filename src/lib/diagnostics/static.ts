@@ -45,7 +45,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
   return best;
 }
 
-const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "note", "min", "max", "step", "maxLength", "custom", "when"];
+const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "exclusiveOptions", "note", "min", "max", "step", "maxLength", "custom", "when"];
 const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
@@ -684,6 +684,13 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       } else if (!Number.isInteger(q.maxSelections) || (q.maxSelections as number) < 1 || (q.maxSelections as number) > LIMITS.maxOptions || (Array.isArray(q.options) && (q.maxSelections as number) > q.options.length)) {
         const maximum = Array.isArray(q.options) ? q.options.length : LIMITS.maxOptions;
         add(ctx, "KQA219", `${p}.maxSelections must be a whole number from 1 to the number of declared options (at most ${maximum}).`, "Set maxSelections to a valid option count.", { offset: m.at(`${p}.maxSelections`), path: `${p}.maxSelections`, questionId: qid });
+      }
+    }
+    if (q.exclusiveOptions !== undefined) {
+      const values = Array.isArray(q.options) ? new Set(q.options.filter(isObj).map((option) => option.value).filter((value): value is string => typeof value === "string")) : new Set<string>();
+      const exclusive = Array.isArray(q.exclusiveOptions) ? q.exclusiveOptions : [];
+      if (t !== "multi" || !Array.isArray(q.exclusiveOptions) || exclusive.length === 0 || exclusive.some((value) => typeof value !== "string" || !OPTION_VALUE_RE.test(value)) || new Set(exclusive).size !== exclusive.length || exclusive.some((value) => !values.has(value))) {
+        add(ctx, "KQA221", `${p}.exclusiveOptions must be a non-empty list of unique values declared in this multi question's options.`, 'Use "exclusiveOptions" only on a multi question and list declared option values.', { offset: m.at(`${p}.exclusiveOptions`), path: `${p}.exclusiveOptions`, questionId: qid });
       }
     }
 
