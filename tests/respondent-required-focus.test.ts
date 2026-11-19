@@ -77,6 +77,60 @@ describe("respondent required-answer recovery", () => {
     expect(shell.getAttribute("lang")).toBe("ar");
   });
 
+  it("renders respondent navigation in each supported shell locale", async () => {
+    const cases = [
+      { locale: "vi", lang: "vi", dir: "ltr", review: "Xem lại câu trả lời" },
+      { locale: "es", lang: "es", dir: "ltr", review: "Revisar las respuestas" },
+      { locale: "ar", lang: "ar", dir: "rtl", review: "مراجعة الإجابات" },
+    ];
+    for (const [index, item] of cases.entries()) {
+      if (index === 0) {
+        await act(async () => {
+          root.render(createElement(RespondentShell, { token: "participant-token", initialLocale: "vi" }));
+          await Promise.resolve();
+        });
+      } else {
+        const selector = host.querySelector<HTMLSelectElement>(".rs-language select")!;
+        selector.value = item.locale;
+        await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
+      }
+      const shell = host.querySelector<HTMLElement>(".rs")!;
+      expect(shell.getAttribute("lang")).toBe(item.lang);
+      expect(shell.getAttribute("dir")).toBe(item.dir);
+      expect(Array.from(host.querySelectorAll("button")).some((button) => button.textContent?.trim() === item.review)).toBe(true);
+    }
+  });
+
+  it("isolates authored question text and language inside Arabic shell validation", async () => {
+    state.api.mockResolvedValueOnce({
+      ok: true, status: 200, data: {
+        ok: true,
+        participant: { name: "Ada", status: "in_progress" },
+        interview: { name: "Study", status: "open" },
+        version: 7,
+        title: "Study questions",
+        questions: [{ id: "bounded", type: "text", label: "What changed?" }],
+        answers: {},
+      },
+    });
+    await act(async () => {
+      root.render(createElement(RespondentShell, { token: "participant-token", initialLocale: "ar" }));
+      await Promise.resolve();
+    });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => window.dispatchEvent(new MessageEvent("message", {
+      data: { kqa: 1, type: "hello", lang: "en", dir: "ltr" }, origin: "null", source: frame.contentWindow,
+    })));
+    await act(async () => window.dispatchEvent(new MessageEvent("message", {
+      data: { kqa: 1, type: "length-draft", id: "bounded", valid: false, count: 22, max: 20 }, origin: "null", source: frame.contentWindow,
+    })));
+
+    const isolated = host.querySelector<HTMLElement>('.rs-banner.warn bdi[dir="auto"]')!;
+    expect(isolated.textContent).toBe("What changed?");
+    expect(isolated.getAttribute("lang")).toBe("en");
+    expect(host.querySelector<HTMLElement>(".rs")?.getAttribute("dir")).toBe("rtl");
+  });
+
   it("lets a respondent open the review when every required answer is empty", async () => {
     state.api.mockResolvedValueOnce({
       ok: true, status: 200, data: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditRespondentLocales, RESPONDENT_LOCALES, RESPONDENT_LOCALE_META, isRespondentLocale, resolveRespondentLocale, respondentBridgeMessages, respondentMessage, respondentTime } from "../src/lib/respondent-locale";
+import { auditRespondentLocales, RESPONDENT_LOCALES, RESPONDENT_LOCALE_META, isRespondentLocale, resolveRespondentLocale, respondentBridgeMessages, respondentMessage, respondentMessageParts, respondentTime } from "../src/lib/respondent-locale";
 
 describe("respondent shell locales", () => {
   it("uses a saved supported choice before browser preferences", () => {
@@ -42,6 +42,14 @@ describe("respondent shell locales", () => {
     const timestamp = new Date("2026-11-19T13:05:00Z");
     expect(respondentTime("en-AU", timestamp)).toBe(new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit" }).format(timestamp));
     expect(respondentTime("ar", new Date("2026-11-19T13:05:00Z"))).toBeTruthy();
+  });
+
+  it("keeps authored question text isolated inside localized RTL shell messages", () => {
+    expect(respondentMessageParts("ar", "lengthOver", { question: "English: What changed?", count: 22, max: 20 })).toEqual([
+      { kind: "text", text: "تتكوّن الإجابة عن «" },
+      { kind: "isolate", text: "English: What changed?" },
+      { kind: "text", text: `» من ${new Intl.NumberFormat("ar").format(22)} حرفًا، والحد الأقصى هو ${new Intl.NumberFormat("ar").format(20)}. لم تُحفظ. اختصرها قبل المراجعة أو الإرسال.` },
+    ]);
   });
 
   it("uses Arabic plural categories for selection limits", () => {

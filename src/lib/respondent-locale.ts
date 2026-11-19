@@ -136,6 +136,33 @@ export function respondentMessage(locale: RespondentLocale, key: RespondentMessa
   });
 }
 
+/** Keep dynamic string values available as isolated DOM runs for mixed-direction shell text. */
+export function respondentMessageParts(locale: RespondentLocale, key: RespondentMessage, values: Record<string, string | number> = {}): ({ kind: "text"; text: string } | { kind: "isolate"; text: string })[] {
+  const isolated = new Map<number, string>();
+  const templated: Record<string, string | number> = { ...values };
+  let index = 0;
+  for (const [name, value] of Object.entries(values)) {
+    if (typeof value !== "string") continue;
+    const token = `\uE000kqa${index}\uE001`;
+    isolated.set(index, value);
+    templated[name] = token;
+    index += 1;
+  }
+  const rendered = respondentMessage(locale, key, templated);
+  const parts: ({ kind: "text"; text: string } | { kind: "isolate"; text: string })[] = [];
+  const tokenPattern = /\uE000kqa(\d+)\uE001/g;
+  let cursor = 0;
+  for (const match of rendered.matchAll(tokenPattern)) {
+    const start = match.index ?? 0;
+    if (start > cursor) parts.push({ kind: "text", text: rendered.slice(cursor, start) });
+    const value = isolated.get(Number(match[1]));
+    if (value !== undefined) parts.push({ kind: "isolate", text: value });
+    cursor = start + match[0].length;
+  }
+  if (cursor < rendered.length || !parts.length) parts.push({ kind: "text", text: rendered.slice(cursor) });
+  return parts;
+}
+
 export function respondentTime(locale: RespondentLocale, date: Date): string {
   return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(date);
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerMap, AnswerValue, Question, QuestionOrderGroup, RepeatRecordMap, RepeatRecordOperation, RepeatRecordRow, Section } from "@/lib/format/schema";
 import { displayValue } from "@/lib/format/answers";
-import { RESPONDENT_LOCALE_META, type RespondentLocale, type RespondentMessage, respondentBridgeMessages, respondentMessage, respondentTime } from "@/lib/respondent-locale";
+import { RESPONDENT_LOCALE_META, type RespondentLocale, type RespondentMessage, respondentBridgeMessages, respondentMessage, respondentMessageParts, respondentTime } from "@/lib/respondent-locale";
 import { api, BrandMark, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 
 type Phase = "loading" | "ready" | "invalid" | "error";
@@ -113,6 +113,10 @@ function LocalePicker({ locale, label, onChange }: { locale: RespondentLocale; l
       </select>
     </label>
   );
+}
+
+function LocalizedMessage({ locale, message, values, valueLang }: { locale: RespondentLocale; message: RespondentMessage; values: Record<string, string | number>; valueLang?: string }) {
+  return <>{respondentMessageParts(locale, message, values).map((part, index) => <Fragment key={index}>{part.kind === "isolate" ? <bdi lang={valueLang} dir="auto">{part.text}</bdi> : part.text}</Fragment>)}</>;
 }
 
 export function RespondentShell({ token, initialLocale = "en-AU" }: { token: string; initialLocale?: RespondentLocale }) {
@@ -767,7 +771,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         {submitted && <><Icon name="check" size={16} /> {t("submittedMessage")}</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> {t("closedMessage")}</>}
       </div>
-      {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {lengthDraftHidden ? t("lengthHidden", { question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max }) : t("lengthOver", { question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max })} <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? t("reviewEarlier") : t("editResponse")}</button></div>}
+      {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> <LocalizedMessage locale={locale} message={lengthDraftHidden ? "lengthHidden" : "lengthOver"} values={{ question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max }} valueLang={questionnaireLanguage} /> <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? t("reviewEarlier") : t("editResponse")}</button></div>}
       {rejectedRecordDrafts.length > 0 && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("repeatRejectedCount", { count: rejectedRecordDrafts.length })} <button className="btn" type="button" onClick={() => setConfirming(true)}>{t("repeatRejectedTitle")}</button></div>}
 
       {guidedMode && activeGuidedGroup && (
@@ -830,7 +834,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           }
         >
           <div className="review-content">
-            {firstLengthDraft && <div className="rs-guided-error" role="alert">{t("lengthReviewError", { question: firstLengthDraft.question.label, max: firstLengthDraft.max })} <button type="button" onClick={focusLengthDraft}>{t("editResponse")}</button></div>}
+            {firstLengthDraft && <div className="rs-guided-error" role="alert"><LocalizedMessage locale={locale} message="lengthReviewError" values={{ question: firstLengthDraft.question.label, max: firstLengthDraft.max }} valueLang={questionnaireLanguage} /> <button type="button" onClick={focusLengthDraft}>{t("editResponse")}</button></div>}
             <p className="muted">{t("reviewInstruction")}</p>
             {rejectedRecordDrafts.length > 0 && (
               <section className="rs-guided-error" role="alert" aria-labelledby="rs-record-rejected-title">
