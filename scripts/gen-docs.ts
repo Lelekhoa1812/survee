@@ -5,7 +5,7 @@
  *   docs/kqa-questionnaire-author/references/ from canonical docs and examples
  * Run with `npm run docs`. A test fails if the committed files are out of date.
  */
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { CATALOG, type Category } from "../src/lib/diagnostics/catalog";
 import { manifestJsonSchema } from "../src/lib/format/schema";
@@ -28,6 +28,7 @@ const skillReferences: Record<string, string> = {
   "AUTHORING_TRUST_BOUNDARY_EVAL.md": "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md",
   "AUTHORING_TRUST_BOUNDARY_CASES.json": "evals/authoring-trust-boundary-cases.json",
   "starter.kqa.html": "template/starter.kqa.html",
+  "conditional-follow-up.kqa.html": "examples/conditional-follow-up.kqa.html",
   "routed-follow-up.kqa.html": "examples/routed-follow-up.kqa.html",
   "service-improvement.kqa.html": "examples/service-improvement.kqa.html",
   "service-improvement.review.md": "examples/service-improvement.review.md",
@@ -36,7 +37,43 @@ const skillReferences: Record<string, string> = {
 };
 const referencesDir = path.join(root, "kqa-questionnaire-author", "references");
 mkdirSync(referencesDir, { recursive: true });
-for (const [name, source] of Object.entries(skillReferences)) copyFileSync(path.join(root, source), path.join(referencesDir, name));
+
+const skillPathByDocPath = new Map(Object.entries(skillReferences).map(([name, source]) => [path.posix.normalize(source), name]));
+skillPathByDocPath.set("kqa-questionnaire-author/SKILL.md", "../SKILL.md");
+
+function portableSkillMarkdown(markdown: string, source: string) {
+  return markdown.replace(/(\]\()(<[^>]+>|[^)\s]+)(?=[\s)])/g, (match, prefix: string, wrappedTarget: string) => {
+    const target = wrappedTarget.startsWith("<") && wrappedTarget.endsWith(">")
+      ? wrappedTarget.slice(1, -1)
+      : wrappedTarget;
+    if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) return match;
+
+    const targetPath = target.split(/[?#]/, 1)[0];
+    const suffix = target.slice(targetPath.length);
+    const docPath = targetPath.startsWith("/api/docs/")
+      ? path.posix.normalize(targetPath.slice("/api/docs/".length))
+      : targetPath.startsWith("/")
+        ? null
+        : path.posix.normalize(path.posix.join(path.posix.dirname(source), targetPath));
+    if (!docPath) return match;
+    const skillPath = skillPathByDocPath.get(docPath);
+    if (!skillPath) return match;
+    const bundleTarget = path.posix.join("references", skillPath);
+    const relativeTarget = path.posix.relative("references", bundleTarget);
+    const replacement = `${prefix}${relativeTarget}${suffix}`;
+    return wrappedTarget.startsWith("<") ? `${prefix}<${relativeTarget}${suffix}>` : replacement;
+  });
+}
+
+for (const [name, source] of Object.entries(skillReferences)) {
+  const sourcePath = path.join(root, source);
+  const targetPath = path.join(referencesDir, name);
+  if (name.endsWith(".md")) {
+    writeFileSync(targetPath, portableSkillMarkdown(readFileSync(sourcePath, "utf8"), source));
+  } else {
+    copyFileSync(sourcePath, targetPath);
+  }
+}
 
 const TITLES: Record<Category, string> = {
   file: "The file itself (KQA1xx)",

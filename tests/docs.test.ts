@@ -1,8 +1,32 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 import { buildBundle, DOCS, readAsset, readDoc } from "../src/lib/docs";
 import { getInterviewPackage, INTERVIEW_PACKAGES, INTERVIEW_PACKAGE_VERSION } from "../src/lib/interview-packages";
 
 describe("agent documentation bundle", () => {
+  const skillReferences = [
+    ["FORMAT.md", "FORMAT.md"],
+    ["AGENT_PLAYBOOK.md", "AGENT_PLAYBOOK.md"],
+    ["DESIGN_SYSTEM.md", "DESIGN_SYSTEM.md"],
+    ["INTERVIEW_PACKAGES.md", "INTERVIEW_PACKAGES.md"],
+    ["QUESTION_BLUEPRINT.md", "QUESTION_BLUEPRINT.md"],
+    ["MCP.md", "MCP.md"],
+    ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
+    ["questionnaire-authoring-cases.json", "evals/questionnaire-authoring-cases.json"],
+    ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
+    ["package-draft-cases.json", "evals/package-draft-cases.json"],
+    ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
+    ["AUTHORING_TRUST_BOUNDARY_EVAL.md", "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md"],
+    ["AUTHORING_TRUST_BOUNDARY_CASES.json", "evals/authoring-trust-boundary-cases.json"],
+    ["starter.kqa.html", "template/starter.kqa.html"],
+    ["conditional-follow-up.kqa.html", "examples/conditional-follow-up.kqa.html"],
+    ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
+    ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
+    ["service-improvement.review.md", "examples/service-improvement.review.md"],
+    ["personal-planning.kqa.html", "examples/personal-planning.kqa.html"],
+    ["personal-planning.review.md", "examples/personal-planning.review.md"],
+  ] as const;
+
   it("publishes the design system and includes it in the full questionnaire bundle", async () => {
     expect(DOCS.some((doc) => doc.slug === "design-system" && doc.file === "DESIGN_SYSTEM.md")).toBe(true);
     const bundle = await buildBundle("https://kqa.example");
@@ -136,27 +160,30 @@ describe("agent documentation bundle", () => {
     expect(skill).toContain("references/PACKAGE_DRAFT_BENCHMARK.md");
     expect(skill).toContain("references/AUTHORING_TRUST_BOUNDARY_EVAL.md");
     expect(skill).toContain("references/QUESTION_BLUEPRINT.md");
-    const references = [
-      ["FORMAT.md", "FORMAT.md"],
-      ["AGENT_PLAYBOOK.md", "AGENT_PLAYBOOK.md"],
-      ["DESIGN_SYSTEM.md", "DESIGN_SYSTEM.md"],
-      ["INTERVIEW_PACKAGES.md", "INTERVIEW_PACKAGES.md"],
-      ["QUESTION_BLUEPRINT.md", "QUESTION_BLUEPRINT.md"],
-      ["MCP.md", "MCP.md"],
-      ["QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md"],
-      ["questionnaire-authoring-cases.json", "evals/questionnaire-authoring-cases.json"],
-      ["PACKAGE_DRAFT_BENCHMARK.md", "evals/PACKAGE_DRAFT_BENCHMARK.md"],
-      ["package-draft-cases.json", "evals/package-draft-cases.json"],
-      ["package-draft-results.schema.json", "evals/package-draft-results.schema.json"],
-      ["AUTHORING_TRUST_BOUNDARY_EVAL.md", "evals/AUTHORING_TRUST_BOUNDARY_EVAL.md"],
-      ["starter.kqa.html", "template/starter.kqa.html"],
-      ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
-      ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
-      ["service-improvement.review.md", "examples/service-improvement.review.md"],
-      ["personal-planning.kqa.html", "examples/personal-planning.kqa.html"],
-      ["personal-planning.review.md", "examples/personal-planning.review.md"],
-    ];
-    for (const [copy, source] of references) expect(await readDoc(`kqa-questionnaire-author/references/${copy}`)).toBe(await readDoc(source));
+    const ignoreLinkTargets = (markdown: string) => markdown.replace(/(\]\()(<[^>]+>|[^)\s]+)(?=[\s)])/g, "$1LINK");
+    for (const [copy, source] of skillReferences) {
+      expect(ignoreLinkTargets(await readDoc(`kqa-questionnaire-author/references/${copy}`) ?? "")).toBe(ignoreLinkTargets(await readDoc(source) ?? ""));
+    }
+  });
+
+  it("keeps every relative Markdown link resolvable in the installed skill bundle", async () => {
+    const bundledPaths = new Set(["SKILL.md", ...skillReferences.map(([name]) => `references/${name}`)]);
+    const markdownFiles: Array<[string, string]> = [["SKILL.md", await readDoc("kqa-questionnaire-author/SKILL.md") ?? ""]];
+    for (const [name] of skillReferences) {
+      if (name.endsWith(".md")) markdownFiles.push([`references/${name}`, await readDoc(`kqa-questionnaire-author/references/${name}`) ?? ""]);
+    }
+
+    for (const [file, markdown] of markdownFiles) {
+      for (const [, wrappedTarget] of markdown.matchAll(/\]\((<[^>]+>|[^)\s]+)(?=[\s)])/g)) {
+        const target = wrappedTarget.startsWith("<") ? wrappedTarget.slice(1, -1) : wrappedTarget;
+        if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) continue;
+        const targetPath = decodeURIComponent(target.split(/[?#]/, 1)[0]);
+        expect(targetPath.startsWith("/")).toBe(false);
+        if (!targetPath) continue;
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), targetPath));
+        expect(bundledPaths.has(resolved), `${file} links to missing bundle path ${target}`).toBe(true);
+      }
+    }
   });
 
   it("publishes the questionnaire evaluation benchmark and its labeled development corpus", async () => {

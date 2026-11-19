@@ -170,7 +170,7 @@ Routing conditions are intentionally declarative: they cannot contain scripts, n
 
 For example, after an optional `details` question, a follow-up can use `{ "when": { "all": [{ "question": "details", "operator": "answered" }] } }` to appear only when the person entered a value. Use `notAnswered` to target an unanswered earlier item; use `equals` with a declared option value for `single`/`select`, `contains` for a `multi` value, and `{ "question": "age", "operator": "gte", "value": 18 }` for a numeric threshold. A date comparison uses a valid ISO calendar value, such as `{ "question": "start-date", "operator": "lt", "value": "2026-01-01" }`. Keep each condition list to 20 items or fewer and test below/equal/above boundaries, missing values, and edits that show or hide the follow-up.
 
-See the complete [`routed-follow-up.kqa.html`](examples/routed-follow-up.kqa.html) example for an eligible required follow-up, respondent disclosure, and stable saved-answer behavior.
+See the complete [`routed-follow-up.kqa.html`](routed-follow-up.kqa.html) example for an eligible required follow-up, respondent disclosure, and stable saved-answer behavior.
 
 When the labels are long sentences, use a short meaningful slug (`agree-with-suggestion`, `prefer-phased-rollout`) or a positional key (`o1`, `o2`, `o3`) that you never reorder or reuse. Never use the sentence itself as the value.
 

@@ -8,7 +8,7 @@ Output **one complete HTML file** that (1) declares every question in a JSON man
 
 This playbook is only for writing the file. Operating a live interview (people, links, invites, answers) is the MCP server in `docs/MCP.md`, not this page. The file supports single choice, checkboxes, one-line text, paragraphs, dropdown, number, scale, date, and full-order ranking. It does not score, and it does not send email.
 
-Agents that support portable skills can also load [`kqa-questionnaire-author/SKILL.md`](kqa-questionnaire-author/SKILL.md), or retrieve it through the `get_questionnaire_authoring_skill` MCP tool. This skill summarizes the workflow; this playbook and [`FORMAT.md`](FORMAT.md) remain authoritative for KQA behavior.
+Agents that support portable skills can also load [`kqa-questionnaire-author/SKILL.md`](../SKILL.md), or retrieve it through the `get_questionnaire_authoring_skill` MCP tool. This skill summarizes the workflow; this playbook and [`FORMAT.md`](FORMAT.md) remain authoritative for KQA behavior.
 
 ## Step 1. Gather what you need
 
@@ -60,7 +60,7 @@ When the questionnaire is new or a question could materially affect a decision, 
 
 For native bounded text fields, verify a paste beyond the configured maximum remains visible, is clearly marked unsaved, survives an unrelated answer refresh, and can be corrected to a saved value. Confirm guided progress, answer review and submission remain blocked until correction, and the page warns before leaving with the unsaved draft. Do not claim this in-memory draft survives reload or closure.
 
-For a structured agent critique, follow the `kqa-question-review/1` contract returned by `get_design_guidance` verbatim, including its outcome, finding fields, category, severity, and confidence values. Returning `no_findings` is valid; use `needs_context` when a host fact is material and unresolved. Do not invent an issue or claim human testing. KQA's public development benchmark and scorer are documented in [`evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md); that evaluator uses a separate result format and tracks content review separately from checker correctness. Neither establishes questionnaire validity.
+For a structured agent critique, follow the `kqa-question-review/1` contract returned by `get_design_guidance` verbatim, including its outcome, finding fields, category, severity, and confidence values. Returning `no_findings` is valid; use `needs_context` when a host fact is material and unresolved. Do not invent an issue or claim human testing. KQA's public development benchmark and scorer are documented in [`evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](QUESTIONNAIRE_AUTHORING_BENCHMARK.md); that evaluator uses a separate result format and tracks content review separately from checker correctness. Neither establishes questionnaire validity.
 
 For each questionnaire, document the target population and unit, sample frame/source, recruitment and selection method, who may be missed, eligibility rules, collection mode/language, and whether the purpose is qualitative learning or population estimation. Follow the sampling and reporting plan in [`INTERVIEW_PACKAGES.md`](INTERVIEW_PACKAGES.md#sampling-and-reporting-plan); do not claim representativeness or a margin of error the design cannot support.
 
@@ -84,7 +84,7 @@ Before fielding, include a host-approved respondent notice covering purpose, acc
 | A "comments" box at the end | `longtext` with an id like `anything-else` |
 | Respondent details (name, company) | `text` questions. The app already knows the respondent's name, so only ask for what you actually need |
 
-For a complete routed example, see [`examples/routed-follow-up.kqa.html`](examples/routed-follow-up.kqa.html), also available from this KQA instance at `/api/docs/examples/routed-follow-up.kqa.html`. The earlier [`conditional-follow-up.kqa.html`](examples/conditional-follow-up.kqa.html) shows a custom scripted reveal and does not contribute native eligibility semantics.
+For a complete routed example, see [`examples/routed-follow-up.kqa.html`](routed-follow-up.kqa.html), also available from this KQA instance at `/api/docs/examples/routed-follow-up.kqa.html`. The earlier [`conditional-follow-up.kqa.html`](conditional-follow-up.kqa.html) shows a custom scripted reveal and does not contribute native eligibility semantics.
 
 For every conditional branch, keep a small route test matrix in the review record. Test each distinct source-answer path, including a path with no matching follow-up and a change that makes a previously answered item inactive. Record the source answer, expected eligible question IDs, required questions, progress count, answer-review visibility, retained-answer behavior on inactivation and reactivation, respondent ability to inspect and independently clear a retained value or note without changing the routing answer, and current-version export/analysis treatment. The static checker and in-app live probe do not execute this matrix for you.
 
