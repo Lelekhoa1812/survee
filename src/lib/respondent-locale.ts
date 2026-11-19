@@ -26,6 +26,34 @@ const MESSAGES = {
 
 export type RespondentMessage = keyof typeof MESSAGES["en-AU"];
 
+/**
+ * Check shell copy parity without claiming linguistic quality. This catches the easy-to-miss
+ * cases where a newly added UI state is blank in a locale or drops an interpolation token.
+ */
+export function auditRespondentLocales(): string[] {
+  const english = MESSAGES["en-AU"] as Record<string, string>;
+  const issues: string[] = [];
+  const placeholders = (value: string) => [...value.matchAll(/\{([a-zA-Z]+)\}/g)].map((match) => match[1]).sort();
+  for (const locale of RESPONDENT_LOCALES) {
+    const messages = MESSAGES[locale] as Record<string, string>;
+    for (const key of Object.keys(english)) {
+      const message = messages[key];
+      if (typeof message !== "string" || message.trim() === "") {
+        issues.push(`${locale}.${key} is missing or empty`);
+      } else {
+        // A one-item form may spell out "one" in the translated copy instead of printing {count}.
+        const allowedOneCountOmission = key.endsWith("One");
+        const localized = placeholders(message).filter((name) => !(allowedOneCountOmission && name === "count"));
+        const reference = placeholders(english[key]).filter((name) => !(allowedOneCountOmission && name === "count"));
+        if (JSON.stringify(localized) !== JSON.stringify(reference)) {
+          issues.push(`${locale}.${key} has different interpolation placeholders`);
+        }
+      }
+    }
+  }
+  return issues;
+}
+
 export function isRespondentLocale(value: unknown): value is RespondentLocale {
   return typeof value === "string" && (RESPONDENT_LOCALES as readonly string[]).includes(value);
 }

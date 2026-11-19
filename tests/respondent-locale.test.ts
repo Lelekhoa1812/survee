@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RESPONDENT_LOCALES, RESPONDENT_LOCALE_META, isRespondentLocale, resolveRespondentLocale, respondentBridgeMessages, respondentMessage, respondentTime } from "../src/lib/respondent-locale";
+import { auditRespondentLocales, RESPONDENT_LOCALES, RESPONDENT_LOCALE_META, isRespondentLocale, resolveRespondentLocale, respondentBridgeMessages, respondentMessage, respondentTime } from "../src/lib/respondent-locale";
 
 describe("respondent shell locales", () => {
   it("uses a saved supported choice before browser preferences", () => {
@@ -28,6 +28,10 @@ describe("respondent shell locales", () => {
       expect(messages.lengthCount).toContain("{count}");
       expect(messages.requiredError).toBeTruthy();
     }
+  });
+
+  it("keeps every shell message complete and preserves interpolation placeholders across locales", () => {
+    expect(auditRespondentLocales()).toEqual([]);
   });
 
   it("formats interpolated counts and save times with the selected locale", () => {
