@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getInterviewPackage, INTERVIEW_PACKAGES, INTERVIEW_PACKAGE_VERSION } from "../src/lib/interview-packages";
+import { getInterviewPackage, INTERACTION_PATTERN_IDS, INTERVIEW_PACKAGES, INTERVIEW_PACKAGE_VERSION } from "../src/lib/interview-packages";
 
 describe("addressable interview package modules", () => {
   it("returns the exact detailed module for every stable catalog ID", async () => {
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/11");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/12");
     for (const item of INTERVIEW_PACKAGES) {
       const result = await getInterviewPackage(item.id);
       expect(result?.packageId, item.id).toBe(item.id);
@@ -13,6 +13,28 @@ describe("addressable interview package modules", () => {
       expect(result?.packages, item.id).toContain("**Use for:**");
       expect(result?.packages, item.id).toContain("report-back owner");
       expect(result?.packages, item.id).toContain("KQA does not monitor outcomes");
+    }
+  });
+
+  it("provides contextual interaction options and tradeoffs without prescribed recipes or fit scores", async () => {
+    expect(new Set(INTERACTION_PATTERN_IDS)).toEqual(new Set(["all", "guided", "guided-question", "routing", "question-order-variation", "ranking", "independent-ratings", "option-randomization", "repeat", "required-answer"]));
+    for (const item of INTERVIEW_PACKAGES) {
+      expect(item.interactionGuidance.consider.length + item.interactionGuidance.avoid.length, item.id).toBeGreaterThan(0);
+      expect(item.interactionGuidance.decisionChecks.length, item.id).toBeGreaterThan(0);
+      expect(item).not.toHaveProperty("default");
+      expect(item).not.toHaveProperty("score");
+      expect(item).not.toHaveProperty("fitScore");
+      for (const candidate of item.interactionGuidance.consider) {
+        expect(INTERACTION_PATTERN_IDS, item.id).toContain(candidate.pattern);
+        expect(candidate.when.length, item.id).toBeGreaterThan(10);
+        expect(candidate.benefit.length, item.id).toBeGreaterThan(10);
+        expect(candidate.tradeoff.length, item.id).toBeGreaterThan(10);
+      }
+      for (const caution of item.interactionGuidance.avoid) {
+        expect(INTERACTION_PATTERN_IDS, item.id).toContain(caution.pattern);
+        expect(caution.when.length, item.id).toBeGreaterThan(10);
+        expect(caution.reason.length, item.id).toBeGreaterThan(10);
+      }
     }
   });
 
@@ -57,5 +79,16 @@ describe("addressable interview package modules", () => {
       riskFlags: expect.arrayContaining(["clinical-advice boundary"]),
     });
     expect(result?.selectionGuidance).toContain("clinical treatment assessment, scoring, or recommendations are outside scope");
+  });
+
+  it("returns the same contextual interaction metadata in compact and focused MCP package profiles", async () => {
+    const catalog = await getInterviewPackage(undefined, { catalogOnly: true });
+    const focused = await getInterviewPackage("industrial-operations");
+    const catalogItem = catalog?.packageCatalog.find((item) => item.id === "industrial-operations");
+    const focusedItem = focused?.packageCatalog.find((item) => item.id === "industrial-operations");
+    expect(catalogItem?.interactionGuidance).toEqual(focusedItem?.interactionGuidance);
+    expect(catalogItem?.interactionGuidance.avoid.map((item) => item.pattern)).toContain("repeat");
+    expect(catalog?.selectionGuidance).toContain("complete strict order of every option");
+    expect(catalog?.selectionGuidance).toContain("fixed values explicitly declared");
   });
 });

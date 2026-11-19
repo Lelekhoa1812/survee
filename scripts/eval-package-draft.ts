@@ -11,6 +11,7 @@ const DIMENSIONS = [
   "respondent_and_context_fit",
   "response_options_and_recall",
   "flow_and_burden",
+  "interaction_fit",
   "privacy_and_risk",
   "analysis_and_interpretation",
   "sampling_and_inference",
@@ -29,7 +30,7 @@ function unique(values: unknown, label: string): asserts values is string[] {
 }
 
 export function validateBenchmark(benchmark: any) {
-  assert(benchmark?.benchmarkVersion === "kqa-package-draft/12", "Unsupported package-draft benchmark version.");
+  assert(benchmark?.benchmarkVersion === "kqa-package-draft/13", "Unsupported package-draft benchmark version.");
   assert(benchmark.track === "package-draft-review", "Benchmark track must be package-draft-review.");
   assert(benchmark.packageLibraryVersion === INTERVIEW_PACKAGE_VERSION, "Benchmark package-library version does not match the current catalog.");
   unique(benchmark.dimensions, "dimensions");
@@ -54,6 +55,8 @@ export function validateBenchmark(benchmark: any) {
   assert(benchmark.ratingScale && ["0", "1", "2", "3"].every((score) => NONEMPTY(benchmark.ratingScale[score])), "Benchmark needs anchored 0–3 rating descriptions.");
   const samplingRubric = benchmark.dimensionRubrics?.sampling_and_inference;
   assert(samplingRubric && ["0", "1", "2", "3"].every((score) => NONEMPTY(samplingRubric[score])), "Benchmark needs anchored 0–3 sampling_and_inference descriptions.");
+  const interactionRubric = benchmark.dimensionRubrics?.interaction_fit;
+  assert(interactionRubric && ["0", "1", "2", "3"].every((score) => NONEMPTY(interactionRubric[score])), "Benchmark needs anchored 0–3 interaction_fit descriptions.");
   return benchmark;
 }
 
@@ -63,7 +66,7 @@ function validateRunDate(value: unknown) {
 
 export function validateResults(benchmark: any, results: any) {
   assert(results?.benchmarkVersion === benchmark.benchmarkVersion, "Result benchmarkVersion does not match the corpus.");
-  assert(results?.resultsSchemaVersion === "kqa-package-draft-results/3", "Unsupported package-draft results schema version.");
+  assert(results?.resultsSchemaVersion === "kqa-package-draft-results/4", "Unsupported package-draft results schema version.");
   assert(NONEMPTY(results.model) && NONEMPTY(results.skillVersion) && NONEMPTY(results.promptVersion), "Record model, skillVersion and promptVersion.");
   const provenance = results.runProvenance;
   assert(provenance && NONEMPTY(provenance.provider) && NONEMPTY(provenance.modelSnapshot), "Record provider and immutable modelSnapshot in runProvenance.");

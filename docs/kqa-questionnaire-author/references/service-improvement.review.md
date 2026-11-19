@@ -1,6 +1,6 @@
 # Service improvement example review
 
-**Status:** Illustrative example only; **NOT validated and NOT ready to field**. This questionnaire was drafted from package `service-improvement` in `kqa-interview-packages/7`; that version label records the source library at the time and predates the current `kqa-interview-packages/11` guidance. The KQA static checker passing establishes markup and manifest consistency only. No respondent pretest, task-based usability test, live interaction test, accessibility audit, or domain review has been performed.
+**Status:** Illustrative example only; **NOT validated and NOT ready to field**. This questionnaire was drafted from package `service-improvement` in `kqa-interview-packages/7`; that version label records the source library at the time and predates the current `kqa-interview-packages/12` guidance. The KQA static checker passing establishes markup and manifest consistency only. No respondent pretest, task-based usability test, live interaction test, accessibility audit, or domain review has been performed.
 
 ## Scope and assumptions
 

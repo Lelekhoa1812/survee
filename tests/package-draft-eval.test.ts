@@ -9,7 +9,7 @@ const benchmark = JSON.parse(await readFile(new URL("../docs/evals/package-draft
 const dimensions = benchmark.dimensions;
 const resultsFor = () => ({
   benchmarkVersion: benchmark.benchmarkVersion,
-  resultsSchemaVersion: "kqa-package-draft-results/3",
+  resultsSchemaVersion: "kqa-package-draft-results/4",
   model: "test/model@1",
   skillVersion: "test-skill@1",
   promptVersion: "test-prompt@1",
@@ -48,16 +48,19 @@ const resultsFor = () => ({
 describe("package draft development benchmark", () => {
   it("loads the versioned corpus against the current catalog and preserves public-development limits", () => {
     expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length + 9);
-    expect(benchmark.benchmarkVersion).toBe("kqa-package-draft/12");
-    expect(benchmark.packageLibraryVersion).toBe("kqa-interview-packages/11");
+    expect(benchmark.benchmarkVersion).toBe("kqa-package-draft/13");
+    expect(benchmark.packageLibraryVersion).toBe("kqa-interview-packages/12");
     expect(benchmark.dimensions).toContain("sampling_and_inference");
     expect(Object.keys(benchmark.dimensionRubrics.sampling_and_inference)).toEqual(["0", "1", "2", "3"]);
+    expect(benchmark.dimensions).toContain("interaction_fit");
+    expect(Object.keys(benchmark.dimensionRubrics.interaction_fit)).toEqual(["0", "1", "2", "3"]);
     const report = scoreResults(benchmark, resultsFor());
     expect(report.developmentOnly).toBe(true);
     expect(report.hardGateReview.flaggedCaseCount).toBe(0);
     expect(report.dimensions.intent_coverage.meanScore).toBe(2);
     expect(report.dimensions.intent_coverage.pairwiseReviewerAgreement).toBe(1);
     expect(report.dimensions.sampling_and_inference.meanScore).toBe(2);
+    expect(report.dimensions.interaction_fit.meanScore).toBe(2);
     expect(report.limitations.join(" ")).toContain("not a hidden holdout");
   });
 
@@ -182,7 +185,7 @@ describe("package draft development benchmark", () => {
     const report = scoreResults(benchmark, results, checks);
     expect(report.staticFormatChecks).toEqual(checks);
     expect(report.dimensions).not.toHaveProperty("staticFormat");
-    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/3");
+    expect(report.resultsSchemaVersion).toBe("kqa-package-draft-results/4");
     expect(report.run.runProvenance).toEqual(results.runProvenance);
     expect(report.cases[0]).toMatchObject({ htmlSha256: checks[0].htmlSha256, reviewSha256: checks[0].reviewSha256 });
     expect(report.cases[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);

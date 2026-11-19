@@ -1,8 +1,8 @@
 {
-  "benchmarkVersion": "kqa-package-draft/12",
+  "benchmarkVersion": "kqa-package-draft/13",
   "track": "package-draft-review",
   "status": "public-development-only",
-  "packageLibraryVersion": "kqa-interview-packages/11",
+  "packageLibraryVersion": "kqa-interview-packages/12",
   "description": "Synthetic, source-informed briefs for expert review of complete package-based KQA questionnaire drafts. Cases define decision intent and boundaries, not canonical question wording.",
   "dimensions": [
     "intent_coverage",
@@ -10,6 +10,7 @@
     "respondent_and_context_fit",
     "response_options_and_recall",
     "flow_and_burden",
+    "interaction_fit",
     "privacy_and_risk",
     "analysis_and_interpretation",
     "sampling_and_inference",
@@ -23,6 +24,12 @@
     "ratingCaveat": "Ratings are expert judgments about a draft, not validation or respondent evidence. Reviewers must cite the artifact and explain the rating."
   },
   "dimensionRubrics": {
+    "interaction_fit": {
+      "0": "The interaction is unsafe, inaccessible, or fundamentally mismatched to the stated decision and respondent context; it forces ranking when ties or independent judgments are valid, uses routing for sensitive or urgent inference, or turns repeat rows into operational logs.",
+      "1": "Major fit gaps remain in presentation, routing, ranking versus independent ratings, randomization, repeat use, optionality, burden, or access; material tradeoffs are missing or the chosen interaction is asserted without a contextual reason.",
+      "2": "The main interaction pattern fits the brief and major risks are avoided, but a relevant alternative, benefit, tradeoff, or respondent-test requirement is incomplete.",
+      "3": "The interaction choices are tied to the construct, decision, respondent group, device, accessibility and burden evidence; plausible alternatives and tradeoffs are explicit, no unsupported pattern is imposed, and unresolved fit is marked for respondent testing."
+    },
     "sampling_and_inference": {
       "0": "No sample or inference plan is recorded, or the draft's claims directly conflict with the stated design.",
       "1": "Material omissions or mismatches remain in population/unit, frame or recruitment, selection, eligibility, coverage/nonresponse, mode/language, or intended inference; host facts may be invented or claims overstated.",

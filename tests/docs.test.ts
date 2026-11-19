@@ -105,12 +105,13 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/11");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/11");
+    expect(packages).toContain("kqa-interview-packages/12");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/12");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {
       expect(item.decisionFocus.length).toBeGreaterThan(0);
+      expect(item.interactionGuidance.decisionChecks.length).toBeGreaterThan(0);
       expect(item.respondents.length).toBeGreaterThan(0);
       expect(item.useWhen.length).toBeGreaterThan(0);
       expect(item.notFor.length).toBeGreaterThan(0);
@@ -241,9 +242,9 @@ describe("agent documentation bundle", () => {
     expect(JSON.parse(corpus!.body).benchmarkVersion).toBe("kqa-questionnaire-review/1");
     const draftCases = await readAsset("evals/package-draft-cases.json");
     const resultSchema = await readAsset("evals/package-draft-results.schema.json");
-    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/12");
+    expect(JSON.parse(draftCases!.body).benchmarkVersion).toBe("kqa-package-draft/13");
     expect(JSON.parse(resultSchema!.body).title).toContain("package-draft");
-    expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/3");
+    expect(JSON.parse(resultSchema!.body).properties.resultsSchemaVersion.const).toBe("kqa-package-draft-results/4");
     expect(JSON.parse(resultSchema!.body).properties.benchmarkVersion.const).toBe(JSON.parse(draftCases!.body).benchmarkVersion);
     const selectionCases = await readAsset("evals/package-selection-cases.json");
     const selectionSchema = await readAsset("evals/package-selection.schema.json");

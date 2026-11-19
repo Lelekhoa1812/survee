@@ -201,11 +201,11 @@ describe("MCP tools", () => {
 
   it("returns the interview package guide to interview readers", async () => {
     const res = await call("get_interview_packages", {});
-    const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string; packageCatalog: { id: string; decisionFocus: string; respondents: string; useWhen: string; notFor: string; riskFlags: string[]; relatedPackages: string[] }[] } } };
+    const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string; packageCatalog: { id: string; decisionFocus: string; respondents: string; useWhen: string; notFor: string; riskFlags: string[]; relatedPackages: string[]; interactionGuidance: { consider: { pattern: string; when: string; benefit: string; tradeoff: string }[]; avoid: { pattern: string; when: string; reason: string }[]; decisionChecks: string[] } }[] } } };
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
-    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/11");
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/12");
     expect(body.result.structuredContent.packageCatalog).toHaveLength(18);
     expect(body.result.structuredContent.packageCatalog[0]).toMatchObject({
       id: "product-discovery",
@@ -215,6 +215,11 @@ describe("MCP tools", () => {
       notFor: expect.any(String),
       riskFlags: expect.any(Array),
       relatedPackages: expect.any(Array),
+      interactionGuidance: {
+        consider: expect.any(Array),
+        avoid: expect.any(Array),
+        decisionChecks: expect.any(Array),
+      },
     });
     const compact = await call("get_interview_packages", { catalogOnly: true });
     const compactBody = await compact.json() as { result: { structuredContent: { catalogOnly: boolean; packageCatalog: unknown[]; packages?: unknown } } };
