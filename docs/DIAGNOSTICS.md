@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 91 codes. Severity is **error**, **warning** or **note**.
+There are 92 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -846,3 +846,11 @@ Severity: **warning**
 The question's option order or rotation policy changed while people have saved answers. Responses collected under different presentation designs may not be directly comparable.
 
 **How to fix:** Keep the presentation policy consistent for trend comparisons, or document the change and analyze the cohorts separately.
+
+### KQA709: Saved repeated records may no longer fit
+
+Severity: **warning**
+
+A repeated-record field or row limit changed while people had saved rows, so some stored values may not map to the new definition or may exceed its cap.
+
+**How to fix:** Keep stable repeat field ids and compatible types, or review affected saved records and respondent recovery before publishing.

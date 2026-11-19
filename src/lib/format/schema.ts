@@ -12,8 +12,10 @@ import { z } from "zod";
 
 export const FORMAT_ID = "kqa/1" as const;
 
-export const QUESTION_TYPES = ["single", "multi", "select", "rank", "text", "longtext", "number", "scale", "date"] as const;
+export const QUESTION_TYPES = ["single", "multi", "select", "rank", "text", "longtext", "number", "scale", "date", "repeat"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
+export const REPEAT_FIELD_TYPES = ["single", "select", "text", "longtext", "number", "scale", "date"] as const;
+export type RepeatFieldType = (typeof REPEAT_FIELD_TYPES)[number];
 
 /** Question and section ids. Lowercase, so they are safe in URLs, CSV headers and JSON keys. */
 export const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -26,6 +28,8 @@ export const LIMITS = {
   maxSections: 50,
   maxOptions: 50,
   maxRankOptions: 8,
+  maxRepeatRows: 20,
+  maxRepeatFields: 12,
   maxLabel: 300,
   maxHelp: 1000,
   maxTitle: 120,
@@ -93,6 +97,48 @@ export const sectionSchema = z.object({
   description: z.string().max(LIMITS.maxHelp).optional(),
 });
 
+/** A bounded scalar field repeated inside one respondent's record group. */
+export const repeatFieldSchema = z.object({
+  id: idString,
+  label: z.string().min(1).max(LIMITS.maxLabel),
+  help: z.string().max(LIMITS.maxHelp).optional(),
+  type: z.enum(REPEAT_FIELD_TYPES),
+  required: z.boolean().optional(),
+  options: z.array(optionSchema).min(2).max(LIMITS.maxOptions).optional(),
+  min: z.number().finite().optional(),
+  max: z.number().finite().optional(),
+  step: z.number().finite().positive().optional(),
+  maxLength: z.number().int().min(1).max(LIMITS.longtextMax).optional(),
+}).superRefine((field, ctx) => {
+  if (["single", "select"].includes(field.type) && !field.options) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: `${field.type} repeat fields need at least two options` });
+  }
+  if (!["single", "select"].includes(field.type) && field.options !== undefined) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: "options only apply to single or select repeat fields" });
+  }
+  if (!["number", "scale"].includes(field.type) && (field.min !== undefined || field.max !== undefined || field.step !== undefined)) {
+    ctx.addIssue({ code: "custom", path: ["min"], message: "min, max and step only apply to number or scale repeat fields" });
+  }
+  if (field.min !== undefined && field.max !== undefined && field.min > field.max) {
+    ctx.addIssue({ code: "custom", path: ["min"], message: "min cannot exceed max" });
+  }
+  if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: "repeat field option values must be unique" });
+  }
+  if (field.type === "scale") {
+    const min = field.min ?? 1;
+    const max = field.max ?? 5;
+    if (!Number.isInteger(min) || !Number.isInteger(max)) ctx.addIssue({ code: "custom", path: ["min"], message: "scale repeat field bounds must be whole numbers" });
+    if (max - min > LIMITS.scaleSpanMax) ctx.addIssue({ code: "custom", path: ["max"], message: `scale repeat fields support a span of at most ${LIMITS.scaleSpanMax}` });
+  }
+  if (field.maxLength !== undefined && !["text", "longtext"].includes(field.type)) {
+    ctx.addIssue({ code: "custom", path: ["maxLength"], message: "maxLength only applies to text repeat fields" });
+  }
+  if (field.maxLength !== undefined && field.type === "text" && field.maxLength > LIMITS.textMax) {
+    ctx.addIssue({ code: "custom", path: ["maxLength"], message: `text repeat fields cannot exceed ${LIMITS.textMax} characters` });
+  }
+});
+
 export const questionSchema = z.object({
   id: idString,
   type: z.enum(QUESTION_TYPES),
@@ -116,11 +162,34 @@ export const questionSchema = z.object({
   max: z.number().finite().optional(),
   step: z.number().finite().positive().optional(),
   maxLength: z.number().int().min(1).max(LIMITS.longtextMax).optional(),
+  /** Repeat-group fields are stored separately from AnswerValue and edited with row/field operations. */
+  fields: z.array(repeatFieldSchema).min(1).max(LIMITS.maxRepeatFields).optional(),
+  /** Required for repeat questions; bounds row creation for runtime, payload and review. */
+  maxRows: z.number().int().min(1).max(LIMITS.maxRepeatRows).optional(),
+  /** Minimum complete rows required at submit; `required: true` also means at least one. */
+  minRows: z.number().int().min(0).max(LIMITS.maxRepeatRows).optional(),
+  /** Singular, localized noun used for generated row controls, e.g. "goal". */
+  itemLabel: z.string().min(1).max(80).optional(),
   /** True when the page sets this answer from script with KQA.set() instead of a bound control. */
   custom: z.boolean().optional(),
   /** Show this question only when its bounded conditions match earlier answers. */
   when: whenSchema.optional(),
 }).superRefine((question, ctx) => {
+  if (question.type === "repeat") {
+    if (!question.fields) ctx.addIssue({ code: "custom", path: ["fields"], message: "repeat questions need at least one field" });
+    if (question.maxRows === undefined) ctx.addIssue({ code: "custom", path: ["maxRows"], message: "repeat questions need a finite maxRows" });
+    if (question.minRows !== undefined && question.maxRows !== undefined && question.minRows > question.maxRows) {
+      ctx.addIssue({ code: "custom", path: ["minRows"], message: "minRows cannot exceed maxRows" });
+    }
+    if (new Set((question.fields ?? []).map((field) => field.id)).size !== (question.fields ?? []).length) {
+      ctx.addIssue({ code: "custom", path: ["fields"], message: "repeat field ids must be unique within the group" });
+    }
+    if (question.options !== undefined || question.maxSelections !== undefined || question.minSelections !== undefined || question.exclusiveOptions !== undefined || question.randomizeOptions !== undefined || question.fixedOptionValues !== undefined || question.note !== undefined || question.min !== undefined || question.max !== undefined || question.step !== undefined || question.maxLength !== undefined || question.custom) {
+      ctx.addIssue({ code: "custom", path: ["type"], message: "repeat questions use fields and row limits; scalar question options, notes and custom controls do not apply" });
+    }
+  } else if (question.fields !== undefined || question.maxRows !== undefined || question.minRows !== undefined || question.itemLabel !== undefined) {
+    ctx.addIssue({ code: "custom", path: ["fields"], message: "fields, maxRows, minRows and itemLabel only apply to repeat questions" });
+  }
   if (question.type === "rank") {
     if ((question.options?.length ?? 0) < 2) ctx.addIssue({ code: "custom", path: ["options"], message: "rank questions need at least two options" });
     if ((question.options?.length ?? 0) > LIMITS.maxRankOptions) ctx.addIssue({ code: "custom", path: ["options"], message: `rank questions support at most ${LIMITS.maxRankOptions} options` });
@@ -176,6 +245,7 @@ export type Question = z.infer<typeof questionSchema>;
 export type Section = z.infer<typeof sectionSchema>;
 export type Option = z.infer<typeof optionSchema>;
 export type Condition = z.infer<typeof conditionSchema>;
+export type RepeatField = z.infer<typeof repeatFieldSchema>;
 
 /** Types that must carry an `options` list. */
 export const OPTION_TYPES: readonly QuestionType[] = ["single", "multi", "select", "rank"];
@@ -183,6 +253,25 @@ export const OPTION_TYPES: readonly QuestionType[] = ["single", "multi", "select
 export const RANGE_TYPES: readonly QuestionType[] = ["number", "scale"];
 
 export type AnswerValue = string | number | string[];
+
+/** A stable respondent-created row; array order is display order, never identity. */
+export interface RepeatRecordRow {
+  id: string;
+  values: Record<string, string | number>;
+  /** Server-side deletion tombstone prevents a stale add or field edit from resurrecting this row. */
+  deletedAt?: string;
+  /** Whole-row revision is used to prevent removing a row changed by another open page. */
+  revision: number;
+  /** Field revisions allow edits to different fields in the same row to merge safely. */
+  fieldRevisions: Record<string, number>;
+}
+export type RepeatRecordMap = Record<string, RepeatRecordRow[]>;
+
+export type RepeatRecordOperation =
+  | { op: "add"; questionId: string; rowId: string }
+  | { op: "set"; questionId: string; rowId: string; fieldId: string; expectedFieldRevision: number; value: string | number }
+  | { op: "clear"; questionId: string; rowId: string; fieldId: string; expectedFieldRevision: number }
+  | { op: "remove"; questionId: string; rowId: string; expectedRowRevision: number };
 
 /** One stored answer. `value` is absent when only a note was written. */
 export interface StoredAnswer {

@@ -1,7 +1,7 @@
 import { Workbook, type Worksheet } from "exceljs";
 import { evaluateEligibility, isAnswered, progress } from "../format/answers";
 import { neutraliseCell } from "./csv";
-import { exportFilename, longTable, sortedParticipants, wideColumns, wideTable } from "./rows";
+import { exportFilename, longTable, recordTable, sortedParticipants, wideColumns, wideTable } from "./rows";
 import type { ExportFile, ExportInput, ExportParticipant } from "./types";
 
 const FONT_NAME = "Calibri";
@@ -150,7 +150,7 @@ function writePeople(wb: Workbook, input: ExportInput, people: ExportParticipant
   writeTable(wb, { name: "People", header, rows, wrap: new Set([1]), filter: false });
 }
 
-/** Styled workbook: Summary, Wide, Long and People sheets. */
+/** Styled workbook: Summary, Wide, Long and People sheets, plus Records when repeat data exists. */
 export async function xlsxExport(input: ExportInput): Promise<ExportFile> {
   const wb = new Workbook();
   const people = sortedParticipants(input);
@@ -177,6 +177,17 @@ export async function xlsxExport(input: ExportInput): Promise<ExportFile> {
   });
 
   writePeople(wb, input, people);
+
+  const records = recordTable(input);
+  if (records.rows.length) {
+    writeTable(wb, {
+      name: "Records",
+      header: records.header,
+      rows: records.rows,
+      wrap: indexesWhere(records.header, (header) => header === "Question" || header === "Field" || header === "Value"),
+      filter: true,
+    });
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   return {

@@ -8,7 +8,7 @@ Autosave requires a connection. While offline, new edits remain only in the open
 
 If the host publishes a new questionnaire while your page is open, KQA rejects writes from the old version and locks that page. Confirmed answers remain saved. KQA keeps rejected edits in memory on the open page and lets you review or copy them before reloading; it never transfers them automatically because the questions or their meaning may have changed. Reload to continue with the latest version. Transient page-exit save failures stay marked as not saved and are retried while the page remains open; other failures remain marked so you can review them.
 
-The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, dates, and full-order ranking (`rank`) are supported as well. Section 3.4 is the full list. The format has no native repeatable-record group: do not encode structured rows as JSON text, cloned controls with generated question IDs, or an overloaded answer value. The authoring skill and repeatable-record decision benchmark provide further guidance. KQA does not score answers or rank people. A required checkbox is answered when at least one box is ticked; a required ranking is answered when every option is present in the saved order. Text that is only spaces is empty.
+The everyday questions are a single choice (`single`), checkboxes (`multi`), a one-line free-text field (`text`, 500 characters unless you set `maxLength`), and a paragraph (`longtext`, 20,000 characters unless you set `maxLength`). Dropdowns (`select`), numbers, scales, dates, full-order ranking (`rank`), and bounded repeatable record groups (`repeat`) are supported. Section 3.4 is the full list. Repeated records are structured child rows belonging to one respondent and one question; they are not additional respondents or scalar answer values. KQA does not score answers or rank people. A required checkbox is answered when at least one box is ticked; a required ranking is answered when every option is present in the saved order. A required repeat group needs at least one complete row; `minRows` can require more. Text that is only spaces is empty.
 
 ## 1. How it works
 
@@ -141,7 +141,7 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | Field | Required | Applies to | Rule |
 |---|---|---|---|
 | `id` | yes | all | Same pattern as section ids. **Unique across the manifest. Never rename once people have answered** |
-| `type` | yes | all | `single`, `multi`, `select`, `text`, `longtext`, `number`, `scale`, `date`, `rank` |
+| `type` | yes | all | `single`, `multi`, `select`, `text`, `longtext`, `number`, `scale`, `date`, `rank`, `repeat` |
 | `label` | yes | all | The question text. Up to 300 characters. Used in the host's answers view and every export |
 | `help` | no | all | Up to 1000 characters |
 | `section` | no | all | Must be the `id` of a declared section |
@@ -157,6 +157,10 @@ A machine-readable JSON Schema is in `kqa-manifest.schema.json`. It is generated
 | `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and uses safely representable whole-number bounds, with `min` below `max` and a span of at most 20 steps |
 | `step` | no | `number`, `scale` | Positive number |
 | `maxLength` | no | `text`, `longtext` | Default 500 for `text`, 20000 for `longtext` |
+| `fields` | yes for `repeat` | `repeat` | 1 to 12 typed fields (`single`, `select`, `text`, `longtext`, `number`, `scale`, `date`); each has a stable `id`, `label`, optional `help` and `required`, plus type-appropriate options or bounds |
+| `maxRows` | yes for `repeat` | `repeat` | Maximum respondent-created rows, 1 to 20 |
+| `minRows` | no for `repeat` | `repeat` | Minimum number of complete rows required at submission, 0 to `maxRows`; default 0. A required repeat question always requires at least one complete row |
+| `itemLabel` | no for `repeat` | `repeat` | Singular noun used in generated row labels and add/remove controls; defaults to “item” |
 | `custom` | no | all | `true` when the answer is set from script with `KQA.set()` and has no `data-kqa` control |
 | `when` | no | all | Bounded visibility rule. Use `all` and/or `any`, each with 1 to 20 conditions. Conditions can test whether any earlier answer type is `answered`/`notAnswered`, compare earlier choices (`equals`/`notEquals`, `contains`/`notContains`), or compare earlier `number`, `scale`, or `date` answers using `lt`, `lte`, `gt`, `gte`, `eq`, or `ne` |
 
@@ -203,7 +207,39 @@ For a checkbox option that cannot logically combine with any other answer, decla
 | A rating, such as 1 to 5 | `scale` | numbered radios, or `<input type="range">` |
 | A calendar date | `date` | `<input type="date">` |
 | Order every option from highest to lowest priority | `rank` | an ordered list (`<ol>`) with one item per option |
+| Collect a bounded number of structured instances for one respondent | `repeat` | one semantic `<template>` containing a fieldset row prototype |
 | Anything else (custom drag and drop, matrix, sliders with custom UI) | any type + `custom: true` | your own markup that calls `KQA.set` |
+
+#### Bounded repeatable records (`repeat`)
+
+Use a repeat group when one respondent needs to report a small, finite number of similar entities or events, such as several assets, previous roles, or work locations. Prefer a checkbox when respondents choose from a known unordered list, fixed questions when the number of instances is known, and a short text field only when structured fields are unnecessary. Do not use a repeat group as a live operational log, incident reporting channel, anonymous channel, or a substitute for a safety process. State what counts as one row, the reference period, whether to include every instance or only selected ones, and what to do when the maximum is reached. Keep the cap as low as the decision allows.
+
+Each repeat question declares `fields`, `maxRows`, and optionally `minRows` and `itemLabel`. Fields use stable unique ids within that group. `single` fields use radio options; `select` fields use a dropdown; text, paragraph, number, scale, and date fields follow their scalar validation rules. A row is complete when all its `required` fields are valid and non-empty. Optional fields may be blank. The group is answered when it has at least one active row. Requiredness and `minRows` are enforced at submission for eligible groups; required fields are validated on every active row. Rows are saved separately from `answers` and do not multiply respondent-level progress or denominators. Hidden groups retain their data and do not block submission while ineligible.
+
+Declare exactly one semantic `<template data-kqa-repeat-template="QUESTION_ID">` for each repeat question. Inside it, put one `<fieldset>` with a `<legend>` and native labeled controls marked `data-kqa-repeat-field="FIELD_ID"`; include each declared choice option exactly once. The runtime clones the template, assigns respondent-specific stable row identifiers and unique control names, and provides accessible add/remove buttons. Do not pre-clone rows, bind a repeat question with `data-kqa`, assign generated question ids, or implement your own persistence. Generated row controls are localized with the KQA shell language; author-provided labels and question content remain in the questionnaire's language. Test add, remove, validation, returning to edit, small screens, keyboard use, and screen-reader announcements. Row removal is a respondent data change and removes that row from the active answer set.
+
+```json
+{
+  "id": "assets",
+  "type": "repeat",
+  "label": "Which assets did you inspect during this shift?",
+  "help": "Add one row per inspected asset. Include all assets; the maximum is 10.",
+  "required": true,
+  "itemLabel": "asset",
+  "maxRows": 10,
+  "minRows": 1,
+  "fields": [
+    { "id": "name", "type": "text", "label": "Asset identifier", "required": true },
+    { "id": "condition", "type": "select", "label": "Observed condition", "required": true,
+      "options": [{ "value": "ok", "label": "No issue observed" }, { "value": "attention", "label": "Needs attention" }] },
+    { "id": "checked-on", "type": "date", "label": "Inspection date" }
+  ]
+}
+```
+
+Repeat records contain potentially sensitive person-linked data. Use data minimisation, disclose collection and retention accurately, apply the host's access and deletion policies, and pretest the task with intended respondents. Review row-level exports as personal data. KQA keeps repeated rows out of ordinary scalar summaries and cross-tabs by default. See [repeat-record design and research](REPEATABLE_RECORDS_DESIGN.md) for selection, burden, data, and validation guidance.
+
+See the complete [`repeated-assets.kqa.html`](repeated-assets.kqa.html) example for the semantic template and native field binding pattern. It is a technical example, not a validated industrial inspection instrument or a safety reporting process.
 
 A matrix such as "rate each of these five items" is **five questions**, one per row, usually `scale` or `single` with the same options. Use `rank` only when the task requires relative ordering of the options and ties are intentionally not allowed. State the dimension and direction in the question (for example, "order all options from highest to lowest priority"), explain that every option must be placed once, and keep the list short: forced rankings take more effort and can make near-equal options seem meaningfully different. Test comprehension and completion with intended respondents, including on the devices they are likely to use. Use separate ratings when options can be equally important or deserve independent judgments; use `multi` when choices are unordered. The respondent may confirm the displayed starting order or use the accessible move controls. Ranking records relative order, not the size of differences between positions; do not interpret rank positions as independent ratings or a score. Ranking options is not a way to rank people, candidates, employees, patients, or other individuals. See the [Australian Bureau of Statistics' question-type guidance](https://www.abs.gov.au/statistics/standards/abs-forms-design-standards/2023/general-forms-design-principles-question-type), Smyth, Olson and Burke's [experimental comparison of ranking formats](https://digitalcommons.unl.edu/sociologyfacpub/542/), and Vriens et al.'s research on [order effects and ipsative ranking data](https://journals.sagepub.com/doi/10.1177/0049124115588997). Findings depend on method and population; these sources support pretesting, not a universal ranking format.
 

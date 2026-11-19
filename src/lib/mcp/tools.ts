@@ -311,7 +311,7 @@ const TOOLS: ToolDef[] = [
     async run() {
       const skill = await readDoc("kqa-questionnaire-author/SKILL.md");
       if (!skill) return err("The questionnaire authoring skill is unavailable.", "docs_unavailable");
-      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "questionnaire-authoring-cases.json", "PACKAGE_DRAFT_BENCHMARK.md", "package-draft-cases.json", "package-draft-results.schema.json", "AUTHORING_TRUST_BOUNDARY_EVAL.md", "AUTHORING_TRUST_BOUNDARY_CASES.json", "starter.kqa.html", "conditional-follow-up.kqa.html", "routed-follow-up.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
+      const referenceNames = ["FORMAT.md", "AGENT_PLAYBOOK.md", "DESIGN_SYSTEM.md", "INTERVIEW_PACKAGES.md", "QUESTION_BLUEPRINT.md", "REPEATABLE_RECORDS_DESIGN.md", "MCP.md", "QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "questionnaire-authoring-cases.json", "PACKAGE_DRAFT_BENCHMARK.md", "package-draft-cases.json", "package-draft-results.schema.json", "AUTHORING_TRUST_BOUNDARY_EVAL.md", "AUTHORING_TRUST_BOUNDARY_CASES.json", "starter.kqa.html", "conditional-follow-up.kqa.html", "routed-follow-up.kqa.html", "repeated-assets.kqa.html", "service-improvement.kqa.html", "service-improvement.review.md", "personal-planning.kqa.html", "personal-planning.review.md"];
       const references = await Promise.all(referenceNames.map(async (name) => ({ path: `references/${name}`, content: await readDoc(`kqa-questionnaire-author/references/${name}`) })));
       if (references.some((reference) => reference.content === null)) return err("The questionnaire authoring skill references are incomplete.", "docs_unavailable");
       return ok({ source: "docs/kqa-questionnaire-author/SKILL.md", skill, files: [{ path: "SKILL.md", content: skill }, ...references] });
@@ -530,7 +530,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_answers",
-    description: "Read answers for review. display is the label a host sees. There is no score.",
+    description: "Read answers for review. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present. There is no score.",
     inputSchema: obj({ interviewId: str, personId: str, submittedOnly: bool }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -543,22 +543,30 @@ const TOOLS: ToolDef[] = [
       let people = await listParticipants(id);
       if (only) people = people.filter((p) => p.id === only);
       if (args.submittedOnly === true) people = people.filter((p) => p.status === "submitted");
-      const rows = people.map((p) => ({
-        id: p.id,
-        name: p.name,
-        status: p.status,
-        submittedAt: p.submittedAt ?? null,
-        answers: version.manifest.questions.map((q) => {
-          const stored = p.answers[q.id];
-          return { questionId: q.id, type: q.type, label: q.label, value: stored?.value ?? null, display: displayValue(q, stored?.value), note: stored?.note ?? null, updatedAt: stored?.updatedAt ?? null };
-        }),
-      }));
+      const rows = people.map((p) => {
+        const recordGroups = Object.fromEntries(
+          Object.entries(p.recordGroups ?? {})
+            .filter(([, records]) => records.length > 0)
+            .map(([questionId, records]) => [questionId, records.map(({ id: rowId, values }) => ({ id: rowId, values }))]),
+        );
+        return {
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          submittedAt: p.submittedAt ?? null,
+          answers: version.manifest.questions.map((q) => {
+            const stored = p.answers[q.id];
+            return { questionId: q.id, type: q.type, label: q.label, value: stored?.value ?? null, display: displayValue(q, stored?.value), note: stored?.note ?? null, updatedAt: stored?.updatedAt ?? null };
+          }),
+          ...(Object.keys(recordGroups).length ? { recordGroups } : {}),
+        };
+      });
       return ok({ interviewStatus: interview.status, people: rows });
     },
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer. Set crossTabWith with segmentBy to produce a bounded two-question count matrix with row denominators and checkbox overlap notes. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; completed aggregate pages remain stable for up to one hour. Initial scans are live, not database snapshots. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Repeat-group field values are excluded; rows are never counted as participants. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer. Set crossTabWith with segmentBy to produce a bounded two-question count matrix with row denominators and checkbox overlap notes. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; completed aggregate pages remain stable for up to one hour. Initial scans are live, not database snapshots. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       runId: str,
@@ -600,7 +608,9 @@ const TOOLS: ToolDef[] = [
       if (!interview) return err("Interview not found.", "not_found");
       const version = await getVersion(interview._id, interview.currentVersion);
       if (!version) return err("Survey version not found.", "not_found");
-      let questions = version.manifest.questions;
+      // Repeated rows stay respondent-linked records and are not scalar outcomes or participants.
+      // They remain available from get_answers and the normalized Records export.
+      let questions = version.manifest.questions.filter((question) => question.type !== "repeat");
       const questionId = asString(args.questionId, 64);
       const requestedQuestionIds = args.questionIds;
       const segmentById = asString(args.segmentBy, 64);
@@ -898,7 +908,7 @@ const TOOLS: ToolDef[] = [
           interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, createdAt: interview.createdAt.toISOString() },
           manifest: version.manifest,
           surveyVersion: version.version,
-          participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers })),
+          participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups })),
           generatedAt: new Date().toISOString(),
         },
         format,

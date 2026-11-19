@@ -4,7 +4,7 @@ import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
 import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer } from "../format/answers";
 import { orderOptions } from "../format/option-order";
-import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question } from "../format/schema";
+import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question, type RepeatField, type RepeatRecordMap, type RepeatRecordOperation } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, SurveyVersionDoc } from "./types";
@@ -22,8 +22,13 @@ export function toOid(id: string): ObjectId | null {
 function participantView(p: ParticipantDoc): ParticipantView {
   return {
     id: p._id.toHexString(), interviewId: p.interviewId.toHexString(), token: p.token, name: p.name, email: p.email, note: p.note, status: p.status, answers: p.answers ?? {},
+    recordGroups: visibleRecordGroups(p.recordGroups ?? {}),
     revision: p.revision, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), lastSeenAt: iso(p.lastSeenAt), lastSavedAt: iso(p.lastSavedAt), submittedAt: iso(p.submittedAt),
   };
+}
+
+function visibleRecordGroups(groups: RepeatRecordMap): RepeatRecordMap {
+  return Object.fromEntries(Object.entries(groups).map(([questionId, rows]) => [questionId, rows.filter((row) => !row.deletedAt)]));
 }
 
 function logEvent(tenantId: string, interviewId: ObjectId, type: string, participantId?: ObjectId, meta?: Record<string, unknown>) {
@@ -243,6 +248,7 @@ export type AnalyticsRunCreateResult =
 const ANALYTICS_RUN_TTL_MS = 60 * 60 * 1000;
 const ANALYTICS_RUN_MAX_BYTES = 1024 * 1024;
 const ANALYTICS_RUN_SLOTS_PER_TENANT = 10;
+const MAX_REPEAT_ROW_HISTORY_PER_PARTICIPANT = 2000;
 
 /** Store an aggregate-only page set with bounded size, lifetime, and per-tenant concurrency. */
 export async function createAnalyticsRun(
@@ -457,11 +463,18 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
 }
 
 export type SaveResult =
-  | { ok: true; revision: number; savedAt: string; status: ParticipantStatus }
-  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; code?: string; details?: { id: string; reason: string }[] };
+  | { ok: true; revision: number; savedAt: string; status: ParticipantStatus; recordGroups?: RepeatRecordMap }
+  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; code?: string; details?: { id: string; reason: string }[]; recordErrors?: RepeatRecordIssue[] };
 
 export interface AnswerPatch {
   [questionId: string]: { value?: unknown; note?: unknown };
+}
+
+export interface RepeatRecordIssue {
+  questionId: string;
+  rowId?: string;
+  fieldId?: string;
+  reason: string;
 }
 
 type FenceFailure = { ok: false; status: 403 | 404 | 409; error: string; code?: string };
@@ -487,120 +500,193 @@ async function fenceRespondentWrite(
   return versionConflict();
 }
 
-/** Validate a patch against the manifest and apply it. Unknown ids and invalid values are rejected, never stored. */
-export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch): Promise<SaveResult> {
+/** Validate respondent operations against the manifest and apply them without replacing stale group snapshots. */
+export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch, operations: RepeatRecordOperation[] = []): Promise<SaveResult> {
   const ids = Object.keys(patch);
-  if (ids.length === 0) return { ok: false, status: 400, error: "Nothing to save." };
-  if (ids.length > 200) return { ok: false, status: 413, error: "Too many answers in one request." };
+  if (ids.length === 0 && operations.length === 0) return { ok: false, status: 400, error: "Nothing to save." };
+  if (ids.length + operations.length > 200) return { ok: false, status: 413, error: "Too many answer operations in one request." };
   const ctx = await loadByToken(token);
   if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
   if (ctx.version.version !== expectedVersion) return versionConflict();
   if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
   if (ctx.participant.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them." };
 
-  const byId = new Map<string, Question>(ctx.version.manifest.questions.map((q) => [q.id, q]));
-  const problems: { id: string; reason: string }[] = [];
   const now = new Date();
   const nowIso = now.toISOString();
-  const next: AnswerMap = { ...ctx.participant.answers };
-  for (const id of ids) {
-    const q = byId.get(id);
-    if (!q) {
-      problems.push({ id, reason: "not a question in this interview" });
-      continue;
-    }
-    const entry = patch[id] ?? {};
-    const cur = next[id] ?? { updatedAt: nowIso };
-    const merged = { ...cur, updatedAt: nowIso };
-    if ("value" in entry) {
-      const v = validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" });
-      if (!v.ok) {
-        problems.push({ id, reason: v.reason });
-        continue;
-      }
-      if (q.type === "multi" && q.maxSelections !== undefined && Array.isArray(v.value) && v.value.length > q.maxSelections) {
-        const previous = ctx.participant.answers[id]?.value;
-        const previousCount = Array.isArray(previous) ? new Set(previous).size : 0;
-        if (previousCount <= q.maxSelections || v.value.length >= previousCount) {
-          problems.push({ id, reason: `choose no more than ${q.maxSelections} options; remove choices from your saved answer before adding any` });
-          continue;
-        }
-      }
-      if (q.type === "multi" && exclusiveConflictCount(q, v.value) > 0) {
-        const previous = ctx.participant.answers[id]?.value;
-        if (exclusiveConflictCount(q, v.value) >= exclusiveConflictCount(q, previous)) {
-          problems.push({ id, reason: "choose an exclusive option by itself; remove conflicting choices before saving" });
-          continue;
-        }
-      }
-      if (v.value === null) delete merged.value;
-      else merged.value = v.value;
-      if (q.randomizeOptions && v.value !== null) {
-        merged.presentedOptionOrder = orderOptions({ options: q.options ?? [], randomizeOptions: true, fixedOptionValues: q.fixedOptionValues, participantId: ctx.participant.id, questionnaireVersion: String(ctx.version.version), questionId: q.id }).map((option) => option.value);
-        merged.optionOrderVersion = ctx.version.version;
-      } else {
-        delete merged.presentedOptionOrder;
-        delete merged.optionOrderVersion;
-      }
-    }
-    if ("note" in entry) {
-      const cfg = noteConfig(q);
-      if (!cfg.enabled) {
-        problems.push({ id, reason: "this question does not take a note" });
-        continue;
-      }
-      const note = entry.note;
-      if (note === null || note === undefined || note === "") delete merged.note;
-      else if (typeof note !== "string") {
-        problems.push({ id, reason: "the note must be text" });
-        continue;
-      } else if (note.length > cfg.maxLength) {
-        problems.push({ id, reason: `the note is ${note.length} characters, the limit is ${cfg.maxLength}` });
-        continue;
-      } else merged.note = note;
-    }
-    if (merged.value === undefined && merged.note === undefined) delete next[id];
-    else next[id] = merged;
-  }
-  if (!problems.length) {
-    const eligible = evaluateEligibility(ctx.version.manifest, next);
-    for (const id of ids) {
-      if (eligible[id] !== false) continue;
-      const entry = patch[id] ?? {};
-      const question = byId.get(id)!;
-      const submittedValue = "value" in entry ? validateAnswer(question, entry.value, { allowOverLimit: question.type === "multi", allowExclusiveConflict: question.type === "multi", allowUnderMinSelections: question.type === "multi" }) : null;
-      const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
-      const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
-      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
-    }
-  }
-  if (problems.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems };
-  if (JSON.stringify(next).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };
-
-  // Update only the answers that were sent, by path, so two saves in flight at once cannot overwrite each other's questions.
-  const $set: Record<string, unknown> = { status: "in_progress", updatedAt: now, lastSavedAt: now, lastSeenAt: now };
-  const $unset: Record<string, ""> = {};
-  for (const id of ids) {
-    if (next[id]) $set[`answers.${id}`] = next[id];
-    else $unset[`answers.${id}`] = "";
-  }
   const participants = await col.participants();
   const result = await withMongoTransaction(async (session): Promise<SaveResult> => {
     const fence = await fenceRespondentWrite(session, ctx.tenantId, new ObjectId(ctx.interview.id), expectedVersion);
     if (!fence.ok) return fence;
+    // Always use the current participant inside the transaction callback. Mongo retries this
+    // callback after transient write conflicts, so sibling field operations merge on retry.
+    const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), token }), { session });
+    if (!current) return { ok: false, status: 404, error: "This link is not valid." };
+    if (current.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them." };
+    const byId = new Map<string, Question>(ctx.version.manifest.questions.map((q) => [q.id, q]));
+    const problems: { id: string; reason: string }[] = [];
+    const recordErrors: RepeatRecordIssue[] = [];
+    const next: AnswerMap = { ...(current.answers ?? {}) };
+    for (const id of ids) {
+      const q = byId.get(id);
+      if (!q) { problems.push({ id, reason: "not a question in this interview" }); continue; }
+      const entry = patch[id] ?? {};
+      const cur = next[id] ?? { updatedAt: nowIso };
+      const merged = { ...cur, updatedAt: nowIso };
+      if ("value" in entry) {
+        const v = validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" });
+        if (!v.ok) { problems.push({ id, reason: v.reason }); continue; }
+        if (q.type === "multi" && q.maxSelections !== undefined && Array.isArray(v.value) && v.value.length > q.maxSelections) {
+          const previous = current.answers?.[id]?.value;
+          const previousCount = Array.isArray(previous) ? new Set(previous).size : 0;
+          if (previousCount <= q.maxSelections || v.value.length >= previousCount) { problems.push({ id, reason: `choose no more than ${q.maxSelections} options; remove choices from your saved answer before adding any` }); continue; }
+        }
+        if (q.type === "multi" && exclusiveConflictCount(q, v.value) > 0) {
+          const previous = current.answers?.[id]?.value;
+          if (exclusiveConflictCount(q, v.value) >= exclusiveConflictCount(q, previous)) { problems.push({ id, reason: "choose an exclusive option by itself; remove conflicting choices before saving" }); continue; }
+        }
+        if (v.value === null) delete merged.value;
+        else merged.value = v.value;
+        if (q.randomizeOptions && v.value !== null) {
+          merged.presentedOptionOrder = orderOptions({ options: q.options ?? [], randomizeOptions: true, fixedOptionValues: q.fixedOptionValues, participantId: ctx.participant.id, questionnaireVersion: String(ctx.version.version), questionId: q.id }).map((option) => option.value);
+          merged.optionOrderVersion = ctx.version.version;
+        } else { delete merged.presentedOptionOrder; delete merged.optionOrderVersion; }
+      }
+      if ("note" in entry) {
+        const cfg = noteConfig(q);
+        if (!cfg.enabled) { problems.push({ id, reason: "this question does not take a note" }); continue; }
+        const note = entry.note;
+        if (note === null || note === undefined || note === "") delete merged.note;
+        else if (typeof note !== "string") { problems.push({ id, reason: "the note must be text" }); continue; }
+        else if (note.length > cfg.maxLength) { problems.push({ id, reason: `the note is ${note.length} characters, the limit is ${cfg.maxLength}` }); continue; }
+        else merged.note = note;
+      }
+      if (merged.value === undefined && merged.note === undefined) delete next[id];
+      else next[id] = merged;
+    }
+    const eligible = evaluateEligibility(ctx.version.manifest, next);
+    for (const id of ids) {
+      if (eligible[id] !== false) continue;
+      const entry = patch[id] ?? {};
+      const q = byId.get(id);
+      if (!q) continue;
+      const submittedValue = "value" in entry ? validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" }) : null;
+      const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
+      const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
+      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
+    }
+
+    const groups: RepeatRecordMap = { ...(current.recordGroups ?? {}) };
+    const touched = new Set<string>();
+    const conflict = (questionId: string, rowId: string, fieldId?: string): SaveResult => ({
+      ok: false, status: 409, code: fieldId ? "record_field_conflict" : "record_row_conflict",
+      error: fieldId ? "This record field changed in another window. Reload the record before editing it again." : "This record changed in another window. Reload the record before editing it again.",
+      recordErrors: [{ questionId, rowId, fieldId, reason: "the expected revision is stale" }],
+    });
+    for (const operation of operations) {
+      const q = byId.get(operation.questionId);
+      if (!q || q.type !== "repeat") { recordErrors.push({ questionId: operation.questionId, reason: "not a repeat question in this interview" }); continue; }
+      if (eligible[q.id] === false) { recordErrors.push({ questionId: q.id, reason: "this question is not available for the answers currently selected" }); continue; }
+      if (!ID_RE.test(operation.rowId)) { recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "row id is invalid" }); continue; }
+      const rows = [...(groups[q.id] ?? [])];
+      let rowIndex = rows.findIndex((row) => row.id === operation.rowId && !row.deletedAt);
+      if (operation.op === "add") {
+        const existing = rows.find((row) => row.id === operation.rowId);
+        if (existing && !existing.deletedAt) {
+          // A retry after a committed add whose response was lost is idempotent.
+          touched.add(q.id);
+          continue;
+        }
+        if (existing?.deletedAt) return conflict(q.id, operation.rowId);
+        const participantRowHistory = Object.values(groups).reduce((count, groupRows) => count + groupRows.length, 0);
+        if (participantRowHistory >= MAX_REPEAT_ROW_HISTORY_PER_PARTICIPANT) {
+          recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: "the record history limit has been reached" });
+          continue;
+        }
+        if (rows.filter((row) => !row.deletedAt).length >= (q.maxRows ?? LIMITS.maxRepeatRows)) {
+          recordErrors.push({ questionId: q.id, rowId: operation.rowId, reason: `no more than ${q.maxRows ?? LIMITS.maxRepeatRows} records may be added` });
+          continue;
+        }
+        rows.push({ id: operation.rowId, values: {}, revision: 0, fieldRevisions: {} });
+      } else {
+        if (rowIndex < 0) {
+          const removed = rows.find((row) => row.id === operation.rowId && row.deletedAt);
+          if (operation.op === "remove" && removed && operation.expectedRowRevision + 1 === removed.revision) {
+            // A retry after a committed remove whose response was lost is idempotent.
+            touched.add(q.id);
+            continue;
+          }
+          return conflict(q.id, operation.rowId, operation.op === "set" || operation.op === "clear" ? operation.fieldId : undefined);
+        }
+        const row = { ...rows[rowIndex], values: { ...rows[rowIndex].values }, fieldRevisions: { ...rows[rowIndex].fieldRevisions } };
+        if (operation.op === "remove") {
+          if (!Number.isSafeInteger(operation.expectedRowRevision) || operation.expectedRowRevision !== row.revision) return conflict(q.id, operation.rowId);
+          row.deletedAt = nowIso;
+          row.values = {};
+          row.revision += 1;
+          rows[rowIndex] = row;
+        } else {
+          const field = (q.fields ?? []).find((item) => item.id === operation.fieldId);
+          if (!field) { recordErrors.push({ questionId: q.id, rowId: row.id, fieldId: operation.fieldId, reason: "not a field in this record" }); continue; }
+          const fieldRevision = row.fieldRevisions[field.id] ?? 0;
+          if (fieldRevision === operation.expectedFieldRevision + 1) {
+            if (operation.op === "clear" && !Object.hasOwn(row.values, field.id)) {
+              touched.add(q.id);
+              continue;
+            }
+            if (operation.op === "set") {
+              const replayValidation = validateRepeatField(field, operation.value);
+              if (replayValidation.ok && Object.is(row.values[field.id], replayValidation.value)) {
+                touched.add(q.id);
+                continue;
+              }
+            }
+          }
+          if (!Number.isSafeInteger(operation.expectedFieldRevision) || operation.expectedFieldRevision !== fieldRevision) return conflict(q.id, row.id, field.id);
+          if (operation.op === "set") {
+            const validation = validateRepeatField(field, operation.value);
+            if (!validation.ok) { recordErrors.push({ questionId: q.id, rowId: row.id, fieldId: field.id, reason: validation.reason }); continue; }
+            row.values[field.id] = validation.value;
+          } else delete row.values[field.id];
+          row.fieldRevisions[field.id] = fieldRevision + 1;
+          row.revision += 1;
+          rows[rowIndex] = row;
+        }
+      }
+      groups[q.id] = rows;
+      touched.add(q.id);
+    }
+    if (problems.length || recordErrors.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems, recordErrors };
+    if (JSON.stringify({ answers: next, recordGroups: groups }).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };
+    const $set: Record<string, unknown> = { status: "in_progress", updatedAt: now, lastSavedAt: now, lastSeenAt: now };
+    const $unset: Record<string, ""> = {};
+    for (const id of ids) {
+      if (next[id]) $set[`answers.${id}`] = next[id];
+      else $unset[`answers.${id}`] = "";
+    }
+    for (const id of touched) $set[`recordGroups.${id}`] = groups[id];
     const res = await participants.findOneAndUpdate(
-      tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), status: { $ne: "submitted" } }),
+      tenantFilter(ctx.tenantId, { _id: current._id, revision: current.revision, status: { $ne: "submitted" } }),
       { $set, ...(Object.keys($unset).length ? { $unset } : {}), $inc: { revision: 1 } },
       { returnDocument: "after", session },
     );
     if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked." };
-    return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status };
+    const returnedGroups: RepeatRecordMap = {};
+    for (const id of touched) returnedGroups[id] = (res.recordGroups?.[id] ?? []).filter((row) => !row.deletedAt);
+    return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status, ...(touched.size ? { recordGroups: returnedGroups } : {}) };
   });
   if (result.ok) logEvent(ctx.tenantId, new ObjectId(ctx.interview.id), "save", new ObjectId(ctx.participant.id), { ids: ids.slice(0, 20) });
   return result;
 }
 
-export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[] };
+function validateRepeatField(field: RepeatField, raw: unknown): { ok: true; value: string | number } | { ok: false; reason: string } {
+  // Reuse the same scalar validators as ordinary questions, without accepting a repeat value array.
+  const result = validateAnswer({ ...field, required: false } as Question, raw);
+  if (!result.ok) return result;
+  if (result.value === null || Array.isArray(result.value)) return { ok: false, reason: "a non-empty scalar value is required" };
+  return { ok: true, value: result.value };
+}
+
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RepeatRecordIssue[] };
 
 export async function submitAnswers(token: string, expectedVersion: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
@@ -618,10 +704,10 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: participantId, token }), { session });
     if (!current) return { ok: false, status: 404, error: "This link is not valid." };
     if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
-    const pr = progress(ctx.version.manifest, current.answers);
-    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length) {
+    const pr = progress(ctx.version.manifest, current.answers, current.recordGroups ?? {});
+    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length || pr.repeatErrors.length) {
       const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
-      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidMinimumSelections.length + pr.invalidExclusiveSelections.length + pr.invalidRankSelections.length;
+      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidMinimumSelections.length + pr.invalidExclusiveSelections.length + pr.invalidRankSelections.length + pr.repeatErrors.length;
       return {
         ok: false,
         status: 422,
@@ -632,6 +718,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
         invalidMinimumSelections: pr.invalidMinimumSelections,
         invalidExclusiveSelections: pr.invalidExclusiveSelections,
         invalidRankSelections: pr.invalidRankSelections,
+        repeatErrors: pr.repeatErrors,
       };
     }
     const now = new Date();

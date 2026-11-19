@@ -61,7 +61,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
       return {
         id: p.id, token: p.token, name: p.name, email: p.email, note: p.note, status: p.status,
         answered: pr.answered, total: pr.total, requiredMissing: pr.missingRequired.length,
-        createdAt: p.createdAt, updatedAt: p.updatedAt, lastSeenAt: p.lastSeenAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers,
+        createdAt: p.createdAt, updatedAt: p.updatedAt, lastSeenAt: p.lastSeenAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups,
         mail: { state: mail.state, sentAt: mail.sentAt, error: mail.error, delivery: mail.state === "sent" ? mail.delivery : "unknown", deliveryCheckedAt: mail.deliveryCheckedAt, deliveryDetail: mail.deliveryDetail },
       };
     }),

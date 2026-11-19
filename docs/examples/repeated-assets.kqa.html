@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Routine asset inspection</title>
+  <script type="application/json" id="kqa-manifest">
+  {
+    "format": "kqa/1",
+    "title": "Routine asset inspection",
+    "description": "A technical example of a bounded repeated-record group.",
+    "questions": [
+      {
+        "id": "assets",
+        "type": "repeat",
+        "required": true,
+        "label": "Which assets did you inspect during this shift?",
+        "help": "Add one row per routine inspection. Do not include urgent hazards or safety incidents here; use the site's monitored reporting process.",
+        "itemLabel": "asset",
+        "minRows": 1,
+        "maxRows": 5,
+        "fields": [
+          { "id": "asset-id", "type": "text", "label": "Asset identifier", "required": true, "maxLength": 80 },
+          {
+            "id": "condition",
+            "type": "select",
+            "label": "Observed condition",
+            "required": true,
+            "options": [
+              { "value": "routine", "label": "No routine issue observed" },
+              { "value": "follow-up", "label": "Routine follow-up suggested" },
+              { "value": "not-assessed", "label": "Not assessed" }
+            ]
+          },
+          { "id": "inspection-date", "type": "date", "label": "Inspection date" }
+        ]
+      }
+    ]
+  }
+  </script>
+  <style>
+    :root { color-scheme: light dark; font: 1rem/1.5 system-ui, sans-serif; }
+    body { max-width: 52rem; margin: 0 auto; padding: 1.25rem; }
+    .question { border: 1px solid #8888; border-radius: .75rem; padding: 1rem; }
+    template fieldset { border: 1px solid #8888; border-radius: .5rem; margin-block: 1rem; padding: 1rem; }
+    legend { font-weight: 700; padding-inline: .4rem; }
+    label { display: grid; gap: .35rem; margin-block: .75rem; }
+    input, select, button { box-sizing: border-box; font: inherit; min-height: 44px; max-width: 100%; }
+    [data-kqa-record-add], [data-kqa-record-remove] { margin-block: .5rem; padding: .5rem .8rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Routine asset inspection</h1>
+    <p>This small example shows the HTML template contract. Replace the purpose, safety notice, categories and limit with host-approved content before use.</p>
+    <section class="question" data-kqa-question-id="assets">
+      <h2>Which assets did you inspect during this shift?</h2>
+      <p>Add one row per routine inspection. The host must provide a separate monitored route for urgent safety matters.</p>
+      <template data-kqa-repeat-template="assets">
+        <fieldset>
+          <legend>Asset</legend>
+          <label for="asset-id">Asset identifier
+            <input id="asset-id" type="text" data-kqa-repeat-field="asset-id" maxlength="80">
+          </label>
+          <label for="condition">Observed condition
+            <select id="condition" data-kqa-repeat-field="condition">
+              <option value="">Choose a condition</option>
+              <option value="routine">No routine issue observed</option>
+              <option value="follow-up">Routine follow-up suggested</option>
+              <option value="not-assessed">Not assessed</option>
+            </select>
+          </label>
+          <label for="inspection-date">Inspection date
+            <input id="inspection-date" type="date" data-kqa-repeat-field="inspection-date">
+          </label>
+        </fieldset>
+      </template>
+    </section>
+  </main>
+</body>
+</html>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Workbook } from "exceljs";
 import type { Manifest } from "../src/lib/format/schema";
 import { csvLong, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
-import { exportFilename, longTable, slugify, wideTable } from "../src/lib/export/rows";
+import { exportFilename, longTable, recordTable, slugify, wideTable } from "../src/lib/export/rows";
 import { jsonExport } from "../src/lib/export/json";
 import { escapeInline, markdownExport } from "../src/lib/export/markdown";
 import { exportInterview, type ExportInput } from "../src/lib/export/index";
@@ -324,6 +324,96 @@ describe("JSON", () => {
     expect(ben.answers.satisfaction.note).toBe(benNote);
     expect(ben.answers.satisfaction.value).toBeUndefined();
     expect(sum.submittedAt).toBeUndefined();
+    expect(doc.participants.every((person: Record<string, unknown>) => !Object.hasOwn(person, "recordGroups"))).toBe(true);
+  });
+
+  it("adds public repeat rows only when present and omits internal revision counters", () => {
+    const repeatManifest: Manifest = {
+      ...manifest,
+      questions: [...manifest.questions, {
+        id: "assets", type: "repeat", label: "Assets", maxRows: 5,
+        fields: [
+          { id: "asset-name", label: "Asset name", type: "text" },
+          { id: "condition", label: "Condition", type: "select", options: [{ value: "good", label: "Good" }, { value: "poor", label: "Poor" }] },
+        ],
+      }],
+    };
+    const repeatInput: ExportInput = {
+      ...input,
+      manifest: repeatManifest,
+      participants: input.participants.map((person) => person.id === "p-ben" ? {
+        ...person,
+        recordGroups: {
+          assets: [
+            { id: "row-opaque-2", values: { "asset-name": "=HYPERLINK(\"https://example.com\")", condition: "good" }, revision: 4, fieldRevisions: { "asset-name": 3, condition: 4 } },
+            { id: "row-opaque-1", values: { "asset-name": "" }, revision: 1, fieldRevisions: { "asset-name": 1 } },
+          ],
+        },
+      } : person),
+    };
+    const doc = JSON.parse(jsonExport(repeatInput).body as string);
+    const ben = doc.participants.find((person: { id: string }) => person.id === "p-ben");
+    expect(ben.recordGroups.assets).toEqual([
+      { id: "row-opaque-2", values: { "asset-name": "=HYPERLINK(\"https://example.com\")", condition: "good" } },
+      { id: "row-opaque-1", values: { "asset-name": "" } },
+    ]);
+    expect(JSON.stringify(ben.recordGroups)).not.toContain("revision");
+  });
+});
+
+describe("repeat record exports", () => {
+  const repeatManifest: Manifest = {
+    ...manifest,
+    questions: [...manifest.questions, {
+      id: "assets", type: "repeat", label: "Assets", maxRows: 5,
+      fields: [
+        { id: "asset-name", label: "Asset name", type: "text" },
+        { id: "condition", label: "Condition", type: "single", options: [{ value: "good", label: "Good" }, { value: "poor", label: "Poor" }] },
+      ],
+    }],
+  };
+  const repeatInput: ExportInput = {
+    ...input,
+    manifest: repeatManifest,
+    participants: [{
+      ...input.participants[0],
+      recordGroups: {
+        assets: [
+          { id: "row-1", values: { "asset-name": "=SUM(A1)", condition: "good" }, revision: 2, fieldRevisions: { "asset-name": 1, condition: 2 } },
+          { id: "row-2", values: {}, revision: 1, fieldRevisions: {} },
+        ],
+      },
+    }],
+  };
+
+  it("creates one normalized row per declared field, preserving order and value presence", () => {
+    const table = recordTable(repeatInput);
+    expect(table.header).toEqual(["Person id", "Person", "Person status", "Question id", "Question", "Row id", "Row order", "Field id", "Field", "Field type", "Value present", "Value"]);
+    expect(table.rows).toHaveLength(4);
+    expect(table.rows[0]).toEqual(["p-ben", "Ben Okafor", "in_progress", "assets", "Assets", "row-1", "1", "asset-name", "Asset name", "text", "true", "=SUM(A1)"]);
+    expect(table.rows[2]).toMatchObject(["p-ben", "Ben Okafor", "in_progress", "assets", "Assets", "row-2", "2", "asset-name", "Asset name", "text", "false", ""]);
+  });
+
+  it("adds a formula-safe Records sheet only for existing rows and leaves CSV cardinality unchanged", async () => {
+    const wide = wideTable(repeatInput);
+    const long = longTable(repeatInput);
+    expect(wide.rows).toHaveLength(1);
+    expect(long.rows).toHaveLength(2);
+    expect(csvLong(repeatInput).body).not.toContain("row-1");
+
+    const file = await xlsxExport(repeatInput);
+    const workbook = new Workbook();
+    await workbook.xlsx.load(file.body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(["Summary", "Wide", "Long", "People", "Records"]);
+    const records = workbook.getWorksheet("Records")!;
+    expect(records.rowCount).toBe(5);
+    expect(records.getCell(2, 12).value).toBe("'=SUM(A1)");
+    expect(records.getCell(4, 11).value).toBe("false");
+
+    const legacy = await xlsxExport(input);
+    const legacyBook = new Workbook();
+    await legacyBook.xlsx.load(legacy.body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
+    expect(legacyBook.worksheets.map((sheet) => sheet.name)).toEqual(["Summary", "Wide", "Long", "People"]);
   });
 });
 

@@ -26,6 +26,7 @@ describe("agent documentation bundle", () => {
     ["starter.kqa.html", "template/starter.kqa.html"],
     ["conditional-follow-up.kqa.html", "examples/conditional-follow-up.kqa.html"],
     ["routed-follow-up.kqa.html", "examples/routed-follow-up.kqa.html"],
+    ["repeated-assets.kqa.html", "examples/repeated-assets.kqa.html"],
     ["service-improvement.kqa.html", "examples/service-improvement.kqa.html"],
     ["service-improvement.review.md", "examples/service-improvement.review.md"],
     ["personal-planning.kqa.html", "examples/personal-planning.kqa.html"],
@@ -157,7 +158,7 @@ describe("agent documentation bundle", () => {
     expect(bundle).toContain("does not simulate respondent input");
     expect(bundle).toContain("<!-- QUESTION_BLUEPRINT.md -->");
     expect(bundle).toContain("<!-- kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md -->");
-    expect(bundle).toContain("The proposal is not a shipped KQA capability");
+    expect(bundle).toContain("Status: supported in the KQA questionnaire format");
   });
 
   it("publishes the repeatable-record selection benchmark and its development corpus", async () => {

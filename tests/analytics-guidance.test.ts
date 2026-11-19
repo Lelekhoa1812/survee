@@ -6,7 +6,7 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/16");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/17");
     const analysis = getAnalyticsGuidance();
     expect(analysis.principles.find((principle) => principle.id === "explore-answer-segments")?.guidance).toContain("crossTabWith");
     expect(analysis.productConstraints.join(" ")).toContain("400 cells");
@@ -53,6 +53,8 @@ describe("versioned analytics guidance", () => {
       "relative-value error is not rank error",
       "binscollapsed",
       "privacy",
+      "repeat-group rows",
+      "never count rows as participants",
       "ambiguity",
     ]) {
       expect(text).toContain(phrase);
@@ -72,6 +74,14 @@ describe("versioned analytics guidance", () => {
     expect(constraints).toContain("disclosure rules");
     expect(constraints).toContain("reuse analysisrunid as runid");
     expect(constraints).toContain("initial participant scan is live");
+  });
+
+  it("states that repeat rows are excluded and are not independent observations", () => {
+    const guidance = getAnalyticsGuidance();
+    const principle = guidance.principles.find((item) => item.id === "keep-repeat-records-out-of-default-analysis");
+    expect(principle?.guidance).toContain("exclude their field values");
+    expect(principle?.guidance).toContain("never count rows as participants");
+    expect(guidance.productConstraints.join(" ")).toContain("Repeat-group field values are excluded");
   });
 
   it("returns fresh package objects so callers cannot mutate shared guidance", () => {

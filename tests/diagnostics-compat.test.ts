@@ -135,4 +135,20 @@ describe("compareVersions", () => {
       'Question "qremoved" ("Removed") is not in the new version, and 1 person has answered it.',
     ]);
   });
+
+  it("warns when a saved repeated field is removed or the active row count exceeds a lowered cap", () => {
+    const previous = manifest([{ id: "assets", type: "repeat", label: "Assets", maxRows: 5, fields: [
+      { id: "name", type: "text", label: "Asset name" },
+      { id: "condition", type: "text", label: "Condition" },
+    ] }]);
+    const next = manifest([{ id: "assets", type: "repeat", label: "Assets", maxRows: 1, fields: [
+      { id: "name", type: "text", label: "Asset name" },
+    ] }]);
+    const diagnostics = compareVersions({ previous, next, answers: [{ status: "in_progress", answers: {}, recordGroups: { assets: [
+      { id: "r1", values: { name: "A-1", condition: "good" }, revision: 0, fieldRevisions: {} },
+      { id: "r2", values: { name: "A-2" }, revision: 0, fieldRevisions: {} },
+    ] } }] });
+    expect(diagnostics.filter((item) => item.code === "KQA709")).toHaveLength(1);
+    expect(diagnostics.find((item) => item.code === "KQA709")?.message).toContain("1 person may no longer fit");
+  });
 });

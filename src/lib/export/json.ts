@@ -39,6 +39,11 @@ export function jsonExport(input: ExportInput): ExportFile {
           optionOrderVersion: a.optionOrderVersion,
         };
       }
+      const recordGroups = Object.fromEntries(
+        Object.entries(p.recordGroups ?? {})
+          .filter(([, rows]) => rows.length > 0)
+          .map(([questionId, rows]) => [questionId, rows.map(({ id, values }) => ({ id, values }))]),
+      );
       return {
         id: p.id,
         name: p.name,
@@ -58,6 +63,7 @@ export function jsonExport(input: ExportInput): ExportFile {
         /** Current-rule inference; KQA does not record whether a question was actually rendered. */
         eligibility: Object.fromEntries(manifest.questions.map((q) => [q.id, eligibility[q.id] === false ? "inactive" : "eligible"])),
         answers,
+        ...(Object.keys(recordGroups).length ? { recordGroups } : {}),
       };
     }),
   };

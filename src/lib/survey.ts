@@ -35,8 +35,8 @@ export async function withCompat(prepared: Prepared, interviewId: string): Promi
   if (!interview) return prepared;
   const current = await (await col.versions()).findOne(tenantFilter(tenantId, { interviewId: oid, version: interview.currentVersion }), { projection: { manifest: 1 } });
   if (!current) return prepared;
-  const people = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }), { projection: { answers: 1, status: 1 } }).toArray();
-  const extra = compareVersions({ previous: current.manifest, next: prepared.report.manifest, answers: people.map((p) => ({ answers: p.answers ?? {}, status: p.status })) });
+  const people = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }), { projection: { answers: 1, recordGroups: 1, status: 1 } }).toArray();
+  const extra = compareVersions({ previous: current.manifest, next: prepared.report.manifest, answers: people.map((p) => ({ answers: p.answers ?? {}, recordGroups: p.recordGroups ?? {}, status: p.status })) });
   if (!extra.length) return prepared;
   const report = mergeDiagnostics(prepared.report, extra);
   return { ...prepared, report, markdown: toAgentMarkdown(report) };

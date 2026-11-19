@@ -1,4 +1,4 @@
-import type { AnswerMap, Manifest } from "../format/schema";
+import type { AnswerMap, Manifest, RepeatRecordMap } from "../format/schema";
 
 export type ExportFormat = "json" | "csv-wide" | "csv-long" | "xlsx" | "md";
 export const EXPORT_FORMATS: ExportFormat[] = ["json", "csv-wide", "csv-long", "xlsx", "md"];
@@ -14,6 +14,7 @@ export interface ExportParticipant {
   lastSavedAt?: string; // ISO
   submittedAt?: string; // ISO
   answers: AnswerMap;
+  recordGroups?: RepeatRecordMap;
 }
 
 export interface ExportInput {

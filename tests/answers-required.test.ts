@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { displayValue, eligibilityQuestionIds, evaluateEligibility, isAnswered, progress, validateAnswer } from "../src/lib/format/answers";
-import type { Manifest, Question } from "../src/lib/format/schema";
+import type { Manifest, Question, RepeatRecordMap } from "../src/lib/format/schema";
 
 const checkbox: Question = {
   id: "channels",
@@ -191,6 +191,19 @@ describe("answered, without scores", () => {
     expect(evaluateEligibility(manifest, { details: { value: "Some context", updatedAt: "" } })).toEqual({ details: true, "follow-up": true, skip: false });
   });
 
+  it("allows only answer-state routing from repeated groups and fails closed on comparisons", () => {
+    const manifest: Manifest = { format: "kqa/1", title: "Repeat routing", questions: [
+      { id: "assets", type: "repeat", label: "Assets", maxRows: 3, fields: [{ id: "name", type: "text", label: "Name" }] },
+      { id: "present", type: "text", label: "Has records", when: { all: [{ question: "assets", operator: "answered" }] } },
+      { id: "absent", type: "text", label: "No records", when: { all: [{ question: "assets", operator: "notAnswered" }] } },
+      { id: "invalid-negative", type: "text", label: "Invalid comparison", when: { all: [{ question: "assets", operator: "notEquals", value: "x" }] } },
+      { id: "invalid-typed", type: "text", label: "Invalid typed comparison", when: { all: [{ question: "assets", operator: "gte", value: 1 }] } },
+    ] };
+    const groups = { assets: [{ id: "r1", values: { name: "A" }, revision: 0, fieldRevisions: {} }] };
+    expect(evaluateEligibility(manifest, {}, groups)).toEqual({ assets: true, present: true, absent: false, "invalid-negative": false, "invalid-typed": false });
+    expect(evaluateEligibility(manifest, {}, {})).toEqual({ assets: true, present: false, absent: true, "invalid-negative": false, "invalid-typed": false });
+  });
+
   it("projects transitive routing dependencies in manifest order for selected analysis questions", () => {
     const manifest: Manifest = {
       format: "kqa/1", title: "Routing", questions: [
@@ -201,5 +214,40 @@ describe("answered, without scores", () => {
     };
     expect(eligibilityQuestionIds(manifest, ["outcome"])).toEqual(["root", "branch", "outcome"]);
     expect(eligibilityQuestionIds(manifest, ["branch"])).toEqual(["root", "branch"]);
+  });
+
+  it("counts a repeat group once and validates required rows and fields", () => {
+    const manifest: Manifest = { format: "kqa/1", title: "Records", questions: [
+      { id: "jobs", type: "repeat", label: "Jobs", required: true, maxRows: 3, fields: [
+        { id: "title", type: "text", label: "Title", required: true },
+        { id: "start", type: "date", label: "Start" },
+      ] },
+      { id: "follow", type: "text", label: "Follow up", when: { all: [{ question: "jobs", operator: "answered" }] } },
+    ] };
+    const empty = progress(manifest, {});
+    expect(empty).toMatchObject({ total: 1, answered: 0, missingRequired: ["jobs"], repeatErrors: [{ questionId: "jobs", reason: "add at least 1 record" }] });
+    const groups: RepeatRecordMap = { jobs: [
+      { id: "job-1", values: {}, revision: 0, fieldRevisions: {} },
+      { id: "job-2", values: { title: "Research", start: "2024-02-30" }, revision: 1, fieldRevisions: { title: 1, start: 1 } },
+    ] };
+    const current = progress(manifest, {}, groups);
+    expect(current).toMatchObject({ total: 2, answered: 1, requiredAnswered: 1, repeatErrors: [
+      { questionId: "jobs", rowId: "job-1", fieldId: "title" },
+      { questionId: "jobs", rowId: "job-2", fieldId: "start" },
+    ] });
+  });
+
+  it("does not accept repeat data in scalar AnswerValue validation", () => {
+    const repeat: Question = { id: "items", type: "repeat", label: "Items", maxRows: 2, fields: [{ id: "name", type: "text", label: "Name" }] };
+    expect(validateAnswer(repeat, "value")).toMatchObject({ ok: false, reason: expect.stringContaining("record groups") });
+  });
+
+  it("retains but does not validate repeat rows while their route is inactive", () => {
+    const manifest: Manifest = { format: "kqa/1", title: "Routed records", questions: [
+      { id: "kind", type: "single", label: "Kind", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+      { id: "details", type: "repeat", label: "Details", required: true, maxRows: 2, fields: [{ id: "name", type: "text", label: "Name", required: true }], when: { all: [{ question: "kind", operator: "equals", value: "yes" }] } },
+    ] };
+    const result = progress(manifest, { kind: { value: "no", updatedAt: "now" } }, { details: [{ id: "draft", values: {}, revision: 0, fieldRevisions: {} }] });
+    expect(result).toMatchObject({ inactive: 1, missingRequired: [], repeatErrors: [] });
   });
 });

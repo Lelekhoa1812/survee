@@ -1,6 +1,8 @@
-import { LIMITS, isCalendarDate, scaleBounds, type AnswerMap, type AnswerValue, type Condition, type Manifest, type Question } from "./schema";
+import { LIMITS, isCalendarDate, scaleBounds, type AnswerMap, type AnswerValue, type Condition, type Manifest, type Question, type RepeatField, type RepeatRecordMap } from "./schema";
 
 export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string };
+
+export interface RepeatAnswerIssue { questionId: string; rowId?: string; fieldId?: string; reason: string }
 
 export function exclusiveConflictCount(q: Question, value: unknown): number {
   if (q.type !== "multi" || !Array.isArray(value)) return 0;
@@ -76,6 +78,8 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
       if (!isCalendarDate(raw)) return { ok: false, reason: `"${raw}" is not a valid YYYY-MM-DD date` };
       return { ok: true, value: raw };
     }
+    case "repeat":
+      return { ok: false, reason: "repeat answers are stored as record groups, not scalar answer values" };
   }
 }
 
@@ -85,7 +89,8 @@ function describe(v: unknown): string {
   return typeof v === "object" ? "an object" : `${typeof v} ${JSON.stringify(v)?.slice(0, 40)}`;
 }
 
-export function isAnswered(q: Question, answers: AnswerMap): boolean {
+export function isAnswered(q: Question, answers: AnswerMap, recordGroups: RepeatRecordMap = {}): boolean {
+  if (q.type === "repeat") return (recordGroups[q.id] ?? []).some((row) => !row.deletedAt);
   const a = answers[q.id];
   if (!a || a.value === undefined || a.value === null) return false;
   if (q.type === "rank") return validateAnswer(q, a.value).ok && Array.isArray(a.value) && a.value.length > 0;
@@ -95,7 +100,7 @@ export function isAnswered(q: Question, answers: AnswerMap): boolean {
 }
 
 /** Evaluate the current manifest's bounded routing rules in question order. */
-export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Record<string, boolean> {
+export function evaluateEligibility(manifest: Manifest, answers: AnswerMap, recordGroups: RepeatRecordMap = {}): Record<string, boolean> {
   const eligible: Record<string, boolean> = {};
   const questionById = new Map(manifest.questions.map((item) => [item.id, item]));
   for (const question of manifest.questions) {
@@ -103,8 +108,12 @@ export function evaluateEligibility(manifest: Manifest, answers: AnswerMap): Rec
     if (!when) { eligible[question.id] = true; continue; }
     const matches = (condition: NonNullable<typeof when.all>[number]): boolean => {
       if (!eligible[condition.question]) return false;
+      const sourceQuestion = questionById.get(condition.question);
+      if (sourceQuestion?.type === "repeat" && condition.operator !== "answered" && condition.operator !== "notAnswered") return false;
       const value = answers[condition.question]?.value;
-      const answered = value !== undefined && value !== null && (Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim() !== "" : true);
+      const answered = sourceQuestion?.type === "repeat"
+        ? (recordGroups[condition.question] ?? []).some((row) => !row.deletedAt)
+        : value !== undefined && value !== null && (Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim() !== "" : true);
       if (condition.operator === "answered") return answered;
       if (condition.operator === "notAnswered") return !answered;
       if (!answered || !("value" in condition)) return false;
@@ -179,9 +188,10 @@ export interface Progress {
   invalidRankSelections: { id: string }[];
   eligible: Record<string, boolean>;
   inactive: number;
+  repeatErrors: RepeatAnswerIssue[];
 }
 
-export function progress(manifest: Manifest, answers: AnswerMap): Progress {
+export function progress(manifest: Manifest, answers: AnswerMap, recordGroups: RepeatRecordMap = {}): Progress {
   let answered = 0;
   let requiredTotal = 0;
   let requiredAnswered = 0;
@@ -190,14 +200,21 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
   const invalidMinimumSelections: Progress["invalidMinimumSelections"] = [];
   const invalidExclusiveSelections: Progress["invalidExclusiveSelections"] = [];
   const invalidRankSelections: Progress["invalidRankSelections"] = [];
-  const eligible = evaluateEligibility(manifest, answers);
+  const eligible = evaluateEligibility(manifest, answers, recordGroups);
+  const repeatErrors = validateRecordGroups(manifest, recordGroups, answers, eligible);
   let total = 0;
   for (const q of manifest.questions) {
     if (!eligible[q.id]) continue;
     total += 1;
-    const done = isAnswered(q, answers);
+    const done = isAnswered(q, answers, recordGroups);
     if (done) answered += 1;
+    if (q.required) {
+      requiredTotal += 1;
+      if (done) requiredAnswered += 1;
+      else missingRequired.push(q.id);
+    }
     const value = answers[q.id]?.value;
+    if (q.type === "repeat") continue;
     if (q.type === "multi" && q.maxSelections !== undefined && Array.isArray(value)) {
       const selected = new Set(value).size;
       if (selected > q.maxSelections) invalidSelections.push({ id: q.id, selected, maximum: q.maxSelections });
@@ -208,13 +225,43 @@ export function progress(manifest: Manifest, answers: AnswerMap): Progress {
     }
     if (q.type === "multi" && Array.isArray(value) && value.some((item) => q.exclusiveOptions?.includes(item)) && new Set(value).size > 1) invalidExclusiveSelections.push({ id: q.id });
     if (q.type === "rank" && value !== undefined && value !== null && !validateAnswer(q, value).ok) invalidRankSelections.push({ id: q.id });
-    if (q.required) {
-      requiredTotal += 1;
-      if (done) requiredAnswered += 1;
-      else missingRequired.push(q.id);
+  }
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidMinimumSelections, invalidExclusiveSelections, invalidRankSelections, eligible, inactive: manifest.questions.length - total, repeatErrors };
+}
+
+/** Validate retained repeat rows at submit; drafts remain saveable while required fields are incomplete. */
+export function validateRecordGroups(manifest: Manifest, recordGroups: RepeatRecordMap = {}, answers: AnswerMap = {}, eligibility?: Record<string, boolean>): RepeatAnswerIssue[] {
+  const issues: RepeatAnswerIssue[] = [];
+  const eligible = eligibility ?? evaluateEligibility(manifest, answers, recordGroups);
+  for (const question of manifest.questions) {
+    if (question.type !== "repeat" || eligible[question.id] === false) continue;
+    const rows = (recordGroups[question.id] ?? []).filter((row) => !row.deletedAt);
+    const minRows = Math.max(question.minRows ?? 0, question.required ? 1 : 0);
+    if (rows.length < minRows) issues.push({ questionId: question.id, reason: `add at least ${minRows} record${minRows === 1 ? "" : "s"}` });
+    const fields = new Map((question.fields ?? []).map((field) => [field.id, field]));
+    for (const row of rows) {
+      for (const field of question.fields ?? []) {
+        const value = row.values?.[field.id];
+        const hasValue = value !== undefined && !(typeof value === "string" && value.trim() === "");
+        if (field.required && !hasValue) {
+          issues.push({ questionId: question.id, rowId: row.id, fieldId: field.id, reason: "this field is required in each retained record" });
+          continue;
+        }
+        if (hasValue) {
+          const validation = validateRepeatFieldValue(field, value);
+          if (!validation.ok) issues.push({ questionId: question.id, rowId: row.id, fieldId: field.id, reason: validation.reason });
+        }
+      }
+      for (const fieldId of Object.keys(row.values ?? {})) {
+        if (!fields.has(fieldId)) issues.push({ questionId: question.id, rowId: row.id, fieldId, reason: "this field is not in the current questionnaire" });
+      }
     }
   }
-  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidMinimumSelections, invalidExclusiveSelections, invalidRankSelections, eligible, inactive: manifest.questions.length - total };
+  return issues;
+}
+
+function validateRepeatFieldValue(field: RepeatField, value: unknown): ValidateResult {
+  return validateAnswer({ ...field, required: false } as Question, value);
 }
 
 /** Human-readable form of a stored value: option labels instead of option values. */

@@ -145,7 +145,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { deleteInterview, getVersion, iterateAnalyticsParticipants, noteMcp, publishVersionIfCurrent } from "../src/lib/repo";
+import { deleteInterview, getVersion, iterateAnalyticsParticipants, listParticipants, noteMcp, publishVersionIfCurrent } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -169,6 +169,36 @@ beforeEach(() => {
 });
 
 describe("MCP tools", () => {
+  it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {
+    const repeatManifest = {
+      ...analyticsManifest,
+      questions: [...analyticsManifest.questions, {
+        id: "assets", type: "repeat" as const, label: "Assets", maxRows: 4,
+        fields: [{ id: "name", label: "Asset name", type: "text" as const }],
+      }],
+    };
+    vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest: repeatManifest } as never);
+    vi.mocked(listParticipants).mockResolvedValueOnce([{
+      id: personId, name: "Ada Lovelace", status: "submitted", answers: {},
+      recordGroups: { assets: [{ id: "row-stable-1", values: { name: "Pump 4" }, revision: 8, fieldRevisions: { name: 5 } }] },
+    }] as never);
+    const response = await call("get_answers", { interviewId });
+    const body = await response.json() as { result: { structuredContent: { people: { answers: unknown[]; recordGroups?: Record<string, { id: string; values: Record<string, string | number> }[]> }[] } } };
+    expect(body.result.structuredContent.people[0].recordGroups).toEqual({ assets: [{ id: "row-stable-1", values: { name: "Pump 4" } }] });
+    expect(body.result.structuredContent.people[0].answers).toHaveLength(4);
+    expect(JSON.stringify(body.result.structuredContent.people[0].recordGroups)).not.toContain("revision");
+  });
+
+  it("preserves the legacy get_answers person shape when no repeat rows exist", async () => {
+    vi.mocked(listParticipants).mockResolvedValueOnce([{
+      id: personId, name: "Ada Lovelace", status: "submitted", answers: {},
+    }] as never);
+    const response = await call("get_answers", { interviewId });
+    const body = await response.json() as { result: { structuredContent: { people: Record<string, unknown>[] } } };
+    expect(body.result.structuredContent.people[0]).not.toHaveProperty("recordGroups");
+    expect(Object.keys(body.result.structuredContent.people[0])).toEqual(["id", "name", "status", "submittedAt", "answers"]);
+  });
+
   it("returns the interview package guide to interview readers", async () => {
     const res = await call("get_interview_packages", {});
     const body = await res.json() as { result: { structuredContent: { source: string; packages: string; packageVersion: string; packageCatalog: { id: string; decisionFocus: string; respondents: string; useWhen: string; notFor: string; riskFlags: string[]; relatedPackages: string[] }[] } } };
@@ -215,7 +245,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/kqa-questionnaire-author/SKILL.md");
     expect(body.result.structuredContent.skill).toContain("name: kqa-questionnaire-author");
     expect(body.result.structuredContent.skill).toContain("Do not use it for an unapproved draft");
-    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/questionnaire-authoring-cases.json", "references/PACKAGE_DRAFT_BENCHMARK.md", "references/package-draft-cases.json", "references/package-draft-results.schema.json", "references/AUTHORING_TRUST_BOUNDARY_EVAL.md", "references/AUTHORING_TRUST_BOUNDARY_CASES.json", "references/starter.kqa.html", "references/conditional-follow-up.kqa.html", "references/routed-follow-up.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
+    expect(body.result.structuredContent.files.map((file) => file.path)).toEqual(expect.arrayContaining(["SKILL.md", "references/FORMAT.md", "references/INTERVIEW_PACKAGES.md", "references/QUESTION_BLUEPRINT.md", "references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/questionnaire-authoring-cases.json", "references/PACKAGE_DRAFT_BENCHMARK.md", "references/package-draft-cases.json", "references/package-draft-results.schema.json", "references/AUTHORING_TRUST_BOUNDARY_EVAL.md", "references/AUTHORING_TRUST_BOUNDARY_CASES.json", "references/starter.kqa.html", "references/conditional-follow-up.kqa.html", "references/routed-follow-up.kqa.html", "references/repeated-assets.kqa.html", "references/service-improvement.kqa.html", "references/service-improvement.review.md", "references/personal-planning.kqa.html", "references/personal-planning.review.md"]));
     const availablePaths = new Set(body.result.structuredContent.files.map((file) => file.path));
     const benchmarkGuides = new Set(["references/QUESTIONNAIRE_AUTHORING_BENCHMARK.md", "references/PACKAGE_DRAFT_BENCHMARK.md"]);
     for (const file of body.result.structuredContent.files.filter((item) => benchmarkGuides.has(item.path))) {

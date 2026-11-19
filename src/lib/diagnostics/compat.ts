@@ -1,4 +1,4 @@
-import type { AnswerMap, Manifest } from "../format/schema";
+import type { AnswerMap, Manifest, RepeatRecordMap } from "../format/schema";
 import { entry } from "./catalog";
 import type { Diagnostic } from "./types";
 
@@ -10,7 +10,7 @@ export interface CompatInput {
   previous: Manifest;
   next: Manifest;
   /** One AnswerMap per participant. */
-  answers: { answers: AnswerMap; status: string }[];
+  answers: { answers: AnswerMap; status: string; recordGroups?: RepeatRecordMap }[];
 }
 
 function make(code: string, message: string, fix?: string, questionId?: string): Diagnostic {
@@ -27,11 +27,12 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
   const peopleOverNewSelectionLimit = new Map<string, number>();
   const peopleUnderNewSelectionMinimum = new Map<string, number>();
   const peopleWithExclusiveConflicts = new Map<string, number>();
+  const repeatDataChanges = new Map<string, Set<number>>();
   let submitted = 0;
 
   // Aggregate participant data once. Compatibility checks run both during admin previews and MCP
   // version changes, so scanning every participant again for each question/option is costly.
-  for (const person of answers) {
+  for (const [personIndex, person] of answers.entries()) {
     if (person.status === "submitted") submitted += 1;
     for (const [questionId, answer] of Object.entries(person.answers)) {
       if (answer.value !== undefined || !!answer.note) {
@@ -75,6 +76,28 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
       // Existing semantics count a person once per option, even if malformed stored data repeats it.
       for (const value of new Set(values)) counts.set(value, (counts.get(value) ?? 0) + 1);
     }
+    for (const [questionId, rows] of Object.entries(person.recordGroups ?? {})) {
+      const activeRows = rows.filter((row) => !row.deletedAt);
+      if (activeRows.length) answeredPeopleByQuestion.set(questionId, (answeredPeopleByQuestion.get(questionId) ?? 0) + 1);
+      const oldQuestion = prevById.get(questionId);
+      const nextQuestion = nextById.get(questionId);
+      if (oldQuestion?.type !== "repeat" || nextQuestion?.type !== "repeat" || activeRows.length === 0) continue;
+      const nextFields = new Map((nextQuestion.fields ?? []).map((field) => [field.id, field]));
+      let affected = nextQuestion.maxRows !== undefined && activeRows.length > nextQuestion.maxRows;
+      for (const row of activeRows) {
+        for (const [fieldId, value] of Object.entries(row.values ?? {})) {
+          if (value === "" || value === null || value === undefined) continue;
+          const oldField = (oldQuestion.fields ?? []).find((field) => field.id === fieldId);
+          const nextField = nextFields.get(fieldId);
+          const contract = (field: typeof oldField) => field ? JSON.stringify({ type: field.type, required: field.required, options: field.options, min: field.min, max: field.max, step: field.step, maxLength: field.maxLength }) : null;
+          if (!nextField || contract(oldField) !== contract(nextField)) affected = true;
+        }
+      }
+      if (affected) {
+        if (!repeatDataChanges.has(questionId)) repeatDataChanges.set(questionId, new Set());
+        repeatDataChanges.get(questionId)!.add(personIndex);
+      }
+    }
   }
 
   const nextByNewLabel = new Map<string, (typeof next.questions)[number]>();
@@ -97,6 +120,10 @@ export function compareVersions({ previous, next, answers }: CompatInput): Diagn
     }
     if (n.type !== q.type && people > 0) {
       out.push(make("KQA701", `Question "${q.id}" changed from "${q.type}" to "${n.type}", and ${people} saved ${people === 1 ? "answer uses" : "answers use"} the old type.`, undefined, q.id));
+    }
+    if (n.type === "repeat" && q.type === "repeat") {
+      const affected = repeatDataChanges.get(q.id)?.size ?? 0;
+      if (affected > 0) out.push(make("KQA709", `Repeated-record fields or the row limit for "${q.id}" changed while saved data from ${affected} ${affected === 1 ? "person may" : "people may"} no longer fit the new definition.`, undefined, q.id));
     }
     if (n.type === q.type && q.options && n.options) {
       const keep = new Set(n.options.map((o) => o.value));

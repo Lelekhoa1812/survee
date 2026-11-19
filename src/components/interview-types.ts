@@ -1,4 +1,4 @@
-import type { AnswerMap, Manifest } from "@/lib/format/schema";
+import type { AnswerMap, Manifest, RepeatRecordMap } from "@/lib/format/schema";
 import type { AnalyticsCohortKey } from "@/lib/analytics/cohorts";
 import type { QuestionSummary } from "@/lib/analytics/summary";
 import type { ParticipantStatus } from "@/lib/repo/types";
@@ -29,6 +29,7 @@ export interface PersonRow {
   lastSavedAt?: string;
   submittedAt?: string;
   answers: AnswerMap;
+  recordGroups?: RepeatRecordMap;
 }
 
 export interface VersionRow {

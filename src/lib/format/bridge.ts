@@ -13,12 +13,15 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   if (window.KQA) return;
 
   var listeners = { ready: [], change: [], lock: [], eligibility: [], validation: [] };
-  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false, guided: false, guidedSection: null, locale: "en-AU", messages: {} };
+  var state = { ready: false, locked: false, questions: [], qmap: {}, answers: {}, recordGroups: {}, eligibility: {}, eligibilityReady: false, participant: null, probe: false, preview: false, guided: false, guidedSection: null, locale: "en-AU", messages: {} };
   var errors = [];
   var consoleErrors = [];
   var routingStatusNode = null;
   var lengthDrafts = {};
   var lengthDraftValues = {};
+  var pendingRecordOperations = [];
+  var recordDrafts = {};
+  var recordAnnouncements = {};
   var readyResolve;
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
 
@@ -30,7 +33,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var template = state.messages && state.messages[key];
     if (values && values.count === 1 && state.messages && typeof state.messages[key + "One"] === "string") template = state.messages[key + "One"];
     if (typeof template !== "string") {
-      var defaults = { lengthCount: "{count} of {max} characters used", lengthLimitReached: "limit reached", lengthOverLimit: "over the limit", lengthApproaching: "Character limit approaching.", lengthReachedAnnouncement: "Character limit reached.", lengthExceededAnnouncement: "Character limit exceeded. This text has not been saved; shorten it to the limit.", maxSelections: "Choose no more than {count} options.", maxSelectionsOne: "Choose no more than {count} option.", minSelections: "Choose at least {count} options, or leave this question blank.", minSelectionsOne: "Choose at least {count} option, or leave this question blank.", exclusiveHelp: "Exclusive options must be chosen by themselves.", exclusiveError: "Choose an exclusive option by itself.", rankError: "Rank every option exactly once to continue.", rankMoveUp: "Move up", rankMoveDown: "Move down", rankConfirm: "Use this order", rankPosition: "Currently position {index} of {total}.", rankMoveLabel: "Move {label} {direction}", rankUseLabel: "Use this order for {label}", browseAnswered: "{answered} of {total} answered", questionShown: "Questions shown: {count}.", questionHidden: "Questions hidden: {count}. Hidden answers are retained.", rankMoved: "{label} moved to position {index} of {total}.", rankChanged: "This ranking's options changed. Rank every current option exactly once, then choose Use this order.", savedMaxSelections: "This saved answer has {selected} choices. Remove choices until no more than {maximum} remain.", removeChoices: "Remove {count} more choices to continue.", exclusiveSelected: "Exclusive option selected; other choices cleared.", exclusiveCleared: "Exclusive choice cleared." };
+      var defaults = { lengthCount: "{count} of {max} characters used", lengthLimitReached: "limit reached", lengthOverLimit: "over the limit", lengthApproaching: "Character limit approaching.", lengthReachedAnnouncement: "Character limit reached.", lengthExceededAnnouncement: "Character limit exceeded. This text has not been saved; shorten it to the limit.", maxSelections: "Choose no more than {count} options.", maxSelectionsOne: "Choose no more than {count} option.", minSelections: "Choose at least {count} options, or leave this question blank.", minSelectionsOne: "Choose at least {count} option, or leave this question blank.", exclusiveHelp: "Exclusive options must be chosen by themselves.", exclusiveError: "Choose an exclusive option by itself.", rankError: "Rank every option exactly once to continue.", rankMoveUp: "Move up", rankMoveDown: "Move down", rankConfirm: "Use this order", rankPosition: "Currently position {index} of {total}.", rankMoveLabel: "Move {label} {direction}", rankUseLabel: "Use this order for {label}", browseAnswered: "{answered} of {total} answered", questionShown: "Questions shown: {count}.", questionHidden: "Questions hidden: {count}. Hidden answers are retained.", rankMoved: "{label} moved to position {index} of {total}.", rankChanged: "This ranking's options changed. Rank every current option exactly once, then choose Use this order.", savedMaxSelections: "This saved answer has {selected} choices. Remove choices until no more than {maximum} remain.", removeChoices: "Remove {count} more choices to continue.", exclusiveSelected: "Exclusive option selected; other choices cleared.", exclusiveCleared: "Exclusive choice cleared.", repeatAdd: "Add {item}", repeatRemove: "Remove {item} {index}", repeatRowLabel: "{item} {index}", repeatRowAdded: "{item} {index} added.", repeatRowRemoved: "{item} removed.", repeatConflict: "This {item} changed elsewhere. Review the saved value before continuing.", repeatFieldInvalid: "This value is invalid and has not been saved. Check this field." };
       template = values && values.count === 1 ? defaults[key + "One"] || defaults[key] : defaults[key];
       if (typeof template !== "string") return "";
     }
@@ -460,6 +463,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       var confirmId = rankConfirmButtons[k].getAttribute("data-kqa-rank-confirm");
       rankConfirmButtons[k].disabled = state.locked || !!(state.eligibility && state.eligibility[confirmId] === false);
     }
+    state.questions.forEach(function (question) {
+      if (question.type !== "repeat") return;
+      var add = document.querySelector('[data-kqa-record-add="' + question.id + '"]');
+      var list = document.querySelector('[data-kqa-record-list="' + question.id + '"]');
+      if (add && list) updateRecordButtons(question, list, add);
+    });
     setHtmlState(state.ready ? (state.locked ? "locked" : "ready") : "loading");
   }
 
@@ -841,6 +850,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       applySelectionLimitGuidance();
       applyRankControls();
       applyAnswers(m.answers);
+      applyRecordGroups(m.recordGroups);
       updateEligibility(true);
       applyLock();
       readyResolve(snapshot());
@@ -849,6 +859,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     } else if (m.type === "locale") {
       state.locale = typeof m.locale === "string" ? m.locale : state.locale;
       state.messages = m.messages || state.messages;
+      updateRecordLocalization();
       applySelectionLimitGuidance();
       applyRankControls();
       state.questions.forEach(function (question) {
@@ -868,6 +879,10 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       restoreLengthDrafts();
       updateEligibility(true);
       state.questions.forEach(function (x) { emit("change", { id: x.id, value: answerOf(x.id).value, note: answerOf(x.id).note, source: "app" }); });
+    } else if (m.type === "record-groups") {
+      applyRecordGroups(m.recordGroups, m.ackOperationIds);
+    } else if (m.type === "record-rejected") {
+      rejectRecordOperations(m);
     } else if (m.type === "lock") {
       state.locked = !!m.locked;
       applyLock();
@@ -928,6 +943,414 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     Object.keys(state.answers).forEach(function (id) { out[id] = { value: state.answers[id].value, note: state.answers[id].note }; });
     return out;
   }
+
+  // Repeat-group wire contract: init.recordGroups is a RepeatRecordMap keyed by
+  // repeat question id. Each user action emits {type:"record-operation", operation}.
+  // Successful host persistence should echo an authoritative snapshot with
+  // {type:"record-groups", recordGroups}; newer row/field revisions identify
+  // concurrent edits and preserve the respondent's rejected value for review.
+  function recordTemplate(questionId) {
+    var all = document.querySelectorAll("template[data-kqa-repeat-template]");
+    for (var i = 0; i < all.length; i++) if (all[i].getAttribute("data-kqa-repeat-template") === questionId) return all[i];
+    return null;
+  }
+  function recordField(question, fieldId) {
+    var fields = question.fields || [];
+    for (var i = 0; i < fields.length; i++) if (fields[i].id === fieldId) return fields[i];
+    return null;
+  }
+  function recordRows(questionId) { if (!state.recordGroups[questionId]) state.recordGroups[questionId] = []; return state.recordGroups[questionId]; }
+  function recordMinimum(question) { return Math.max(question.required ? 1 : 0, typeof question.minRows === "number" ? question.minRows : 0); }
+  function itemLabel(question) { return question.itemLabel || "item"; }
+  function uniqueRecordId() {
+    var bytes = new Uint8Array(16);
+    try { window.crypto.getRandomValues(bytes); }
+    catch (e) { for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256); }
+    var out = "r";
+    for (var j = 0; j < bytes.length; j++) out += ("0" + bytes[j].toString(16)).slice(-2);
+    return out;
+  }
+  function rowFieldControls(row, fieldId) {
+    var all = row.querySelectorAll("[data-kqa-repeat-field]");
+    var out = [];
+    for (var i = 0; i < all.length; i++) if (all[i].getAttribute("data-kqa-repeat-field") === fieldId) out.push(all[i]);
+    return out;
+  }
+  function valueForRecordField(field, controls) {
+    if (field.type === "single" || (field.type === "scale" && controls[0] && controls[0].type === "radio")) {
+      for (var i = 0; i < controls.length; i++) if (controls[i].checked) return field.type === "scale" ? Number(controls[i].value) : controls[i].value;
+      return null;
+    }
+    var el = controls[0];
+    if (!el) return null;
+    if (field.type === "number" || field.type === "scale") return el.value === "" ? null : Number(el.value);
+    return el.value === "" ? null : el.value;
+  }
+  function writeRecordField(field, controls, value) {
+    controls.forEach(function (el) {
+      if (field.required) { el.setAttribute("required", "required"); el.setAttribute("aria-required", "true"); }
+      else { el.removeAttribute("required"); el.removeAttribute("aria-required"); }
+      if (field.type === "single" || (field.type === "scale" && el.type === "radio")) el.checked = value !== undefined && value !== null && String(value) === el.value;
+      else if (el.tagName === "SELECT") el.value = value === undefined || value === null ? "" : String(value);
+      else if (el.type === "range") { if (value !== undefined && value !== null) el.value = String(value); }
+      else el.value = value === undefined || value === null ? "" : String(value);
+    });
+  }
+  function showRecordFieldError(row, fieldId, message) {
+    var controls = rowFieldControls(row, fieldId);
+    var errorId = "kqa-repeat-error-" + row.getAttribute("data-kqa-record-question") + "-" + row.getAttribute("data-kqa-record-row") + "-" + fieldId;
+    var error = row.querySelector('[data-kqa-repeat-error="' + fieldId + '"]');
+    if (!error) {
+      error = document.createElement("p");
+      error.id = errorId;
+      error.setAttribute("data-kqa-repeat-error", fieldId);
+      error.setAttribute("role", "alert");
+      error.setAttribute("aria-live", "polite");
+      var last = controls[controls.length - 1];
+      if (last) last.insertAdjacentElement("afterend", error); else row.appendChild(error);
+    }
+    markLocalized(error);
+    error.textContent = message;
+    controls.forEach(function (control) { control.setAttribute("aria-invalid", "true"); appendDescription(control, error.id, true); });
+  }
+  function clearRecordFieldError(row, fieldId) {
+    var error = row.querySelector('[data-kqa-repeat-error="' + fieldId + '"]');
+    var controls = rowFieldControls(row, fieldId);
+    if (error) error.remove();
+    controls.forEach(function (control) { control.removeAttribute("aria-invalid"); if (error) appendDescription(control, error.id, false); });
+  }
+  function updateRecordButtons(question, list, addButton) {
+    var rows = recordRows(question.id);
+    var minRows = recordMinimum(question);
+    addButton.disabled = state.locked || rows.length >= question.maxRows;
+    var removeButtons = list.querySelectorAll("button[data-kqa-record-remove]");
+    for (var i = 0; i < removeButtons.length; i++) removeButtons[i].disabled = state.locked || rows.length <= minRows;
+  }
+  function buildRecordRow(question, rowData, list) {
+    var template = recordTemplate(question.id);
+    if (!template || !template.content) return null;
+    var fragment = template.content.cloneNode(true);
+    var row = fragment.querySelector("fieldset");
+    if (!row) return null;
+    row.setAttribute("data-kqa-record-row", rowData.id);
+    row.setAttribute("data-kqa-generated-row", question.id);
+    row.setAttribute("data-kqa-record-question", question.id);
+    row.setAttribute("tabindex", "-1");
+    var suffix = "-" + question.id + "-" + rowData.id;
+    var idMap = {};
+    var identified = row.querySelectorAll("[id]");
+    for (var i = 0; i < identified.length; i++) {
+      var oldId = identified[i].id;
+      idMap[oldId] = oldId + suffix;
+      identified[i].id = idMap[oldId];
+    }
+    var refs = row.querySelectorAll("[for], [aria-labelledby], [aria-describedby], [aria-controls]");
+    for (var j = 0; j < refs.length; j++) {
+      ["for", "aria-labelledby", "aria-describedby", "aria-controls"].forEach(function (name) {
+        if (!refs[j].hasAttribute(name)) return;
+        refs[j].setAttribute(name, refs[j].getAttribute(name).split(/\s+/).map(function (id) { return idMap[id] || id; }).join(" "));
+      });
+    }
+    var rowIndex = recordRows(question.id).findIndex(function (item) { return item.id === rowData.id; }) + 1;
+    var legend = row.querySelector("legend");
+    if (legend) { markLocalized(legend); legend.textContent = localized("repeatRowLabel", { item: itemLabel(question), index: rowIndex }); }
+    (question.fields || []).forEach(function (field) {
+      var controls = rowFieldControls(row, field.id);
+      controls.forEach(function (control) {
+        control.setAttribute("data-kqa-repeat-row", rowData.id);
+        control.setAttribute("data-kqa-repeat-question", question.id);
+        if (field.type === "single" || (field.type === "scale" && control.type === "radio")) control.name = "kqa-repeat-" + question.id + "-" + rowData.id + "-" + field.id;
+      });
+      var draftKey = question.id + "/" + rowData.id + "/" + field.id;
+      var draft = recordDrafts[draftKey];
+      writeRecordField(field, controls, draft ? draft.value : rowData.values && rowData.values[field.id]);
+      if (draft) showRecordFieldError(row, field.id, draft.message || localized("repeatFieldInvalid"));
+    });
+    var remove = document.createElement("button");
+    remove.type = "button";
+    remove.setAttribute("data-kqa-record-remove", rowData.id);
+    remove.setAttribute("data-kqa-record-question", question.id);
+    markLocalized(remove);
+    remove.textContent = localized("repeatRemove", { item: itemLabel(question), index: rowIndex });
+    remove.setAttribute("aria-label", localized("repeatRemove", { item: itemLabel(question), index: rowIndex }));
+    remove.style.cssText = "min-height:44px;padding:8px 12px;margin-top:8px;font:inherit";
+    row.appendChild(remove);
+    list.appendChild(fragment);
+    return row;
+  }
+  function renderRecordQuestion(question) {
+    if (question.type !== "repeat") return;
+    var template = recordTemplate(question.id);
+    if (!template || !template.parentNode) return;
+    var list = template.parentNode.querySelector('[data-kqa-record-list="' + question.id + '"]');
+    if (!list) {
+      list = document.createElement("div");
+      list.setAttribute("data-kqa-record-list", question.id);
+      list.setAttribute("role", "group");
+      list.setAttribute("aria-label", question.label);
+      template.insertAdjacentElement("afterend", list);
+    }
+    while (list.firstChild) list.removeChild(list.firstChild);
+    recordRows(question.id).forEach(function (row) { buildRecordRow(question, row, list); });
+    var status = list.querySelector('[data-kqa-record-status="' + question.id + '"]');
+    if (!status) {
+      status = document.createElement("span");
+      status.setAttribute("data-kqa-record-status", question.id);
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      status.setAttribute("aria-atomic", "true");
+      status.style.cssText = "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+      list.appendChild(status);
+    }
+    if (recordAnnouncements[question.id]) status.textContent = recordAnnouncements[question.id];
+    var add = template.parentNode.querySelector('[data-kqa-record-add="' + question.id + '"]');
+    if (!add) {
+      add = document.createElement("button");
+      add.type = "button";
+      add.setAttribute("data-kqa-record-add", question.id);
+      add.style.cssText = "min-height:44px;padding:8px 12px;margin-top:8px;font:inherit";
+      list.insertAdjacentElement("afterend", add);
+    }
+    markLocalized(add);
+    add.textContent = localized("repeatAdd", { item: itemLabel(question) });
+    add.setAttribute("aria-label", localized("repeatAdd", { item: itemLabel(question) }));
+    updateRecordButtons(question, list, add);
+  }
+  function renderRecordGroups() { state.questions.forEach(renderRecordQuestion); }
+  function updateRecordLocalization() {
+    state.questions.forEach(function (question) {
+      if (question.type !== "repeat") return;
+      var rows = recordRows(question.id);
+      var add = document.querySelector('[data-kqa-record-add="' + question.id + '"]');
+      if (add) { markLocalized(add); add.textContent = localized("repeatAdd", { item: itemLabel(question) }); add.setAttribute("aria-label", add.textContent); }
+      rows.forEach(function (row, index) {
+        var node = document.querySelector('fieldset[data-kqa-record-question="' + question.id + '"][data-kqa-record-row="' + row.id + '"]');
+        if (!node) return;
+        var label = localized("repeatRowLabel", { item: itemLabel(question), index: index + 1 });
+        var legend = node.querySelector("legend");
+        if (legend) { markLocalized(legend); legend.textContent = label; }
+        var remove = node.querySelector("button[data-kqa-record-remove]");
+        if (remove) { markLocalized(remove); remove.textContent = localized("repeatRemove", { item: itemLabel(question), index: index + 1 }); remove.setAttribute("aria-label", remove.textContent); }
+      });
+    });
+  }
+  function applyRecordGroups(groups, ackOperationIds) {
+    var active = document.activeElement;
+    var focusState = null;
+    if (active && active.getAttribute) {
+      var activeRow = active.closest && active.closest("fieldset[data-kqa-record-row]");
+      if (activeRow) focusState = {
+        questionId: activeRow.getAttribute("data-kqa-record-question"), rowId: activeRow.getAttribute("data-kqa-record-row"),
+        fieldId: active.getAttribute("data-kqa-repeat-field"), remove: active.hasAttribute("data-kqa-record-remove"),
+        start: typeof active.selectionStart === "number" ? active.selectionStart : null,
+        end: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+      };
+    }
+    var previousGroups = state.recordGroups;
+    var next = {};
+    Object.keys(previousGroups || {}).forEach(function (id) { next[id] = (previousGroups[id] || []).map(function (row) { return { id: row.id, values: Object.assign({}, row.values || {}), revision: Number(row.revision) || 0, fieldRevisions: Object.assign({}, row.fieldRevisions || {}) }; }); });
+    Object.keys(groups || {}).forEach(function (id) {
+      next[id] = (groups[id] || []).map(function (row) {
+        return { id: row.id, values: Object.assign({}, row.values || {}), revision: Number(row.revision) || 0, fieldRevisions: Object.assign({}, row.fieldRevisions || {}) };
+      });
+    });
+    var remaining = [];
+    var acknowledged = Array.isArray(ackOperationIds) ? ackOperationIds : [];
+    pendingRecordOperations.forEach(function (operation) {
+      if (operation.operationId && acknowledged.indexOf(operation.operationId) >= 0) return;
+      var rows = next[operation.questionId] || [];
+      var row = rows.find(function (item) { return item.id === operation.rowId; });
+      if (operation.op === "add") {
+        if (!row) {
+          var local = recordRows(operation.questionId).find(function (item) { return item.id === operation.rowId; });
+          if (local) { if (!next[operation.questionId]) next[operation.questionId] = []; next[operation.questionId].push(local); }
+          remaining.push(operation);
+        }
+      } else if (operation.op === "remove") {
+        if (!row) return;
+        if (row.revision > operation.expectedRowRevision) {
+          var list = document.querySelector('[data-kqa-record-list="' + operation.questionId + '"]');
+          var status = list && list.querySelector('[data-kqa-record-status="' + operation.questionId + '"]');
+          recordAnnouncements[operation.questionId] = localized("repeatConflict", { item: itemLabel(q(operation.questionId)) });
+          if (status) status.textContent = recordAnnouncements[operation.questionId];
+          return;
+        }
+        rows.splice(rows.indexOf(row), 1);
+        remaining.push(operation);
+      } else {
+        if (!row) return;
+        var serverFieldRevision = Number(row.fieldRevisions[operation.fieldId]) || 0;
+        if (serverFieldRevision > operation.expectedFieldRevision) {
+          var draftKey = operation.questionId + "/" + operation.rowId + "/" + operation.fieldId;
+          recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, message: localized("repeatConflict", { item: itemLabel(q(operation.questionId)) }) };
+          var list = document.querySelector('[data-kqa-record-list="' + operation.questionId + '"]');
+          var status = list && list.querySelector('[data-kqa-record-status="' + operation.questionId + '"]');
+          recordAnnouncements[operation.questionId] = localized("repeatConflict", { item: itemLabel(q(operation.questionId)) });
+          if (status) status.textContent = recordAnnouncements[operation.questionId];
+          return;
+        }
+        if (operation.op === "clear") delete row.values[operation.fieldId]; else row.values[operation.fieldId] = operation.value;
+        row.fieldRevisions[operation.fieldId] = operation.expectedFieldRevision + 1;
+        var previousRow = (previousGroups[operation.questionId] || []).find(function (item) { return item.id === operation.rowId; });
+        row.revision = Math.max(row.revision, previousRow ? previousRow.revision : 0);
+        remaining.push(operation);
+      }
+    });
+    state.recordGroups = next;
+    pendingRecordOperations = remaining;
+    renderRecordGroups();
+    if (focusState) {
+      var focusSelector = focusState.fieldId
+        ? '[data-kqa-repeat-question="' + focusState.questionId + '"][data-kqa-repeat-row="' + focusState.rowId + '"][data-kqa-repeat-field="' + focusState.fieldId + '"]'
+        : focusState.remove
+          ? 'button[data-kqa-record-remove="' + focusState.rowId + '"]'
+          : 'fieldset[data-kqa-record-question="' + focusState.questionId + '"][data-kqa-record-row="' + focusState.rowId + '"]';
+      var focusTarget = document.querySelector(focusSelector);
+      if (focusTarget) {
+        try { focusTarget.focus({ preventScroll: true }); } catch (e) { focusTarget.focus(); }
+        if (focusState.start !== null && typeof focusTarget.setSelectionRange === "function") {
+          try { focusTarget.setSelectionRange(focusState.start, focusState.end); } catch (e) {}
+        }
+      }
+    }
+  }
+  function rejectRecordOperations(message) {
+    var rejected = Array.isArray(message.rejectedOperationIds) ? message.rejectedOperationIds : [];
+    var errors = Array.isArray(message.recordErrors) ? message.recordErrors : [];
+    pendingRecordOperations.forEach(function (operation) {
+      if (!operation.operationId || rejected.indexOf(operation.operationId) < 0) return;
+      var issue = errors.find(function (item) { return item.questionId === operation.questionId && (!item.rowId || item.rowId === operation.rowId) && (!item.fieldId || item.fieldId === operation.fieldId); });
+      if (operation.op === "set" || operation.op === "clear") {
+        var draftKey = operation.questionId + "/" + operation.rowId + "/" + operation.fieldId;
+        recordDrafts[draftKey] = { value: operation.op === "clear" ? undefined : operation.value, message: localized("repeatFieldInvalid") };
+      }
+      recordAnnouncements[operation.questionId] = localized("repeatConflict", { item: itemLabel(q(operation.questionId)) });
+      if (issue && issue.reason && operation.op === "set") recordDrafts[operation.questionId + "/" + operation.rowId + "/" + operation.fieldId].message = localized("repeatFieldInvalid");
+    });
+    pendingRecordOperations = pendingRecordOperations.filter(function (operation) { return !operation.operationId || rejected.indexOf(operation.operationId) < 0; });
+    applyRecordGroups(message.recordGroups || {});
+  }
+  var recordOperationSequence = 0;
+  function sendRecordOperation(operation) {
+    recordOperationSequence += 1;
+    var operationId = "ro" + recordOperationSequence + "-" + uniqueRecordId();
+    pendingRecordOperations.push(Object.assign({}, operation, { operationId: operationId }));
+    post({ type: "record-operation", operation: operation, operationId: operationId });
+  }
+  function addRecordRow(question) {
+    var rows = recordRows(question.id);
+    if (state.locked || rows.length >= question.maxRows) return;
+    var row = { id: uniqueRecordId(), values: {}, revision: 0, fieldRevisions: {} };
+    rows.push(row);
+    renderRecordQuestion(question);
+    sendRecordOperation({ op: "add", questionId: question.id, rowId: row.id });
+    var list = document.querySelector('[data-kqa-record-list="' + question.id + '"]');
+    var first = list && list.querySelector('[data-kqa-repeat-row="' + row.id + '"]');
+    if (first) first.focus();
+    var status = list && list.querySelector('[data-kqa-record-status="' + question.id + '"]');
+    if (status) { recordAnnouncements[question.id] = localized("repeatRowAdded", { item: itemLabel(question), index: rows.length }); status.textContent = recordAnnouncements[question.id]; }
+  }
+  function removeRecordRow(question, rowId) {
+    var rows = recordRows(question.id);
+    var index = rows.findIndex(function (row) { return row.id === rowId; });
+    var minRows = recordMinimum(question);
+    if (state.locked || index < 0 || rows.length <= minRows) return;
+    var row = rows[index];
+    rows.splice(index, 1);
+    renderRecordQuestion(question);
+    sendRecordOperation({ op: "remove", questionId: question.id, rowId: rowId, expectedRowRevision: row.revision });
+    var list = document.querySelector('[data-kqa-record-list="' + question.id + '"]');
+    var remaining = list && list.querySelectorAll("fieldset[data-kqa-record-row]");
+    var target = remaining && (remaining[Math.min(index, remaining.length - 1)] || document.querySelector('[data-kqa-record-add="' + question.id + '"]'));
+    if (target && target.focus) target.focus();
+    var status = list && list.querySelector('[data-kqa-record-status="' + question.id + '"]');
+    if (status) { recordAnnouncements[question.id] = localized("repeatRowRemoved", { item: itemLabel(question) }); status.textContent = recordAnnouncements[question.id]; }
+  }
+  function validateRecordValue(field, value) {
+    if (value === null || value === undefined || value === "") return true;
+    if ((field.type === "single" || field.type === "select") && !(field.options || []).some(function (option) { return option.value === value; })) return false;
+    if ((field.type === "text" || field.type === "longtext") && String(value).length > (field.maxLength || (field.type === "text" ? 500 : 20000))) return false;
+    if (field.type === "number" || field.type === "scale") {
+      if (typeof value !== "number" || !isFinite(value)) return false;
+      var min = field.type === "scale" ? (field.min === undefined ? 1 : field.min) : field.min;
+      var max = field.type === "scale" ? (field.max === undefined ? 5 : field.max) : field.max;
+      if (min !== undefined && value < min || max !== undefined && value > max) return false;
+      if (field.type === "scale" && (!Number.isInteger(value) || (max - min) > 20)) return false;
+      if (field.step !== undefined) {
+        var base = min === undefined ? 0 : min;
+        if (Math.abs((value - base) / field.step - Math.round((value - base) / field.step)) > 1e-9) return false;
+      }
+    }
+    if (field.type === "date") {
+      var dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+      if (!dateMatch) return false;
+      var year = Number(dateMatch[1]); var month = Number(dateMatch[2]); var day = Number(dateMatch[3]);
+      var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      var monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      if (year < 1 || month < 1 || month > 12 || day < 1 || day > monthDays[month - 1]) return false;
+    }
+    return true;
+  }
+  function captureRecordField(el) {
+    var rowNode = el.closest("fieldset[data-kqa-record-row]");
+    var questionId = rowNode && rowNode.getAttribute("data-kqa-record-question");
+    var rowId = el.getAttribute("data-kqa-repeat-row");
+    var fieldId = el.getAttribute("data-kqa-repeat-field");
+    var question = q(questionId);
+    var row = recordRows(questionId).find(function (item) { return item.id === rowId; });
+    var field = question && recordField(question, fieldId);
+    if (!question || !row || !field || state.locked) return;
+    var value = valueForRecordField(field, rowFieldControls(rowNode, fieldId));
+    var draftKey = questionId + "/" + rowId + "/" + fieldId;
+    if (!validateRecordValue(field, value)) {
+      recordDrafts[draftKey] = { value: value };
+      showRecordFieldError(rowNode, fieldId, localized("repeatFieldInvalid"));
+      var invalidList = document.querySelector('[data-kqa-record-list="' + questionId + '"]');
+      var invalidStatus = invalidList && invalidList.querySelector('[data-kqa-record-status="' + questionId + '"]');
+      recordAnnouncements[questionId] = localized("repeatFieldInvalid");
+      if (invalidStatus) invalidStatus.textContent = recordAnnouncements[questionId];
+      return;
+    }
+    delete recordDrafts[draftKey];
+    clearRecordFieldError(rowNode, fieldId);
+    var expectedFieldRevision = Number(row.fieldRevisions[fieldId]) || 0;
+    if (value === null || value === "") {
+      if (!(fieldId in row.values)) return;
+      delete row.values[fieldId];
+      sendRecordOperation({ op: "clear", questionId: questionId, rowId: rowId, fieldId: fieldId, expectedFieldRevision: expectedFieldRevision });
+    } else {
+      if (row.values[fieldId] === value) return;
+      row.values[fieldId] = value;
+      sendRecordOperation({ op: "set", questionId: questionId, rowId: rowId, fieldId: fieldId, expectedFieldRevision: expectedFieldRevision, value: value });
+    }
+    row.fieldRevisions[fieldId] = expectedFieldRevision + 1;
+    row.revision++;
+  }
+  document.addEventListener("input", function (ev) {
+    var el = ev.target;
+    if (el && el.hasAttribute && el.hasAttribute("data-kqa-repeat-field")) captureRecordField(el);
+  }, true);
+  document.addEventListener("change", function (ev) {
+    var el = ev.target;
+    if (el && el.hasAttribute && el.hasAttribute("data-kqa-repeat-field")) captureRecordField(el);
+  }, true);
+  document.addEventListener("click", function (ev) {
+    var target = ev.target;
+    var add = target && target.closest ? target.closest("button[data-kqa-record-add]") : null;
+    if (add) {
+      ev.preventDefault();
+      var question = q(add.getAttribute("data-kqa-record-add"));
+      if (question) addRecordRow(question);
+      return;
+    }
+    var remove = target && target.closest ? target.closest("button[data-kqa-record-remove]") : null;
+    if (remove) {
+      ev.preventDefault();
+      var questionId = remove.getAttribute("data-kqa-record-question");
+      var removeQuestion = q(questionId);
+      if (removeQuestion) removeRecordRow(removeQuestion, remove.getAttribute("data-kqa-record-remove"));
+    }
+  }, true);
 
   // ---- errors from the page, reported to the app (the admin checker shows them)
   window.addEventListener("error", function (e) {

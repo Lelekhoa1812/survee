@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createQuestionSummaryAccumulator, summarizeQuestion, withCurrentEligibility, type AnalyticsRespondent } from "../src/lib/analytics/summary";
+import { createQuestionSummaryAccumulator, summarizeQuestion, summarizeQuestionCohorts, withCurrentEligibility, type AnalyticsRespondent, type CohortAnalyticsRespondent } from "../src/lib/analytics/summary";
 import { eligibilityQuestionIds } from "../src/lib/format/answers";
 import { formatPercentage } from "../src/lib/analytics/format";
 import type { Question } from "../src/lib/format/schema";
@@ -20,6 +20,20 @@ const respondent = (value?: string | number | string[], note?: string): Analytic
 });
 
 describe("descriptive question summaries", () => {
+  it("omits repeat groups from scalar summaries while retaining cohort participant counts", async () => {
+    const manifestQuestions: Question[] = [
+      { id: "choice", type: "single", label: "Choice", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] },
+      { id: "assets", type: "repeat", label: "Assets", fields: [{ id: "name", type: "text", label: "Asset" }], maxRows: 5 },
+    ];
+    async function* people(): AsyncGenerator<CohortAnalyticsRespondent> {
+      yield { answers: { choice: { value: "a", updatedAt: at } }, status: "submitted" };
+    }
+    const result = await summarizeQuestionCohorts(manifestQuestions, people());
+    expect(result.statusCounts.submitted).toBe(1);
+    expect(result.summaries.submitted.choice?.answeredCount).toBe(1);
+    expect(result.summaries.submitted.assets).toBeUndefined();
+  });
+
   it("returns exact summaries for a one-person cohort without suppression", () => {
     const choice: Question = { id: "q", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] };
     const number: Question = { id: "q", type: "number", label: "Budget" };

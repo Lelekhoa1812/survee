@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   context: {
-    participant: { name: "Ada", status: "invited", revision: 0, answers: {} },
+    participant: { name: "Ada", status: "invited", revision: 0, answers: {}, recordGroups: { people: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } },
     interview: { name: "Study", status: "open" },
     version: { version: 7, manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] } },
   },
@@ -51,14 +51,27 @@ describe("respondent questionnaire version routes", () => {
     const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }] });
+    await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }], recordGroups: { people: [{ id: "row-1" }] } });
   });
 
   it("requires and forwards the loaded version on answer saves", async () => {
     const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, answers: { q1: { value: "answer" } } }), params);
 
     expect(response.status).toBe(200);
-    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, { q1: { value: "answer" } });
+    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, { q1: { value: "answer" } }, []);
+  });
+
+  it("forwards explicit record operations alongside scalar answers", async () => {
+    const recordOperations = [{ op: "set", questionId: "people", rowId: "row-1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }];
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, recordOperations }), params);
+    expect(response.status).toBe(200);
+    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, {}, recordOperations);
+  });
+
+  it("rejects malformed record operations before repository access", async () => {
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, recordOperations: [{ op: "set", questionId: "people", rowId: "row.1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }] }), params);
+    expect(response.status).toBe(400);
+    expect(mocks.saveAnswers).not.toHaveBeenCalled();
   });
 
   it("rejects an answer save without a version before reaching the repository", async () => {

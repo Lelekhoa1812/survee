@@ -38,6 +38,7 @@ const TYPE_LABELS: Record<QuestionType, string> = {
   number: "Number",
   scale: "Scale",
   date: "Date",
+  repeat: "Repeated records",
 };
 
 function formatNumber(value: number) {

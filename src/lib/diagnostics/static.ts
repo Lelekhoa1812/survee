@@ -45,7 +45,7 @@ function closest(word: string, candidates: readonly string[]): string | undefine
   return best;
 }
 
-const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "minSelections", "exclusiveOptions", "randomizeOptions", "fixedOptionValues", "note", "min", "max", "step", "maxLength", "custom", "when"];
+const QUESTION_KEYS = ["id", "type", "label", "help", "section", "required", "options", "maxSelections", "minSelections", "exclusiveOptions", "randomizeOptions", "fixedOptionValues", "note", "min", "max", "step", "maxLength", "fields", "maxRows", "minRows", "itemLabel", "custom", "when"];
 const ROOT_KEYS = ["format", "title", "description", "presentation", "sections", "questions"];
 const SECTION_KEYS = ["id", "title", "description"];
 const OPTION_KEYS = ["value", "label"];
@@ -316,6 +316,8 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   const scripts: { el: El; text: string; startLine: number; src?: string; type?: string }[] = [];
   const manifestScripts: El[] = [];
   const dataKqa: Found[] = [];
+  const repeatTemplates: Found[] = [];
+  const repeatFields: Found[] = [];
   const questionBlocks: Found[] = [];
   const questionLists: Found[] = [];
   const dataNote: Found[] = [];
@@ -358,7 +360,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
       if (hasAttr(el, "download")) add(ctx, "KQA413", "<a download> will do nothing in the frame.", undefined, { offset: el.sourceCodeLocation?.startOffset });
     }
     if (tag === "input" && attr(el, "type")?.toLowerCase() === "file") add(ctx, "KQA415", "An <input type=\"file\"> is present.", undefined, { offset: el.sourceCodeLocation?.startOffset });
-    if ((tag === "input" || tag === "option") && !hasAttr(el, "data-kqa")) unbound.push(el);
+    if ((tag === "input" || tag === "option") && !hasAttr(el, "data-kqa") && !hasAttr(el, "data-kqa-repeat-field")) unbound.push(el);
     if (tag === "label") {
       const f = attr(el, "for");
       if (f) labelsFor.set(f, (labelsFor.get(f) ?? 0) + 1);
@@ -420,6 +422,8 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
     }
     // bindings
     if (hasAttr(el, "data-kqa")) dataKqa.push({ el, ancestors });
+    if (hasAttr(el, "data-kqa-repeat-template")) repeatTemplates.push({ el, ancestors });
+    if (hasAttr(el, "data-kqa-repeat-field")) repeatFields.push({ el, ancestors });
     if (hasAttr(el, "data-kqa-question-id")) questionBlocks.push({ el, ancestors });
     if (hasAttr(el, "data-kqa-question-list")) questionLists.push({ el, ancestors });
     if (hasAttr(el, "data-kqa-note")) dataNote.push({ el, ancestors });
@@ -526,7 +530,7 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   const keyAt = (path: string): number => mBase + (parsed.keyStarts.get(path) ?? parsed.starts.get(path) ?? 0);
 
   const manifest = validateManifest(parsed.value, { ctx, at, keyAt, stats });
-  const bound = manifest ? checkBindings(manifest, { ctx, dataKqa, questionBlocks, questionLists, dataNote, dataStatus, labelsFor, scriptSetsAnswers, stats, unbound, at }) : undefined;
+  const bound = manifest ? checkBindings(manifest, { ctx, dataKqa, repeatTemplates, repeatFields, questionBlocks, questionLists, dataNote, dataStatus, labelsFor, scriptSetsAnswers, stats, unbound, at }) : undefined;
   void bound;
   return finish(manifest);
 }
@@ -653,6 +657,48 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
     if (q.required !== undefined && typeof q.required !== "boolean") add(ctx, "KQA203", `${p}.required must be true or false, found ${JSON.stringify(q.required)}.`, undefined, { offset: m.at(`${p}.required`), path: `${p}.required`, questionId: qid });
     if (q.required === true) m.stats.requiredQuestions++;
     if (q.custom !== undefined && typeof q.custom !== "boolean") add(ctx, "KQA203", `${p}.custom must be true or false.`, undefined, { offset: m.at(`${p}.custom`), path: `${p}.custom`, questionId: qid });
+    if (t === "repeat") {
+      const fields = Array.isArray(q.fields) ? q.fields : [];
+      if (!fields.length || fields.length > LIMITS.maxRepeatFields) add(ctx, "KQA203", `${p}.fields must contain 1 to ${LIMITS.maxRepeatFields} repeat fields.`, undefined, { offset: m.at(`${p}.fields`), path: `${p}.fields`, questionId: qid });
+      const maxRows = typeof q.maxRows === "number" ? q.maxRows : undefined;
+      const minRows = typeof q.minRows === "number" ? q.minRows : undefined;
+      if (maxRows === undefined || !Number.isInteger(maxRows) || maxRows < 1 || maxRows > LIMITS.maxRepeatRows) add(ctx, "KQA203", `${p}.maxRows must be a whole number from 1 to ${LIMITS.maxRepeatRows}.`, undefined, { offset: m.at(`${p}.maxRows`), path: `${p}.maxRows`, questionId: qid });
+      if (q.minRows !== undefined && (minRows === undefined || !Number.isInteger(minRows) || minRows < 0 || minRows > LIMITS.maxRepeatRows || maxRows !== undefined && minRows > maxRows)) add(ctx, "KQA203", `${p}.minRows must be a whole number from 0 through maxRows.`, undefined, { offset: m.at(`${p}.minRows`), path: `${p}.minRows`, questionId: qid });
+      if (q.itemLabel !== undefined && (typeof q.itemLabel !== "string" || !q.itemLabel.trim() || q.itemLabel.length > 80)) add(ctx, "KQA203", `${p}.itemLabel must be non-empty text up to 80 characters.`, undefined, { offset: m.at(`${p}.itemLabel`), path: `${p}.itemLabel`, questionId: qid });
+      const fieldIds = new Set<string>();
+      fields.forEach((field, j) => {
+        const fp = `${p}.fields[${j}]`;
+        if (!isObj(field)) return void add(ctx, "KQA203", `${fp} must be an object.`, undefined, { offset: m.at(fp), path: fp, questionId: qid });
+        checkUnknownKeys(field, ["id", "label", "help", "type", "required", "options", "min", "max", "step", "maxLength"], fp, m);
+        if (typeof field.id !== "string" || !ID_RE.test(field.id)) add(ctx, "KQA206", `${fp}.id must be a valid field id.`, undefined, { offset: m.at(`${fp}.id`), path: `${fp}.id`, questionId: qid });
+        else if (fieldIds.has(field.id)) add(ctx, "KQA207", `${fp}.id "${field.id}" is duplicated in this repeat group.`, undefined, { offset: m.at(`${fp}.id`), path: `${fp}.id`, questionId: qid });
+        else fieldIds.add(field.id);
+        str(field.label, `${fp}.label`, m, { max: LIMITS.maxLabel, label: `${fp}.label`, code: "KQA215" });
+        const fieldTypes = ["single", "select", "text", "longtext", "number", "scale", "date"];
+        if (typeof field.type !== "string" || !fieldTypes.includes(field.type)) add(ctx, "KQA208", `${fp}.type must be one of ${fieldTypes.join(", ")}.`, undefined, { offset: m.at(`${fp}.type`), path: `${fp}.type`, questionId: qid });
+        if (field.help !== undefined) str(field.help, `${fp}.help`, m, { max: LIMITS.maxHelp, label: `${fp}.help`, optional: true });
+        if (field.required !== undefined && typeof field.required !== "boolean") add(ctx, "KQA203", `${fp}.required must be true or false.`, undefined, { offset: m.at(`${fp}.required`), path: `${fp}.required`, questionId: qid });
+        if (["single", "select"].includes(String(field.type)) && (!Array.isArray(field.options) || field.options.length < 2)) add(ctx, "KQA209", `${fp} needs at least two options.`, undefined, { offset: m.at(`${fp}.options`), path: `${fp}.options`, questionId: qid });
+        if (!(["single", "select"].includes(String(field.type))) && field.options !== undefined) add(ctx, "KQA209", `${fp}.options only applies to single and select repeat fields.`, undefined, { offset: m.at(`${fp}.options`), path: `${fp}.options`, questionId: qid });
+        if (Array.isArray(field.options)) {
+          if (field.options.length > LIMITS.maxOptions) add(ctx, "KQA209", `${fp}.options has ${field.options.length} entries; the maximum is ${LIMITS.maxOptions}.`, undefined, { offset: m.at(`${fp}.options`), path: `${fp}.options`, questionId: qid });
+          const optionValues = new Set<string>();
+          field.options.forEach((option, k) => {
+            const op = `${fp}.options[${k}]`;
+            if (!isObj(option)) return void add(ctx, "KQA209", `${op} must be an object with value and label.`, undefined, { offset: m.at(op), path: op, questionId: qid });
+            checkUnknownKeys(option, OPTION_KEYS, op, m);
+            if (typeof option.value !== "string" || !OPTION_VALUE_RE.test(option.value)) add(ctx, "KQA210", `${op}.value must be a valid option value.`, undefined, { offset: m.at(`${op}.value`), path: `${op}.value`, questionId: qid });
+            else if (optionValues.has(option.value)) add(ctx, "KQA210", `${op}.value "${option.value}" is duplicated.`, undefined, { offset: m.at(`${op}.value`), path: `${op}.value`, questionId: qid });
+            else optionValues.add(option.value);
+            str(option.label, `${op}.label`, m, { max: LIMITS.maxLabel, label: `${op}.label`, code: "KQA215" });
+          });
+        }
+        if ((field.type === "number" || field.type === "scale") && field.min !== undefined && field.max !== undefined && typeof field.min === "number" && typeof field.max === "number" && field.min > field.max) add(ctx, "KQA212", `${fp}.min cannot exceed max.`, undefined, { offset: m.at(`${fp}.min`), path: `${fp}.min`, questionId: qid });
+        if ((field.type === "number" || field.type === "scale") && field.step !== undefined && (typeof field.step !== "number" || field.step <= 0)) add(ctx, "KQA212", `${fp}.step must be greater than zero.`, undefined, { offset: m.at(`${fp}.step`), path: `${fp}.step`, questionId: qid });
+        if (!(["number", "scale"].includes(String(field.type))) && (field.min !== undefined || field.max !== undefined || field.step !== undefined)) add(ctx, "KQA216", `${fp} uses min/max/step, which apply only to number or scale fields.`, undefined, { offset: m.at(fp), path: fp, questionId: qid });
+        if (field.maxLength !== undefined && (typeof field.maxLength !== "number" || !Number.isInteger(field.maxLength) || field.maxLength < 1 || field.maxLength > (field.type === "text" ? LIMITS.textMax : LIMITS.longtextMax) || !["text", "longtext"].includes(String(field.type)))) add(ctx, "KQA203", `${fp}.maxLength is invalid for this repeat field type.`, undefined, { offset: m.at(`${fp}.maxLength`), path: `${fp}.maxLength`, questionId: qid });
+      });
+    }
 
     // options
     const wantsOptions = (OPTION_TYPES as readonly string[]).includes(t);
@@ -834,6 +880,8 @@ function slug(s: string): string {
 interface BCtx {
   ctx: Ctx;
   dataKqa: Found[];
+  repeatTemplates: Found[];
+  repeatFields: Found[];
   questionBlocks: Found[];
   questionLists: Found[];
   dataNote: Found[];
@@ -922,6 +970,11 @@ function checkBindings(manifest: Manifest, b: BCtx) {
 
   for (const q of manifest.questions) {
     const list = controls.get(q.id) ?? [];
+    if (q.type === "repeat") {
+      checkRepeatBindings(q, b);
+      if (list.length) for (const found of list) add(ctx, "KQA309", `Repeat question "${q.id}" must not use data-kqa; bind its row fields with data-kqa-repeat-field inside its template.`, undefined, { offset: startOf(found.el), snippet: tagSrc(found.el), questionId: q.id });
+      continue;
+    }
     if (q.randomizeOptions === true && q.custom) add(ctx, "KQA223", `Question "${q.id}" cannot randomize options when it is custom.`, "Use native radio, checkbox, or select controls so KQA can apply and retain the presented order.", { questionId: q.id, path: `questions[${manifest.questions.indexOf(q)}].randomizeOptions` });
     if (list.length === 0) {
       if (!q.custom) {
@@ -988,6 +1041,7 @@ function checkBindings(manifest: Manifest, b: BCtx) {
         case "number": return k === "input:number";
         case "scale": return k === "input:range" || k === "input:radio";
         case "date": return k === "input:date";
+        case "repeat": return false;
       }
     };
     const expectedText: Record<string, string> = {
@@ -1120,5 +1174,96 @@ function checkBindings(manifest: Manifest, b: BCtx) {
   for (const el of b.dataStatus) {
     const id = attr(el, "data-kqa-status") ?? "";
     if (!byId.has(id)) add(ctx, "KQA311", `data-kqa-status="${id}" does not match any question.`, undefined, { offset: startOf(el), snippet: tagSrc(el) });
+  }
+}
+
+function checkRepeatBindings(question: Question, b: BCtx) {
+  const { ctx } = b;
+  const startOf = (el: El) => el.sourceCodeLocation?.startOffset;
+  const tagSrc = (el: El) => {
+    const loc = el.sourceCodeLocation?.startTag;
+    return loc ? ctx.html.slice(loc.startOffset, loc.endOffset).replace(/\s+/g, " ") : `<${el.tagName}>`;
+  };
+  const templates = b.repeatTemplates.filter((found) => attr(found.el, "data-kqa-repeat-template") === question.id);
+  if (templates.length !== 1) {
+    add(ctx, "KQA300", `Repeat question "${question.id}" needs exactly one <template data-kqa-repeat-template="${question.id}">; found ${templates.length}.`, `Add one template containing the semantic fieldset row prototype.`, { questionId: question.id });
+    return;
+  }
+  const template = templates[0]!;
+  if (template.el.tagName !== "template") add(ctx, "KQA309", `data-kqa-repeat-template="${question.id}" must be on a <template>.`, undefined, { offset: startOf(template.el), snippet: tagSrc(template.el), questionId: question.id });
+  const templateControls = b.repeatFields.filter((found) => found.ancestors.includes(template.el));
+  const fieldsets = templateControls.map((found) => found.ancestors.find((ancestor) => ancestor.tagName === "fieldset")).filter(Boolean);
+  const uniqueFieldsets = new Set(fieldsets);
+  if (uniqueFieldsets.size !== 1 || !fieldsets[0] || !kids(fieldsets[0]).some((child) => isEl(child) && child.tagName === "legend")) {
+    add(ctx, "KQA318", `Repeat template for "${question.id}" needs one semantic <fieldset> row with a <legend>.`, `Put all repeated field controls inside one fieldset with a legend such as “Item”.`, { offset: startOf(template.el), snippet: tagSrc(template.el), questionId: question.id });
+  }
+  const declaredFields = question.fields ?? [];
+  for (const found of b.repeatFields) {
+    if (found.ancestors.includes(template.el)) continue;
+    add(ctx, "KQA301", `data-kqa-repeat-field="${attr(found.el, "data-kqa-repeat-field") ?? ""}" is outside a repeat template.`, undefined, { offset: startOf(found.el), snippet: tagSrc(found.el) });
+  }
+  for (const field of declaredFields) {
+    const controls = templateControls.filter((found) => attr(found.el, "data-kqa-repeat-field") === field.id);
+    if (!controls.length) {
+      add(ctx, "KQA300", `Repeat field "${field.id}" in "${question.id}" has no control in its template.`, `Add a native field control marked data-kqa-repeat-field="${field.id}".`, { questionId: question.id });
+      continue;
+    }
+    const expected: Record<string, (el: El) => boolean> = {
+      single: (el) => el.tagName === "input" && attr(el, "type")?.toLowerCase() === "radio",
+      select: (el) => el.tagName === "select",
+      text: (el) => el.tagName === "input" && TEXT_INPUT_TYPES.has((attr(el, "type") ?? "text").toLowerCase()),
+      longtext: (el) => el.tagName === "textarea",
+      number: (el) => el.tagName === "input" && attr(el, "type")?.toLowerCase() === "number",
+      scale: (el) => el.tagName === "input" && ["range", "radio"].includes((attr(el, "type") ?? "").toLowerCase()),
+      date: (el) => el.tagName === "input" && attr(el, "type")?.toLowerCase() === "date",
+    };
+    if (controls.some((found) => !expected[field.type]?.(found.el))) {
+      add(ctx, "KQA302", `Repeat field "${field.id}" is not bound to a native ${field.type} control.`, undefined, { offset: startOf(controls[0]!.el), snippet: tagSrc(controls[0]!.el), questionId: question.id });
+      continue;
+    }
+    if (field.type !== "single" && field.type !== "scale" && controls.length !== 1) add(ctx, "KQA313", `Repeat field "${field.id}" needs exactly one control; found ${controls.length}.`, undefined, { offset: startOf(controls[1]!.el), snippet: tagSrc(controls[1]!.el), questionId: question.id });
+    for (const found of controls) {
+      const el = found.el;
+      if (!hasLabel(el, found.ancestors, b.labelsFor)) add(ctx, "KQA308", `Repeat field control ${tagSrc(el)} has no accessible label.`, `Wrap the control in a <label> or provide aria-label/aria-labelledby.`, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      if (hasAttr(el, "data-kqa")) add(ctx, "KQA309", `Repeat field "${field.id}" must use data-kqa-repeat-field, not data-kqa.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      if (hasAttr(el, "disabled") || hasAttr(el, "readonly")) add(ctx, "KQA310", `${tagSrc(el)} is disabled or read-only.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      if (hasAttr(el, "checked")) add(ctx, "KQA320", `${tagSrc(el)} preselects a repeat answer.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      if (field.type !== "single" && field.type !== "select" && attr(el, "value")) add(ctx, "KQA320", `${tagSrc(el)} has a default value.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      if (el.tagName === "textarea" && textOf(el).trim()) add(ctx, "KQA320", `Repeat field "${field.id}" has default text.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      if (el.tagName === "select") for (const option of kids(el)) if (isEl(option) && option.tagName === "option" && hasAttr(option, "selected")) add(ctx, "KQA320", `Repeat field "${field.id}" has a preselected option.`, undefined, { offset: startOf(option), snippet: tagSrc(option), questionId: question.id });
+    }
+    if (field.type === "single" || field.type === "select") {
+      const expectedValues = new Set((field.options ?? []).map((option) => option.value));
+      const actualValues = new Set<string>();
+      for (const found of controls) {
+        if (field.type === "single") {
+          const value = attr(found.el, "value");
+          if (value && expectedValues.has(value)) actualValues.add(value);
+          else if (value) add(ctx, "KQA303", `Repeat field "${field.id}" has undeclared option value "${value}".`, undefined, { offset: startOf(found.el), snippet: tagSrc(found.el), questionId: question.id });
+        } else {
+          for (const child of kids(found.el)) if (isEl(child) && child.tagName === "option") {
+            const value = attr(child, "value") ?? textOf(child).trim();
+            if (!value) continue;
+            if (expectedValues.has(value)) actualValues.add(value);
+            else add(ctx, "KQA303", `Repeat field "${field.id}" has undeclared option value "${value}".`, undefined, { offset: startOf(child), snippet: tagSrc(child), questionId: question.id });
+          }
+        }
+      }
+      for (const value of expectedValues) if (!actualValues.has(value)) add(ctx, "KQA304", `Repeat field "${field.id}" does not bind option "${value}" in its template.`, undefined, { offset: startOf(controls[0]!.el), snippet: tagSrc(controls[0]!.el), questionId: question.id });
+    } else if (field.type === "scale" && controls[0]?.el.tagName === "input" && attr(controls[0].el, "type")?.toLowerCase() === "radio") {
+      const min = typeof field.min === "number" ? field.min : 1;
+      const max = typeof field.max === "number" ? field.max : 5;
+      const actualValues = new Set<number>();
+      for (const found of controls) {
+        const value = Number(attr(found.el, "value"));
+        if (!Number.isInteger(value) || value < min || value > max) add(ctx, "KQA303", `Repeat scale field "${field.id}" has a radio value outside ${min} to ${max}.`, undefined, { offset: startOf(found.el), snippet: tagSrc(found.el), questionId: question.id });
+        else actualValues.add(value);
+      }
+      for (let value = min; value <= max && value - min <= 20; value++) if (!actualValues.has(value)) add(ctx, "KQA304", `Repeat scale field "${field.id}" has no radio for ${value}.`, undefined, { offset: startOf(controls[0]!.el), snippet: tagSrc(controls[0]!.el), questionId: question.id });
+    }
+  }
+  for (const found of templateControls) {
+    const id = attr(found.el, "data-kqa-repeat-field") ?? "";
+    if (!declaredFields.some((field) => field.id === id)) add(ctx, "KQA301", `Repeat template for "${question.id}" has undeclared field "${id}".`, undefined, { offset: startOf(found.el), snippet: tagSrc(found.el), questionId: question.id });
   }
 }

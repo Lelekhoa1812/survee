@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { displayValue, isAnswered } from "@/lib/format/answers";
-import type { Question } from "@/lib/format/schema";
+import type { Question, RepeatField, RepeatRecordRow } from "@/lib/format/schema";
 import type { InterviewData, PersonRow } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
 import { Badge, Icon, Modal } from "./ui";
@@ -43,14 +43,52 @@ function fmtScaleMedianRange(range: QuestionSummary["scaleMedianRange"]) {
     : `${fmtNumber(range.lower)}–${fmtNumber(range.upper)}`;
 }
 
+function recordFieldText(field: RepeatField | undefined, value: string | number | undefined): string {
+  if (value === undefined || value === null) return "";
+  if (field && (field.type === "single" || field.type === "select") && typeof value === "string") {
+    return field.options?.find((option) => option.value === value)?.label ?? value;
+  }
+  return String(value);
+}
+
+function RecordEntries({ fields, records }: { fields: RepeatField[]; records: RepeatRecordRow[] }) {
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      {records.map((record, index) => {
+        const fieldById = new Map(fields.map((field) => [field.id, field]));
+        const extraFieldIds = Object.keys(record.values).filter((fieldId) => !fieldById.has(fieldId)).sort();
+        return (
+          <div key={record.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+            <div className="who" style={{ fontWeight: 600 }}>Entry {index + 1}<span className="code-chip" style={{ marginLeft: 8 }}>{record.id}</span></div>
+            <div className="stack" style={{ gap: 6 }}>
+              {[...fields.map((field) => field.id), ...extraFieldIds].map((fieldId) => {
+                const field = fieldById.get(fieldId);
+                const present = Object.prototype.hasOwnProperty.call(record.values, fieldId);
+                const value = present ? recordFieldText(field, record.values[fieldId]) : "";
+                return (
+                  <div key={fieldId}>
+                    <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>{field?.label ?? fieldId}</div>
+                    <div className="val">{present ? value : <span className="muted">No value saved</span>}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      {records.length === 0 && <p className="muted" style={{ fontSize: 13.5 }}>No records saved.</p>}
+    </div>
+  );
+}
+
 export function AnswersTab({ data }: { data: InterviewData }) {
   const [view, setView] = useState<"question" | "person">(data.interview.mode === "multi" && data.people.length > 1 ? "question" : "person");
   const [only, setOnly] = useState<"all" | "submitted">("all");
   const [viewing, setViewing] = useState<PersonRow | null>(null);
   const people = useMemo(() => data.people.filter((p) => (only === "submitted" ? p.status === "submitted" : true)), [data.people, only]);
   const { questions, sections } = data.manifest;
-  const anyAnswers = data.people.some((p) => p.answered > 0 || Object.values(p.answers).some((answer) => !!answer.note?.trim()));
-  const summaries = useMemo(() => new Map(questions.map((q) => [q.id, summarizeQuestion(q, people)])), [questions, people]);
+  const anyAnswers = data.people.some((p) => p.answered > 0 || Object.values(p.answers).some((answer) => !!answer.note?.trim()) || Object.values(p.recordGroups ?? {}).some((records) => records.length > 0));
+  const summaries = useMemo(() => new Map(questions.filter((q) => q.type !== "repeat").map((q) => [q.id, summarizeQuestion(q, people)])), [questions, people]);
 
   const groups = useMemo(() => {
     const out: { id: string; title: string; description?: string; qs: Question[] }[] = [];
@@ -60,6 +98,10 @@ export function AnswersTab({ data }: { data: InterviewData }) {
     if (loose.length) out.push({ id: "_", title: sections?.length ? "Other questions" : "Questions", qs: loose });
     return out.filter((g) => g.qs.length);
   }, [questions, sections]);
+  const currentRepeatIds = useMemo(() => new Set(questions.filter((q) => q.type === "repeat").map((q) => q.id)), [questions]);
+  const retainedRepeatIds = useMemo(() => [...new Set(people.flatMap((p) => Object.entries(p.recordGroups ?? {})
+    .filter(([questionId, records]) => records.length > 0 && !currentRepeatIds.has(questionId))
+    .map(([questionId]) => questionId)))].sort(), [people, currentRepeatIds]);
 
   if (!anyAnswers) {
     return (
@@ -86,11 +128,33 @@ export function AnswersTab({ data }: { data: InterviewData }) {
       </div>
 
       {view === "question" ? (
-        groups.map((g) => (
+        <>
+        {groups.map((g) => (
           <section key={g.id} className="stack" style={{ gap: 10 }}>
             <div><div className="section-title" style={{ marginBottom: 2 }}>{g.title}</div>{g.description && <p className="muted" style={{ fontSize: 13.5 }}>{g.description}</p>}</div>
             <div className="card">
               {g.qs.map((q) => {
+                if (q.type === "repeat") {
+                  const rowCount = people.reduce((sum, p) => sum + (p.recordGroups?.[q.id]?.length ?? 0), 0);
+                  return (
+                    <div key={q.id} className="q-card">
+                      <div>
+                        <h4>{q.label}</h4>
+                        <div className="meta"><span className="code-chip">{q.id}</span><span>Repeat group</span><span>{rowCount} {rowCount === 1 ? "record" : "records"}</span></div>
+                        {q.help && <p className="muted" style={{ fontSize: 13.5 }}>{q.help}</p>}
+                      </div>
+                      <div className="stack" style={{ gap: 10 }}>
+                        {people.map((p) => (
+                          <div key={p.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                            <div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}</div>
+                            <RecordEntries fields={q.fields ?? []} records={p.recordGroups?.[q.id] ?? []} />
+                          </div>
+                        ))}
+                        {people.length === 0 && <p className="muted">No people in this view.</p>}
+                      </div>
+                    </div>
+                  );
+                }
                 const summary = summaries.get(q.id)!;
                 const answeredBy = people.filter((p) => isAnswered(q, p.answers));
                 const noteOnly = people.filter((p) => !isAnswered(q, p.answers) && p.answers[q.id]?.note);
@@ -126,7 +190,27 @@ export function AnswersTab({ data }: { data: InterviewData }) {
               })}
             </div>
           </section>
-        ))
+        ))}
+        {retainedRepeatIds.length > 0 && (
+          <section className="stack" style={{ gap: 10 }}>
+            <div className="section-title" style={{ marginBottom: 2 }}>Retained records from earlier questionnaire versions</div>
+            <div className="card">
+              {retainedRepeatIds.map((questionId) => (
+                <div key={questionId} className="q-card">
+                  <div><h4>Retained repeat group</h4><div className="meta"><span className="code-chip">{questionId}</span></div></div>
+                  <div className="stack" style={{ gap: 10 }}>
+                    {people.map((p) => {
+                      const records = p.recordGroups?.[questionId] ?? [];
+                      if (!records.length) return null;
+                      return <div key={p.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}><div className="who">{p.name}{p.status !== "submitted" && <span className="muted" style={{ fontWeight: 400 }}> · draft</span>}</div><RecordEntries fields={[]} records={records} /></div>;
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        </>
       ) : (
         <div className="card">
           {people.length === 0 && <div className="card-pad muted">Nobody has submitted yet.</div>}
@@ -150,6 +234,14 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                     <button className="btn sm right" onClick={() => setViewing(p)}>View in the original layout</button>
                   </div>
                   {questions.map((q) => {
+                    if (q.type === "repeat") {
+                      return (
+                        <div key={q.id} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                          <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>{q.label}<span className="code-chip" style={{ marginLeft: 8 }}>{q.id}</span></div>
+                          <RecordEntries fields={q.fields ?? []} records={p.recordGroups?.[q.id] ?? []} />
+                        </div>
+                      );
+                    }
                     const a = p.answers[q.id];
                     const has = isAnswered(q, p.answers);
                     if (!has && !a?.note) return null;
@@ -163,6 +255,12 @@ export function AnswersTab({ data }: { data: InterviewData }) {
                       </div>
                     );
                   })}
+                  {retainedRepeatIds.map((questionId) => (
+                    <div key={questionId} className="ans" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                      <div className="who" style={{ fontWeight: 500, color: "var(--ink-2)" }}>Retained repeat group <span className="code-chip" style={{ marginLeft: 8 }}>{questionId}</span></div>
+                      <RecordEntries fields={[]} records={p.recordGroups?.[questionId] ?? []} />
+                    </div>
+                  ))}
                   {p.answered < p.total && <p className="muted" style={{ fontSize: 13 }}>{p.total - p.answered} {p.total - p.answered === 1 ? "question" : "questions"} not answered.</p>}
                 </div>
               </details>

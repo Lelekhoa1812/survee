@@ -124,6 +124,52 @@ export function longTable(input: ExportInput): Table {
   return { header: [...LONG_HEADER], rows };
 }
 
+/** Normalized, lossless row/field view for repeat-group answers. Existing question tables remain unchanged. */
+export function recordTable(input: ExportInput): Table {
+  const header = [
+    "Person id", "Person", "Person status", "Question id", "Question", "Row id", "Row order",
+    "Field id", "Field", "Field type", "Value present", "Value",
+  ];
+  const rows: string[][] = [];
+  for (const person of sortedParticipants(input)) {
+    const groups = person.recordGroups ?? {};
+    const declaredQuestionIds = input.manifest.questions.filter((question) => question.type === "repeat" && Object.hasOwn(groups, question.id)).map((question) => question.id);
+    const declaredIdSet = new Set(declaredQuestionIds);
+    const questionIds = [...declaredQuestionIds, ...Object.keys(groups).filter((questionId) => !declaredIdSet.has(questionId)).sort()];
+    for (const questionId of questionIds) {
+      const records = groups[questionId] ?? [];
+      const question = input.manifest.questions.find((candidate) => candidate.id === questionId && candidate.type === "repeat");
+      for (const [rowIndex, record] of records.entries()) {
+        const declared = question?.fields ?? [];
+        const knownIds = new Set(declared.map((field) => field.id));
+        const fields = [
+          ...declared,
+          ...Object.keys(record.values).filter((fieldId) => !knownIds.has(fieldId)).sort().map((id) => ({ id, label: "", type: "unknown" })),
+        ];
+        for (const field of fields) {
+          const present = Object.prototype.hasOwnProperty.call(record.values, field.id);
+          const value = present ? record.values[field.id] : undefined;
+          rows.push([
+            person.id,
+            person.name,
+            person.status,
+            questionId,
+            question?.label ?? "",
+            record.id,
+            String(rowIndex + 1),
+            field.id,
+            field.label,
+            field.type,
+            present ? "true" : "false",
+            value === undefined ? "" : String(value),
+          ]);
+        }
+      }
+    }
+  }
+  return { header, rows };
+}
+
 /** Kinds of export file, used for filenames. */
 export type ExportFileKind = "json" | "csv" | "xlsx" | "md" | "csv-wide" | "csv-long";
 

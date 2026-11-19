@@ -25,6 +25,9 @@ describe("respondent shell locales", () => {
       expect(messages.rankMoveUp).toBeTruthy();
       expect(messages.rankMoveDown).toBeTruthy();
       expect(messages.rankConfirm).toBeTruthy();
+      expect(messages.repeatAdd).toContain("{item}");
+      expect(messages.repeatRemove).toContain("{index}");
+      expect(messages.repeatRowAdded).toContain("{index}");
       expect(messages.lengthCount).toContain("{count}");
       expect(messages.requiredError).toBeTruthy();
     }

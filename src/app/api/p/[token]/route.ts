@@ -28,6 +28,7 @@ export async function GET(req: Request, { params }: Ctx) {
     sections: manifest.sections ?? [],
     questions,
     answers: ctx.participant.answers,
-    progress: progress(manifest, ctx.participant.answers),
+    recordGroups: ctx.participant.recordGroups ?? {},
+    progress: progress(manifest, ctx.participant.answers, ctx.participant.recordGroups ?? {}),
   });
 }

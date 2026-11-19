@@ -2,7 +2,7 @@
  * Deterministic, model-ready interpretation guidance for agents using KQA analytics.
  * KQA itself does not run an LLM or apply these instructions to a report.
  */
-export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/16" as const;
+export const ANALYTICS_GUIDANCE_VERSION = "kqa-analytics/17" as const;
 
 const PRINCIPLES = [
   {
@@ -16,6 +16,12 @@ const PRINCIPLES = [
     title: "Make participant scope explicit",
     guidance:
       "State whether the result includes all people in the interview, only submitted people, or a caller-selected participant status subset. KQA's default analyze_answers scope includes invited, in-progress, and submitted people; submittedOnly or statuses can restrict the cohort. Set compareStatuses to compare selected statuses from one participant scan and one shared asOf. For paginated tool results, pass analysisRunId back as runId with interviewId and offset/limit so every page uses the same completed aggregate output and asOf; the initial participant scan is live and is not a database snapshot. scope.participantCount and statusCohorts[].participantCount count everyone in their selected status groups. respondentCount is a compatibility alias for these counts; do not describe invited people with no answers as respondents. Per-question cohortCount is everyone in the selected status group; eligibleCount and inactiveCount are inferred from the current routing rules and saved answers. KQA does not retain historical display telemetry. State each group's participant count, eligible/inactive counts, valid-answer n, and denominator; do not present inferred eligibility as proof an item was displayed. Use subgroup comparisons only when the subgroup is directly represented in available data and disclose its size.",
+  },
+  {
+    id: "keep-repeat-records-out-of-default-analysis",
+    title: "Keep repeated records at the right unit of analysis",
+    guidance:
+      "Repeat-group rows are structured records nested within one participant. The default analyze_answers summaries exclude their field values and never count rows as participants or independent observations. A repeat group may be counted as one manifest question, but its row count is not a respondent count. Do not infer row-level rates, distributions, trends, or averages from ordinary question summaries. Use get_answers or the lossless JSON/Excel Records export for review, and state clearly when any separate row-level analysis is performed.",
   },
   {
     id: "explore-answer-segments",
@@ -77,6 +83,7 @@ const REVIEW_CHECKLIST = [
   "Does the answer name the decision, question, questionnaire version, respondent scope, and time period that were actually analyzed?",
   "Are cohortCount, eligibleCount, inactiveCount, answeredCount, noAnswerCount, unmappedResponseCount, and valid-answer denominators distinguished, with inferred eligibility clearly separated from historical display?",
   "Do side-by-side status groups come from one scan, share an asOf, and show each group's denominator?",
+  "Are repeat-group rows kept distinct from participants and excluded from default question summaries?",
   "Are scale distributions treated as ordered categories, number summaries described as numeric, and multi-select shares labeled per respondent?",
   "Does the interpretation avoid unsupported population, significance, or causal claims and identify material uncertainty?",
   "Does the chart fit the comparison, show clear labels and denominators, and avoid visual distortion?",
@@ -158,6 +165,7 @@ export function getAnalyticsGuidance() {
     productConstraints: [
       "KQA's analyze_answers output is current-version descriptive data; it returns no raw text, names, notes, private links, score, significance test, or causal estimate.",
       "The default cohort includes invited, in-progress, and submitted people. submittedOnly restricts the cohort to submitted people; statuses can select any non-empty subset of those statuses.",
+      "Repeat-group field values are excluded from analyze_answers in this release. A repeat group is at most one manifest question; its record rows are nested within a participant and are never counted as participants or independent observations.",
       "KQA does not enforce a minimum cohort-size threshold; singleton counts and percentages may be returned. Integrated agents should state small-n limitations and follow the host's disclosure rules.",
       "QuestionSummary.disclosureRisk flags singleton cohort, answer, no-answer, note-only, unmapped, valid-denominator, distribution-value, and numeric-summary counts. singletonDistributionValues lists the current-version values with a count of one. This is a detectable-signal set, not an identifiability assessment or anonymity guarantee.",
       "analyze_answers segmentBy groups up to 20 selected outcome questions by one closed categorical current-version answer in one shared participant scan; checkbox groups can overlap, and answer-group counts include singleton and zero-count options. questionIds selects the outcomes; questionId remains available for one outcome.",

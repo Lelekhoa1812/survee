@@ -1,5 +1,5 @@
 import type { Binary, ObjectId } from "mongodb";
-import type { AnswerMap, Manifest, Question } from "../format/schema";
+import type { AnswerMap, Manifest, Question, RepeatRecordMap } from "../format/schema";
 import type { McpCapability } from "../mcp/capabilities";
 
 export type InterviewMode = "single" | "multi";
@@ -166,6 +166,8 @@ export interface ParticipantDoc {
   status: ParticipantStatus;
   /** keyed by question id */
   answers: AnswerMap;
+  /** Repeatable record answers keyed by repeat question id; kept separate from scalar AnswerValue. */
+  recordGroups?: RepeatRecordMap;
   /** Incremented on every successful save. */
   revision: number;
   createdAt: Date;
@@ -342,6 +344,7 @@ export interface ParticipantView {
   note?: string;
   status: ParticipantStatus;
   answers: AnswerMap;
+  recordGroups?: RepeatRecordMap;
   revision: number;
   createdAt: string;
   updatedAt: string;

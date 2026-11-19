@@ -47,6 +47,13 @@ function fields(filter: Record<string, any>) {
   return Object.assign({}, ...(Array.isArray(filter.$and) ? filter.$and : [filter]));
 }
 
+function assignPath(target: Record<string, any>, path: string, value: unknown) {
+  const parts = path.split(".");
+  let at = target;
+  for (const part of parts.slice(0, -1)) at = at[part] ??= {};
+  at[parts.at(-1)!] = value;
+}
+
 beforeEach(() => {
   mocks.currentVersion = 4;
   mocks.interviewStatus = "open";
@@ -81,7 +88,10 @@ beforeEach(() => {
     const f = fields(filter);
     if (f.revision !== undefined && f.revision !== mocks.participant.revision) return null;
     if (mocks.participant.status === "submitted") return null;
-    Object.assign(mocks.participant, update.$set);
+    for (const [path, value] of Object.entries(update.$set ?? {})) {
+      if (path.includes(".")) assignPath(mocks.participant, path, value);
+      else mocks.participant[path] = value;
+    }
     mocks.participant.revision += update.$inc?.revision ?? 0;
     return { ...mocks.participant };
   });
@@ -151,7 +161,7 @@ describe("respondent version fence", () => {
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: false, status: 422, invalidExclusiveSelections: [{ id: "q1" }] });
     const reduce = await asAxion(() => saveAnswers(token, 4, { q1: { value: ["none"] } }));
     expect(reduce).toMatchObject({ ok: true });
-    expect(mocks.participant.answers.q1.value).toEqual(["none", "a"]); // Existing answer is not silently rewritten.
+    expect(mocks.participant.answers.q1.value).toEqual(["none"]); // The correction is applied only after its transaction commits.
     const savedSet = mocks.participantUpdate.mock.calls.at(-1)?.[1].$set;
     expect(savedSet["answers.q1"].value).toEqual(["none"]);
   });
@@ -281,5 +291,68 @@ describe("respondent version fence", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(mocks.participantUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("saves stable repeat rows and merges independent field revisions", async () => {
+    mocks.versionManifest.questions = [{
+      id: "people", type: "repeat", label: "People", maxRows: 2,
+      fields: [
+        { id: "name", type: "text", label: "Name", required: true },
+        { id: "age", type: "number", label: "Age", min: 0 },
+      ],
+    }];
+    const add = await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "people", rowId: "row-1" }]));
+    expect(add).toMatchObject({ ok: true, recordGroups: { people: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } });
+
+    const name = await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "people", rowId: "row-1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }]));
+    const age = await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "people", rowId: "row-1", fieldId: "age", expectedFieldRevision: 0, value: 42 }]));
+    expect(name).toMatchObject({ ok: true });
+    expect(age).toMatchObject({ ok: true, recordGroups: { people: [{ id: "row-1", values: { name: "Ada", age: 42 }, revision: 2, fieldRevisions: { name: 1, age: 1 } }] } });
+  });
+
+  it("rejects stale same-field writes, stale row removals, and adds above maxRows", async () => {
+    mocks.versionManifest.questions = [{ id: "items", type: "repeat", label: "Items", maxRows: 1, fields: [{ id: "label", type: "text", label: "Label" }] }];
+    await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-1" }]));
+    await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "items", rowId: "row-1", fieldId: "label", expectedFieldRevision: 0, value: "first" }]));
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "items", rowId: "row-1", fieldId: "label", expectedFieldRevision: 0, value: "stale" }]))).toMatchObject({ ok: false, status: 409, code: "record_field_conflict" });
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-2" }]))).toMatchObject({ ok: false, status: 400, recordErrors: [{ questionId: "items", rowId: "row-2" }] });
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "remove", questionId: "items", rowId: "row-1", expectedRowRevision: 0 }]))).toMatchObject({ ok: false, status: 409, code: "record_row_conflict" });
+    expect(mocks.participant.recordGroups?.items).toHaveLength(1);
+  });
+
+  it("makes committed record operations idempotent while retaining non-reusable row tombstones", async () => {
+    mocks.versionManifest.questions = [{ id: "items", type: "repeat", label: "Items", maxRows: 1, fields: [{ id: "label", type: "text", label: "Label" }] }];
+    const add = [{ op: "add" as const, questionId: "items", rowId: "row-1" }];
+    await asAxion(() => saveAnswers(token, 4, {}, add));
+    expect(await asAxion(() => saveAnswers(token, 4, {}, add))).toMatchObject({ ok: true });
+    const set = [{ op: "set" as const, questionId: "items", rowId: "row-1", fieldId: "label", expectedFieldRevision: 0, value: "one" }];
+    await asAxion(() => saveAnswers(token, 4, {}, set));
+    expect(await asAxion(() => saveAnswers(token, 4, {}, set))).toMatchObject({ ok: true });
+    const remove = [{ op: "remove" as const, questionId: "items", rowId: "row-1", expectedRowRevision: 1 }];
+    await asAxion(() => saveAnswers(token, 4, {}, remove));
+    expect(await asAxion(() => saveAnswers(token, 4, {}, remove))).toMatchObject({ ok: true, recordGroups: { items: [] } });
+    expect(mocks.participant.recordGroups?.items[0]).toMatchObject({ id: "row-1", deletedAt: expect.any(String), values: {} });
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-1" }]))).toMatchObject({ ok: false, status: 409, code: "record_row_conflict" });
+    expect(await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "items", rowId: "row-2" }]))).toMatchObject({ ok: true });
+  });
+
+  it("validates required repeat rows and fields inside the submit transaction", async () => {
+    mocks.versionManifest.questions = [{
+      id: "jobs", type: "repeat", label: "Jobs", required: true, minRows: 1, maxRows: 3,
+      fields: [{ id: "title", type: "text", label: "Title", required: true }],
+    }];
+    await asAxion(() => saveAnswers(token, 4, {}, [{ op: "add", questionId: "jobs", rowId: "job-1" }]));
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: false, status: 422, repeatErrors: [{ questionId: "jobs", rowId: "job-1", fieldId: "title" }] });
+    await asAxion(() => saveAnswers(token, 4, {}, [{ op: "set", questionId: "jobs", rowId: "job-1", fieldId: "title", expectedFieldRevision: 0, value: "Research" }]));
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
+  });
+
+  it("submits against a repeat row saved after the initial token lookup", async () => {
+    mocks.versionManifest.questions = [{ id: "assets", type: "repeat", label: "Assets", required: true, maxRows: 2, fields: [{ id: "name", type: "text", label: "Name", required: true }] }];
+    mocks.beforeTransaction = () => {
+      mocks.participant.recordGroups = { assets: [{ id: "asset-1", values: { name: "Pump" }, revision: 1, fieldRevisions: { name: 1 } }] };
+      mocks.participant.revision++;
+    };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true });
   });
 });

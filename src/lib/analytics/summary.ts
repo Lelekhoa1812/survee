@@ -556,6 +556,7 @@ export function createQuestionSummaryAccumulator(q: Question): QuestionSummaryAc
 }
 
 export function summarizeQuestion(q: Question, respondents: AnalyticsRespondent[]): QuestionSummary {
+  if (q.type === "repeat") throw new Error("Repeat-group fields are not summarized as scalar answers.");
   const summary = createQuestionSummaryAccumulator(q);
   for (const respondent of respondents) summary.add(respondent);
   return summary.finish();
@@ -566,6 +567,7 @@ export async function summarizeQuestionCohorts(
   questions: Question[],
   respondents: AsyncIterable<CohortAnalyticsRespondent>,
 ): Promise<QuestionCohortSummaries> {
+  questions = questions.filter((question) => question.type !== "repeat");
   const statusCounts: Record<ParticipantStatus, number> = { invited: 0, in_progress: 0, submitted: 0 };
   const byStatus = new Map(ANALYTICS_STATUSES.map((status) => [
     status,
@@ -599,6 +601,7 @@ export async function summarizeSelectedQuestionCohort(
   respondents: AsyncIterable<CohortAnalyticsRespondent>,
   statuses: readonly ParticipantStatus[],
 ): Promise<SelectedQuestionCohortSummaries> {
+  questions = questions.filter((question) => question.type !== "repeat");
   const selectedStatuses = ANALYTICS_STATUSES.filter((status) => statuses.includes(status));
   const statusCounts: Record<ParticipantStatus, number> = { invited: 0, in_progress: 0, submitted: 0 };
   const byStatus = new Map(selectedStatuses.map((status) => [
