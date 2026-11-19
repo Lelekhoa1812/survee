@@ -1,6 +1,6 @@
 # KQA
 
-Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file supports single choice, checkboxes, short and long text, dropdown, number, scale, date, and full-order ranking of 2–8 options; choice answers and whether an answer is present can drive declarative conditional follow-ups. KQA does not score answers or rank people.
+Host-run interviews. Upload an HTML questionnaire with optional reusable workspace images, email or copy each person a private link, and keep every answer in MongoDB as they type. Review individual answers, inspect descriptive summaries, and export the results from one place. The file supports single choice, checkboxes, short and long text, dropdown, number, scale, date, full-order ranking of 2–8 options, and bounded repeatable records; choice answers and whether an answer is present can drive declarative conditional follow-ups. Repeated rows remain part of one respondent and are excluded from default aggregate summaries. KQA does not score answers or rank people.
 
 | Portal | Address | For |
 |---|---|---|
@@ -23,6 +23,7 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYBOOK.md) | The procedure an agent follows, the fix loop with the checker report, a prompt to paste |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Sourced design, accessibility, interaction, analytics and usability review standards |
 | [`docs/INTERVIEW_PACKAGES.md`](docs/INTERVIEW_PACKAGES.md) | 18 versioned, addressable industrial, public-service, research and personal starting packages with risk safeguards |
+| [`docs/kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md`](docs/kqa-questionnaire-author/references/REPEATABLE_RECORDS_DESIGN.md) | When bounded repeated records fit, their runtime and analysis limits, and field-use safeguards |
 | [`docs/QUESTION_BLUEPRINT.md`](docs/QUESTION_BLUEPRINT.md) | Reusable per-question purpose, interpretation, routing and test record |
 | [`docs/kqa-questionnaire-author/SKILL.md`](docs/kqa-questionnaire-author/SKILL.md) | Portable Agent Skills workflow for questionnaire design and live updates |
 | [`docs/DIAGNOSTICS.md`](docs/DIAGNOSTICS.md) | Every checker code, why it matters, how to fix it (generated) |
@@ -31,7 +32,6 @@ For contributors, [`docs/README.md`](docs/README.md) maps current source-of-trut
 | [`docs/examples/`](docs/examples) | Runnable feature examples plus clearly labeled, illustrative service-improvement and personal-planning questionnaires with review records; examples are not validated instruments |
 | [`docs/MCP.md`](docs/MCP.md) | How an agent operates a live interview (not how to write the HTML) |
 | [`docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md`](docs/evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | Reproducible review cases, scoring contract and evidence limits |
-| [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification, and capability-boundary evaluation |
 | [`docs/evals/PACKAGE_SELECTION_BENCHMARK.md`](docs/evals/PACKAGE_SELECTION_BENCHMARK.md) | Development-only package-fit, clarification and boundary evaluation |
 | [`docs/evals/PACKAGE_DRAFT_BENCHMARK.md`](docs/evals/PACKAGE_DRAFT_BENCHMARK.md) | Independent expert review of complete package-based questionnaire drafts, with separate evidence lanes |
 | [`docs/evals/AUTHORING_TRUST_BOUNDARY_EVAL.md`](docs/evals/AUTHORING_TRUST_BOUNDARY_EVAL.md) | Seeded agent/MCP tool-trace safety evaluation and its limits |
