@@ -116,7 +116,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `apply_questionnaire_required_patch` | Publish the reviewed required/optional changes with a signed preview token and compatibility acknowledgement |
 | `list_people` | People, optional email, status, progress, mail state, private link |
 | `get_person` | One person |
-| `add_people` | Add people to a multi-user interview. Email is optional |
+| `add_people` | Add people to an interview. Email is optional. Adding people to a One-person interview switches it to Multi-user |
 | `update_person` | Name, optional email, private note. An empty email clears it |
 | `remove_person` | Remove the person, their answers, and their invite history |
 | `reopen_person` | Unlock a submitted person |
