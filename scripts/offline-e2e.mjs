@@ -44,7 +44,7 @@ try {
   await typeInto(frame, '[data-kqa="team-size"]', "999999");
   await page.waitForSelector(".toast.err", { timeout: 8000 });
   const toast = await page.$eval(".toast.err", (e) => e.textContent);
-  check("refused value is explained", /maximum|above/i.test(toast), toast);
+  check("refused value names the question and the limit", /How many people are in your team/.test(toast) && /5,?000/.test(toast), toast);
   await sleep(800);
   const reverted = await frame.evaluate(() => document.querySelector('[data-kqa="team-size"]').value);
   check("page reverts to the saved value", reverted === "", `value="${reverted}"`);

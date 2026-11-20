@@ -536,9 +536,11 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
   };
 }
 
+export interface AnswerProblem { id: string; reason: string; code: string; params?: { minimum?: number; maximum?: number } }
+
 export type SaveResult =
   | { ok: true; revision: number; savedAt: string; status: ParticipantStatus; recordGroups?: RepeatRecordMap }
-  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; code?: string; details?: { id: string; reason: string }[]; recordErrors?: RepeatRecordIssue[] };
+  | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; code?: string; details?: AnswerProblem[]; recordErrors?: RepeatRecordIssue[] };
 
 export interface AnswerPatch {
   [questionId: string]: { value?: unknown; note?: unknown };
@@ -596,26 +598,26 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
     if (current.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them.", code: "invalid_state" };
     const byId = new Map<string, Question>(ctx.version.manifest.questions.map((q) => [q.id, q]));
-    const problems: { id: string; reason: string }[] = [];
+    const problems: AnswerProblem[] = [];
     const recordErrors: RepeatRecordIssue[] = [];
     const next: AnswerMap = { ...(current.answers ?? {}) };
     for (const id of ids) {
       const q = byId.get(id);
-      if (!q) { problems.push({ id, reason: "not a question in this interview" }); continue; }
+      if (!q) { problems.push({ id, reason: "not a question in this interview", code: "unknown_question" }); continue; }
       const entry = patch[id] ?? {};
       const cur = next[id] ?? { updatedAt: nowIso };
       const merged = { ...cur, updatedAt: nowIso };
       if ("value" in entry) {
         const v = validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" });
-        if (!v.ok) { problems.push({ id, reason: v.reason }); continue; }
+        if (!v.ok) { problems.push({ id, reason: v.reason, code: v.code, params: v.params }); continue; }
         if (q.type === "multi" && q.maxSelections !== undefined && Array.isArray(v.value) && v.value.length > q.maxSelections) {
           const previous = current.answers?.[id]?.value;
           const previousCount = Array.isArray(previous) ? new Set(previous).size : 0;
-          if (previousCount <= q.maxSelections || v.value.length >= previousCount) { problems.push({ id, reason: `choose no more than ${q.maxSelections} options; remove choices from your saved answer before adding any` }); continue; }
+          if (previousCount <= q.maxSelections || v.value.length >= previousCount) { problems.push({ id, reason: `choose no more than ${q.maxSelections} options; remove choices from your saved answer before adding any`, code: "above_maximum_selections", params: { maximum: q.maxSelections } }); continue; }
         }
         if (q.type === "multi" && exclusiveConflictCount(q, v.value) > 0) {
           const previous = current.answers?.[id]?.value;
-          if (exclusiveConflictCount(q, v.value) >= exclusiveConflictCount(q, previous)) { problems.push({ id, reason: "choose an exclusive option by itself; remove conflicting choices before saving" }); continue; }
+          if (exclusiveConflictCount(q, v.value) >= exclusiveConflictCount(q, previous)) { problems.push({ id, reason: "choose an exclusive option by itself; remove conflicting choices before saving", code: "exclusive_conflict" }); continue; }
         }
         if (v.value === null) delete merged.value;
         else merged.value = v.value;
@@ -626,11 +628,11 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       }
       if ("note" in entry) {
         const cfg = noteConfig(q);
-        if (!cfg.enabled) { problems.push({ id, reason: "this question does not take a note" }); continue; }
+        if (!cfg.enabled) { problems.push({ id, reason: "this question does not take a note", code: "note_not_enabled" }); continue; }
         const note = entry.note;
         if (note === null || note === undefined || note === "") delete merged.note;
-        else if (typeof note !== "string") { problems.push({ id, reason: "the note must be text" }); continue; }
-        else if (note.length > cfg.maxLength) { problems.push({ id, reason: `the note is ${note.length} characters, the limit is ${cfg.maxLength}` }); continue; }
+        else if (typeof note !== "string") { problems.push({ id, reason: "the note must be text", code: "expected_text" }); continue; }
+        else if (note.length > cfg.maxLength) { problems.push({ id, reason: `the note is ${note.length} characters, the limit is ${cfg.maxLength}`, code: "max_length", params: { maximum: cfg.maxLength } }); continue; }
         else merged.note = note;
       }
       if (merged.value === undefined && merged.note === undefined) delete next[id];
@@ -726,7 +728,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       const submittedValue = "value" in entry ? validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" }) : null;
       const setsValue = submittedValue && submittedValue.ok && submittedValue.value !== null;
       const setsNote = typeof entry.note === "string" && entry.note.trim() !== "";
-      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected" });
+      if (setsValue || setsNote) problems.push({ id, reason: "this question is not available for the answers currently selected", code: "inactive_question" });
     }
     for (const id of new Set(operations.map((operation) => operation.questionId))) {
       if (eligible[id] === false && byId.get(id)?.type === "repeat") recordErrors.push({ questionId: id, reason: "this question is not available for the answers currently selected", code: "inactive_question" });

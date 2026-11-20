@@ -35,7 +35,7 @@ describe("answered, without scores", () => {
   it("allows blank optional multi answers but requires a minimum once choices are selected", () => {
     const minimum = { ...checkbox, required: false, minSelections: 2 };
     expect(validateAnswer(minimum, [])).toEqual({ ok: true, value: null });
-    expect(validateAnswer(minimum, ["email", "email"])).toEqual({ ok: false, reason: "choose at least 2 options or leave this question blank" });
+    expect(validateAnswer(minimum, ["email", "email"])).toEqual({ ok: false, reason: "choose at least 2 options or leave this question blank", code: "below_minimum_selections", params: { minimum: 2 } });
     expect(validateAnswer(minimum, ["email", "phone"])).toEqual({ ok: true, value: ["email", "phone"] });
     expect(validateAnswer(minimum, ["email"], { allowUnderMinSelections: true })).toEqual({ ok: true, value: ["email"] });
     expect(progress({ format: "kqa/1", title: "Minimum", questions: [minimum] }, {

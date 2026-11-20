@@ -1,6 +1,7 @@
 import { LIMITS, isCalendarDate, scaleBounds, type AnswerMap, type AnswerValue, type Condition, type Manifest, type Question, type RepeatField, type RepeatRecordMap } from "./schema";
 
-export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string };
+export type AnswerIssueCode = "expected_option" | "invalid_option" | "expected_option_list" | "below_minimum_selections" | "above_maximum_selections" | "exclusive_conflict" | "expected_rank" | "rank_incomplete" | "rank_duplicate" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "expected_scale" | "outside_scale" | "invalid_date" | "not_scalar";
+export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string; code: AnswerIssueCode; params?: { minimum?: number; maximum?: number } };
 
 export type RepeatIssueCode = "stale_revision" | "invalid_question" | "invalid_row_id" | "history_limit" | "max_rows" | "invalid_field" | "inactive_question" | "min_rows" | "required_field" | "invalid_option" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "expected_scale" | "outside_scale" | "invalid_date" | "nonempty_scalar";
 export interface RepeatAnswerIssue { questionId: string; rowId?: string; fieldId?: string; reason: string; code: RepeatIssueCode; params?: { minimum?: number; maximum?: number } }
@@ -50,66 +51,66 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
   switch (q.type) {
     case "single":
     case "select": {
-      if (typeof raw !== "string") return { ok: false, reason: `expected one option value (string), got ${describe(raw)}` };
+      if (typeof raw !== "string") return { ok: false, code: "expected_option", reason: `expected one option value (string), got ${describe(raw)}` };
       if (raw === "") return { ok: true, value: null };
       const allowed = (q.options ?? []).map((o) => o.value);
-      if (!allowed.includes(raw)) return { ok: false, reason: `"${raw}" is not one of the options (${allowed.join(", ")})` };
+      if (!allowed.includes(raw)) return { ok: false, code: "invalid_option", reason: `"${raw}" is not one of the options (${allowed.join(", ")})` };
       return { ok: true, value: raw };
     }
     case "multi": {
-      if (!Array.isArray(raw) || raw.some((x) => typeof x !== "string")) return { ok: false, reason: `expected an array of option values, got ${describe(raw)}` };
+      if (!Array.isArray(raw) || raw.some((x) => typeof x !== "string")) return { ok: false, code: "expected_option_list", reason: `expected an array of option values, got ${describe(raw)}` };
       const allowed = new Set((q.options ?? []).map((o) => o.value));
       const bad = raw.filter((x) => !allowed.has(x));
-      if (bad.length) return { ok: false, reason: `not option values: ${bad.map((b) => `"${b}"`).join(", ")}` };
+      if (bad.length) return { ok: false, code: "invalid_option", reason: `not option values: ${bad.map((b) => `"${b}"`).join(", ")}` };
       const unique = [...new Set(raw)];
-      if (!options.allowUnderMinSelections && unique.length > 0 && q.minSelections !== undefined && unique.length < q.minSelections) return { ok: false, reason: `choose at least ${q.minSelections} options or leave this question blank` };
-      if (!options.allowOverLimit && q.maxSelections !== undefined && unique.length > q.maxSelections) return { ok: false, reason: `choose no more than ${q.maxSelections} options` };
+      if (!options.allowUnderMinSelections && unique.length > 0 && q.minSelections !== undefined && unique.length < q.minSelections) return { ok: false, code: "below_minimum_selections", params: { minimum: q.minSelections }, reason: `choose at least ${q.minSelections} options or leave this question blank` };
+      if (!options.allowOverLimit && q.maxSelections !== undefined && unique.length > q.maxSelections) return { ok: false, code: "above_maximum_selections", params: { maximum: q.maxSelections }, reason: `choose no more than ${q.maxSelections} options` };
       const exclusive = new Set(q.exclusiveOptions ?? []);
-      if (!options.allowExclusiveConflict && unique.some((value) => exclusive.has(value)) && unique.length > 1) return { ok: false, reason: "choose an exclusive option by itself" };
+      if (!options.allowExclusiveConflict && unique.some((value) => exclusive.has(value)) && unique.length > 1) return { ok: false, code: "exclusive_conflict", reason: "choose an exclusive option by itself" };
       // Keep the manifest's order so exports and comparisons are stable.
       const order = (q.options ?? []).map((o) => o.value);
       unique.sort((a, b) => order.indexOf(a) - order.indexOf(b));
       return { ok: true, value: unique.length ? unique : null };
     }
     case "rank": {
-      if (!Array.isArray(raw) || raw.some((x) => typeof x !== "string")) return { ok: false, reason: `expected an ordered array of option values, got ${describe(raw)}` };
+      if (!Array.isArray(raw) || raw.some((x) => typeof x !== "string")) return { ok: false, code: "expected_rank", reason: `expected an ordered array of option values, got ${describe(raw)}` };
       if (raw.length === 0) return { ok: true, value: null };
       const allowed = (q.options ?? []).map((option) => option.value);
-      if (raw.length !== allowed.length) return { ok: false, reason: `rank every option exactly once (expected ${allowed.length}, got ${raw.length})` };
-      if (new Set(raw).size !== raw.length) return { ok: false, reason: "each option must appear exactly once" };
+      if (raw.length !== allowed.length) return { ok: false, code: "rank_incomplete", reason: `rank every option exactly once (expected ${allowed.length}, got ${raw.length})` };
+      if (new Set(raw).size !== raw.length) return { ok: false, code: "rank_duplicate", reason: "each option must appear exactly once" };
       const invalid = raw.filter((value) => !allowed.includes(value));
-      if (invalid.length) return { ok: false, reason: `not option values: ${invalid.map((value) => `"${value}"`).join(", ")}` };
+      if (invalid.length) return { ok: false, code: "invalid_option", reason: `not option values: ${invalid.map((value) => `"${value}"`).join(", ")}` };
       return { ok: true, value: [...raw] };
     }
     case "text":
     case "longtext": {
-      if (typeof raw !== "string") return { ok: false, reason: `expected text (string), got ${describe(raw)}` };
+      if (typeof raw !== "string") return { ok: false, code: "expected_text", reason: `expected text (string), got ${describe(raw)}` };
       const max = q.maxLength ?? (q.type === "text" ? LIMITS.textMax : LIMITS.longtextMax);
-      if (raw.length > max) return { ok: false, reason: `text is ${raw.length} characters, the limit is ${max}` };
+      if (raw.length > max) return { ok: false, code: "max_length", params: { maximum: max }, reason: `text is ${raw.length} characters, the limit is ${max}` };
       return { ok: true, value: raw.trim() === "" ? null : raw };
     }
     case "number": {
       const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
-      if (typeof n !== "number" || !Number.isFinite(n)) return { ok: false, reason: `expected a number, got ${describe(raw)}` };
-      if (q.min !== undefined && n < q.min) return { ok: false, reason: `${n} is below the minimum ${q.min}` };
-      if (q.max !== undefined && n > q.max) return { ok: false, reason: `${n} is above the maximum ${q.max}` };
+      if (typeof n !== "number" || !Number.isFinite(n)) return { ok: false, code: "expected_number", reason: `expected a number, got ${describe(raw)}` };
+      if (q.min !== undefined && n < q.min) return { ok: false, code: "below_minimum", params: { minimum: q.min }, reason: `${n} is below the minimum ${q.min}` };
+      if (q.max !== undefined && n > q.max) return { ok: false, code: "above_maximum", params: { maximum: q.max }, reason: `${n} is above the maximum ${q.max}` };
       return { ok: true, value: n };
     }
     case "scale": {
       const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
       const { min, max } = scaleBounds(q);
-      if (typeof n !== "number" || !Number.isInteger(n)) return { ok: false, reason: `expected a whole number from ${min} to ${max}, got ${describe(raw)}` };
-      if (n < min || n > max) return { ok: false, reason: `${n} is outside the scale ${min} to ${max}` };
+      if (typeof n !== "number" || !Number.isInteger(n)) return { ok: false, code: "expected_scale", reason: `expected a whole number from ${min} to ${max}, got ${describe(raw)}` };
+      if (n < min || n > max) return { ok: false, code: "outside_scale", params: { minimum: min, maximum: max }, reason: `${n} is outside the scale ${min} to ${max}` };
       return { ok: true, value: n };
     }
     case "date": {
-      if (typeof raw !== "string") return { ok: false, reason: `expected a date as YYYY-MM-DD, got ${describe(raw)}` };
+      if (typeof raw !== "string") return { ok: false, code: "invalid_date", reason: `expected a date as YYYY-MM-DD, got ${describe(raw)}` };
       if (raw === "") return { ok: true, value: null };
-      if (!isCalendarDate(raw)) return { ok: false, reason: `"${raw}" is not a valid YYYY-MM-DD date` };
+      if (!isCalendarDate(raw)) return { ok: false, code: "invalid_date", reason: `"${raw}" is not a valid YYYY-MM-DD date` };
       return { ok: true, value: raw };
     }
     case "repeat":
-      return { ok: false, reason: "repeat answers are stored as record groups, not scalar answer values" };
+      return { ok: false, code: "not_scalar", reason: "repeat answers are stored as record groups, not scalar answer values" };
   }
 }
 

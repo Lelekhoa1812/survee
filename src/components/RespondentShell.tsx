@@ -470,7 +470,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     pendingRecordOperations.current = [];
     inflight.current = true;
     setSave("saving");
-    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string }[]; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) } });
+    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string; code?: string; params?: Record<string, number> }[]; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) } });
     if (res.ok) {
       inflight.current = false;
       attempts.current = 0;
@@ -519,7 +519,13 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     }
     // 400/404: the server refused a value. Show why, then put the page back to what is actually saved.
     setSave("error");
-    toast(t("couldNotSave"), "err", localeMeta);
+    const refusal = res.status === 400 ? res.data.details?.[0] : undefined;
+    if (refusal) {
+      const label = questions.current.find((question) => question.id === refusal.id)?.label ?? refusal.id;
+      toast(t("answerRefused", { question: label, reason: respondentRepeatIssue(locale, { code: refusal.code, params: refusal.params }) }), "err", localeMeta);
+    } else {
+      toast(t("couldNotSave"), "err", localeMeta);
+    }
     const reasons = res.data.recordErrors ?? [];
     if (reasons.length && Object.keys(batch).length) {
       // Record operations reject atomically. Retry valid scalar edits by themselves, while
