@@ -1,0 +1,202 @@
+{
+  "generated_at": "2026-11-15T20:54:09.014687+00:00",
+  "nodes": {
+    "docs_agent_playbook_ai_agent_playbook_write_a_kqa_questionnaire": {
+      "code_fingerprint": "c789ed23555f424b252db776cf3ba6e5e7de7168f420285db6a58551b8662c05",
+      "label": "AI agent playbook: write a KQA questionnaire",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.999411582,
+      "source_file": "docs/AGENT_PLAYBOOK.md",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_app_api_admin_login_route": {
+      "code_fingerprint": "f1cac0cb2c7473f4aed621c87f08efffb100e70bd5cb29063753bee633c397b6",
+      "label": "login/route.ts",
+      "last": "2026-11-15T08:49:19.431633+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T08:49:19.431633+00:00",
+          "outcome": "useful",
+          "q": "Trace the login, signup, and password recovery routes through their shared account and session components in KQA."
+        }
+      ],
+      "score": 0.988437473,
+      "source_file": "src/app/api/admin/login/route.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_components_adminnav": {
+      "code_fingerprint": "540968562152b2fb211a820b8cc861728bf2a693daa56108b28fc745698bf5ec",
+      "label": "AdminNav.tsx",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.999411582,
+      "source_file": "src/components/AdminNav.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_auth_checkcredentials": {
+      "code_fingerprint": "9c21cf4d356f94361bdf594c53194508080e373f9b4f3927b11f843272018ed2",
+      "label": "checkCredentials()",
+      "last": "2026-11-15T08:49:19.431633+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T08:49:19.431633+00:00",
+          "outcome": "useful",
+          "q": "Trace the login, signup, and password recovery routes through their shared account and session components in KQA."
+        }
+      ],
+      "score": 0.988437473,
+      "source_file": "src/lib/auth.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_auth_createsession": {
+      "code_fingerprint": "9c21cf4d356f94361bdf594c53194508080e373f9b4f3927b11f843272018ed2",
+      "label": "createSession()",
+      "last": "2026-11-15T08:49:19.431633+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T08:49:19.431633+00:00",
+          "outcome": "useful",
+          "q": "Trace the login, signup, and password recovery routes through their shared account and session components in KQA."
+        }
+      ],
+      "score": 0.988437473,
+      "source_file": "src/lib/auth.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_auth_session_cookie": {
+      "code_fingerprint": "9c21cf4d356f94361bdf594c53194508080e373f9b4f3927b11f843272018ed2",
+      "label": "SESSION_COOKIE",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.999411582,
+      "source_file": "src/lib/auth.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_auth_verifysession": {
+      "code_fingerprint": "9c21cf4d356f94361bdf594c53194508080e373f9b4f3927b11f843272018ed2",
+      "label": "verifySession()",
+      "last": "2026-11-15T08:49:19.431633+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T08:49:19.431633+00:00",
+          "outcome": "useful",
+          "q": "Trace the login, signup, and password recovery routes through their shared account and session components in KQA."
+        }
+      ],
+      "score": 0.988437473,
+      "source_file": "src/lib/auth.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_http_guardadmin": {
+      "code_fingerprint": "5f4a019a762b20ec054a3fab56cda43c2fc2da96234293ae1941ad962db6dade",
+      "label": "guardAdmin()",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.999411582,
+      "source_file": "src/lib/http.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_mcp_http": {
+      "code_fingerprint": "16fc8aa67b82a753a99bfad0a3a10b18c76fffdd00026b8954eb00d75e061012",
+      "label": "mcp/http.ts",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "neg": 1,
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.001092296,
+      "source_file": "src/lib/mcp/http.ts",
+      "status": "contested",
+      "uses": 1,
+      "verdict": "useful"
+    },
+    "src_lib_mcp_oauth_authorizationservermetadata": {
+      "code_fingerprint": "941449784a891eb2e8df6f00a64f3a86f7415e7995c837899e90e80d141a10e7",
+      "label": "authorizationServerMetadata()",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.999411582,
+      "source_file": "src/lib/mcp/oauth.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_mcp_tools": {
+      "code_fingerprint": "e6b5175b24c7a8f789297871f6d33a2037415bff9d3fb786feda96163f162c2f",
+      "label": "tools.ts",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "neg": 2,
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": -0.986852442,
+      "source_file": "src/lib/mcp/tools.ts",
+      "status": "contested",
+      "uses": 1,
+      "verdict": "dead end"
+    },
+    "src_lib_survey": {
+      "code_fingerprint": "2650dc84b247d046a5bc27099b435eb9e0ec6ae5b7796ffc2c337de9b9fb94a6",
+      "label": "survey.ts",
+      "last": "2026-11-15T20:17:27.996425+00:00",
+      "provenance": [
+        {
+          "date": "2026-11-15T20:17:27.996425+00:00",
+          "outcome": "useful",
+          "q": "How are authentication, tenant-bound service access, key permissions, questionnaire MCP editing, and analytics guidance connected in KQA? Query expansion: admin auth authorization guard session key mcp tool response survey questionnaire design."
+        }
+      ],
+      "score": 0.999411582,
+      "source_file": "src/lib/survey.ts",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

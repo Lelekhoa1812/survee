@@ -33,6 +33,7 @@ import {
   recentEvents,
   regenerateToken,
   reopenParticipant,
+  promoteToMultiUser,
   saveQuestionnaireReviewDraft,
   updateInterview,
   updateParticipant,
@@ -1584,14 +1585,13 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "add_people",
-    description: "Add people to a multi-user interview. Email is optional. One-person interviews cannot add people.",
+    description: "Add people to an interview. Email is optional. Adding people to a One-person interview switches it to Multi-user.",
     inputSchema: obj({ interviewId: str, people: { type: "array", items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
-      if (interview.mode !== "multi") return err("This interview is in One person mode, so it has a single link.", "invalid_state");
       if (!Array.isArray(args.people)) return err("people must be a list.", "invalid_args");
       const people: { name: string; email?: string; note?: string }[] = [];
       for (const raw of args.people.slice(0, 100)) {
@@ -1609,6 +1609,7 @@ const TOOLS: ToolDef[] = [
         people.push({ name, email, note: asString(item.note, 1000) });
       }
       if (!people.length) return err("Add at least one person with a name.", "invalid_args");
+      if (interview.mode !== "multi") await promoteToMultiUser(id);
       const created = await addParticipants(id, people);
       const loaded = await loadPeople(id);
       const views = loaded ? created.map((p) => loaded.people.find((row) => row.id === p.id) ?? shapePerson(p, null, [])) : created.map((p) => shapePerson(p, null, []));
@@ -1698,7 +1699,7 @@ const TOOLS: ToolDef[] = [
       if (!id) return err("personId is required.");
       const result = await sendInvite({ personId: id, triggeredBy: "mcp", resend: args.resend === true });
       if (!result.ok) return err(result.error, result.code);
-      return ok({ result: result.result, to: result.to, sentAt: result.sentAt, interviewId: result.interviewId, personId: result.personId });
+      return ok({ result: result.result, to: result.to, sentAt: result.sentAt, messageId: result.messageId ?? null, interviewId: result.interviewId, personId: result.personId });
     },
   },
   {
@@ -1720,7 +1721,9 @@ const TOOLS: ToolDef[] = [
       const result = await checkInviteDelivery(id);
       if (!result.ok) return err(result.error, result.code);
       const label = result.delivery === "delivered" ? "Delivered" : result.delivery === "bounced" ? "Bounced" : "Not confirmed yet";
-      return ok({ delivery: result.delivery, label, detail: result.detail ?? null, checkedAt: result.checkedAt, personId: result.personId, interviewId: result.interviewId });
+      // A missing bounce is not proof of delivery: many mail servers send no receipt, so "unknown" is the normal result for a good send.
+      const note = result.delivery === "unknown" ? "No bounce or delivery receipt was found. Many mail servers send no receipt, so this does not mean the invite failed." : null;
+      return ok({ delivery: result.delivery, label, detail: result.detail ?? null, note, checkedAt: result.checkedAt, personId: result.personId, interviewId: result.interviewId });
     },
   },
 ];

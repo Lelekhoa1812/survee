@@ -1,6 +1,6 @@
 import { parseEmail } from "@/lib/mail/address";
 import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
-import { addParticipants, getInterview } from "@/lib/repo";
+import { addParticipants, getInterview, promoteToMultiUser } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,7 +10,6 @@ export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
-  if (interview.mode !== "multi") return fail(400, "This interview is in One person mode, so it has a single link.");
   const body = await readJson<{ people?: unknown }>(req, 64 * 1024);
   if (!body.ok) return body.res;
   const raw = Array.isArray(body.data.people) ? body.data.people : [];
@@ -29,5 +28,7 @@ export async function POST(req: Request, { params }: Ctx) {
     }
   }
   if (!people.length) return fail(400, "Add at least one person with a name.");
+  // Validation is done; only now does a One-person interview become Multi-user.
+  if (interview.mode !== "multi") await promoteToMultiUser(id);
   return json({ ok: true, people: await addParticipants(id, people) }, 201);
 }

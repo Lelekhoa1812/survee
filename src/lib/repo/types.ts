@@ -203,7 +203,7 @@ export interface EventDoc {
   /** Absent only for an agent call that is not about one interview. */
   interviewId?: ObjectId;
   participantId?: ObjectId;
-  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "workspace_member_removed";
+  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed";
   at: Date;
   meta?: Record<string, unknown>;
 }

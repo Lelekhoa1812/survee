@@ -21,7 +21,7 @@ export function useOrigin(): string {
   return o;
 }
 
-const EVENT_TEXT: Record<string, string> = { open: "opened their link", save: "saved answers", submit: "submitted", reopen: "was reopened by you", created: "Interview created", version: "New survey version uploaded", status: "Status changed", export: "Exported answers", invite: "was emailed their link", mcp: "was updated by an agent" };
+const EVENT_TEXT: Record<string, string> = { open: "opened their link", save: "saved answers", submit: "submitted", reopen: "was reopened by you", created: "Interview created", version: "New survey version uploaded", status: "Status changed", update: "Interview details changed", export: "Exported answers", invite: "was emailed their link", mcp: "was updated by an agent" };
 
 function mcpActorLabel(meta?: Record<string, unknown>): string | null {
   const actor = meta?.actor;

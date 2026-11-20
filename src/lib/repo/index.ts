@@ -145,7 +145,19 @@ export async function updateInterview(id: string, patch: { name?: string; descri
   if (Object.keys(unset).length) update.$unset = unset;
   const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { returnDocument: "after" });
   if (res && patch.status) logEvent(tenantId, oid, "status", undefined, { status: patch.status });
+  const changed = [patch.name !== undefined && "name", patch.description !== undefined && "description"].filter((f): f is string => Boolean(f));
+  if (res && changed.length) logEvent(tenantId, oid, "update", undefined, { fields: changed });
   return res;
+}
+
+/** Adding people turns a One-person interview into a Multi-user one, so the label and links stay accurate. */
+export async function promoteToMultiUser(id: string): Promise<void> {
+  const oid = toOid(id);
+  if (!oid) return;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return;
+  const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid, mode: "single" }), { $set: { mode: "multi", updatedAt: new Date() } }, { returnDocument: "after" });
+  if (res) logEvent(tenantId, oid, "update", undefined, { fields: ["mode"] });
 }
 
 export async function addVersion(id: string, survey: NewSurvey): Promise<number | null> {
