@@ -60,6 +60,13 @@ describe("file level", () => {
     const r = checkHtml(STARTER.slice(0, STARTER.indexOf("<script>\n  // A custom control") + 40));
     expect(codes(r)).toContain("KQA112");
   });
+  it("warns, without blocking, when article start and end tags do not match", () => {
+    const missingEnd = checkHtml(swap(STARTER, "</article>", ""));
+    expect(codes(missingEnd)).toContain("KQA113");
+    expect(find(missingEnd, "KQA113")?.severity).toBe("warning");
+    expect(missingEnd.ok).toBe(true);
+    expect(codes(checkHtml(STARTER))).not.toContain("KQA113");
+  });
   it("flags duplicate ids with the first location", () => {
     const r = checkHtml(swap(STARTER, 'id="f-goal"', 'id="f-company"'));
     expect(find(r, "KQA111")?.message).toMatch(/f-company.*used 2 times/);

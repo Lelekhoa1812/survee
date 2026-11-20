@@ -197,6 +197,20 @@ describe("MCP questionnaire version patch", () => {
     expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "mcp_upload");
   });
 
+  it("publishes a legacy upload with a valid preview token when compatibilityHash is omitted", async () => {
+    state.compatibilityImpact = true;
+    const preview = await callTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false });
+    expect(preview.structuredContent.code).toBe("acknowledgement_required");
+    const previewToken = preview.structuredContent.previewToken as string;
+    const published = await callTool("upload_survey_version", {
+      interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
+      candidateHash: hash(candidate), acknowledgeCompatibilityImpact: true, previewToken,
+    });
+    expect(published.structuredContent.code).not.toBe("stale_preview");
+    expect(published.isError).toBeFalsy();
+    expect(state.publish).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects stale or altered legacy-upload previews", async () => {
     const stale = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 1, baseHash: state.baseHash,

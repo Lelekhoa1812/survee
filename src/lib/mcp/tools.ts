@@ -867,7 +867,8 @@ const TOOLS: ToolDef[] = [
         name: loaded.interview.name,
         status: loaded.interview.status,
         currentVersion: loaded.interview.currentVersion,
-        counts,
+        // inProgress matches list_interviews; in_progress is kept for existing clients.
+        counts: { ...counts, inProgress: counts.in_progress },
         people: loaded.people.map((p) => ({ id: p.id, name: p.name, status: p.status, answered: p.answered, total: p.total, requiredMissing: p.requiredMissing, mail: p.mail.state })),
       });
     },
@@ -1522,7 +1523,7 @@ const TOOLS: ToolDef[] = [
           fileNameHash: fileNameHash(fileName),
         });
         if (!preview.ok) return previewTokenError(preview.code);
-        if (preview.claims.compatibilityHash !== compatibilityHash || args.compatibilityHash !== compatibilityHash) {
+        if (preview.claims.compatibilityHash !== compatibilityHash || (args.compatibilityHash !== undefined && args.compatibilityHash !== compatibilityHash)) {
           return err("Compatibility findings changed since preview. Preview again before uploading.", "stale_preview");
         }
       }
@@ -1590,24 +1591,24 @@ const TOOLS: ToolDef[] = [
       if (!id) return err("interviewId is required.");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
-      if (interview.mode !== "multi") return err("This interview is in One person mode, so it has a single link.");
-      if (!Array.isArray(args.people)) return err("people must be a list.");
+      if (interview.mode !== "multi") return err("This interview is in One person mode, so it has a single link.", "invalid_state");
+      if (!Array.isArray(args.people)) return err("people must be a list.", "invalid_args");
       const people: { name: string; email?: string; note?: string }[] = [];
       for (const raw of args.people.slice(0, 100)) {
-        if (!raw || typeof raw !== "object") return err("Each person needs a name.");
+        if (!raw || typeof raw !== "object") return err("Each person needs a name.", "invalid_args");
         const item = raw as Record<string, unknown>;
         const name = asString(item.name, 120);
-        if (!name) return err("Each person needs a name.");
+        if (!name) return err("Each person needs a name.", "invalid_args");
         let email: string | undefined;
         if (item.email !== undefined && item.email !== null && item.email !== "") {
-          if (typeof item.email !== "string") return err("That does not look like an email address.");
+          if (typeof item.email !== "string") return err("That does not look like an email address.", "invalid_args");
           const parsed = parseEmail(item.email);
-          if (!parsed.ok || !parsed.email) return err(parsed.ok ? "That does not look like an email address." : parsed.error);
+          if (!parsed.ok || !parsed.email) return err(parsed.ok ? "That does not look like an email address." : parsed.error, "invalid_args");
           email = parsed.email;
         }
         people.push({ name, email, note: asString(item.note, 1000) });
       }
-      if (!people.length) return err("Add at least one person with a name.");
+      if (!people.length) return err("Add at least one person with a name.", "invalid_args");
       const created = await addParticipants(id, people);
       const loaded = await loadPeople(id);
       const views = loaded ? created.map((p) => loaded.people.find((row) => row.id === p.id) ?? shapePerson(p, null, [])) : created.map((p) => shapePerson(p, null, []));

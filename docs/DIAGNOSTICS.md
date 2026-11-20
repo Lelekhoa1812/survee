@@ -79,6 +79,14 @@ The file ends inside a tag, comment or script, so everything after that point is
 
 ## The manifest (KQA2xx)
 
+### KQA113: Unbalanced article element
+
+Severity: **warning**
+
+The number of `<article>` start tags does not match the number of `</article>` end tags. Browsers close the element for you, so the page may still work, but content after the missing or extra tag can land in the wrong place.
+
+**How to fix:** Make every `<article>` have one matching `</article>`, usually at the end of its question group.
+
 ### KQA200: Manifest missing
 
 Severity: **error**

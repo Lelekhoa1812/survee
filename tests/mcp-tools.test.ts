@@ -539,6 +539,24 @@ describe("MCP tools", () => {
     expect(unsubmittedBody.result.structuredContent).toMatchObject({ code: "not_submitted" });
   });
 
+  it("gives add_people refusals an error code", async () => {
+    const response = await call("add_people", { interviewId, people: "not a list" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toMatch(/^(invalid_args|invalid_state)$/);
+    expect(body.result.structuredContent.error).toBeTruthy();
+  });
+
+  it("reports in-progress people under the same camelCase key list_interviews uses", async () => {
+    vi.mocked(listParticipants).mockResolvedValueOnce([
+      { id: personId, interviewId, token: "t1", name: "Ada", status: "in_progress", answers: {}, recordGroups: {} },
+      { id: "6affb00000000000000000aa", interviewId, token: "t2", name: "Grace", status: "submitted", answers: {}, recordGroups: {} },
+    ] as never);
+    const response = await call("get_status", { interviewId });
+    const body = await response.json() as { result: { structuredContent: { counts: Record<string, number> } } };
+    expect(body.result.structuredContent.counts).toMatchObject({ invited: 0, in_progress: 1, inProgress: 1, submitted: 1 });
+  });
+
   it("rejects oversized design source at MCP schema validation", async () => {
     const res = await call("extract_design_profile", { source: "x".repeat(32769), format: "css" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };

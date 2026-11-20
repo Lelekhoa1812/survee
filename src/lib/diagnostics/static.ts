@@ -312,6 +312,13 @@ export function checkHtml(htmlInput: string, options: CheckOptions = {}): Report
   }
   if (syntaxCount > 10) add(ctx, "KQA110", `${syntaxCount - 10} more HTML syntax problems follow. Fix the ones above first; many are knock-on effects.`, undefined);
 
+  // Browsers auto-close a missing </article> at EOF, so the parser reports nothing. Count the raw tags instead.
+  const articleOpens = (html.match(/<article[\s>]/gi) ?? []).length;
+  const articleCloses = (html.match(/<\/article\s*>/gi) ?? []).length;
+  if (articleOpens !== articleCloses) {
+    add(ctx, "KQA113", `The file has ${articleOpens} <article> start tag${articleOpens === 1 ? "" : "s"} and ${articleCloses} </article> end tag${articleCloses === 1 ? "" : "s"}.`, undefined);
+  }
+
   // ---- collect facts from the tree
   const scripts: { el: El; text: string; startLine: number; src?: string; type?: string }[] = [];
   const manifestScripts: El[] = [];
