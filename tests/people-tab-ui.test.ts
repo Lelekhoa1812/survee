@@ -51,4 +51,12 @@ describe("respondent list", () => {
     expect(html).toContain('class="btn sm danger"');
     expect(html).not.toContain("<code");
   });
+
+  it("offers Add people on a One-person interview", () => {
+    const single = { ...data, interview: { ...data.interview, mode: "single" } } as InterviewData;
+    const html = renderToStaticMarkup(createElement(PeopleTab, { data: single, origin: "https://kqa.example", refresh: () => {} }));
+
+    expect(html).toContain("Add people");
+    expect(html).not.toContain("Remove person");
+  });
 });

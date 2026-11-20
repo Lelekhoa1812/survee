@@ -31,7 +31,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         <p className="muted" style={{ flex: 1, minWidth: 240 }}>
           {multi ? "Each person has their own private link. Add an email to send it, or copy the link." : "This interview has one link. Add their name and, if you have it, an email so you can send the link."}
         </p>
-        {multi && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>}
+        <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>
       </div>
 
       {data.people.length === 0 ? (
@@ -100,7 +100,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         </div>
       )}
 
-      {adding && <AddPeople interviewId={data.interview.id} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
+      {adding && <AddPeople interviewId={data.interview.id} switchesToMulti={!multi} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
       {editing && <EditPerson person={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); refresh(); }} />}
       {removing && (
         <Modal title={`Remove ${removing.name}?`} onClose={() => setRemoving(null)} actions={<>
@@ -114,7 +114,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
   );
 }
 
-function AddPeople({ interviewId, onClose, onDone }: { interviewId: string; onClose: () => void; onDone: () => void }) {
+function AddPeople({ interviewId, switchesToMulti, onClose, onDone }: { interviewId: string; switchesToMulti: boolean; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const blank = () => ({ name: "", email: "", note: "" });
   const [rows, setRows] = useState([blank(), blank()]);
@@ -151,6 +151,7 @@ function AddPeople({ interviewId, onClose, onDone }: { interviewId: string; onCl
   return (
     <Modal title="Add people" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || filled.length === 0 || invalid} onClick={() => void save()}>{busy && <Spinner />} {filled.length === 0 ? "Add people" : <>Add {filled.length} {filled.length === 1 ? "person" : "people"} and create {filled.length === 1 ? "a link" : "links"}</>}</button></>}>
       <p className="muted" style={{ marginTop: -6 }}>A name is enough. Email is optional. Paste one person per line: a name, Name, email, or Name &lt;email&gt;.</p>
+      {switchesToMulti && <div className="callout"><Icon name="info" /><div>This is a One-person interview. Adding people switches it to Multi-user. The existing link and its answers stay as they are.</div></div>}
       <div className="stack" style={{ gap: 10 }}>
         {parsed.map((r, i) => (
           <div key={i} className="stack" style={{ gap: 4 }}>
