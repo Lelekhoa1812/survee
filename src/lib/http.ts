@@ -78,7 +78,7 @@ export async function guardAdmin(opts: { mutating?: boolean; roles?: readonly Te
 /** Read a JSON body with a size cap, so a huge payload cannot exhaust memory. */
 export async function readJson<T = Record<string, unknown>>(req: Request, maxBytes = LIMITS.maxFileBytes + 64 * 1024): Promise<{ ok: true; data: T } | { ok: false; res: NextResponse }> {
   const len = Number(req.headers.get("content-length") ?? "0");
-  if (len > maxBytes) return { ok: false, res: fail(413, "That request is too large.") };
+  if (len > maxBytes) return { ok: false, res: fail(413, "That request is too large.", { code: "payload_too_large" }) };
   try {
     // Count bytes as they arrive, so a body with no declared length cannot be buffered past the limit.
     const reader = req.body?.getReader();
@@ -91,17 +91,17 @@ export async function readJson<T = Record<string, unknown>>(req: Request, maxByt
         total += value.byteLength;
         if (total > maxBytes) {
           await reader.cancel().catch(() => {});
-          return { ok: false, res: fail(413, "That request is too large.") };
+          return { ok: false, res: fail(413, "That request is too large.", { code: "payload_too_large" }) };
         }
         chunks.push(value);
       }
     }
     const text = Buffer.concat(chunks).toString("utf8");
     const data = JSON.parse(text) as T;
-    if (data === null || typeof data !== "object") return { ok: false, res: fail(400, "Send a JSON object.") };
+    if (data === null || typeof data !== "object") return { ok: false, res: fail(400, "Send a JSON object.", { code: "invalid_args" }) };
     return { ok: true, data };
   } catch {
-    return { ok: false, res: fail(400, "That request was not valid JSON.") };
+    return { ok: false, res: fail(400, "That request was not valid JSON.", { code: "invalid_args" }) };
   }
 }
 

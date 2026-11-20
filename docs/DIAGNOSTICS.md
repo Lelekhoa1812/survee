@@ -14,7 +14,7 @@ Severity: **error**
 
 The upload contained no text, so there is nothing to run.
 
-**How to fix:** Output the complete HTML document, from <!doctype html> to </html>.
+**How to fix:** Output the complete HTML document, from `<!doctype html>` to `</html>`.
 
 ### KQA101: File is too large
 
@@ -30,7 +30,7 @@ Severity: **warning**
 
 The text contains replacement characters (U+FFFD), which means some characters were mangled before they reached us. Accents, quotes and symbols will look wrong.
 
-**How to fix:** Save the file as UTF-8 and make sure <meta charset="utf-8"> is the first element in <head>.
+**How to fix:** Save the file as UTF-8 and make sure `<meta charset="utf-8">` is the first element in `<head>`.
 
 ### KQA103: Missing <!doctype html>
 
@@ -38,7 +38,7 @@ Severity: **warning**
 
 Without a doctype the browser renders in quirks mode, which changes box sizing and layout.
 
-**How to fix:** Start the file with <!doctype html>.
+**How to fix:** Start the file with `<!doctype html>`.
 
 Wrong:
 
@@ -75,15 +75,15 @@ Severity: **error**
 
 The file ends inside a tag, comment or script, so everything after that point is lost. This usually means the output was cut off.
 
-**How to fix:** Re-output the complete file. Check that every <script>, <style> and comment is closed and the file ends with </html>.
+**How to fix:** Re-output the complete file. Check that every `<script>`, `<style>` and comment is closed and the file ends with `</html>`.
 
 ### KQA113: Unbalanced article element
 
 Severity: **warning**
 
-The number of <article> start tags does not match the number of </article> end tags. Browsers close the element for you, so the page may still work, but content after the missing or extra tag can land in the wrong place.
+The number of `<article>` start tags does not match the number of `</article>` end tags. Browsers close the element for you, so the page may still work, but content after the missing or extra tag can land in the wrong place.
 
-**How to fix:** Make every <article> have one matching </article>, usually at the end of its question group.
+**How to fix:** Make every `<article>` have one matching `</article>`, usually at the end of its question group.
 
 ## The manifest (KQA2xx)
 
@@ -91,9 +91,9 @@ The number of <article> start tags does not match the number of </article> end t
 
 Severity: **error**
 
-The page has no <script type="application/json" id="kqa-manifest">. Without it the app does not know what the questions are, so it cannot save, review or export answers.
+The page has no `<script type="application/json" id="kqa-manifest">`. Without it the app does not know what the questions are, so it cannot save, review or export answers.
 
-**How to fix:** Add exactly one manifest script inside <head> (or at the top of <body>) listing every question.
+**How to fix:** Add exactly one manifest script inside `<head>` (or at the top of `<body>`) listing every question.
 
 Wrong:
 
@@ -115,7 +115,7 @@ Severity: **error**
 
 The app cannot tell which manifest is the real one.
 
-**How to fix:** Keep one <script id="kqa-manifest"> and delete the others.
+**How to fix:** Keep one `<script id="kqa-manifest">` and delete the others.
 
 ### KQA202: Manifest is not valid JSON
 
@@ -337,7 +337,7 @@ Severity: **error**
 
 Guided presentations hide inactive question blocks and need one stable wrapper for every question, inside its matching question list. Without those markers survee cannot safely switch steps.
 
-**How to fix:** Mark each question list with data-kqa-question-list="<section-id>" (or an empty value for unsectioned questions in guided-question mode) and each complete question wrapper with data-kqa-question-id="<question-id>" as a direct child.
+**How to fix:** Mark each question list with data-kqa-question-list="`<section-id>`" (or an empty value for unsectioned questions in guided-question mode) and each complete question wrapper with data-kqa-question-id="`<question-id>`" as a direct child.
 
 ### KQA322: Question-order group markup is incomplete
 
@@ -351,9 +351,9 @@ Question-order variation moves complete question blocks. Every group member must
 
 Severity: **error**
 
-The manifest declares a question, but no element in the page carries data-kqa="<id>". Nobody could answer it.
+The manifest declares a question, but no element in the page carries data-kqa="`<id>`". Nobody could answer it.
 
-**How to fix:** Add the matching control with data-kqa="<id>" (a native rank question uses an ordered <ol>), or set "custom": true if the page sets this answer from script with KQA.set().
+**How to fix:** Add the matching control with data-kqa="`<id>`" (a native rank question uses an ordered `<ol>`), or set "custom": true if the page sets this answer from script with KQA.set().
 
 Wrong:
 
@@ -371,7 +371,7 @@ Right:
 
 Severity: **error**
 
-An element has data-kqa="<id>" but the manifest has no question with that id, so the answer would be rejected.
+An element has data-kqa="`<id>`" but the manifest has no question with that id, so the answer would be rejected.
 
 **How to fix:** Fix the id (check spelling and case) or add the question to the manifest.
 
@@ -381,13 +381,13 @@ Severity: **error**
 
 The element cannot hold an answer of this question's type. For example a checkbox bound to a single-choice question lets people tick several options.
 
-**How to fix:** Use the element listed for this type in docs/FORMAT.md (single: radio, multi: checkbox, select: <select>, rank: ordered <ol>, text: input, longtext: textarea, number: input type=number, scale: input type=range or numbered radios, date: input type=date).
+**How to fix:** Use the element listed for this type in docs/FORMAT.md (single: radio, multi: checkbox, select: `<select>`, rank: ordered `<ol>`, text: input, longtext: textarea, number: input type=number, scale: input type=range or numbered radios, date: input type=date).
 
 ### KQA303: Option value in the page is not in the manifest
 
 Severity: **error**
 
-A radio, checkbox or <option> carries a value the manifest does not list. The server rejects unknown values, so this answer would fail to save.
+A radio, checkbox or `<option>` carries a value the manifest does not list. The server rejects unknown values, so this answer would fail to save.
 
 **How to fix:** Make the control's value attribute exactly equal one of the manifest option values (case matters).
 
@@ -403,7 +403,7 @@ The manifest lists an option that nobody can pick because the page has no matchi
 
 Severity: **error**
 
-An element has data-kqa-note="<id>" but that question does not exist or does not enable notes.
+An element has data-kqa-note="`<id>`" but that question does not exist or does not enable notes.
 
 **How to fix:** Add "note": true to the question, or correct the id.
 
@@ -411,7 +411,7 @@ An element has data-kqa-note="<id>" but that question does not exist or does not
 
 Severity: **error**
 
-The manifest says the question has a note, but the page has no <textarea data-kqa-note="<id>">.
+The manifest says the question has a note, but the page has no <textarea data-kqa-note="`<id>`">.
 
 **How to fix:** Add the note textarea, or remove "note" from the question.
 
@@ -429,7 +429,7 @@ Severity: **warning**
 
 Screen readers and voice control cannot identify an unlabelled field, and clicking the text does nothing.
 
-**How to fix:** Wrap the control in a <label>, or add <label for="id">, aria-label or aria-labelledby.
+**How to fix:** Wrap the control in a `<label>`, or add `<label for="id">`, aria-label or aria-labelledby.
 
 ### KQA309: data-kqa on an element that cannot hold a value
 
@@ -451,7 +451,7 @@ People cannot change a disabled control, and the app also uses disabled to lock 
 
 Severity: **warning**
 
-data-kqa-status="<id>" points at a question that does not exist, so it never updates.
+data-kqa-status="`<id>`" points at a question that does not exist, so it never updates.
 
 **How to fix:** Correct the id.
 
@@ -461,7 +461,7 @@ Severity: **error**
 
 Without a value attribute the browser reports "on", which is not one of the options.
 
-**How to fix:** Add value="<option value>".
+**How to fix:** Add value="`<option value>`".
 
 Wrong:
 
@@ -497,7 +497,7 @@ Severity: **warning**
 
 "custom": true tells the app the page sets this answer from script, but no script calls KQA.set() or KQA.setNote().
 
-**How to fix:** Call KQA.set("<id>", value) when the answer changes, or bind a normal control instead.
+**How to fix:** Call KQA.set("`<id>`", value) when the answer changes, or bind a normal control instead.
 
 ### KQA318: Radio group has no group label
 
@@ -505,7 +505,7 @@ Severity: **warning**
 
 Screen readers announce the options without saying which question they belong to.
 
-**How to fix:** Wrap the options in <fieldset><legend>…</legend>…</fieldset> or add role="radiogroup" with aria-labelledby.
+**How to fix:** Wrap the options in `<fieldset>``<legend>`…`</legend>`…`</fieldset>` or add role="radiogroup" with aria-labelledby.
 
 ### KQA319: Radios of different questions share a name
 
@@ -531,7 +531,7 @@ Severity: **error**
 
 Questionnaires run in a locked-down frame. Only https scripts from cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com are allowed, and the file must be self-contained (no relative files).
 
-**How to fix:** Inline the script, or load a pinned version from an allowed CDN, for example https://cdnjs.cloudflare.com/ajax/libs/<lib>/<exact-version>/<file>.min.js.
+**How to fix:** Inline the script, or load a pinned version from an allowed CDN, for example https://cdnjs.cloudflare.com/ajax/libs/`<lib>`/`<exact-version>`/`<file>`.min.js.
 
 ### KQA401: Stylesheet or font loads from a blocked source
 
@@ -539,7 +539,7 @@ Severity: **error**
 
 Only Google Fonts (fonts.googleapis.com and fonts.gstatic.com) and cdnjs.cloudflare.com may serve styles and fonts. Everything else is blocked and the page falls back to default styling.
 
-**How to fix:** Inline the CSS in a <style> element, or use an allowed host.
+**How to fix:** Inline the CSS in a `<style>` element, or use an allowed host.
 
 ### KQA402: Network call in script
 
@@ -563,21 +563,21 @@ Severity: **warning**
 
 alert(), confirm() and prompt() are blocked in the frame. confirm() returns false and prompt() returns null, so flows that depend on them stop.
 
-**How to fix:** Replace them with an inline message or a <dialog> element.
+**How to fix:** Replace them with an inline message or a `<dialog>` element.
 
 ### KQA405: Form submits to a URL
 
 Severity: **error**
 
-A <form> with an action or method="post" navigates away on submit, and form submission is blocked in the frame.
+A `<form>` with an action or method="post" navigates away on submit, and form submission is blocked in the frame.
 
-**How to fix:** Remove the <form> wrapper (inputs do not need one), or remove action and method and make sure Enter cannot submit.
+**How to fix:** Remove the `<form>` wrapper (inputs do not need one), or remove action and method and make sure Enter cannot submit.
 
 ### KQA406: Meta refresh
 
 Severity: **error**
 
-<meta http-equiv="refresh"> reloads or redirects the page and would wipe unsaved input.
+`<meta http-equiv="refresh">` reloads or redirects the page and would wipe unsaved input.
 
 **How to fix:** Remove it.
 
@@ -585,7 +585,7 @@ Severity: **error**
 
 Severity: **error**
 
-<base> rewrites every relative link and the #anchor links the contents menu relies on.
+`<base>` rewrites every relative link and the #anchor links the contents menu relies on.
 
 **How to fix:** Remove it.
 
@@ -595,7 +595,7 @@ Severity: **error**
 
 Nested browsing contexts are not allowed.
 
-**How to fix:** Remove <iframe>, <frame>, <object> and <embed>.
+**How to fix:** Remove `<iframe>`, `<frame>`, `<object>` and `<embed>`.
 
 ### KQA409: Navigation away from the page
 
@@ -625,7 +625,7 @@ window.print() is blocked in the frame.
 
 Severity: **warning**
 
-Downloads are blocked in the frame, so <a download> and Blob downloads do nothing.
+Downloads are blocked in the frame, so `<a download>` and Blob downloads do nothing.
 
 **How to fix:** Remove it. The host exports answers from /admin.
 
@@ -641,9 +641,9 @@ Dynamic code evaluation is blocked by the frame's content security policy and th
 
 Severity: **warning**
 
-A <form> with no action still tries to submit when someone presses Enter in a text field. The submit is blocked by the sandbox, but the browser logs an error and some browsers reload the frame first, which would lose anything typed and not yet saved.
+A `<form>` with no action still tries to submit when someone presses Enter in a text field. The submit is blocked by the sandbox, but the browser logs an error and some browsers reload the frame first, which would lose anything typed and not yet saved.
 
-**How to fix:** Remove the <form> wrapper (survee saves each answer as it changes, so no form is needed), or add an onsubmit="return false" attribute or a submit handler that calls event.preventDefault().
+**How to fix:** Remove the `<form>` wrapper (survee saves each answer as it changes, so no form is needed), or add an onsubmit="return false" attribute or a submit handler that calls event.preventDefault().
 
 ### KQA415: File input
 
@@ -651,7 +651,7 @@ Severity: **error**
 
 File uploads are not supported in questionnaires.
 
-**How to fix:** Remove <input type="file"> and ask people to send files by email.
+**How to fix:** Remove `<input type="file">` and ask people to send files by email.
 
 ### KQA417: Image loads from the network
 
@@ -659,7 +659,7 @@ Severity: **warning**
 
 The frame blocks remote images. Use a stored survee asset URL or embed the image as a data: URI or inline SVG.
 
-**How to fix:** Upload the image in Settings and use its /api/assets/ URL, or embed it as a data: URI or inline <svg>.
+**How to fix:** Upload the image in Settings and use its /api/assets/ URL, or embed it as a data: URI or inline `<svg>`.
 
 Wrong:
 
@@ -687,15 +687,15 @@ A relative image path points at a file that is not part of the saved questionnai
 
 Severity: **note**
 
-Screen readers and spell-check use <html lang> to identify the language of the questionnaire content.
+Screen readers and spell-check use `<html lang>` to identify the language of the questionnaire content.
 
-**How to fix:** Set <html lang> to a valid BCP 47 tag that matches the questionnaire, such as "en-AU", "fr-CA" or "vi".
+**How to fix:** Set `<html lang>` to a valid BCP 47 tag that matches the questionnaire, such as "en-AU", "fr-CA" or "vi".
 
 ### KQA505: Review the complete language journey
 
 Severity: **warning**
 
-The <html lang> value declares the questionnaire content language for assistive technology. survee's built-in shell currently supports en-AU, Vietnamese, Spanish, and Arabic, while the vi/es/ar interface wording is still a machine-drafted first release awaiting qualified native-speaker and in-context review. This setting does not translate questionnaire content, invitations, or host-provided notices.
+The `<html lang>` value declares the questionnaire content language for assistive technology. survee's built-in shell currently supports en-AU, Vietnamese, Spanish, and Arabic, while the vi/es/ar interface wording is still a machine-drafted first release awaiting qualified native-speaker and in-context review. This setting does not translate questionnaire content, invitations, or host-provided notices.
 
 **How to fix:** Use an accurate BCP 47 language tag for the questionnaire and mark passages in another language with their own lang attribute (and dir="rtl" when appropriate). Select the intended shell language and review the complete journey: questions, notices, help, navigation, save and error states, review, submission, completion, and support. Test realistic tasks and error recovery with intended-language respondents. Arrange qualified review of machine-drafted shell translations before field use; block fielding when respondents cannot operate essential steps or understand the questionnaire.
 
@@ -705,7 +705,7 @@ Severity: **warning**
 
 Without it phones render the page at desktop width and zoom out, so text becomes tiny.
 
-**How to fix:** Add <meta name="viewport" content="width=device-width, initial-scale=1">.
+**How to fix:** Add `<meta name="viewport" content="width=device-width, initial-scale=1">`.
 
 ### KQA503: Missing <title>
 
@@ -713,15 +713,15 @@ Severity: **note**
 
 The title names the page in the browser tab and for assistive technology.
 
-**How to fix:** Add a <title> (the app shows the manifest title in its own bar).
+**How to fix:** Add a `<title>` (the app shows the manifest title in its own bar).
 
 ### KQA504: No <h1> or <main>
 
 Severity: **note**
 
-A single <h1> inside <main> gives assistive technology and the host a clear page structure.
+A single `<h1>` inside `<main>` gives assistive technology and the host a clear page structure.
 
-**How to fix:** Add one <h1> and wrap the content in <main>.
+**How to fix:** Add one `<h1>` and wrap the content in `<main>`.
 
 ## Live check in the browser (KQA6xx)
 

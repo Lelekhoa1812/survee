@@ -1,7 +1,7 @@
 import { progress } from "@/lib/format/answers";
 import { orderOptions } from "@/lib/format/option-order";
 import { assignQuestionOrder, presentedQuestionIds } from "@/lib/format/question-order";
-import { fail, json } from "@/lib/http";
+import { fail, json, withServerErrors } from "@/lib/http";
 import { ensureQuestionOrderAssignment, loadByToken } from "@/lib/repo";
 import { looksLikeToken } from "@/lib/tokens";
 import { shouldRecordVisit } from "@/lib/visit";
@@ -9,13 +9,13 @@ import { shouldRecordVisit } from "@/lib/visit";
 type Ctx = { params: Promise<{ token: string }> };
 
 /** Everything the respondent shell needs: who they are, the questions and their saved answers. */
-export async function GET(req: Request, { params }: Ctx) {
+export const GET = withServerErrors("p/questionnaire", async function GET(req: Request, { params }: Ctx) {
   const { token } = await params;
-  if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
+  if (!looksLikeToken(token)) return fail(404, "This link is not valid.", { code: "not_found" });
   // Prefetch of the invite link must not count as the person opening it. Status changes only on save.
   const respondentVisit = shouldRecordVisit(req);
   const ctx = await loadByToken(token, { touch: respondentVisit });
-  if (!ctx) return fail(404, "This link is not valid.");
+  if (!ctx) return fail(404, "This link is not valid.", { code: "not_found" });
   const { manifest } = ctx.version;
   const proposedOrder = assignQuestionOrder(manifest, ctx.participant.id, ctx.version.version);
   const questionOrderAssignment = respondentVisit && manifest.questionOrderGroups?.length
@@ -41,4 +41,4 @@ export async function GET(req: Request, { params }: Ctx) {
     recordGroups: ctx.participant.recordGroups ?? {},
     progress: progress(manifest, ctx.participant.answers, ctx.participant.recordGroups ?? {}),
   });
-}
+});

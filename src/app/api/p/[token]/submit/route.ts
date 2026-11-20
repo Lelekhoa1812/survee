@@ -6,7 +6,7 @@ type Ctx = { params: Promise<{ token: string }> };
 
 export const POST = withServerErrors("p/submit", async function POST(req: Request, { params }: Ctx) {
   const { token } = await params;
-  if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
+  if (!looksLikeToken(token)) return fail(404, "This link is not valid.", { code: "not_found" });
   const body = await readJson<{ version?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
   if (typeof body.data.version !== "number" || !Number.isSafeInteger(body.data.version) || body.data.version < 1) {

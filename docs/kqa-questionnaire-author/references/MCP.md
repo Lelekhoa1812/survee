@@ -203,7 +203,7 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
 | `docs_unavailable` | Bundled documentation could not be read. Try again later. |
 
-Respondent routes use the same `{ ok, error, code }` shape over HTTP. An unexpected failure returns HTTP 500 with `code: "server_error"` and no details. Retry the save; the server logs the error type only.
+Respondent routes use the same `{ ok, error, code }` shape over HTTP. A malformed or wrong-shaped body returns `invalid_args`, an over-size body returns `payload_too_large`, and a link that does not match a person returns `not_found`. An unexpected failure returns HTTP 500 with `code: "server_error"` and no details. Retry the save; the server logs the error type only.
 
 ## Deliberately absent
 

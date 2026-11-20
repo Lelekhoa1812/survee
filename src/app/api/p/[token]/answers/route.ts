@@ -8,17 +8,17 @@ type Ctx = { params: Promise<{ token: string }> };
 /** Body: { version, answers?, recordOperations? }. Only supplied scalar ids and explicit record operations are changed. */
 export const PUT = withServerErrors("p/answers", async function PUT(req: Request, { params }: Ctx) {
   const { token } = await params;
-  if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
+  if (!looksLikeToken(token)) return fail(404, "This link is not valid.", { code: "not_found" });
   const body = await readJson<{ version?: unknown; answers?: unknown; recordOperations?: unknown }>(req, 512 * 1024);
   if (!body.ok) return body.res;
   if (typeof body.data.version !== "number" || !Number.isSafeInteger(body.data.version) || body.data.version < 1) {
     return fail(409, "This questionnaire version is missing. Reload the page to continue.", { code: "questionnaire_version_changed" });
   }
   const a = body.data.answers;
-  if (a !== undefined && (!a || typeof a !== "object" || Array.isArray(a))) return fail(400, "Send answers as an object keyed by question id.");
+  if (a !== undefined && (!a || typeof a !== "object" || Array.isArray(a))) return fail(400, "Send answers as an object keyed by question id.", { code: "invalid_args" });
   const ops = body.data.recordOperations;
   if (ops !== undefined && (!Array.isArray(ops) || ops.length > 200 || ops.some((op) => !isRepeatRecordOperation(op)))) {
-    return fail(400, "Send recordOperations as an array of record operations.");
+    return fail(400, "Send recordOperations as an array of record operations.", { code: "invalid_args" });
   }
   const result = await saveAnswers(token, body.data.version, (a ?? {}) as AnswerPatch, (ops ?? []) as RepeatRecordOperation[]);
   return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, details: result.details, recordErrors: result.recordErrors });

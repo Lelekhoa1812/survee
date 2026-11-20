@@ -122,6 +122,14 @@ describe("respondent questionnaire version routes", () => {
     expect(mocks.saveAnswers).not.toHaveBeenCalled();
   });
 
+  it("returns a coded invalid_args error for a malformed answers object", async () => {
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, answers: ["not", "an", "object"] }), params);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, code: "invalid_args" });
+    expect(mocks.saveAnswers).not.toHaveBeenCalled();
+  });
+
   it("rejects an answer save without a version before reaching the repository", async () => {
     const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { answers: { q1: { value: "answer" } } }), params);
 

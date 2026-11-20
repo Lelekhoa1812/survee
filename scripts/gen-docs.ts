@@ -101,6 +101,9 @@ const TITLES: Record<Category, string> = {
   compat: "Replacing a survey that already has answers (KQA7xx)",
 };
 
+/** Catalog text names tags such as <article> in prose. Wrap them in code spans so Markdown shows them instead of parsing them as HTML. */
+const prose = (text: string): string => text.replace(/<\/?[A-Za-z!][^<>]*>/g, (tag) => `\`${tag}\``);
+
 const out: string[] = [];
 out.push("# Checker codes");
 out.push("");
@@ -121,9 +124,9 @@ for (const cat of Object.keys(TITLES) as Category[]) {
     out.push("");
     out.push(`Severity: **${c.severity === "info" ? "note" : c.severity}**`);
     out.push("");
-    out.push(c.explain);
+    out.push(prose(c.explain));
     out.push("");
-    out.push(`**How to fix:** ${c.fix}`);
+    out.push(`**How to fix:** ${prose(c.fix)}`);
     if (c.example) {
       out.push("");
       out.push("Wrong:");
