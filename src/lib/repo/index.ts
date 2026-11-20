@@ -563,26 +563,26 @@ async function fenceRespondentWrite(
   );
   if (changed.matchedCount) return { ok: true };
   const current = await interviews.findOne(tenantFilter(tenantId, { _id: interviewId }), { session });
-  if (!current) return { ok: false, status: 404, error: "This link is not valid." };
+  if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
   if (current.currentVersion !== expectedVersion) return versionConflict();
-  if (current.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
+  if (current.status !== "open") return { ok: false, status: 403, error: "This interview is closed.", code: "invalid_state" };
   return versionConflict();
 }
 
 /** Validate respondent operations against the manifest and apply them without replacing stale group snapshots. */
 export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch, operations: RepeatRecordOperation[] = []): Promise<SaveResult> {
   const ids = Object.keys(patch);
-  if (ids.length === 0 && operations.length === 0) return { ok: false, status: 400, error: "Nothing to save." };
-  if (ids.length + operations.length > 200) return { ok: false, status: 413, error: "Too many answer operations in one request." };
+  if (ids.length === 0 && operations.length === 0) return { ok: false, status: 400, error: "Nothing to save.", code: "invalid_args" };
+  if (ids.length + operations.length > 200) return { ok: false, status: 413, error: "Too many answer operations in one request.", code: "payload_too_large" };
   // Each entry must be an object ({ value } and/or { note }) or null. A bare string would make the `in` checks below throw.
   if (ids.some((id) => patch[id] !== null && (typeof patch[id] !== "object" || Array.isArray(patch[id])))) {
-    return { ok: false, status: 400, error: "Send each answer as an object with a value or note." };
+    return { ok: false, status: 400, error: "Send each answer as an object with a value or note.", code: "invalid_args" };
   }
   const ctx = await loadByToken(token);
-  if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
+  if (!ctx) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
   if (ctx.version.version !== expectedVersion) return versionConflict();
-  if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
-  if (ctx.participant.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them." };
+  if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed.", code: "invalid_state" };
+  if (ctx.participant.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them.", code: "invalid_state" };
 
   const now = new Date();
   const nowIso = now.toISOString();
@@ -593,8 +593,8 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     // Always use the current participant inside the transaction callback. Mongo retries this
     // callback after transient write conflicts, so sibling field operations merge on retry.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), token }), { session });
-    if (!current) return { ok: false, status: 404, error: "This link is not valid." };
-    if (current.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them." };
+    if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
+    if (current.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them.", code: "invalid_state" };
     const byId = new Map<string, Question>(ctx.version.manifest.questions.map((q) => [q.id, q]));
     const problems: { id: string; reason: string }[] = [];
     const recordErrors: RepeatRecordIssue[] = [];
@@ -732,7 +732,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       if (eligible[id] === false && byId.get(id)?.type === "repeat") recordErrors.push({ questionId: id, reason: "this question is not available for the answers currently selected", code: "inactive_question" });
     }
     if (problems.length || recordErrors.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems, recordErrors };
-    if (JSON.stringify({ answers: next, recordGroups: groups }).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large." };
+    if (JSON.stringify({ answers: next, recordGroups: groups }).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large.", code: "payload_too_large" };
     const $set: Record<string, unknown> = { status: "in_progress", updatedAt: now, lastSavedAt: now, lastSeenAt: now };
     const $unset: Record<string, ""> = {};
     for (const id of ids) {
@@ -745,7 +745,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       { $set, ...(Object.keys($unset).length ? { $unset } : {}), $inc: { revision: 1 } },
       { returnDocument: "after", session },
     );
-    if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked." };
+    if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked.", code: "invalid_state" };
     const returnedGroups: RepeatRecordMap = {};
     for (const id of touched) returnedGroups[id] = (res.recordGroups?.[id] ?? []).filter((row) => !row.deletedAt);
     return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status, ...(touched.size ? { recordGroups: returnedGroups } : {}) };
@@ -758,9 +758,9 @@ export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; stat
 
 export async function submitAnswers(token: string, expectedVersion: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
-  if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
+  if (!ctx) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
   if (ctx.version.version !== expectedVersion) return versionConflict();
-  if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed." };
+  if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed.", code: "invalid_state" };
   const participants = await col.participants();
   const interviewId = new ObjectId(ctx.interview.id);
   const participantId = new ObjectId(ctx.participant.id);
@@ -770,7 +770,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
     // Read after the shared write fence, on every transaction retry. A save that
     // wins the fence must be reflected in the answers used for validation.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: participantId, token }), { session });
-    if (!current) return { ok: false, status: 404, error: "This link is not valid." };
+    if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
     if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
     const pr = progress(ctx.version.manifest, current.answers, current.recordGroups ?? {});
     if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length || pr.repeatErrors.length) {
@@ -795,7 +795,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
       { $set: { status: "submitted", submittedAt: now, updatedAt: now } },
       { returnDocument: "after", session },
     );
-    if (!res) return { ok: false, status: 409, error: "Your answers changed in another window. Please try submitting again." };
+    if (!res) return { ok: false, status: 409, error: "Your answers changed in another window. Please try submitting again.", code: "concurrent_change" };
     return { ok: true, submittedAt: (res.submittedAt ?? now).toISOString(), newlySubmitted: true };
   });
   if (result.ok && result.newlySubmitted) logEvent(ctx.tenantId, interviewId, "submit", participantId);

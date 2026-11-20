@@ -330,6 +330,14 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent).toMatchObject({ error: "Interview not found.", code: "not_found" });
   });
 
+  it("returns confirmation_mismatch when the confirm name is wrong", async () => {
+    const res = await call("delete_interview", { interviewId, confirmName: "Wrong name" });
+    const body = await res.json() as { result: { isError: boolean; structuredContent: { code?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toMatchObject({ code: "confirmation_mismatch" });
+    expect(deleteInterview).not.toHaveBeenCalled();
+  });
+
   it("keeps a successful deletion audit at tenant scope", async () => {
     const res = await call("delete_interview", { interviewId, confirmName: "Investor interview" });
     const body = await res.json() as { result: { isError: boolean } };

@@ -19,7 +19,7 @@ describe("saveAnswers entry shape", () => {
     ["a boolean alongside a valid entry", { "focus-area": true, other: { value: "x" } }],
   ])("rejects %s with a 400 instead of throwing", async (_label, patch) => {
     const result = await saveAnswers(token, 1, patch as never);
-    expect(result).toEqual({ ok: false, status: 400, error: "Send each answer as an object with a value or note." });
+    expect(result).toEqual({ ok: false, status: 400, error: "Send each answer as an object with a value or note.", code: "invalid_args" });
   });
 
   it("still accepts null as a clear marker for the shape check", async () => {

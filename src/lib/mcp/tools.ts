@@ -995,7 +995,7 @@ const TOOLS: ToolDef[] = [
       if (!id) return err("interviewId is required.");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
-      if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.");
+      if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.", "confirmation_mismatch");
       const deleted = await deleteInterview(id);
       return deleted ? ok({ ok: true }) : err("Interview not found.", "not_found");
     },
