@@ -241,7 +241,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.source).toBe("docs/INTERVIEW_PACKAGES.md");
     expect(body.result.structuredContent.packages).toContain("Candidate experience");
     expect(body.result.structuredContent.packages).toContain("Personal reflection and wellbeing");
-    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/12");
+    expect(body.result.structuredContent.packageVersion).toBe("kqa-interview-packages/13");
     expect(body.result.structuredContent.packageCatalog).toHaveLength(18);
     expect(body.result.structuredContent.packageCatalog[0]).toMatchObject({
       id: "product-discovery",

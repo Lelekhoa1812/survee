@@ -109,8 +109,8 @@ describe("agent documentation bundle", () => {
 
   it("keeps the stable package catalog synchronized with the documentation and returns focused profiles", async () => {
     const packages = await readDoc("INTERVIEW_PACKAGES.md");
-    expect(packages).toContain("kqa-interview-packages/12");
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/12");
+    expect(packages).toContain("kqa-interview-packages/13");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/13");
     for (const item of INTERVIEW_PACKAGES) expect(packages).toContain(`\`${item.id}\``);
     const packageIds = new Set(INTERVIEW_PACKAGES.map((item) => item.id));
     for (const item of INTERVIEW_PACKAGES) {

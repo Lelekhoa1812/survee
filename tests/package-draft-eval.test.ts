@@ -49,7 +49,7 @@ describe("package draft development benchmark", () => {
   it("loads the versioned corpus against the current catalog and preserves public-development limits", () => {
     expect(validateBenchmark(benchmark).cases).toHaveLength(INTERVIEW_PACKAGES.length + 9);
     expect(benchmark.benchmarkVersion).toBe("kqa-package-draft/13");
-    expect(benchmark.packageLibraryVersion).toBe("kqa-interview-packages/12");
+    expect(benchmark.packageLibraryVersion).toBe("kqa-interview-packages/13");
     expect(benchmark.dimensions).toContain("sampling_and_inference");
     expect(Object.keys(benchmark.dimensionRubrics.sampling_and_inference)).toEqual(["0", "1", "2", "3"]);
     expect(benchmark.dimensions).toContain("interaction_fit");

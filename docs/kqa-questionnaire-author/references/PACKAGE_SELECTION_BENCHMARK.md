@@ -26,7 +26,7 @@ Example result:
   "model": "provider/model snapshot",
   "runDate": "2026-11-19",
   "promptVersion": "prompt hash or release",
-  "packageLibraryVersion": "kqa-interview-packages/12",
+  "packageLibraryVersion": "kqa-interview-packages/13",
   "cases": [
     {
       "caseId": "account-progress-or-friction",

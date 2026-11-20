@@ -3,7 +3,7 @@ import { getInterviewPackage, INTERACTION_PATTERN_IDS, INTERVIEW_PACKAGES, INTER
 
 describe("addressable interview package modules", () => {
   it("returns the exact detailed module for every stable catalog ID", async () => {
-    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/12");
+    expect(INTERVIEW_PACKAGE_VERSION).toBe("kqa-interview-packages/13");
     for (const item of INTERVIEW_PACKAGES) {
       const result = await getInterviewPackage(item.id);
       expect(result?.packageId, item.id).toBe(item.id);

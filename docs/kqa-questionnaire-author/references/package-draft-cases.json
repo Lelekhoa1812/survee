@@ -2,7 +2,7 @@
   "benchmarkVersion": "kqa-package-draft/13",
   "track": "package-draft-review",
   "status": "public-development-only",
-  "packageLibraryVersion": "kqa-interview-packages/12",
+  "packageLibraryVersion": "kqa-interview-packages/13",
   "description": "Synthetic, source-informed briefs for expert review of complete package-based survee questionnaire drafts. Cases define decision intent and boundaries, not canonical question wording.",
   "dimensions": [
     "intent_coverage",

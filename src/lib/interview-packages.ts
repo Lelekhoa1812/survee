@@ -1,6 +1,6 @@
 import { readDoc } from "./docs";
 
-export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/12" as const;
+export const INTERVIEW_PACKAGE_VERSION = "kqa-interview-packages/13" as const;
 
 export const INTERACTION_PATTERN_IDS = [
   "all", "guided", "guided-question", "routing", "question-order-variation", "ranking",

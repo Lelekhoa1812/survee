@@ -33,7 +33,7 @@
       },
       "additionalProperties": false
     },
-    "packageLibraryVersion": { "const": "kqa-interview-packages/12" },
+    "packageLibraryVersion": { "const": "kqa-interview-packages/13" },
     "runDate": { "type": "string", "format": "date" },
     "outputs": {
       "type": "array",
