@@ -338,6 +338,16 @@ describe("MCP tools", () => {
     expect(deleteInterview).not.toHaveBeenCalled();
   });
 
+  it("returns server_error without the raw message when a tool throws", async () => {
+    vi.mocked(getInterview).mockRejectedValueOnce(new Error("connection string leaked"));
+    const res = await call("delete_interview", { interviewId, confirmName: "Investor interview" });
+    const body = await res.json() as { result: { isError: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toMatchObject({ code: "server_error" });
+    expect(JSON.stringify(body)).not.toContain("connection string leaked");
+    expect(deleteInterview).not.toHaveBeenCalled();
+  });
+
   it("keeps a successful deletion audit at tenant scope", async () => {
     const res = await call("delete_interview", { interviewId, confirmName: "Investor interview" });
     const body = await res.json() as { result: { isError: boolean } };

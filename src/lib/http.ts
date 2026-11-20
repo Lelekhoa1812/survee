@@ -23,6 +23,8 @@ export function withServerErrors<A extends unknown[]>(route: string, handler: (.
     try {
       return await handler(...args);
     } catch (err) {
+      // Next uses thrown control-flow errors (redirect, notFound) that must reach the framework unchanged.
+      if (typeof err === "object" && err !== null && "digest" in err && String((err as { digest: unknown }).digest).startsWith("NEXT_")) throw err;
       console.error(`[${route}] unexpected error`, err instanceof Error ? err.name : "unknown");
       return fail(500, "We could not complete this just now. Try again in a moment.", { code: "server_error" });
     }

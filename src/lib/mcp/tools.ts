@@ -1776,7 +1776,8 @@ export async function dispatchTool(name: string, args: unknown, capabilities?: r
   if (problem) return finish(tool.name, err(problem, "invalid_args"), interviewId);
   try {
     return await finish(tool.name, await tool.run(record), interviewId);
-  } catch {
-    return finish(tool.name, err("That could not be done."), interviewId);
+  } catch (error) {
+    console.error(`[mcp:${tool.name}] unexpected error`, error instanceof Error ? error.name : "unknown");
+    return finish(tool.name, err("That could not be done. Try again in a moment.", "server_error"), interviewId);
   }
 }

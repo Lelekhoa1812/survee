@@ -27,6 +27,12 @@ describe("withServerErrors", () => {
     expect(body.error).toMatch(/try again/i);
   });
 
+  it("rethrows Next control-flow errors so redirects and not-found still work", async () => {
+    const redirectLike = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/admin;307;" });
+    const route = withServerErrors("p/answers", async () => { throw redirectLike; });
+    await expect(route()).rejects.toBe(redirectLike);
+  });
+
   it("logs the route and error type, never the error message", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const route = withServerErrors("p/answers", async () => { throw new TypeError("secret-token-abc"); });

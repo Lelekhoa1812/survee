@@ -202,6 +202,7 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `invalid_image` | The upload is not an accepted image type. |
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
 | `docs_unavailable` | Bundled documentation could not be read. Try again later. |
+| `server_error` | An unexpected failure inside the tool. The server logs the error type only. A write may have partly completed, so read the current state (for example `get_interview`, `list_people` or `list_versions`) before retrying. |
 | `invalid_css` / `invalid_json` / `invalid_input` / `too_large` / `no_tokens` | `extract_design_profile` could not read the source: unsupported CSS, malformed token JSON, a missing or wrong input, a source over 32 KiB, or no supported tokens found. Fix the source and call again. |
 | `no_email` | `send_invite` refused because the person has no email address. Nothing was sent. |
 | `closed` | `send_invite` refused because the interview is closed, so the link would not open. Reopen it first. |
