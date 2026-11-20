@@ -731,7 +731,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     for (const id of new Set(operations.map((operation) => operation.questionId))) {
       if (eligible[id] === false && byId.get(id)?.type === "repeat") recordErrors.push({ questionId: id, reason: "this question is not available for the answers currently selected", code: "inactive_question" });
     }
-    if (problems.length || recordErrors.length) return { ok: false, status: 400, error: "Some answers could not be saved.", details: problems, recordErrors };
+    if (problems.length || recordErrors.length) return { ok: false, status: 400, error: "Some answers could not be saved.", code: "invalid_args", details: problems, recordErrors };
     if (JSON.stringify({ answers: next, recordGroups: groups }).length > LIMITS.maxFileBytes / 3) return { ok: false, status: 413, error: "Answers are too large.", code: "payload_too_large" };
     const $set: Record<string, unknown> = { status: "in_progress", updatedAt: now, lastSavedAt: now, lastSeenAt: now };
     const $unset: Record<string, ""> = {};
