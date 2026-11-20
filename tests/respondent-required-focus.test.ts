@@ -360,6 +360,12 @@ describe("respondent required-answer recovery", () => {
     expect(review.textContent).toContain("Choose no more than 1 option.");
     expect(review.textContent).toContain("Rank every current option exactly once, then choose Use this order.");
     expect(review.textContent).toContain("Email; Phone");
+    const selector = host.querySelector<HTMLSelectElement>(".rs-language select")!;
+    selector.value = "es";
+    await act(async () => selector.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(review.textContent).toContain("Elige como máximo 1 opción.");
+    expect(review.textContent).toContain("Ordena todas las opciones actuales");
+    expect(review.textContent).not.toContain("Rank every current option");
   });
 
   it("states that offline edits have not synced", async () => {

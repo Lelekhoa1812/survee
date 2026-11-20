@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { describe, expect, it, vi } from "vitest";
 import { BRIDGE_SOURCE } from "../src/lib/format/bridge";
+import { respondentBridgeMessages } from "../src/lib/respondent-locale";
 
 type BridgeWindow = Window & { eval: (source: string) => void; MessageEvent: typeof MessageEvent; Event: typeof Event; KQA: any; close: () => void };
 const { JSDOM } = createRequire(import.meta.url)("jsdom") as {
@@ -36,6 +37,23 @@ function operations(post: { mock: { calls: unknown[][] } }): RecordOperation[] {
 }
 
 describe("repeat group iframe bridge", () => {
+  it("localizes default record labels and existing announcements when the language changes", () => {
+    const dom = new JSDOM(questionnaire, { runScripts: "dangerously" });
+    const { window } = dom;
+    const send = (data: object) => window.dispatchEvent(new window.MessageEvent("message", { data: { kqa: 1, ...data }, source: window }));
+    window.eval(BRIDGE_SOURCE);
+    send({ type: "init", locale: "en-AU", messages: respondentBridgeMessages("en-AU"), questions: [{ id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "name", type: "text", label: "Name" }] }], answers: {}, recordGroups: {} });
+    window.document.querySelector<HTMLButtonElement>("[data-kqa-record-add=assets]")!.click();
+    expect(window.document.querySelector("[data-kqa-record-status=assets]")?.textContent).toContain("record 1 added");
+    send({ type: "locale", locale: "es", messages: respondentBridgeMessages("es") });
+    expect(window.document.querySelector("[data-kqa-record-add=assets]")?.textContent).toBe("Añadir registro");
+    expect(window.document.querySelector("fieldset[data-kqa-record-question] legend")?.textContent).toBe("registro 1");
+    expect(window.document.querySelector("[data-kqa-record-status=assets]")?.textContent).toBe("Se añadió registro 1.");
+    send({ type: "locale", locale: "ar", messages: respondentBridgeMessages("ar") });
+    expect(window.document.querySelector("[data-kqa-record-add=assets]")?.textContent).toContain("سجل");
+    window.close();
+  });
+
   it("reports invalid drafts until correction, explicit discard, or row removal", () => {
     const html = '<section><template data-kqa-repeat-template="assets"><fieldset><legend>Asset</legend><input type="number" data-kqa-repeat-field="amount"></fieldset></template></section>';
     const dom = new JSDOM(html, { runScripts: "dangerously", pretendToBeVisual: true });

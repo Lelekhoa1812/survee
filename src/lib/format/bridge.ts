@@ -22,6 +22,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   var pendingRecordOperations = [];
   var recordDrafts = {};
   var recordAnnouncements = {};
+  var numberDrafts = {};
   function reportInvalidRecordDrafts() {
     var drafts = Object.keys(recordDrafts).map(function (key) { return recordDrafts[key]; }).filter(function (draft) { return draft.localInvalid; }).map(function (draft) {
       return { questionId: draft.questionId, rowId: draft.rowId, fieldId: draft.fieldId };
@@ -39,7 +40,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var template = state.messages && state.messages[key];
     if (values && values.count === 1 && state.messages && typeof state.messages[key + "One"] === "string") template = state.messages[key + "One"];
     if (typeof template !== "string") {
-      var defaults = { lengthCount: "{count} of {max} characters used", lengthLimitReached: "limit reached", lengthOverLimit: "over the limit", lengthApproaching: "Character limit approaching.", lengthReachedAnnouncement: "Character limit reached.", lengthExceededAnnouncement: "Character limit exceeded. This text has not been saved; shorten it to the limit.", maxSelections: "Choose no more than {count} options.", maxSelectionsOne: "Choose no more than {count} option.", minSelections: "Choose at least {count} options, or leave this question blank.", minSelectionsOne: "Choose at least {count} option, or leave this question blank.", exclusiveHelp: "Exclusive options must be chosen by themselves.", exclusiveError: "Choose an exclusive option by itself.", rankError: "Rank every option exactly once to continue.", rankMoveUp: "Move up", rankMoveDown: "Move down", rankConfirm: "Use this order", rankPosition: "Currently position {index} of {total}.", rankMoveLabel: "Move {label} {direction}", rankUseLabel: "Use this order for {label}", browseAnswered: "{answered} of {total} answered", questionShown: "Questions shown: {count}.", questionHidden: "Questions hidden: {count}. Hidden answers are retained.", rankMoved: "{label} moved to position {index} of {total}.", rankChanged: "This ranking's options changed. Rank every current option exactly once, then choose Use this order.", savedMaxSelections: "This saved answer has {selected} choices. Remove choices until no more than {maximum} remain.", removeChoices: "Remove {count} more choices to continue.", exclusiveSelected: "Exclusive option selected; other choices cleared.", exclusiveCleared: "Exclusive choice cleared.", repeatAdd: "Add {item}", repeatRemove: "Remove {item} {index}", repeatRowLabel: "{item} {index}", repeatRowAdded: "{item} {index} added.", repeatRowRemoved: "{item} removed.", repeatConflict: "This {item} changed elsewhere. Review the saved value before continuing.", repeatFieldInvalid: "This value is invalid and has not been saved. Check this field." };
+      var defaults = { lengthCount: "{count} of {max} characters used", lengthLimitReached: "limit reached", lengthOverLimit: "over the limit", lengthApproaching: "Character limit approaching.", lengthReachedAnnouncement: "Character limit reached.", lengthExceededAnnouncement: "Character limit exceeded. This text has not been saved; shorten it to the limit.", maxSelections: "Choose no more than {count} options.", maxSelectionsOne: "Choose no more than {count} option.", minSelections: "Choose at least {count} options, or leave this question blank.", minSelectionsOne: "Choose at least {count} option, or leave this question blank.", exclusiveHelp: "Exclusive options must be chosen by themselves.", exclusiveError: "Choose an exclusive option by itself.", rankError: "Rank every option exactly once to continue.", rankMoveUp: "Move up", rankMoveDown: "Move down", rankConfirm: "Use this order", rankPosition: "Currently position {index} of {total}.", rankMoveLabel: "Move {label} {direction}", rankUseLabel: "Use this order for {label}", browseAnswered: "{answered} of {total} answered", questionShown: "Questions shown: {count}.", questionHidden: "Questions hidden: {count}. Hidden answers are retained.", rankMoved: "{label} moved to position {index} of {total}.", rankChanged: "This ranking's options changed. Rank every current option exactly once, then choose Use this order.", savedMaxSelections: "This saved answer has {selected} choices. Remove choices until no more than {maximum} remain.", removeChoices: "Remove {count} more choices to continue.", exclusiveSelected: "Exclusive option selected; other choices cleared.", exclusiveCleared: "Exclusive choice cleared.", repeatDefaultItem: "record", repeatAdd: "Add {item}", repeatRemove: "Remove {item} {index}", repeatRowLabel: "{item} {index}", repeatRowAdded: "{item} {index} added.", repeatRowRemoved: "{item} removed.", repeatConflict: "This {item} changed elsewhere. Review the saved value before continuing.", repeatFieldInvalid: "This value is invalid and has not been saved. Check this field." };
       template = values && values.count === 1 ? defaults[key + "One"] || defaults[key] : defaults[key];
       if (typeof template !== "string") return "";
     }
@@ -274,6 +275,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
         refreshRankControls(id);
       }
       els.forEach(function (el) {
+        if (numberDrafts[id] && isBadNumberInput(el)) return;
         if (el.type === "radio") el.checked = v !== undefined && v !== null && String(v) === el.value;
         else if (el.type === "checkbox") el.checked = Array.isArray(v) && v.indexOf(el.value) !== -1;
         else if (el.tagName === "SELECT") el.value = v === undefined || v === null ? "" : String(v);
@@ -727,6 +729,15 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     return out;
   }
 
+  // ---- browser-invalid number input (e.g. a lone "-"): value is "" with badInput, so it is not a clear
+  function isBadNumberInput(el) {
+    return !!(el && el.type === "number" && el.validity && el.validity.badInput);
+  }
+  function setNumberDraft(id, invalid) {
+    if (!!numberDrafts[id] === invalid) return;
+    if (invalid) numberDrafts[id] = true; else delete numberDrafts[id];
+    post({ type: "number-draft", id: id, valid: !invalid });
+  }
   // ---- binding controls
   function onControl(ev) {
     var el = ev.target;
@@ -752,6 +763,13 @@ export const BRIDGE_SOURCE = String.raw`(function () {
           exclusiveAnnouncement = exclusive ? localized("exclusiveSelected") : localized("exclusiveCleared");
         }
       }
+      if (isBadNumberInput(el)) {
+        setNumberDraft(id, true);
+        el.setAttribute("aria-invalid", "true");
+        return;
+      }
+      setNumberDraft(id, false);
+      el.removeAttribute("aria-invalid");
       var accepted = commit(id, { value: readDom(id) }, "dom");
       if (accepted && nativeTextQuestion) retainLengthDraft(id, false, el, false);
       if (exclusiveAnnouncement) {
@@ -1041,7 +1059,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
   }
   function recordRows(questionId) { if (!state.recordGroups[questionId]) state.recordGroups[questionId] = []; return state.recordGroups[questionId]; }
   function recordMinimum(question) { return Math.max(question.required ? 1 : 0, typeof question.minRows === "number" ? question.minRows : 0); }
-  function itemLabel(question) { return question.itemLabel || "item"; }
+  function itemLabel(question) { return question.itemLabel || localized("repeatDefaultItem"); }
   function uniqueRecordId() {
     var bytes = new Uint8Array(16);
     try { window.crypto.getRandomValues(bytes); }
@@ -1143,7 +1161,7 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       });
       var draftKey = question.id + "/" + rowData.id + "/" + field.id;
       var draft = recordDrafts[draftKey];
-      writeRecordField(field, controls, draft ? draft.value : rowData.values && rowData.values[field.id]);
+      if (!(draft && draft.badInput)) writeRecordField(field, controls, draft ? draft.value : rowData.values && rowData.values[field.id]);
       if (draft) showRecordFieldError(row, field.id, localized(draft.messageKey || "repeatFieldInvalid", draft.messageValues));
     });
     var remove = document.createElement("button");
@@ -1205,13 +1223,13 @@ export const BRIDGE_SOURCE = String.raw`(function () {
       if (add) { markLocalized(add); add.textContent = localized("repeatAdd", { item: itemLabel(question) }); add.setAttribute("aria-label", add.textContent); }
       var announcement = recordAnnouncements[question.id];
       var status = document.querySelector('[data-kqa-record-status="' + question.id + '"]');
-      if (status && announcement) { markLocalized(status); status.textContent = localized(announcement.key, announcement.values); }
+      if (status && announcement) { if (announcement.values && announcement.values.item) announcement.values.item = itemLabel(question); markLocalized(status); status.textContent = localized(announcement.key, announcement.values); }
       rows.forEach(function (row, index) {
         var node = document.querySelector('fieldset[data-kqa-record-question="' + question.id + '"][data-kqa-record-row="' + row.id + '"]');
         if (!node) return;
         (question.fields || []).forEach(function (field) {
           var draft = recordDrafts[question.id + "/" + row.id + "/" + field.id];
-          if (draft) showRecordFieldError(node, field.id, localized(draft.messageKey || "repeatFieldInvalid", draft.messageValues));
+          if (draft) { if (draft.messageValues && draft.messageValues.item) draft.messageValues.item = itemLabel(question); showRecordFieldError(node, field.id, localized(draft.messageKey || "repeatFieldInvalid", draft.messageValues)); }
         });
         var label = localized("repeatRowLabel", { item: itemLabel(question), index: index + 1 });
         var legend = node.querySelector("legend");
@@ -1391,10 +1409,12 @@ export const BRIDGE_SOURCE = String.raw`(function () {
     var row = recordRows(questionId).find(function (item) { return item.id === rowId; });
     var field = question && recordField(question, fieldId);
     if (!question || !row || !field || state.locked) return;
-    var value = valueForRecordField(field, rowFieldControls(rowNode, fieldId));
+    var fieldControls = rowFieldControls(rowNode, fieldId);
+    var badInput = fieldControls.some(isBadNumberInput);
+    var value = valueForRecordField(field, fieldControls);
     var draftKey = questionId + "/" + rowId + "/" + fieldId;
-    if (!validateRecordValue(field, value)) {
-      recordDrafts[draftKey] = { value: value, localInvalid: true, questionId: questionId, rowId: rowId, fieldId: fieldId };
+    if (badInput || !validateRecordValue(field, value)) {
+      recordDrafts[draftKey] = { value: value, badInput: badInput, localInvalid: true, questionId: questionId, rowId: rowId, fieldId: fieldId };
       reportInvalidRecordDrafts();
       showRecordFieldError(rowNode, fieldId, localized("repeatFieldInvalid"));
       var invalidList = document.querySelector('[data-kqa-record-list="' + questionId + '"]');

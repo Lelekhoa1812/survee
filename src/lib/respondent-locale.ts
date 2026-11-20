@@ -40,25 +40,25 @@ export type RespondentMessage = keyof typeof MESSAGES["en-AU"];
 
 const REPEAT_BRIDGE_MESSAGES: Record<RespondentLocale, Record<string, string>> = {
   "en-AU": {
-    repeatAdd: "Add {item}", repeatRemove: "Remove {item} {index}", repeatRowLabel: "{item} {index}",
+    repeatDefaultItem: "record", repeatAdd: "Add {item}", repeatRemove: "Remove {item} {index}", repeatRowLabel: "{item} {index}",
     repeatRowAdded: "{item} {index} added.", repeatRowRemoved: "{item} removed.",
     repeatConflict: "This {item} changed elsewhere. Review the saved value before continuing.",
     repeatFieldInvalid: "This value is invalid and has not been saved. Check this field.",
   },
   vi: {
-    repeatAdd: "Thêm {item}", repeatRemove: "Xóa {item} {index}", repeatRowLabel: "{item} {index}",
+    repeatDefaultItem: "bản ghi", repeatAdd: "Thêm {item}", repeatRemove: "Xóa {item} {index}", repeatRowLabel: "{item} {index}",
     repeatRowAdded: "Đã thêm {item} {index}.", repeatRowRemoved: "Đã xóa {item}.",
     repeatConflict: "{item} này đã thay đổi ở nơi khác. Hãy xem lại giá trị đã lưu trước khi tiếp tục.",
     repeatFieldInvalid: "Giá trị này không hợp lệ và chưa được lưu. Hãy kiểm tra trường này.",
   },
   es: {
-    repeatAdd: "Añadir {item}", repeatRemove: "Eliminar {item} {index}", repeatRowLabel: "{item} {index}",
+    repeatDefaultItem: "registro", repeatAdd: "Añadir {item}", repeatRemove: "Eliminar {item} {index}", repeatRowLabel: "{item} {index}",
     repeatRowAdded: "Se añadió {item} {index}.", repeatRowRemoved: "Se eliminó {item}.",
     repeatConflict: "Este {item} cambió en otro lugar. Revisa el valor guardado antes de continuar.",
     repeatFieldInvalid: "Este valor no es válido y no se ha guardado. Revisa este campo.",
   },
   ar: {
-    repeatAdd: "إضافة {item}", repeatRemove: "إزالة {item} {index}", repeatRowLabel: "{item} {index}",
+    repeatDefaultItem: "سجل", repeatAdd: "إضافة {item}", repeatRemove: "إزالة {item} {index}", repeatRowLabel: "{item} {index}",
     repeatRowAdded: "تمت إضافة {item} {index}.", repeatRowRemoved: "تمت إزالة {item}.",
     repeatConflict: "تغيّر هذا {item} في مكان آخر. راجع القيمة المحفوظة قبل المتابعة.",
     repeatFieldInvalid: "هذه القيمة غير صالحة ولم تُحفظ. تحقّق من هذا الحقل.",

@@ -75,7 +75,7 @@ function mergePatches(older: Patch, newer: Patch): Patch {
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v.trim() !== "" : true);
 function defaultRepeatItem(locale: RespondentLocale): string {
-  return locale === "vi" ? "bản ghi" : locale === "es" ? "registro" : locale === "ar" ? "سجل" : "record";
+  return respondentBridgeMessages(locale).repeatDefaultItem;
 }
 function repeatRowLabel(question: Question, index: number, locale: RespondentLocale): string {
   const defaultItem = defaultRepeatItem(locale);
@@ -142,7 +142,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const [counts, setCounts] = useState({ answered: 0, total: 0, needsAttention: [] as { question: Question; reason: string }[] });
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitProblems, setSubmitProblems] = useState<Record<string, string>>({});
+  const [submitProblems, setSubmitProblems] = useState<Record<string, { key: RespondentMessage; count?: number }>>({});
   const [submitRepeatProblems, setSubmitRepeatProblems] = useState<Record<string, RespondentRepeatIssue>>({});
   const [recordGroups, setRecordGroups] = useState<RepeatRecordMap>({});
   const [rejectedRecordDrafts, setRejectedRecordDrafts] = useState<RejectedRecordDraft[]>([]);
@@ -159,6 +159,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const [lengthDrafts, setLengthDrafts] = useState<Record<string, { question: Question; count: number; max: number }>>({});
   const [invalidRecordDrafts, setInvalidRecordDrafts] = useState<InvalidRecordDraft[]>([]);
   const invalidRecordDraftsRef = useRef<InvalidRecordDraft[]>([]);
+  const [invalidNumberDrafts, setInvalidNumberDrafts] = useState<Record<string, true>>({});
+  const invalidNumberDraftsRef = useRef<Record<string, true>>({});
   const [questionnaireLanguage, setQuestionnaireLanguage] = useState<string | undefined>();
 
   const frame = useRef<HTMLIFrameElement>(null);
@@ -735,6 +737,12 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         }
         invalidRecordDraftsRef.current = drafts;
         setInvalidRecordDrafts(drafts);
+      } else if (m.type === "number-draft" && typeof m.id === "string" && typeof m.valid === "boolean") {
+        if (!questions.current.some((item) => item.id === m.id && item.type === "number")) return;
+        const next = { ...invalidNumberDraftsRef.current };
+        if (m.valid) delete next[m.id]; else next[m.id] = true;
+        invalidNumberDraftsRef.current = next;
+        setInvalidNumberDrafts(next);
       } else if (m.type === "length-draft" && typeof m.id === "string") {
         const question = questions.current.find((item) => item.id === m.id);
         if (m.valid === true) setLengthDrafts((current) => { if (!(m.id in current)) return current; const next = { ...current }; delete next[m.id]; return next; });
@@ -831,21 +839,21 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   useEffect(() => () => { clearTimeout(timer.current); clearTimeout(retry.current); }, []);
 
   useEffect(() => {
-    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || pendingRecordOperations.current.length || rejectedRecordDraftsRef.current.length || invalidRecordDraftsRef.current.length || inflight.current || staleDraftRef.current.length || Object.keys(lengthDrafts).length) { e.preventDefault(); e.returnValue = ""; } };
+    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(pending.current).length || pendingRecordOperations.current.length || rejectedRecordDraftsRef.current.length || invalidRecordDraftsRef.current.length || Object.keys(invalidNumberDraftsRef.current).length || inflight.current || staleDraftRef.current.length || Object.keys(lengthDrafts).length) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [lengthDrafts]);
 
   // ---- submit
   async function submit() {
-    if (Object.keys(lengthDrafts).length || invalidRecordDraftsRef.current.length || rejectedRecordDraftsRef.current.length || recordConflictRefreshFailedRef.current.size) return;
+    if (Object.keys(lengthDrafts).length || invalidRecordDraftsRef.current.length || Object.keys(invalidNumberDraftsRef.current).length || rejectedRecordDraftsRef.current.length || recordConflictRefreshFailedRef.current.size) return;
     setSubmitting(true);
     clearTimeout(timer.current);
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     await flush();
     for (let i = 0; i < 20 && inflight.current; i++) await new Promise((r) => setTimeout(r, 150));
     if (refreshRequiredRef.current) { setSubmitting(false); setConfirming(false); return; }
-    if (invalidRecordDraftsRef.current.length) { setSubmitting(false); return; }
+    if (invalidRecordDraftsRef.current.length || Object.keys(invalidNumberDraftsRef.current).length) { setSubmitting(false); return; }
     if (recordConflictRefreshFailedRef.current.size) { setSubmitting(false); return; }
     if (rejectedRecordDraftsRef.current.length) { setSubmitting(false); toast(t("repeatRejectedTitle"), "err", localeMeta); return; }
     if (inflight.current || Object.keys(pending.current).length || pendingRecordOperations.current.length) { setSubmitting(false); toast(t("notSavedYet"), "err", localeMeta); return; }
@@ -867,12 +875,12 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         return;
       }
       if (res.status === 422) {
-        const problems: Record<string, string> = {};
-        for (const item of res.data.missing ?? []) problems[item.id] = t("requiredError");
-        for (const item of res.data.invalidSelections ?? []) problems[item.id] = t("maxSelections", { count: item.maximum });
-        for (const item of res.data.invalidMinimumSelections ?? []) problems[item.id] = t("minSelections", { count: item.minimum });
-        for (const item of res.data.invalidExclusiveSelections ?? []) problems[item.id] = t("exclusiveError");
-        for (const item of res.data.invalidRankSelections ?? []) problems[item.id] = t("rankError");
+        const problems: Record<string, { key: RespondentMessage; count?: number }> = {};
+        for (const item of res.data.missing ?? []) problems[item.id] = { key: "requiredError" };
+        for (const item of res.data.invalidSelections ?? []) problems[item.id] = { key: "maxSelections", count: item.maximum };
+        for (const item of res.data.invalidMinimumSelections ?? []) problems[item.id] = { key: "minSelections", count: item.minimum };
+        for (const item of res.data.invalidExclusiveSelections ?? []) problems[item.id] = { key: "exclusiveError" };
+        for (const item of res.data.invalidRankSelections ?? []) problems[item.id] = { key: "rankError" };
         setSubmitRepeatProblems(Object.fromEntries((res.data.repeatErrors ?? []).map((item) => [item.questionId, item])));
         setSubmitProblems(problems);
         setSubmitError(true);
@@ -903,7 +911,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
 
   function continueGuided() {
     if (questionGuidedMode) {
-      if (!activeGuidedQuestion || Object.keys(lengthDrafts).length || invalidRecordDraftsRef.current.length) return;
+      if (!activeGuidedQuestion || Object.keys(lengthDrafts).length || invalidRecordDraftsRef.current.length || Object.keys(invalidNumberDraftsRef.current).length) return;
       if (guidedStepIssues.length) {
         setGuidedError(true);
         window.setTimeout(() => guidedErrorRef.current?.focus(), 0);
@@ -915,7 +923,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       return;
     }
     if (!activeGuidedGroup) return;
-    if (Object.keys(lengthDrafts).length || invalidRecordDraftsRef.current.length) return;
+    if (Object.keys(lengthDrafts).length || invalidRecordDraftsRef.current.length || Object.keys(invalidNumberDraftsRef.current).length) return;
     if (guidedStepIssues.length) {
       setGuidedError(true);
       window.setTimeout(() => guidedErrorRef.current?.focus(), 0);
@@ -940,7 +948,8 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   }
 
   const pct = counts.total ? Math.round((counts.answered / counts.total) * 100) : 0;
-  const hasUnsavedChanges = Object.keys(pending.current).length > 0 || pendingRecordOperations.current.length > 0 || rejectedRecordDrafts.length > 0 || invalidRecordDrafts.length > 0 || staleDraft.length > 0;
+  const hasInvalidNumberDraft = Object.keys(invalidNumberDrafts).length > 0;
+  const hasUnsavedChanges = Object.keys(pending.current).length > 0 || pendingRecordOperations.current.length > 0 || rejectedRecordDrafts.length > 0 || invalidRecordDrafts.length > 0 || hasInvalidNumberDraft || staleDraft.length > 0;
   const firstLengthDraft = Object.values(lengthDrafts)[0];
   const lengthDraftHidden = firstLengthDraft ? eligibility.current[firstLengthDraft.question.id] === false : false;
   const lengthDraftSourceId = firstLengthDraft?.question.when?.all?.[0]?.question ?? firstLengthDraft?.question.when?.any?.[0]?.question;
@@ -953,7 +962,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     else post({ type: "focus-question", id: lengthDraftFocusId });
   };
   const SAVE_LABEL: Record<SaveState, string> = { idle: submitted || locked ? t("locked") : t("autosaveOn"), saving: t("saving"), saved: t("saved"), error: t("retrying"), failed: t("notSaved"), offline: hasUnsavedChanges ? t("offlinePending") : t("offline") };
-  const currentSaveLabel = staleDraft.length || rejectedRecordDrafts.length || invalidRecordDrafts.length ? t("notSaved") : SAVE_LABEL[save];
+  const currentSaveLabel = staleDraft.length || rejectedRecordDrafts.length || invalidRecordDrafts.length || hasInvalidNumberDraft ? t("notSaved") : SAVE_LABEL[save];
   const reviewQuestions = displayedQuestions.filter((question) => eligibility.current[question.id] !== false);
   const hiddenQuestionCount = questions.current.length - reviewQuestions.length;
   const retainedAnswers = displayedQuestions.filter((question) => eligibility.current[question.id] === false && (
@@ -1055,7 +1064,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
               )}
             </div>
             <span className={`save-state ${firstLengthDraft || currentSaveLabel === t("notSaved") ? "failed" : save}`} role="status" aria-live="polite" title={firstLengthDraft ? t("overLimitTitle") : hasUnsavedChanges ? t("unsavedTitle") : lastSaved ? t("lastSaved", { time: respondentTime(locale, lastSaved) }) : currentSaveLabel}><i /><span className="rs-save-label">{firstLengthDraft ? t("textNotSaved") : currentSaveLabel}</span></span>
-            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || invalidRecordDrafts.length > 0 || Object.keys(lengthDrafts).length > 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> {t("submitted")}</> : t("reviewAnswers")}</button>
+            <button className={`btn accent ${submitted ? "done" : ""}`} disabled={locked || invalidRecordDrafts.length > 0 || hasInvalidNumberDraft || Object.keys(lengthDrafts).length > 0} onClick={() => setConfirming(true)}>{submitted ? <><Icon name="check" size={16} /> {t("submitted")}</> : t("reviewAnswers")}</button>
           </div>
         </div>
       </div>
@@ -1067,6 +1076,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       </div>
       {draftRecoveryReason === "locked" && (staleDraft.length > 0 || rejectedRecordDrafts.length > 0) && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("lockedError")} {t("unsavedTitle")} <button className="btn" type="button" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button></div>}
       {recordRefreshFailed && !locked && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("repeatRefreshFailed")} <button className="btn" type="button" disabled={recordRefreshing} onClick={retryRecordRefresh}>{t("repeatRetryRefresh")}</button></div>}
+      {hasInvalidNumberDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> <div>{respondentBridgeMessages(locale).repeatFieldInvalid}</div></div>}
       {invalidRecordDrafts.length > 0 && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> <div>{t("repeatInvalidDraft")}<ul>{invalidRecordDrafts.map((draft) => {
         const question = questions.current.find((q) => q.id === draft.questionId);
         const field = question?.fields?.find((item) => item.id === draft.fieldId);
@@ -1094,7 +1104,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
               <button className="btn" type="button" disabled={(questionGuidedMode ? activeGuidedQuestionIndex <= 0 : activeGuidedIndex <= 0) || locked} onClick={() => questionGuidedMode
                 ? activeGuidedQuestionIndex > 0 && goToGuidedQuestion(guidedQuestions[activeGuidedQuestionIndex - 1].id)
                 : activeGuidedIndex > 0 && goToGuidedGroup(questionGroups[activeGuidedIndex - 1].id)}>{t("back")}</button>
-              <button className="btn accent" type="button" disabled={locked || !frameReady || invalidRecordDrafts.length > 0 || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{(questionGuidedMode ? activeGuidedQuestionIndex === guidedQuestions.length - 1 : activeGuidedIndex === questionGroups.length - 1) ? t("reviewAnswers") : t("continue")}</button>
+              <button className="btn accent" type="button" disabled={locked || !frameReady || invalidRecordDrafts.length > 0 || hasInvalidNumberDraft || Object.keys(lengthDrafts).length > 0} onClick={continueGuided}>{(questionGuidedMode ? activeGuidedQuestionIndex === guidedQuestions.length - 1 : activeGuidedIndex === questionGroups.length - 1) ? t("reviewAnswers") : t("continue")}</button>
               <button className="btn" type="button" disabled={locked} onClick={() => { setGuidedMode(false); setGuidedError(false); post({ type: "guided", enabled: false }); }}>{t("showAll")}</button>
             </div>
           </div>
@@ -1141,7 +1151,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           actions={
             <>
               <button className="btn" disabled={submitting} onClick={() => setConfirming(false)}>{t("keepEditing")}</button>
-              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || invalidRecordDrafts.length > 0 || recordRefreshFailed || recordRefreshing || Object.keys(lengthDrafts).length > 0 || rejectedRecordDrafts.length > 0} onClick={submit}>{submitting && <Spinner />} {t("submitAnswers")}</button>}
+              {!counts.needsAttention.length && <button className="btn accent" disabled={submitting || invalidRecordDrafts.length > 0 || hasInvalidNumberDraft || recordRefreshFailed || recordRefreshing || Object.keys(lengthDrafts).length > 0 || rejectedRecordDrafts.length > 0} onClick={submit}>{submitting && <Spinner />} {t("submitAnswers")}</button>}
             </>
           }
         >
@@ -1179,7 +1189,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
               {reviewQuestions.map((question) => {
                 const answer = answers.current[question.id];
                 const attention = counts.needsAttention.find((item) => item.question.id === question.id);
-                const problem = attention?.reason ?? (submitRepeatProblems[question.id] ? respondentRepeatIssue(locale, submitRepeatProblems[question.id]) : submitProblems[question.id]);
+                const problem = attention?.reason ?? (submitRepeatProblems[question.id] ? respondentRepeatIssue(locale, submitRepeatProblems[question.id]) : submitProblems[question.id] ? t(submitProblems[question.id].key, submitProblems[question.id].count === undefined ? {} : { count: submitProblems[question.id].count! }) : undefined);
                 const answered = isQuestionAnswered(question);
                 const rows = question.type === "repeat" ? (recordGroups[question.id] ?? []).filter((row) => !row.deletedAt) : [];
                 return (
