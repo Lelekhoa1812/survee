@@ -45,8 +45,13 @@ try {
   await page.waitForSelector(".toast.err", { timeout: 8000 });
   const toast = await page.$eval(".toast.err", (e) => e.textContent);
   check("refused value names the question and the limit", /How many people are in your team/.test(toast) && /5,?000/.test(toast), toast);
-  await sleep(800);
-  const reverted = await frame.evaluate(() => document.querySelector('[data-kqa="team-size"]').value);
+  // The page puts a refused value back after it has re-read the saved answers, which takes a network round trip.
+  let reverted = null;
+  for (let i = 0; i < 24; i++) {
+    reverted = await frame.evaluate(() => document.querySelector('[data-kqa="team-size"]').value);
+    if (reverted === "") break;
+    await sleep(250);
+  }
   check("page reverts to the saved value", reverted === "", `value="${reverted}"`);
 
   // 3. rapid typing: the final value wins and nothing is lost
