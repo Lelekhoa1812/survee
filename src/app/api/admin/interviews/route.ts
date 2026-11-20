@@ -1,14 +1,14 @@
-import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { createInterview, listInterviews } from "@/lib/repo";
 import { prepareSurvey } from "@/lib/survey";
 
-export async function GET() {
+export const GET = withServerErrors("admin/interviews", async function GET() {
   const denied = await guardAdmin();
   if (denied) return denied;
   return json({ ok: true, interviews: await listInterviews() });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/interviews", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const body = await readJson<{ name?: unknown; description?: unknown; mode?: unknown; html?: unknown; fileName?: unknown }>(req);
@@ -22,4 +22,4 @@ export async function POST(req: Request) {
   if (!prepared.survey) return json({ ok: false, error: "The file did not pass the checker.", report: prepared.report, markdown: prepared.markdown }, 422);
   const doc = await createInterview({ name, description: str(body.data.description, 500) || undefined, mode, survey: prepared.survey });
   return json({ ok: true, id: doc._id.toHexString(), report: prepared.report }, 201);
-}
+});

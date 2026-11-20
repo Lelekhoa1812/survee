@@ -18,6 +18,7 @@ vi.mock("@/lib/auth", () => ({
   createSession: () => ({ value: "signed-session", maxAge: 3600 }),
 }));
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   fail: (status: number, error: string) => Response.json({ ok: false, error }, { status }),
   json: (data: unknown) => Object.assign(Response.json(data), { cookies: { set: () => {} } }),
   readJson: async (req: Request) => ({ ok: true, data: await req.json() }),

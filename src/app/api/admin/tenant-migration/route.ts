@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
 import { AXION_TENANT_ID } from "@/lib/env";
-import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { adminSession } from "@/lib/http";
 import { auditTenantMigration, backfillLegacyTenant } from "@/lib/tenant-migration";
 
-export async function GET() {
+export const GET = withServerErrors("admin/tenant-migration", async function GET() {
   const denied = await guardAdmin();
   if (denied) return denied;
   const session = await adminSession();
@@ -15,9 +15,9 @@ export async function GET() {
   } catch {
     return fail(503, "The migration audit could not reach the database.");
   }
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/tenant-migration", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   const session = await adminSession();
@@ -36,4 +36,4 @@ export async function POST(req: Request) {
       : "The migration did not finish. It is safe to review the counts and retry after checking the database.";
     return fail(409, message);
   }
-}
+});

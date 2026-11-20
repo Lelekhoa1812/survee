@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { adminSession, fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { publicBaseUrl, smtpSettings } from "@/lib/env";
@@ -9,7 +9,7 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
-export async function GET() {
+export const GET = withServerErrors("admin/workspace-invitations", async function GET() {
   const denied = await guardAdmin({ roles: ["owner", "admin"] });
   if (denied) return denied;
   const session = await adminSession();
@@ -19,9 +19,9 @@ export async function GET() {
   } catch {
     return fail(503, "Workspace members could not be loaded. Try again.");
   }
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/workspace-invitations", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const session = await adminSession();
@@ -60,4 +60,4 @@ export async function POST(req: Request) {
     await revokeWorkspaceInvitationByToken(session.tenantId, invitation.token).catch(() => {});
     return fail(503, "The invitation email could not be sent. Try again.");
   }
-}
+});

@@ -20,6 +20,7 @@ const currentManifest = { format: "kqa/1", title: "Current survey", questions: [
 const candidateManifest = { format: "kqa/1", title: "Updated survey", questions: [{ id: "q1", type: "text", label: "New question wording" }] };
 
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
   adminSession: async () => state.session,
   readJson: async () => ({ ok: true, data: state.body }),

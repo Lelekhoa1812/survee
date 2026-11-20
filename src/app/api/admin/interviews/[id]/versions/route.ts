@@ -1,4 +1,4 @@
-import { fail, guardAdmin, json, readJson, str, adminSession } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, adminSession, withServerErrors } from "@/lib/http";
 import { getInterview, getVersion, publishVersionIfCurrent } from "@/lib/repo";
 import { prepareSurvey, withCompat } from "@/lib/survey";
 import { LIMITS } from "@/lib/format/schema";
@@ -36,7 +36,7 @@ function tokenError(code: "preview_required" | "preview_expired" | "invalid_prev
 }
 
 /** Preview and apply are deliberately separate. There is no one-call publish path. */
-export async function POST(req: Request, { params }: Ctx) {
+export const POST = withServerErrors("admin/interviews/[id]/versions", async function POST(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   const session = await adminSession();
@@ -179,4 +179,4 @@ export async function POST(req: Request, { params }: Ctx) {
   } catch {
     return fail(503, action === "preview" ? "The questionnaire preview could not be completed." : "The new questionnaire version could not be published.");
   }
-}
+});

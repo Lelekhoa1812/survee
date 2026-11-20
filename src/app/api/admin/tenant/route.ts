@@ -1,8 +1,8 @@
-import { fail, guardAdmin, json, readJson } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, withServerErrors } from "@/lib/http";
 import { adminSession } from "@/lib/http";
 import { updateTenantName } from "@/lib/repo/accounts";
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/tenant", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   const session = await adminSession();
@@ -23,4 +23,4 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "The workspace name could not be updated. Try again.");
   }
-}
+});

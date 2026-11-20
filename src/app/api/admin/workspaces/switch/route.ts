@@ -1,9 +1,9 @@
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
-import { adminSession, fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { loadAccountPrincipal } from "@/lib/repo/accounts";
 import { rememberWorkspace } from "@/lib/repo/workspaces";
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/workspaces/switch", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   const current = await adminSession();
@@ -24,4 +24,4 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "Workspace switching is temporarily unavailable.");
   }
-}
+});

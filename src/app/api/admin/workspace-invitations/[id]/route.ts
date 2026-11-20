@@ -1,9 +1,9 @@
-import { adminSession, fail, guardAdmin, json } from "@/lib/http";
+import { adminSession, fail, guardAdmin, json, withServerErrors } from "@/lib/http";
 import { revokeWorkspaceInvitation } from "@/lib/repo/workspaces";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+export const DELETE = withServerErrors("admin/workspace-invitations/[id]", async function DELETE(_req: Request, ctx: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const session = await adminSession();
@@ -15,4 +15,4 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   } catch {
     return fail(503, "The invitation could not be revoked. Try again.");
   }
-}
+});

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { smtpSettings, publicBaseUrl } from "@/lib/env";
-import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
+import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
 import { createPendingSignup, removePendingSignup } from "@/lib/repo/accounts";
 import { consumeRateLimit } from "@/lib/repo";
 import { headers } from "next/headers";
@@ -19,7 +19,7 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("auth/signup", async function POST(req: Request) {
   if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ email?: unknown; password?: unknown; tenantName?: unknown }>(req, 8 * 1024);
   if (!body.ok) return body.res;
@@ -83,4 +83,4 @@ export async function POST(req: Request) {
     if (pending.ok) await removePendingSignup(pending.id).catch(() => {});
     return fail(503, "We could not send the survee message. Try again later.");
   }
-}
+});

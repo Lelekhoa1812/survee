@@ -1,9 +1,9 @@
-import { adminSession, fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { deleteInterview, getInterview, listParticipants, listVersions, recentEvents, updateInterview } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, { params }: Ctx) {
+export const GET = withServerErrors("admin/interviews/[id]", async function GET(_req: Request, { params }: Ctx) {
   const denied = await guardAdmin();
   if (denied) return denied;
   const session = await adminSession();
@@ -18,9 +18,9 @@ export async function GET(_req: Request, { params }: Ctx) {
     canManage ? recentEvents(id) : Promise.resolve([]),
   ]);
   return json({ ok: true, interview: { ...interview, _id: id }, people, versions, events });
-}
+});
 
-export async function PATCH(req: Request, { params }: Ctx) {
+export const PATCH = withServerErrors("admin/interviews/[id]", async function PATCH(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
@@ -39,9 +39,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
   }
   const updated = await updateInterview(id, patch);
   return updated ? json({ ok: true }) : fail(404, "Interview not found.");
-}
+});
 
-export async function DELETE(req: Request, { params }: Ctx) {
+export const DELETE = withServerErrors("admin/interviews/[id]", async function DELETE(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
@@ -52,4 +52,4 @@ export async function DELETE(req: Request, { params }: Ctx) {
   if (body.data.confirmName !== interview.name) return fail(400, "Type the interview name exactly to confirm deleting it.", { code: "confirmation_mismatch" });
   const deleted = await deleteInterview(id);
   return deleted ? json({ ok: true }) : fail(404, "Interview not found.");
-}
+});

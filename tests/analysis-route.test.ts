@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
   fail: (status: number, error: string) => new Response(JSON.stringify({ ok: false, error }), { status }),
   json: (value: unknown) => new Response(JSON.stringify(value), { status: 200 }),

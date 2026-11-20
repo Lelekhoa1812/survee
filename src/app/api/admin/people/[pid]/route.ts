@@ -1,10 +1,10 @@
 import { parseEmail } from "@/lib/mail/address";
-import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { deleteParticipant, updateParticipant } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ pid: string }> };
 
-export async function PATCH(req: Request, { params }: Ctx) {
+export const PATCH = withServerErrors("admin/people/[pid]", async function PATCH(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid } = await params;
@@ -28,11 +28,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
   }
   const p = await updateParticipant(pid, patch);
   return p ? json({ ok: true, person: p }) : fail(404, "Person not found.");
-}
+});
 
-export async function DELETE(_req: Request, { params }: Ctx) {
+export const DELETE = withServerErrors("admin/people/[pid]", async function DELETE(_req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid } = await params;
   return (await deleteParticipant(pid)) ? json({ ok: true }) : fail(404, "Person not found.");
-}
+});

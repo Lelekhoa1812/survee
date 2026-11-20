@@ -1,11 +1,11 @@
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "@/lib/export";
-import { fail, guardAdmin } from "@/lib/http";
+import { fail, guardAdmin, withServerErrors } from "@/lib/http";
 import { getInterview, getVersion, listParticipants } from "@/lib/repo";
 import { NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(req: Request, { params }: Ctx) {
+export const GET = withServerErrors("admin/interviews/[id]/export", async function GET(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
@@ -30,4 +30,4 @@ export async function GET(req: Request, { params }: Ctx) {
   return new NextResponse(body, {
     headers: { "Content-Type": file.contentType, "Content-Disposition": `attachment; filename="${file.filename.replace(/"/g, "")}"`, "Cache-Control": "no-store" },
   });
-}
+});

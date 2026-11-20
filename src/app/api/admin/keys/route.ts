@@ -1,14 +1,14 @@
-import { fail, guardAdmin, json, readJson, str, adminSession } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, adminSession, withServerErrors } from "@/lib/http";
 import { createApiKey, generateKeySecret, listApiKeys } from "@/lib/repo/keys";
 import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities } from "@/lib/mcp/capabilities";
 
-export async function GET() {
+export const GET = withServerErrors("admin/keys", async function GET() {
   const denied = await guardAdmin({ roles: ["owner", "admin"] });
   if (denied) return denied;
   return json({ ok: true, keys: await listApiKeys() });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/keys", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const session = await adminSession();
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   const created = await createApiKey({ name, note, secret, expiresAt: expires.date, createdBy: session.email, capabilities });
   if (!created.ok) return fail(400, created.error);
   return json({ ok: true, key: created.key, secret: created.secret }, 201);
-}
+});
 
 function parseExpiry(value: unknown): { ok: true; date: Date | null } | { ok: false; error: string } {
   if (value == null || value === "") return { ok: true, date: null };

@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { smtpSettings } from "@/lib/env";
-import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
+import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
 import { completePasswordReset } from "@/lib/repo/accounts";
 import { consumeRateLimit } from "@/lib/repo";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
@@ -12,7 +12,7 @@ function clientIp(h: Headers): string {
   return chain.at(-1) ?? "unknown";
 }
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("auth/password-reset/complete", async function POST(req: Request) {
   if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ token?: unknown; password?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
@@ -46,4 +46,4 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "The password could not be reset. Request a new link and try again.");
   }
-}
+});

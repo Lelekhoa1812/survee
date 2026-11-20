@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ body: {} as Record<string, unknown> }));
 
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   sameOrigin: async () => true,
   readJson: async () => ({ ok: true, data: state.body }),
   str: (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : undefined,

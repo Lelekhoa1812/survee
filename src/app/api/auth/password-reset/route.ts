@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { publicBaseUrl, smtpSettings } from "@/lib/env";
-import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
+import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
 import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { createPendingPasswordReset, removePendingPasswordReset } from "@/lib/repo/accounts";
@@ -20,7 +20,7 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("auth/password-reset", async function POST(req: Request) {
   if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ email?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
@@ -65,4 +65,4 @@ export async function POST(req: Request) {
     await removePendingPasswordReset(pendingId).catch(() => {});
   }
   return generic();
-}
+});

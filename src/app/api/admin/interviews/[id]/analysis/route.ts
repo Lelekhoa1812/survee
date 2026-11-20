@@ -2,12 +2,12 @@ import { ANALYTICS_STATUSES } from "@/lib/analytics/cohorts";
 import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "@/lib/analytics/segments";
 import { withCurrentEligibility } from "@/lib/analytics/summary";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
-import { fail, guardAdmin, json } from "@/lib/http";
+import { fail, guardAdmin, json, withServerErrors } from "@/lib/http";
 import { getInterview, getVersion, iterateAnalyticsParticipants } from "@/lib/repo";
 import type { ParticipantStatus } from "@/lib/repo/types";
 
 /** Return aggregate-only answer segments for up to 20 selected outcome questions in one scan. */
-export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews/[id]/analysis">) {
+export const GET = withServerErrors("admin/interviews/[id]/analysis", async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews/[id]/analysis">) {
   const denied = await guardAdmin();
   if (denied) return denied;
   const { id } = await ctx.params;
@@ -111,4 +111,4 @@ export async function GET(req: Request, ctx: RouteContext<"/api/admin/interviews
       ...(compareStatuses ? ["Status summaries for all selected answer segments share this asOf and one participant scan; updates during the live read are not isolated by a database snapshot."] : []),
     ],
   });
-}
+});

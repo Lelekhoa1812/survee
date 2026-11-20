@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ deleted: true, denied: null as Response | null }));
 
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
   readJson: async () => ({ ok: true, data: { confirmName: "Study" } }),
   fail: (status: number, error: string) => new Response(JSON.stringify({ ok: false, error }), { status }),

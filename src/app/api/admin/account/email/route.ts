@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { publicBaseUrl, smtpSettings } from "@/lib/env";
-import { fail, guardAdmin, json, readJson } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, withServerErrors } from "@/lib/http";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { parseEmail } from "@/lib/mail/address";
 import { adminSession } from "@/lib/http";
@@ -12,7 +12,7 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/account/email", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   const session = await adminSession();
@@ -61,4 +61,4 @@ export async function POST(req: Request) {
     await removePendingEmailChange(pending.id).catch(() => {});
     return fail(503, "We could not send the verification email. Try again later.");
   }
-}
+});

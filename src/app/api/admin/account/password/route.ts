@@ -1,9 +1,9 @@
-import { fail, guardAdmin, json, readJson, sameOrigin } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, sameOrigin, withServerErrors } from "@/lib/http";
 import { adminSession } from "@/lib/http";
 import { changeAccountPassword } from "@/lib/repo/accounts";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/account/password", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
   if (denied) return denied;
   if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
@@ -25,4 +25,4 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "The password could not be changed. Try again.");
   }
-}
+});

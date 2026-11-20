@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
   fail: (status: number, error: string) => Response.json({ ok: false, error }, { status }),
   json: (data: unknown, status = 200, extra?: Record<string, string>) => Response.json(data, { status, headers: extra }),

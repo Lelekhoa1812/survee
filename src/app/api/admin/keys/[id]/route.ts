@@ -1,8 +1,8 @@
-import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { deleteApiKey, updateApiKey } from "@/lib/repo/keys";
 import { parseMcpCapabilities, type McpCapability } from "@/lib/mcp/capabilities";
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export const PATCH = withServerErrors("admin/keys/[id]", async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await ctx.params;
@@ -33,16 +33,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const updated = await updateApiKey(id, patch);
   if (!updated.ok) return fail(404, updated.error);
   return json({ ok: true, key: updated.key });
-}
+});
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export const DELETE = withServerErrors("admin/keys/[id]", async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await ctx.params;
   const removed = await deleteApiKey(id);
   if (!removed.ok) return fail(404, removed.error);
   return json({ ok: true });
-}
+});
 
 function parseExpiry(value: unknown, allowPast: boolean): { ok: true; date: Date | null } | { ok: false; error: string } {
   if (value == null || value === "") return { ok: true, date: null };

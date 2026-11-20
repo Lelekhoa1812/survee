@@ -1,5 +1,5 @@
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
-import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
+import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
 import { clearLoginFailures, loginBlocked, recordLoginFailure } from "@/lib/repo";
 import { authenticateAccount, bootstrapLegacyAxionOwner } from "@/lib/repo/accounts";
 import { headers } from "next/headers";
@@ -14,7 +14,7 @@ function clientIp(h: Headers): string {
 
 const GENERIC_UNAVAILABLE = "Sign-in is unavailable right now. Try again in a moment.";
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/login", async function POST(req: Request) {
   if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ email?: unknown; password?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
@@ -42,4 +42,4 @@ export async function POST(req: Request) {
   const res = json({ ok: true });
   res.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
   return res;
-}
+});

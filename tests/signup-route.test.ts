@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 const state = vi.hoisted(() => ({ body: {} as Record<string, unknown>, headerValues: {} as Record<string, string> }));
 
 vi.mock("@/lib/http", () => ({
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   sameOrigin: async () => true,
   readJson: async () => ({ ok: true, data: state.body }),
   str: (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : undefined,

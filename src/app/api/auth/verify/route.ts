@@ -1,8 +1,8 @@
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
-import { fail, json, readJson, sameOrigin, str } from "@/lib/http";
+import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
 import { completeSignup } from "@/lib/repo/accounts";
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("auth/verify", async function POST(req: Request) {
   if (!(await sameOrigin())) return fail(403, "This request did not come from the survee app.");
   const body = await readJson<{ token?: unknown }>(req, 4096);
   if (!body.ok) return body.res;
@@ -19,4 +19,4 @@ export async function POST(req: Request) {
   } catch {
     return fail(503, "Account verification is temporarily unavailable. Try again.");
   }
-}
+});

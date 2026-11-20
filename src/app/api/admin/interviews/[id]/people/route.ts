@@ -1,10 +1,10 @@
 import { parseEmail } from "@/lib/mail/address";
-import { fail, guardAdmin, json, readJson, str } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { addParticipants, getInterview, promoteToMultiUser } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function POST(req: Request, { params }: Ctx) {
+export const POST = withServerErrors("admin/interviews/[id]/people", async function POST(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { id } = await params;
@@ -31,4 +31,4 @@ export async function POST(req: Request, { params }: Ctx) {
   // Validation is done; only now does a One-person interview become Multi-user.
   if (interview.mode !== "multi") await promoteToMultiUser(id);
   return json({ ok: true, people: await addParticipants(id, people) }, 201);
-}
+});

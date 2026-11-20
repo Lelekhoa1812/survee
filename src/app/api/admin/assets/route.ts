@@ -1,7 +1,7 @@
-import { fail, guardAdmin, json, str } from "@/lib/http";
+import { fail, guardAdmin, json, str, withServerErrors } from "@/lib/http";
 import { addImageAsset, listImageAssets, MAX_IMAGE_BYTES } from "@/lib/repo/assets";
 
-export async function GET(req: Request) {
+export const GET = withServerErrors("admin/assets", async function GET(req: Request) {
   const denied = await guardAdmin();
   if (denied) return denied;
   const url = new URL(req.url);
@@ -11,9 +11,9 @@ export async function GET(req: Request) {
   if (cursor && !/^[0-9a-f]{24}$/i.test(cursor)) return fail(400, "That image page cursor is not valid.");
   const page = await listImageAssets({ cursor, limit: limitValue });
   return json({ ok: true, ...page });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withServerErrors("admin/assets", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const maxBodyBytes = MAX_IMAGE_BYTES + 64 * 1024;
@@ -53,4 +53,4 @@ export async function POST(req: Request) {
         : "The image could not be saved.";
     return fail(message.startsWith("Each image ") ? 413 : 400, message);
   }
-}
+});

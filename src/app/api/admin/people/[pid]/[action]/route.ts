@@ -1,6 +1,6 @@
 import { checkInviteDelivery } from "@/lib/mail/delivery";
 import { sendInvite } from "@/lib/mail/invite";
-import { fail, guardAdmin, json, readJson } from "@/lib/http";
+import { fail, guardAdmin, json, readJson, withServerErrors } from "@/lib/http";
 import { regenerateToken, reopenParticipant } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ pid: string; action: string }> };
@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ pid: string; action: string }> };
 export const maxDuration = 30;
 
 /** POST reopen, token, invite, or delivery for one person. Invite sends a single message. */
-export async function POST(req: Request, { params }: Ctx) {
+export const POST = withServerErrors("admin/people/[pid]/[action]", async function POST(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid, action } = await params;
@@ -36,4 +36,4 @@ export async function POST(req: Request, { params }: Ctx) {
     return json({ ok: true, delivery: result.delivery, detail: result.detail ?? null, checkedAt: result.checkedAt });
   }
   return fail(404, "Unknown action.");
-}
+});
