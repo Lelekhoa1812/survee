@@ -49,12 +49,12 @@ try {
     focused: document.activeElement?.getAttribute("data-kqa-rank-move"),
     focusedItem: document.activeElement?.closest("li")?.getAttribute("data-value"),
   }));
-  check("rank can be reordered with the keyboard and retains useful focus", JSON.stringify(ranked.order) === JSON.stringify(["speed", "quality", "cost"]) && ranked.focused === "up" && ranked.focusedItem === "quality", JSON.stringify(ranked));
+  check("rank can be reordered with the keyboard and retains useful focus", JSON.stringify(ranked.order) === JSON.stringify(["speed", "quality", "cost"]) && ranked.focused === "down" && ranked.focusedItem === "quality", JSON.stringify(ranked));
 
   await page.waitForFunction(() => /Saved/.test(document.querySelector(".save-state")?.textContent ?? ""), { timeout: 8000 });
   check("autosave reports Saved", true);
   const counted = await page.$eval(".rs-progress small", (e) => e.textContent);
-  check("progress counter updates", /^[1-9]\d* of/.test(counted ?? ""), counted);
+  check("progress counter updates", /^Answered [1-9]\d* \/ \d+$/.test((counted ?? "").trim()), counted);
   await page.waitForFunction(async (t) => {
     const response = await fetch(`/api/p/${t}`);
     if (!response.ok) return false;
@@ -85,9 +85,10 @@ try {
   await page.waitForSelector(".modal");
   await page.screenshot({ path: `${out}/respondent-confirm.png` });
   const title = await page.$eval(".modal h2", (e) => e.textContent);
-  log("INFO  confirm dialog:", title);
-  check("required answers reach the submit confirmation", /Submit your answers/.test(title), title);
-  if (/Submit your answers/.test(title)) {
+  const submitLabel = await page.$eval(".modal .btn.accent", (e) => e.textContent.trim());
+  log("INFO  confirm dialog:", title, "|", submitLabel);
+  check("required answers reach the submit confirmation", /Check your answers/.test(title) && /Submit answers/.test(submitLabel), `${title} | ${submitLabel}`);
+  if (/Submit answers/.test(submitLabel)) {
     await page.click(".modal .btn.accent");
     await page.waitForSelector(".rs-banner.ok", { timeout: 8000 });
     check("submit locks the questionnaire", true);
