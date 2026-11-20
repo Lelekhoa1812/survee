@@ -202,6 +202,15 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `invalid_image` | The upload is not an accepted image type. |
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
 | `docs_unavailable` | Bundled documentation could not be read. Try again later. |
+| `invalid_css` / `invalid_json` / `invalid_input` / `too_large` / `no_tokens` | `extract_design_profile` could not read the source: unsupported CSS, malformed token JSON, a missing or wrong input, a source over 32 KiB, or no supported tokens found. Fix the source and call again. |
+| `no_email` | `send_invite` refused because the person has no email address. Nothing was sent. |
+| `closed` | `send_invite` refused because the interview is closed, so the link would not open. Reopen it first. |
+| `no_public_url` | `send_invite` refused because `KQA_PUBLIC_URL` is not set, so no valid link can be written. Nothing was sent. |
+| `mail_not_configured` | `send_invite` refused because SMTP is not configured. Nothing was sent. |
+| `send_failed` | SMTP rejected the message or the send did not complete. Check `get_mail_status` before resending, since the message may have been accepted. |
+| `not_sent` | `check_invite_delivery` was called for a person whose invite has not been sent. |
+| `analysis_run_too_large` | `analyze_answers` could not keep the aggregate result as a run. Select up to 20 outcomes with `questionIds`, or analyze fewer at a time. |
+| `analysis_run_capacity` | The tenant already has the maximum number of active analysis runs. Retry after an existing run expires. |
 
 Respondent routes use the same `{ ok, error, code }` shape over HTTP. A malformed or wrong-shaped body returns `invalid_args`, an over-size body returns `payload_too_large`, and a link that does not match a person returns `not_found`. An unexpected failure returns HTTP 500 with `code: "server_error"` and no details. Retry the save; the server logs the error type only.
 
