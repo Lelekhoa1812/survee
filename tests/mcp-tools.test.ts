@@ -503,6 +503,17 @@ describe("MCP tools", () => {
     expect(JSON.stringify(vi.mocked(noteMcp).mock.calls)).not.toContain(source);
   });
 
+  it("returns one error-code vocabulary for unknown tools and catalog argument conflicts", async () => {
+    const unknown = await call("this_tool_does_not_exist", {});
+    const unknownBody = await unknown.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(unknownBody.result.isError).toBe(true);
+    expect(unknownBody.result.structuredContent).toMatchObject({ code: "unknown_tool", error: "Unknown tool: this_tool_does_not_exist" });
+    const conflict = await call("get_interview_packages", { catalogOnly: true, packageId: "service-improvement" });
+    const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(conflictBody.result.isError).toBe(true);
+    expect(conflictBody.result.structuredContent).toMatchObject({ code: "invalid_args" });
+  });
+
   it("rejects oversized design source at MCP schema validation", async () => {
     const res = await call("extract_design_profile", { source: "x".repeat(32769), format: "css" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };

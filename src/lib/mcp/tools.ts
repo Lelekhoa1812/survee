@@ -299,7 +299,7 @@ const TOOLS: ToolDef[] = [
     description: "Return survee's versioned package catalog, structured fit metadata, and safeguards. Set catalogOnly to true for a compact metadata-only catalog; otherwise omit packageId for the full library or select a stable packageId for focused guidance. Use decision, audience, and risk boundaries to choose; when fit is ambiguous, clarify rather than inventing a score. These are self-completed questionnaire aids, not validated instruments or automated decisions.",
     inputSchema: obj({ packageId: { type: "string", enum: INTERVIEW_PACKAGES.map((item) => item.id) }, catalogOnly: bool }),
     async run(args) {
-      if (args.catalogOnly === true && args.packageId !== undefined) return err("catalogOnly cannot be combined with packageId.", "invalid_arguments");
+      if (args.catalogOnly === true && args.packageId !== undefined) return err("catalogOnly cannot be combined with packageId.", "invalid_args");
       const pack = await getInterviewPackage(args.packageId as (typeof INTERVIEW_PACKAGES)[number]["id"] | undefined, { catalogOnly: args.catalogOnly === true });
       return pack ? ok({ source: "docs/INTERVIEW_PACKAGES.md", ...pack }) : err("The interview package guide is unavailable.", "docs_unavailable");
     },
@@ -1756,7 +1756,7 @@ async function finish(tool: string, result: ToolResult, interviewId?: string): P
 
 export async function dispatchTool(name: string, args: unknown, capabilities?: readonly McpCapability[]): Promise<ToolResult> {
   const tool = TOOLS.find((item) => item.name === name);
-  if (!tool) return err(`Unknown tool: ${name}`);
+  if (!tool) return err(`Unknown tool: ${name}`, "unknown_tool");
   const record = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
   const interviewId = record && typeof record.interviewId === "string" ? record.interviewId : undefined;
   if (!canCallMcpTool(name, capabilities)) return finish(tool.name, err("This credential is not permitted to call this tool.", "forbidden"), interviewId);
