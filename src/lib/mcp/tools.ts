@@ -1660,7 +1660,10 @@ const TOOLS: ToolDef[] = [
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
       const person = await reopenParticipant(id);
-      if (!person) return err("That person has not submitted, so there is nothing to reopen.");
+      if (!person) {
+        if (!(await onePerson(id))) return err("Person not found.", "not_found");
+        return err("That person has not submitted, so there is nothing to reopen.", "not_submitted");
+      }
       const loaded = await onePerson(id);
       return ok({ person: loaded?.view ?? shapePerson(person, null, []) });
     },

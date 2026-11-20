@@ -88,6 +88,7 @@ vi.mock("../src/lib/repo", async () => {
   return {
     ...actual,
     noteMcp: vi.fn(async () => {}),
+    reopenParticipant: vi.fn(async () => null),
     getParticipant: vi.fn(async () => ({
       id: personId,
       interviewId,
@@ -145,7 +146,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { deleteInterview, getVersion, iterateAnalyticsParticipants, listParticipants, noteMcp, publishVersionIfCurrent } from "../src/lib/repo";
+import { deleteInterview, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipants, noteMcp, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -512,6 +513,21 @@ describe("MCP tools", () => {
     const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
     expect(conflictBody.result.isError).toBe(true);
     expect(conflictBody.result.structuredContent).toMatchObject({ code: "invalid_args" });
+  });
+
+  it("gives reopen_person refusals distinct codes for missing and unsubmitted people", async () => {
+    vi.mocked(reopenParticipant).mockResolvedValueOnce(null);
+    vi.mocked(getParticipant).mockResolvedValueOnce(null);
+    const missing = await call("reopen_person", { personId: "6affb00000000000000000ff" });
+    const missingBody = await missing.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(missingBody.result.isError).toBe(true);
+    expect(missingBody.result.structuredContent).toMatchObject({ code: "not_found", error: "Person not found." });
+
+    vi.mocked(reopenParticipant).mockResolvedValueOnce(null);
+    const unsubmitted = await call("reopen_person", { personId });
+    const unsubmittedBody = await unsubmitted.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(unsubmittedBody.result.isError).toBe(true);
+    expect(unsubmittedBody.result.structuredContent).toMatchObject({ code: "not_submitted" });
   });
 
   it("rejects oversized design source at MCP schema validation", async () => {
