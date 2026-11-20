@@ -515,6 +515,15 @@ describe("MCP tools", () => {
     expect(conflictBody.result.structuredContent).toMatchObject({ code: "invalid_args" });
   });
 
+  it("returns isError for empty questionnaire HTML from the checkers", async () => {
+    for (const name of ["check_questionnaire", "audit_questionnaire_design"]) {
+      const res = await call(name, { html: "   " });
+      const body = await res.json() as { result: { isError?: boolean; structuredContent: { ok?: boolean; code?: string } } };
+      expect(body.result.isError, name).toBe(true);
+      expect(body.result.structuredContent, name).toMatchObject({ ok: false, code: "invalid_args" });
+    }
+  });
+
   it("gives reopen_person refusals distinct codes for missing and unsubmitted people", async () => {
     vi.mocked(reopenParticipant).mockResolvedValueOnce(null);
     vi.mocked(getParticipant).mockResolvedValueOnce(null);

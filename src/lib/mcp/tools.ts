@@ -358,8 +358,9 @@ const TOOLS: ToolDef[] = [
     description: "Run survee's static questionnaire checker and return a review checklist for content, usability research, and rendered design. Wording and user testing require judgment; this tool does not render, observe users, or certify the page.",
     inputSchema: obj({ html: str, fileName: str, interviewId: str }, ["html"]),
     async run(args) {
-      if (typeof args.html !== "string") return err("html is required.");
-      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
+      if (typeof args.html !== "string") return err("html is required.", "invalid_args");
+      if (args.html.trim() === "") return err("html is empty. Send the questionnaire file contents.", "invalid_args");
+      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.", "invalid_args");
       let prepared = prepareSurvey(args.html, asString(args.fileName, 200));
       const interviewId = asString(args.interviewId, 40);
       if (interviewId) prepared = await withCompat(prepared, interviewId);
@@ -496,8 +497,9 @@ const TOOLS: ToolDef[] = [
     description: "Run the checker. Nothing is stored.",
     inputSchema: obj({ html: str, fileName: str, interviewId: str }, ["html"]),
     async run(args) {
-      if (typeof args.html !== "string") return err("html is required.");
-      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
+      if (typeof args.html !== "string") return err("html is required.", "invalid_args");
+      if (args.html.trim() === "") return err("html is empty. Send the questionnaire file contents.", "invalid_args");
+      if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.", "invalid_args");
       let prepared = prepareSurvey(args.html, asString(args.fileName, 200));
       const interviewId = asString(args.interviewId, 40);
       if (interviewId) prepared = await withCompat(prepared, interviewId);
