@@ -562,6 +562,10 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   const ids = Object.keys(patch);
   if (ids.length === 0 && operations.length === 0) return { ok: false, status: 400, error: "Nothing to save." };
   if (ids.length + operations.length > 200) return { ok: false, status: 413, error: "Too many answer operations in one request." };
+  // Each entry must be an object ({ value } and/or { note }) or null. A bare string would make the `in` checks below throw.
+  if (ids.some((id) => patch[id] !== null && (typeof patch[id] !== "object" || Array.isArray(patch[id])))) {
+    return { ok: false, status: 400, error: "Send each answer as an object with a value or note." };
+  }
   const ctx = await loadByToken(token);
   if (!ctx) return { ok: false, status: 404, error: "This link is not valid." };
   if (ctx.version.version !== expectedVersion) return versionConflict();
