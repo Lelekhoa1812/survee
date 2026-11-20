@@ -1,4 +1,4 @@
-import { fail, json, readJson } from "@/lib/http";
+import { fail, json, readJson, withServerErrors } from "@/lib/http";
 import { saveAnswers, type AnswerPatch } from "@/lib/repo";
 import { ID_RE, type RepeatRecordOperation } from "@/lib/format/schema";
 import { looksLikeToken } from "@/lib/tokens";
@@ -6,7 +6,7 @@ import { looksLikeToken } from "@/lib/tokens";
 type Ctx = { params: Promise<{ token: string }> };
 
 /** Body: { version, answers?, recordOperations? }. Only supplied scalar ids and explicit record operations are changed. */
-export async function PUT(req: Request, { params }: Ctx) {
+export const PUT = withServerErrors("p/answers", async function PUT(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
   const body = await readJson<{ version?: unknown; answers?: unknown; recordOperations?: unknown }>(req, 512 * 1024);
@@ -22,7 +22,7 @@ export async function PUT(req: Request, { params }: Ctx) {
   }
   const result = await saveAnswers(token, body.data.version, (a ?? {}) as AnswerPatch, (ops ?? []) as RepeatRecordOperation[]);
   return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, details: result.details, recordErrors: result.recordErrors });
-}
+});
 
 function isRepeatRecordOperation(value: unknown): value is RepeatRecordOperation {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

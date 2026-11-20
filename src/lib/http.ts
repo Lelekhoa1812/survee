@@ -14,6 +14,21 @@ export function fail(status: number, error: string, extra: Record<string, unknow
   return json({ ok: false, error, ...extra }, status);
 }
 
+/**
+ * Wraps a route so an unexpected exception returns a JSON 500 instead of an empty body.
+ * The log line names the route and the error type only; request bodies and tokens are never logged.
+ */
+export function withServerErrors<A extends unknown[]>(route: string, handler: (...args: A) => Promise<NextResponse>): (...args: A) => Promise<NextResponse> {
+  return async (...args: A) => {
+    try {
+      return await handler(...args);
+    } catch (err) {
+      console.error(`[${route}] unexpected error`, err instanceof Error ? err.name : "unknown");
+      return fail(500, "We could not complete this just now. Try again in a moment.", { code: "server_error" });
+    }
+  };
+}
+
 /** A valid, unexpired, not signed-out host session, or null. If the revocation list cannot be read the answer is null. */
 export async function adminSession(): Promise<{ userId: string; tenantId: string; role: "owner" | "admin" | "member"; email: string; tenantName: string; emailVerified: boolean; legacyBootstrap: boolean; authVersion: number; sid: string; exp: number } | null> {
   const jar = await cookies();

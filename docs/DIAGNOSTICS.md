@@ -4,7 +4,7 @@
 
 Every finding the checker reports has a stable code. This page explains each one and how to fix it. Errors block the upload. Warnings and notes do not, but warnings usually mean something will look wrong or lose data.
 
-There are 95 codes. Severity is **error**, **warning** or **note**.
+There are 96 codes. Severity is **error**, **warning** or **note**.
 
 ## The file itself (KQA1xx)
 
@@ -77,15 +77,15 @@ The file ends inside a tag, comment or script, so everything after that point is
 
 **How to fix:** Re-output the complete file. Check that every <script>, <style> and comment is closed and the file ends with </html>.
 
-## The manifest (KQA2xx)
-
 ### KQA113: Unbalanced article element
 
 Severity: **warning**
 
-The number of `<article>` start tags does not match the number of `</article>` end tags. Browsers close the element for you, so the page may still work, but content after the missing or extra tag can land in the wrong place.
+The number of <article> start tags does not match the number of </article> end tags. Browsers close the element for you, so the page may still work, but content after the missing or extra tag can land in the wrong place.
 
-**How to fix:** Make every `<article>` have one matching `</article>`, usually at the end of its question group.
+**How to fix:** Make every <article> have one matching </article>, usually at the end of its question group.
+
+## The manifest (KQA2xx)
 
 ### KQA200: Manifest missing
 

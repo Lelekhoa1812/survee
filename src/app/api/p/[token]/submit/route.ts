@@ -1,10 +1,10 @@
-import { fail, json, readJson } from "@/lib/http";
+import { fail, json, readJson, withServerErrors } from "@/lib/http";
 import { submitAnswers } from "@/lib/repo";
 import { looksLikeToken } from "@/lib/tokens";
 
 type Ctx = { params: Promise<{ token: string }> };
 
-export async function POST(req: Request, { params }: Ctx) {
+export const POST = withServerErrors("p/submit", async function POST(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.");
   const body = await readJson<{ version?: unknown }>(req, 4096);
@@ -14,4 +14,4 @@ export async function POST(req: Request, { params }: Ctx) {
   }
   const result = await submitAnswers(token, body.data.version);
   return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, missing: result.missing, invalidSelections: result.invalidSelections, invalidMinimumSelections: result.invalidMinimumSelections, invalidExclusiveSelections: result.invalidExclusiveSelections, invalidRankSelections: result.invalidRankSelections, repeatErrors: result.repeatErrors });
-}
+});

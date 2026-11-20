@@ -175,6 +175,36 @@ Set `segmentBy` to a current-version single-choice, dropdown, checkbox, or scale
 
 Person status stays `invited` ("Not started") until they save an answer. A mail gateway prefetching the link does not count as an open.
 
+## Errors
+
+A failed tool call returns `isError: true` with `structuredContent` shaped as `{ "ok": false, "error": "<message>", "code": "<code>" }`. Read `code` for decisions and `error` for the message to show. Some refusals add fields such as `diagnostics`, `missing`, or `previewToken`.
+
+| Code | Meaning |
+| --- | --- |
+| `invalid_args` | An argument is missing, has the wrong shape, or breaks a rule. Fix the call; do not retry it unchanged. |
+| `invalid_state` | The request is valid, but the interview is in the wrong state for it, for example a closed interview. |
+| `not_found` | The interview, version, person, asset or record does not exist, or is not visible to this credential. |
+| `not_submitted` | `reopen_person` was called for someone who has not submitted. |
+| `unknown_tool` | The tool name is not in this server's catalogue. |
+| `tenant_context_required` | The request is not bound to a workspace. |
+| `forbidden` | The credential's permissions do not allow this action. |
+| `preview_required` | A write needs the reviewed hashes from a preview first. |
+| `preview_expired` | The preview token is past its lifetime. Preview again. |
+| `invalid_preview` | The preview token is malformed, tampered with, or does not match this request. |
+| `stale_preview` | The interview or its findings changed since the preview. Preview again. |
+| `candidate_changed` | The candidate HTML differs from the reviewed candidate. Preview again. |
+| `preview_unavailable` | Signed previews are not configured for this request. |
+| `acknowledgement_required` | The change affects saved answers. Review the findings, then acknowledge them. |
+| `checker` | The questionnaire failed the checker. Read `diagnostics` and fix the file. |
+| `invalid_patch` | A patch names a question or operation that does not exist in the current version. |
+| `confirmation_mismatch` | A destructive action's confirm name does not match exactly. |
+| `in_use` / `asset_in_use` | The image or asset is still referenced. Remove the references first. |
+| `invalid_image` | The upload is not an accepted image type. |
+| `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
+| `docs_unavailable` | Bundled documentation could not be read. Try again later. |
+
+Respondent routes use the same `{ ok, error, code }` shape over HTTP. An unexpected failure returns HTTP 500 with `code: "server_error"` and no details. Retry the save; the server logs the error type only.
+
 ## Deliberately absent
 
 - Login and logout. The bearer token is the credential.

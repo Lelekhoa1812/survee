@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/http", () => ({
   fail: (status: number, error: string, extra: Record<string, unknown> = {}) => new Response(JSON.stringify({ ok: false, error, ...extra }), { status }),
   json: (data: unknown, status = 200) => new Response(JSON.stringify(data), { status }),
+  withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   readJson: async (req: Request) => {
     try { return { ok: true, data: await req.json() }; }
     catch { return { ok: false, res: new Response(JSON.stringify({ ok: false }), { status: 400 }) }; }
