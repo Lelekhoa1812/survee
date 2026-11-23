@@ -11,7 +11,7 @@ export type BasicQuestion = {
   required: boolean;
   note?: boolean;
   section?: string;
-  when?: { all?: Condition[] };
+  when?: { all?: Condition[]; any?: Condition[] };
   options?: Array<{ value: string; label: string }>;
   minSelections?: number;
   maxSelections?: number;
@@ -143,7 +143,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     throw new Error("Section-by-section presentation needs at least one section and every question assigned to a section.");
   }
   const sourceQuestions = new Map(input.questions.map((question) => [question.id, question]));
-  for (const question of input.questions) for (const condition of question.when?.all ?? []) {
+  for (const question of input.questions) for (const condition of [...(question.when?.all ?? []), ...(question.when?.any ?? [])]) {
     const source = sourceQuestions.get(condition.question);
     if (source?.type === "date" && "value" in condition && (typeof condition.value !== "string" || !isCalendarDate(condition.value))) throw new Error(`Choose a valid date for the routing rule that uses "${source.label}".`);
   }

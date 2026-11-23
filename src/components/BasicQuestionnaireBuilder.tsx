@@ -18,17 +18,32 @@ function freshRepeatField(index: number): BasicRepeatField {
   return { id: `field-${index + 1}`, type: "text", label: `Field ${index + 1}` };
 }
 
-function routeCondition(question: BasicQuestion, conditionIndex = 0): Condition | undefined {
-  return question.when?.all?.[conditionIndex];
+type RouteGroup = "all" | "any";
+
+function routeGroup(question: BasicQuestion): RouteGroup {
+  return question.when?.any ? "any" : "all";
+}
+
+function routeConditions(question: BasicQuestion, group = routeGroup(question)): Condition[] {
+  return question.when?.[group] ?? [];
+}
+
+function routeCondition(question: BasicQuestion, conditionIndex = 0, group = routeGroup(question)): Condition | undefined {
+  return routeConditions(question, group)[conditionIndex];
 }
 
 export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => void }) {
   const [data, setData] = useState<BasicQuestionnaire>({ title: "New questionnaire", description: "", presentation: "all", questions: [freshQuestion(0)] });
+  const [routeModes, setRouteModes] = useState<Record<string, RouteGroup>>({});
   const [error, setError] = useState("");
   const built = useMemo(() => {
     try { return { html: generateBasicQuestionnaireHtml(data), error: "" }; }
     catch (caught) { return { html: "", error: caught instanceof Error ? caught.message : "Fix the questionnaire fields before continuing." }; }
   }, [data]);
+
+  function activeRouteGroup(question: BasicQuestion): RouteGroup {
+    return routeModes[question.id] ?? routeGroup(question);
+  }
 
   function updateQuestion(index: number, patch: Partial<BasicQuestion>) {
     setData((current) => {
@@ -40,21 +55,43 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
           if (item === index) return { ...question, ...patch };
           if (!previousId || !nextId || previousId === nextId || !question.when) return question;
           const replace = (condition: Condition): Condition => condition.question === previousId ? { ...condition, question: nextId } : condition;
-          return { ...question, when: { ...question.when, ...(question.when.all ? { all: question.when.all.map(replace) } : {}) } };
+          return { ...question, when: { ...question.when, ...(question.when.all ? { all: question.when.all.map(replace) } : {}), ...(question.when.any ? { any: question.when.any.map(replace) } : {}) } };
         }),
       };
     });
+    const currentId = data.questions[index]?.id;
+    if (currentId && patch.id && currentId !== patch.id && routeModes[currentId]) {
+      setRouteModes((current) => {
+        const next = { ...current, [patch.id!]: current[currentId] };
+        delete next[currentId];
+        return next;
+      });
+    }
   }
 
   function setRouteCondition(index: number, conditionIndex: number, condition?: Condition) {
     setData((current) => {
       const question = current.questions[index];
       if (!question) return current;
-      const all = [...(question.when?.all ?? [])];
-      if (condition) all[conditionIndex] = condition;
-      else all.splice(conditionIndex, 1);
-      return { ...current, questions: current.questions.map((item, itemIndex) => itemIndex === index ? { ...item, when: all.length ? { all } : undefined } : item) };
+      const group = activeRouteGroup(question);
+      const conditions = [...routeConditions(question, group)];
+      if (condition) conditions[conditionIndex] = condition;
+      else conditions.splice(conditionIndex, 1);
+      return { ...current, questions: current.questions.map((item, itemIndex) => itemIndex === index ? { ...item, when: conditions.length ? { [group]: conditions } : undefined } : item) };
     });
+  }
+
+  function setRouteGroup(index: number, group: RouteGroup) {
+    setData((current) => {
+      const question = current.questions[index];
+      if (!question) return current;
+      const existingGroup = routeModes[question.id] ?? routeGroup(question);
+      if (existingGroup === group) return current;
+      const conditions = routeConditions(question, existingGroup);
+      return { ...current, questions: current.questions.map((item, itemIndex) => itemIndex === index ? { ...item, when: conditions.length ? { [group]: conditions } : undefined } : item) };
+    });
+    const question = data.questions[index];
+    if (question) setRouteModes((current) => ({ ...current, [question.id]: group }));
   }
 
   function selectRouteSource(index: number, sourceId: string, conditionIndex = 0) {
@@ -91,13 +128,14 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
 
   function addRouteCondition(index: number) {
     const source = data.questions[index - 1];
-    if (!source || (data.questions[index].when?.all?.length ?? 0) >= 20) return;
-    selectRouteSource(index, source.id, data.questions[index].when?.all?.length ?? 0);
+    const conditions = routeConditions(data.questions[index], activeRouteGroup(data.questions[index]));
+    if (!source || conditions.length >= 20) return;
+    selectRouteSource(index, source.id, conditions.length);
   }
 
   function renderRouteCondition(index: number, conditionIndex: number) {
     const question = data.questions[index];
-    const condition = routeCondition(question, conditionIndex);
+    const condition = routeCondition(question, conditionIndex, activeRouteGroup(question));
     if (!condition) return null;
     const source = data.questions.slice(0, index).find((item) => item.id === condition.question);
     if (!source) return <p className="hint">Choose an earlier question to continue this rule.</p>;
@@ -266,9 +304,10 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         <div className="field"><label htmlFor={`builder-id-${index}`}>Stable question ID</label><input id={`builder-id-${index}`} className="input mono" maxLength={64} pattern="[a-z0-9][a-z0-9_-]{0,63}" value={question.id} onChange={(event) => updateQuestion(index, { id: event.target.value })} /><span className="hint">Lowercase letters, numbers, hyphens and underscores. Keep this ID if you revise the file after collecting answers.</span></div>
         <div className="field"><label htmlFor={`builder-type-${index}`}>Answer type</label><select id={`builder-type-${index}`} className="select" value={question.type} onChange={(event) => changeType(index, event.target.value as BasicQuestionType)}>{questionTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
         {(data.sections?.length ?? 0) > 0 && <div className="field"><label htmlFor={`builder-section-${index}`}>Section</label><select id={`builder-section-${index}`} className="select" value={question.section ?? ""} onChange={(event) => updateQuestion(index, { section: event.target.value || undefined })}><option value="">No section</option>{data.sections?.map((section) => <option key={section.id} value={section.id}>{section.title || section.id}</option>)}</select></div>}
-        {index > 0 && <div className="stack" style={{ marginTop: 12 }}><strong>Show this question when all these rules match</strong>
-          {(question.when?.all ?? []).map((condition, conditionIndex) => <div className="stack" key={`${conditionIndex}-${condition.question}`}><div className="row wrap" style={{ alignItems: "flex-end" }}><label className="field" style={{ flex: "1 1 220px", margin: 0 }}><span>Earlier question</span><select id={`builder-route-source-${index}-${conditionIndex}`} className="select" value={condition.question} onChange={(event) => selectRouteSource(index, event.target.value, conditionIndex)}>{data.questions.slice(0, index).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select></label>{renderRouteCondition(index, conditionIndex)}<button className="btn danger sm" type="button" aria-label={`Remove routing rule ${conditionIndex + 1} from question ${index + 1}`} onClick={() => setRouteCondition(index, conditionIndex)}>Remove rule</button></div></div>)}
-          <button className="btn sm" type="button" aria-label={`Add routing rule to question ${index + 1}`} disabled={(question.when?.all?.length ?? 0) >= 20} onClick={() => addRouteCondition(index)}>Add routing rule</button><span className="hint">Only earlier questions can control this question. All listed rules must match. Inactive answers remain saved.</span>
+        {index > 0 && <div className="stack" style={{ marginTop: 12 }}><strong>Show this question when</strong>
+          <label className="field" style={{ maxWidth: 360, margin: 0 }} htmlFor={`builder-route-mode-${index}`}><span>Rule matching</span><select id={`builder-route-mode-${index}`} className="select" value={activeRouteGroup(question)} onChange={(event) => setRouteGroup(index, event.target.value as RouteGroup)}><option value="all">All rules match</option><option value="any">Any rule matches</option></select></label>
+          {routeConditions(question, activeRouteGroup(question)).map((condition, conditionIndex) => <div className="stack" key={`${conditionIndex}-${condition.question}`}><div className="row wrap" style={{ alignItems: "flex-end" }}><label className="field" style={{ flex: "1 1 220px", margin: 0 }}><span>Earlier question</span><select id={`builder-route-source-${index}-${conditionIndex}`} className="select" value={condition.question} onChange={(event) => selectRouteSource(index, event.target.value, conditionIndex)}>{data.questions.slice(0, index).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select></label>{renderRouteCondition(index, conditionIndex)}<button className="btn danger sm" type="button" aria-label={`Remove routing rule ${conditionIndex + 1} from question ${index + 1}`} onClick={() => setRouteCondition(index, conditionIndex)}>Remove rule</button></div></div>)}
+          <button className="btn sm" type="button" aria-label={`Add routing rule to question ${index + 1}`} disabled={routeConditions(question, activeRouteGroup(question)).length >= 20} onClick={() => addRouteCondition(index)}>Add routing rule</button><span className="hint">Only earlier questions can control this question. {activeRouteGroup(question) === "all" ? "All listed rules must match." : "At least one listed rule must match."} Inactive answers remain saved.</span>
         </div>}
         <div className="field"><label htmlFor={`builder-label-${index}`}>Question text</label><input id={`builder-label-${index}`} className="input" maxLength={300} value={question.label} onChange={(event) => updateQuestion(index, { label: event.target.value })} /></div>
         <div className="field"><label htmlFor={`builder-help-${index}`}>Help text <span className="muted">(optional)</span></label><textarea id={`builder-help-${index}`} className="textarea" rows={2} maxLength={1000} value={question.help} onChange={(event) => updateQuestion(index, { help: event.target.value })} /></div>
