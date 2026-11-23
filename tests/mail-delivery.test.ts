@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { checkInviteDelivery, type DeliveryDeps } from "../src/lib/mail/delivery";
+import { currentMail } from "../src/lib/mail/state";
 
 const messageId = "<delivery-check-123@example.com>";
 const context = {
@@ -44,5 +45,22 @@ describe("invite delivery check throttling", () => {
     expect(rateLimit).toHaveBeenNthCalledWith(1, "delivery-person:test-scope:person-1", 3, 60);
     expect(rateLimit).toHaveBeenNthCalledWith(2, "delivery-workspace:test-scope", 100, 60);
     expect(check).toHaveBeenCalledWith([messageId]);
+  });
+
+  it("checks the exact stored id for a pending attempt and resolves it when a DSN confirms delivery", async () => {
+    const pendingContext = {
+      ...context,
+      rows: [{ ...context.rows[0], status: "pending" as const }],
+    };
+    const save = vi.fn(async () => undefined);
+    const check = vi.fn(async () => new Map([[messageId, { status: "delivered" as const, detail: "Recipient server accepted the message." }]]));
+    const { deps } = harness({ load: async () => pendingContext, check, save });
+
+    expect(await checkInviteDelivery("person-1", deps)).toMatchObject({ ok: true, delivery: "delivered" });
+    expect(check).toHaveBeenCalledWith([messageId]);
+    expect(save).toHaveBeenCalledWith("mail-1", expect.objectContaining({ delivery: "delivered" }));
+    expect(currentMail(pendingContext.person, [{
+      ...pendingContext.rows[0], id: "mail-1", sentAt: "2026-01-01T00:00:00.000Z", delivery: "delivered",
+    }])).toMatchObject({ state: "sent", delivery: "delivered" });
   });
 });

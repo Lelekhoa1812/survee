@@ -110,6 +110,9 @@ export function InviteActions({ person, interviewOpen, publicOrigin, refresh }: 
         <>
           <span className="invite-meta">Outcome unconfirmed{mail.sentAt ? ` ${relTime(mail.sentAt)}` : ""}</span>
           <p className="field-error">The mail server may have accepted this invite. Sending again may deliver a duplicate.</p>
+          <button className="btn sm" type="button" disabled={phase === "checking"} onClick={() => void check()}>
+            {phase === "checking" ? <><Spinner /> Checking…</> : "Check delivery"}
+          </button>
           {!refusal && <button className="btn sm" type="button" onClick={() => setConfirm(true)}>Send again</button>}
         </>
       ) : (

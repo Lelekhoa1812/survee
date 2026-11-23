@@ -32,7 +32,16 @@ export function currentMail(person: { email?: string | null; token: string }, ro
   const latest = matching[0];
   if (!latest) return { state: "unsent", delivery: "unknown" };
   if (latest.status === "pending") {
-    return { state: "pending", sentAt: latest.sentAt, messageId: latest.messageId, delivery: "unknown" };
+    if (latest.delivery === "delivered" || latest.delivery === "bounced") {
+      return {
+        state: "sent", sentAt: latest.sentAt, messageId: latest.messageId,
+        delivery: latest.delivery, deliveryCheckedAt: latest.deliveryCheckedAt, deliveryDetail: latest.deliveryDetail,
+      };
+    }
+    return {
+      state: "pending", sentAt: latest.sentAt, messageId: latest.messageId,
+      delivery: latest.delivery ?? "unknown", deliveryCheckedAt: latest.deliveryCheckedAt, deliveryDetail: latest.deliveryDetail,
+    };
   }
   if (latest.status === "failed") {
     return { state: "failed", sentAt: latest.sentAt, error: latest.error, delivery: "unknown" };

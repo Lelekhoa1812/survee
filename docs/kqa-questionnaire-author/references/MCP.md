@@ -172,7 +172,7 @@ Set `segmentBy` to a current-version single-choice, dropdown, checkbox, or scale
 
 `send_invite` refuses when the person has no email, the interview is closed, or `KQA_PUBLIC_URL` is unset. Before SMTP, it stores a pending attempt without the message body. If SMTP accepts the message but the final status update fails, or SMTP's outcome is ambiguous, the pending attempt remains and ordinary calls do not resend it. Review `get_mail_status`; pass `resend: true` only after deciding a duplicate may result. The link in the message is always `KQA_PUBLIC_URL` plus the token. Changing the email or rotating the link clears the current mail state and does not send on its own. A `sent` result means the configured SMTP server accepted the message; it does not prove the recipient's server delivered it or that the person read it.
 
-`check_invite_delivery` takes a `personId` only. It connects to IMAP, searches for the stored message id, and disconnects. It will not search the mailbox for anything else. A delivery-status notification can confirm `delivered` or `bounced`; `unknown` means delivery is not confirmed, not that sending failed. `get_mail_status` reads stored state without opening the mailbox or returning message bodies.
+`check_invite_delivery` takes a `personId` only. It connects to IMAP, searches for the stored message id for the current invite, and disconnects. It can check an unconfirmed pending attempt as well as a previously accepted send. It will not search the mailbox for anything else. A delivery-status notification can confirm `delivered` or `bounced`; `unknown` means delivery is not confirmed, not that sending failed. `get_mail_status` reads stored state without opening the mailbox or returning message bodies.
 
 Person status stays `invited` ("Not started") until they save an answer. A mail gateway prefetching the link does not count as an open.
 
@@ -215,7 +215,7 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `rate_limit_unavailable` | The durable throttle could not be checked, so the outbound action was refused. Retry later. |
 | `attempt_unavailable` | The durable attempt could not be created, so SMTP was not called. Retry after the storage issue is resolved. |
 | `outcome_unknown` | A durable pending attempt exists, but SMTP acceptance is unconfirmed. Read `get_mail_status`; retry only with `resend: true` if a duplicate may result. |
-| `not_sent` | `check_invite_delivery` was called for a person whose invite has not been sent. |
+| `not_sent` | `check_invite_delivery` has no current matching attempt with a stored Message-ID. |
 | `analysis_run_too_large` | `analyze_answers` could not keep the aggregate result as a run. Select up to 20 outcomes with `questionIds`, or analyze fewer at a time. |
 | `analysis_run_capacity` | The tenant already has the maximum number of active analysis runs. Retry after an existing run expires. |
 

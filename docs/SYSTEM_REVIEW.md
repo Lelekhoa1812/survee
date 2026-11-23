@@ -24,7 +24,7 @@ The following changes are pushed to `main` and deployed:
 - IMAP checks and logout cleanup have bounded deadlines; timeouts retain the existing `unknown` result.
 - Authentication distinguishes invalid/revoked sessions (401) from account-store outages (503 on API/frame routes).
 - Audit event write failures produce sanitized operational logs, and unknown MCP tool attempts enter the audit path.
-- Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries and an explicit resend warns of possible duplicates.
+- Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries, an on-demand IMAP check can resolve a matching delivery-status notice, and explicit resend warns of possible duplicates.
 - Full participant-list and export reads now stop explicitly above 100 people; the host page keeps other controls available, and targeted MCP answer reads load only one tenant-scoped person.
 - A rejected cold-start Mongo connection now clears only its own cached promise so a warm worker can retry when the database recovers.
 - Published questionnaire assets and asset deletion now share a transactional coordination point; a concurrent deletion cannot leave a newly published version pointing at a missing image.
@@ -33,7 +33,7 @@ The following changes are pushed to `main` and deployed:
 
 | Priority | Gap | Impact | Recommended next step |
 | --- | --- | --- | --- |
-| P1 | **Outbound mail still needs reconciliation and workspace invites remain ambiguous.** Participant invite attempts are now persisted before SMTP; an ambiguous attempt stays pending and normal retries are suppressed. There is no worker or provider reconciliation to resolve pending attempts. Workspace invitation sends still rotate the stored token on retries and are not backed by the same attempt flow. | A host may need to make a duplicate-risk decision manually; retries of workspace invites can invalidate a previously delivered link. | Add provider reconciliation or an operator resolution workflow for pending participant attempts, and extend durable attempt semantics to workspace invitations without rotating a delivered token unexpectedly. |
+| P1 | **Outbound mail still needs reconciliation and workspace invites remain ambiguous.** Participant invite attempts are persisted before SMTP; an ambiguous attempt stays pending, normal retries are suppressed, and a rate-limited IMAP check can resolve a matching delivery-status notice. Without a DSN, there is no provider reconciliation and pending may remain unknown indefinitely. Workspace invitation sends still rotate the stored token on retries and are not backed by the same attempt flow. | A host may need a duplicate-risk decision manually; pending status can remain unresolved without a DSN, and retries of workspace invites can invalidate a previously delivered link. | Add provider reconciliation or a host resolution workflow for pending participant attempts, and extend durable attempt semantics to workspace invitations without rotating a delivered token unexpectedly. |
 | P1 | **Participant reads and exports need pagination for larger interviews.** Full-record reads and exports now stop after 100 people and fail explicitly instead of hydrating or exporting an unbounded cohort. Exports under that limit are still assembled in memory. | Interviews above 100 people cannot use the current full-list or export flows; large answer payloads can still make a 100-person response expensive. | Add cursor pagination to host/MCP listing and stream or background larger exports; show continuation/export status. |
 | P1 | **Asset storage has no workspace quota, and active preview drafts can race deletion.** Publication now touches each referenced tenant asset in its transaction, while deletion scans references and deletes in a transaction that writes the same asset. This prevents a concurrent publish from committing a dangling image URL. Draft creation does not use that coordination point, but publication rejects a missing asset. | Aggregate storage costs can grow without a tenant bound; a preview draft created during deletion can become stale and fail when published. | Add configurable workspace quotas and coordinate draft creation with deletion or use a staged tombstone/garbage-collection flow. |
 | P1 | **Consent, retention, and withdrawal rely on host procedures.** The app stores person-linked answers and supports manual deletion, but it does not manage notice versions, consent records, retention windows, or respondent withdrawal. | Hosts can collect data without a consistent in-product record of the notice or planned deletion. | Design a versioned notice and optional consent gate, plus workspace-configured retention, dry-run review, audited deletion, and a respondent withdrawal route. Avoid legal defaults; make policy owner-configurable. |
@@ -46,7 +46,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **921 tests passed across 134 files** after the current code changes.
+- Full automated suite: **922 tests passed across 134 files** after the current code changes.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production code release `8d9015d` and report snapshot `53c6dd7` both reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST returned 401; Vercel showed no runtime errors in the hour after the latest deployment. The earlier authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools. This release was not exercised with a live authenticated mutation; no respondent data or email was used.
@@ -56,7 +56,7 @@ Some repository evaluation scripts require provider-generated result JSON and we
 
 ## Next review order
 
-1. Ship a durable mail outbox and retry model.
+1. Extend durable mail attempt handling to workspace invitations and add an operator reconciliation workflow for attempts with no delivery-status notice.
 2. Bound respondent listing and export memory.
 3. Add workspace asset quotas and race-safe reference lifecycle.
 4. Decide and implement consent, retention, and withdrawal workflows.

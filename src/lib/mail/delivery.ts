@@ -34,8 +34,8 @@ export async function checkInviteDelivery(personId: string, deps: DeliveryDeps =
   const parsed = parseEmail(ctx.person.email ?? "");
   const email = parsed.ok ? parsed.email : null;
   const current = currentMail({ email, token: ctx.person.token }, ctx.rows);
-  if (current.state !== "sent" || !current.messageId) {
-    return { ok: false, code: "not_sent", error: "Send the link before checking delivery." };
+  if ((current.state !== "sent" && current.state !== "pending") || !current.messageId) {
+    return { ok: false, code: "not_sent", error: "There is no stored invite attempt to check." };
   }
   const tenantId = await currentTenantId();
   if (!tenantId && !deps.rateLimit) return { ok: false, code: "rate_limit_unavailable", error: "Delivery checks are temporarily unavailable. Try again." };

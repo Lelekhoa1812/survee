@@ -1710,17 +1710,17 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "check_invite_delivery",
-    description: "Connect briefly over IMAP and look up only the message id survee stored for this person's current invite. Returns delivered, bounced, or unknown.",
+    description: "Connect briefly over IMAP and look up only the message id survee stored for this person's current invite, including an unconfirmed pending attempt. Returns delivered, bounced, or unknown.",
     inputSchema: obj({ personId: str }, ["personId"]),
     guard(args) {
       if ("query" in args || "mailbox" in args || "search" in args || "messageId" in args) {
-        return err("Delivery checks only the invites survee has sent for this person. It does not search a mailbox.");
+        return err("Delivery checks only stored invite attempts for this person. It does not search a mailbox.");
       }
       return null;
     },
     async run(args) {
       if ("query" in args || "mailbox" in args || "search" in args || "messageId" in args) {
-        return err("Delivery checks only the invites survee has sent for this person. It does not search a mailbox.");
+        return err("Delivery checks only stored invite attempts for this person. It does not search a mailbox.");
       }
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
