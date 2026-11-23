@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
+  ParticipantReadLimitError: class ParticipantReadLimitError extends Error { limit = 100; },
   role: "member" as "owner" | "admin" | "member",
   listInterviews: vi.fn(async () => [{ id: "interview-1", counts: { people: 2, invited: 1, inProgress: 0, submitted: 1 } }]),
   getInterview: vi.fn(async () => ({ _id: "interview-1", name: "Study", currentVersion: 1, mode: "multi", status: "open" })),
@@ -32,6 +33,7 @@ vi.mock("../src/lib/repo", () => ({
   getInterview: state.getInterview,
   getVersion: state.getVersion,
   listParticipants: state.listParticipants,
+  ParticipantReadLimitError: state.ParticipantReadLimitError,
   listVersions: state.listVersions,
   recentEvents: state.recentEvents,
   updateInterview: state.updateInterview,
@@ -84,6 +86,15 @@ describe("workspace member access boundary", () => {
     expect(response.status).toBe(200);
     const document = await response.json();
     expect(document.participants[0].recordGroups).toEqual({ assets: [{ id: "row-1", values: { name: "Pump" } }] });
+  });
+
+  it("returns a clear bounded-export failure when the cohort exceeds the per-request limit", async () => {
+    state.role = "owner";
+    state.getInterview.mockResolvedValueOnce({ _id: "0123456789abcdef01234567", name: "Study", currentVersion: 1, mode: "multi", status: "open", createdAt: new Date("2026-01-01T00:00:00.000Z") } as never);
+    state.listParticipants.mockRejectedValueOnce(new state.ParticipantReadLimitError());
+    const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=json"), interviewCtx);
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ code: "export_participant_limit", limit: 100 });
   });
 
   it("allows interview summaries and strips respondent records from detail reads", async () => {

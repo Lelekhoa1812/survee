@@ -27,6 +27,7 @@ import {
   iterateAnalyticsParticipants,
   listInterviews,
   listParticipants,
+  ParticipantReadLimitError,
   listVersions,
   noteMcp,
   publishVersionIfCurrent,
@@ -543,8 +544,9 @@ const TOOLS: ToolDef[] = [
       const version = await getVersion(interview._id, interview.currentVersion);
       if (!version) return err("Survey version not found.", "not_found");
       const only = asString(args.personId, 40);
-      let people = await listParticipants(id);
-      if (only) people = people.filter((p) => p.id === only);
+      let people = only
+        ? await getParticipant(only).then((person) => person?.interviewId === interview._id.toHexString() ? [person] : [])
+        : await listParticipants(id);
       if (args.submittedOnly === true) people = people.filter((p) => p.status === "submitted");
       const rows = people.map((p) => {
         const eligible = evaluateEligibility(version.manifest, p.answers, p.recordGroups);
@@ -1779,6 +1781,9 @@ export async function dispatchTool(name: string, args: unknown, capabilities?: r
   try {
     return await finish(tool.name, await tool.run(record), interviewId);
   } catch (error) {
+    if (error instanceof ParticipantReadLimitError) {
+      return finish(tool.name, err(error.message, "participant_read_limit"), interviewId);
+    }
     console.error(`[mcp:${tool.name}] unexpected error`, error instanceof Error ? error.name : "unknown");
     return finish(tool.name, err("That could not be done. Try again in a moment.", "server_error"), interviewId);
   }

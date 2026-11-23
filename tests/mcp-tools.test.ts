@@ -154,7 +154,7 @@ vi.mock("../src/lib/repo", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, deleteInterview, getInterview, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipants, noteMcp, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, deleteInterview, getInterview, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipants, noteMcp, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -221,6 +221,32 @@ describe("MCP tools", () => {
     const body = await response.json() as { result: { structuredContent: { people: Record<string, unknown>[] } } };
     expect(body.result.structuredContent.people[0]).not.toHaveProperty("recordGroups");
     expect(Object.keys(body.result.structuredContent.people[0])).toEqual(["id", "name", "status", "submittedAt", "answers"]);
+  });
+
+  it("loads one requested get_answers person directly, even when the interview list exceeds the read limit", async () => {
+    vi.mocked(listParticipants).mockReset().mockImplementation(async () => { throw new ParticipantReadLimitError(); });
+    vi.mocked(getParticipant).mockClear().mockResolvedValueOnce({
+      id: personId, interviewId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes" } },
+    } as never);
+    const response = await call("get_answers", { interviewId, personId });
+    const body = await response.json() as { result: { structuredContent: { people: { id: string; status: string }[] }; isError?: boolean } };
+
+    expect(body.result.isError).not.toBe(true);
+    expect(body.result.structuredContent.people).toMatchObject([{ id: personId, status: "submitted" }]);
+    expect(getParticipant).toHaveBeenCalledWith(personId);
+    expect(listParticipants).not.toHaveBeenCalled();
+    vi.mocked(listParticipants).mockReset().mockResolvedValue([
+      { id: personId, name: "Ada Lovelace", status: "submitted", answers: {} },
+      { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: {} },
+    ] as never);
+  });
+
+  it("honors submittedOnly for a targeted get_answers person", async () => {
+    vi.mocked(getParticipant).mockResolvedValueOnce({ id: personId, interviewId, name: "Ada", status: "in_progress", answers: {} } as never);
+    const response = await call("get_answers", { interviewId, personId, submittedOnly: true });
+    const body = await response.json() as { result: { structuredContent: { people: unknown[] } } };
+    expect(body.result.structuredContent.people).toEqual([]);
+    expect(listParticipants).not.toHaveBeenCalled();
   });
 
   it("labels current eligibility without discarding retained answers or repeat rows", async () => {

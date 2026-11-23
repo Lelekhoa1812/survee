@@ -1,6 +1,6 @@
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "@/lib/export";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
-import { getInterview, getVersion, listParticipants } from "@/lib/repo";
+import { getInterview, getVersion, listParticipants, ParticipantReadLimitError } from "@/lib/repo";
 import { NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -15,7 +15,13 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
   if (!interview) return fail(404, "Interview not found.");
   const version = await getVersion(interview._id, interview.currentVersion);
   if (!version) return fail(404, "Survey version not found.");
-  const people = await listParticipants(id);
+  let people;
+  try {
+    people = await listParticipants(id);
+  } catch (error) {
+    if (error instanceof ParticipantReadLimitError) return fail(413, `This interview is too large for a single export request. Export supports up to ${error.limit} people per request.`, { code: "export_participant_limit", limit: error.limit });
+    throw error;
+  }
   const file = await exportInterview(
     {
       interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, createdAt: interview.createdAt.toISOString() },

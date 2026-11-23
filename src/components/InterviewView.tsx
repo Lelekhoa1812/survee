@@ -118,6 +118,13 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
         </div>}
       </div>
 
+      {canManage && data.participantReadLimit ? (
+        <div className="callout warn" role="status" aria-live="polite">
+          <Icon name="info" />
+          <div><b>Respondent records are over the {data.participantReadLimit}-person read limit.</b> Interview settings, counts, activity, and analysis remain available. People, individual answers, and full exports need a paginated workflow that is not available yet.</div>
+        </div>
+      ) : null}
+
       <div className="tabs" role="tablist" aria-label="Interview sections">
         {tabs.map(([k, label, n]) => (
           <button

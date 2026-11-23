@@ -25,13 +25,15 @@ The following changes are pushed to `main` and deployed:
 - Authentication distinguishes invalid/revoked sessions (401) from account-store outages (503 on API/frame routes).
 - Audit event write failures produce sanitized operational logs, and unknown MCP tool attempts enter the audit path.
 - Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries and an explicit resend warns of possible duplicates.
+- Full participant-list and export reads now stop explicitly above 100 people; the host page keeps other controls available, and targeted MCP answer reads load only one tenant-scoped person.
+- A rejected cold-start Mongo connection now clears only its own cached promise so a warm worker can retry when the database recovers.
 
 ## Ranked remaining gaps
 
 | Priority | Gap | Impact | Recommended next step |
 | --- | --- | --- | --- |
 | P1 | **Outbound mail still needs reconciliation and workspace invites remain ambiguous.** Participant invite attempts are now persisted before SMTP; an ambiguous attempt stays pending and normal retries are suppressed. There is no worker or provider reconciliation to resolve pending attempts. Workspace invitation sends still rotate the stored token on retries and are not backed by the same attempt flow. | A host may need to make a duplicate-risk decision manually; retries of workspace invites can invalidate a previously delivered link. | Add provider reconciliation or an operator resolution workflow for pending participant attempts, and extend durable attempt semantics to workspace invitations without rotating a delivered token unexpectedly. |
-| P1 | **Participant reads and exports load the full interview.** `listParticipants()` hydrates all matching people, and the export route builds the complete export in memory. | Large interviews can increase response time and function memory until they fail. | Add cursor pagination to host/MCP listing and stream or background large exports; set explicit per-request bounds and show continuation/export status. |
+| P1 | **Participant reads and exports need pagination for larger interviews.** Full-record reads and exports now stop after 100 people and fail explicitly instead of hydrating or exporting an unbounded cohort. Exports under that limit are still assembled in memory. | Interviews above 100 people cannot use the current full-list or export flows; large answer payloads can still make a 100-person response expensive. | Add cursor pagination to host/MCP listing and stream or background larger exports; show continuation/export status. |
 | P1 | **Asset storage has no workspace quota, and reference-check/delete can race publication.** The current per-file limit does not bound aggregate workspace usage. A version can potentially reference an asset after the deletion scan. | Storage costs can grow without a tenant bound; concurrent changes can leave a published questionnaire with a broken image. | Add configurable workspace quotas and coordinate asset deletion with version publication through a shared atomic protocol or a staged tombstone/garbage-collection flow. |
 | P1 | **Consent, retention, and withdrawal rely on host procedures.** The app stores person-linked answers and supports manual deletion, but it does not manage notice versions, consent records, retention windows, or respondent withdrawal. | Hosts can collect data without a consistent in-product record of the notice or planned deletion. | Design a versioned notice and optional consent gate, plus workspace-configured retention, dry-run review, audited deletion, and a respondent withdrawal route. Avoid legal defaults; make policy owner-configurable. |
 | P2 | **Questionnaires require HTML authoring.** There is no in-app builder for the supported question types and routing. | Non-technical hosts must source or edit files to create and revise a questionnaire. | Build a schema-backed editor with HTML import/export, checker diagnostics, live preview, accessibility states, and version diff/publish review. |
@@ -43,7 +45,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **907 tests passed across 131 files** after the current code changes.
+- Full automated suite: **915 tests passed across 133 files** after the current code changes.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production deployment for the reviewed code and report release `0721355` reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST returned 401. A fresh authenticated MCP `initialize` and `tools/list` both returned 200 with 40 tools during the earlier MCP audit; this mail-focused release was not exercised with a live authenticated send to avoid contacting real recipients.

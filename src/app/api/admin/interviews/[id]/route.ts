@@ -1,5 +1,5 @@
 import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
-import { deleteInterview, getInterview, listParticipants, listVersions, recentEvents, updateInterview } from "@/lib/repo";
+import { deleteInterview, getInterview, listParticipants, listVersions, ParticipantReadLimitError, recentEvents, updateInterview } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,11 +12,19 @@ export const GET = withServerErrors("admin/interviews/[id]", async function GET(
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
   const canManage = session.role === "owner" || session.role === "admin";
-  const [people, versions, events] = await Promise.all([
-    canManage ? listParticipants(id) : Promise.resolve([]),
-    listVersions(interview._id),
-    canManage ? recentEvents(id) : Promise.resolve([]),
-  ]);
+  let people;
+  let versions;
+  let events;
+  try {
+    [people, versions, events] = await Promise.all([
+      canManage ? listParticipants(id) : Promise.resolve([]),
+      listVersions(interview._id),
+      canManage ? recentEvents(id) : Promise.resolve([]),
+    ]);
+  } catch (error) {
+    if (error instanceof ParticipantReadLimitError) return fail(413, error.message, { code: "participant_read_limit", limit: error.limit });
+    throw error;
+  }
   return json({ ok: true, interview: { ...interview, _id: id }, people, versions, events });
 });
 

@@ -238,12 +238,28 @@ export async function deleteInterview(id: string): Promise<boolean> {
 }
 
 // ------------------------------------------------------------------------------------------ participants
+/** Maximum number of full respondent documents any single host/MCP read may hydrate. */
+export const MAX_PARTICIPANTS_PER_READ = 100;
+
+export class ParticipantReadLimitError extends Error {
+  readonly limit = MAX_PARTICIPANTS_PER_READ;
+
+  constructor() {
+    super(`This interview has more than ${MAX_PARTICIPANTS_PER_READ} people. Full-list and export reads currently support at most ${MAX_PARTICIPANTS_PER_READ}; use a single-person read or aggregate analysis where possible.`);
+    this.name = "ParticipantReadLimitError";
+  }
+}
+
 export async function listParticipants(interviewId: string): Promise<ParticipantView[]> {
   const oid = toOid(interviewId);
   if (!oid) return [];
   const tenantId = await currentTenantId();
   if (!tenantId) return [];
-  const docs = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid })).sort({ createdAt: 1 }).toArray();
+  // Read one extra row to distinguish a complete legacy result from a truncated one.
+  // Never hydrate answer payloads or question-order assignments for an unbounded cohort.
+  const docs = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }))
+    .sort({ createdAt: 1, _id: 1 }).limit(MAX_PARTICIPANTS_PER_READ + 1).toArray();
+  if (docs.length > MAX_PARTICIPANTS_PER_READ) throw new ParticipantReadLimitError();
   if (!docs.length) return [];
   const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, { interviewId: oid, participantId: { $in: docs.map((doc) => doc._id) } })).sort({ surveyVersion: 1 }).toArray();
   const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();

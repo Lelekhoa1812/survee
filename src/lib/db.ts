@@ -10,7 +10,13 @@ declare global {
 function client(): Promise<MongoClient> {
   if (!globalThis.__kqaMongo) {
     const c = new MongoClient(mongoUri(), { maxPoolSize: 5, serverSelectionTimeoutMS: 8000, appName: "kqa" });
-    globalThis.__kqaMongo = { client: c.connect() };
+    const entry = { client: c.connect() };
+    globalThis.__kqaMongo = entry;
+    // A failed initial server selection leaves a rejected promise cached for
+    // the lifetime of a warm worker. Let a later request create a fresh client.
+    void entry.client.catch(() => {
+      if (globalThis.__kqaMongo === entry) globalThis.__kqaMongo = undefined;
+    });
   }
   return globalThis.__kqaMongo.client;
 }

@@ -55,6 +55,8 @@ export interface InterviewData {
   /** Aggregate-only counts; available to workspace members without exposing respondent records. */
   counts: { people: number; invited: number; inProgress: number; submitted: number };
   people: PersonRow[];
+  /** Full respondent records are intentionally unavailable when a cohort exceeds the per-read bound. */
+  participantReadLimit?: number;
   versions: VersionRow[];
   events: EventRow[];
   manifest: Manifest;
