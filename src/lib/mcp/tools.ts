@@ -45,6 +45,8 @@ import {
   noteMcp,
   publishVersionIfCurrent,
   regenerateToken,
+  regenerateTokenWithOperation,
+  getRegenerateLinkOperation,
   reopenParticipant,
   saveQuestionnaireReviewDraft,
   updateInterview,
@@ -1911,11 +1913,30 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "regenerate_link",
-    description: "Replace a person's private link. The previous link stops working. Nothing is emailed automatically.",
-    inputSchema: obj({ personId: str }, ["personId"]),
+    description: "Replace a person's private link. The previous link stops working. Nothing is emailed automatically. Optional operationId makes uncertain retries return the same link for seven days.",
+    inputSchema: obj({ personId: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId"]),
     async run(args) {
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ personId: id })).digest("hex") };
+        const existing = await getRegenerateLinkOperation(operation);
+        if (existing?.kind === "conflict") return err("operationId was already used with different regenerate_link arguments.", "operation_id_conflict");
+        if (existing?.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before rotating the link.", "invite_outcome_pending");
+        if (existing?.kind === "replayed") {
+          const link = inviteLink(existing.token);
+          return ok({ token: existing.token, link: link.ok ? link.link : null, interviewId: existing.interviewId });
+        }
+        const result = await regenerateTokenWithOperation(id, operation);
+        if (result.kind === "not_found") return err("Person not found.", "not_found");
+        if (result.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before rotating the link.", "invite_outcome_pending");
+        if (result.kind === "conflict") return err("operationId was already used with different regenerate_link arguments.", "operation_id_conflict");
+        const link = inviteLink(result.token);
+        return ok({ token: result.token, link: link.ok ? link.link : null, interviewId: result.interviewId });
+      }
       const token = await regenerateToken(id);
       if (!token) return err("Person not found.", "not_found");
       const link = inviteLink(token);

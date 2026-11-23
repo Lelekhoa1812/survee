@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   pending: false,
   resolutionPurpose: null as string | null,
   calls: [] as { collection: string; filter: unknown; update?: unknown; options: unknown }[],
+  operations: [] as Array<Record<string, any>>,
   session: { transaction: true },
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work(mocks.session)),
 }));
@@ -16,7 +17,7 @@ vi.mock("../src/lib/db", () => ({
     participants: async () => ({
       findOne: async (filter: unknown, options: unknown) => {
         mocks.calls.push({ collection: "participants.findOne", filter, options });
-        return mocks.current ? { _id: participantId } : null;
+        return mocks.current ? { _id: participantId, interviewId: new ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb") } : null;
       },
       updateOne: async (filter: unknown, update: unknown, options: unknown) => {
         mocks.calls.push({ collection: "participants.updateOne", filter, update, options });
@@ -32,10 +33,15 @@ vi.mock("../src/lib/db", () => ({
         return mocks.pending && !(allowsResolved && Boolean(mocks.resolutionPurpose)) ? { _id: new ObjectId() } : null;
       },
     }),
+    mcpOperations: async () => ({
+      findOne: async (filter: Record<string, unknown>) => mocks.operations.find((row) => Object.entries(filter).every(([key, value]) => row[key] === value)) ?? null,
+      deleteOne: async ({ _id }: { _id: unknown }) => { const index = mocks.operations.findIndex((row) => row._id === _id); if (index >= 0) mocks.operations.splice(index, 1); return { deletedCount: index >= 0 ? 1 : 0 }; },
+      insertOne: async (row: Record<string, any>) => { mocks.operations.push(row); return { insertedId: row._id }; },
+    }),
   },
 }));
 
-import { regenerateToken } from "../src/lib/repo";
+import { regenerateToken, regenerateTokenWithOperation, getRegenerateLinkOperation } from "../src/lib/repo";
 import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
 
 const participantId = new ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa");
@@ -46,10 +52,24 @@ beforeEach(() => {
   mocks.pending = false;
   mocks.resolutionPurpose = null;
   mocks.calls.length = 0;
+  mocks.operations.length = 0;
   mocks.withMongoTransaction.mockClear();
 });
 
 describe("regenerateToken", () => {
+  it("replays the same rotated link for an operation retry and conflicts on changed arguments", async () => {
+    const operation = { operationId: "rotate-1", credentialId: "api_key:key-a", argumentDigest: "digest-a" };
+    const first = await asTenant(() => regenerateTokenWithOperation(participantId.toHexString(), operation));
+    const replay = await asTenant(() => regenerateTokenWithOperation(participantId.toHexString(), operation));
+    expect(first.kind).toBe("rotated");
+    expect(replay).toEqual({ ...(first.kind === "rotated" ? { token: first.token, interviewId: first.interviewId } : {}), kind: "replayed" });
+    expect(mocks.operations).toHaveLength(1);
+    expect(mocks.calls.filter((call) => call.collection === "participants.updateOne")).toHaveLength(1);
+    const mismatch = await asTenant(() => regenerateTokenWithOperation(participantId.toHexString(), { ...operation, argumentDigest: "digest-b" }));
+    expect(mismatch).toEqual({ kind: "conflict" });
+    expect(await asTenant(() => getRegenerateLinkOperation(operation))).toMatchObject({ kind: "replayed", interviewId: "bbbbbbbbbbbbbbbbbbbbbbbb" });
+  });
+
   it("refuses to rotate a link while an invite attempt is unresolved", async () => {
     mocks.pending = true;
 

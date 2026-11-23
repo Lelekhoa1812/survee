@@ -112,6 +112,8 @@ vi.mock("../src/lib/repo", async () => {
     getCreateInterviewOperation: vi.fn(async () => null),
     addParticipantsWithOperation: vi.fn(async (interviewId: string, people: { name: string }[]) => ({ kind: "created" as const, people: people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited" as const, answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" })) })),
     getAddPeopleOperation: vi.fn(async () => null),
+    regenerateTokenWithOperation: vi.fn(async () => ({ kind: "rotated" as const, token: "rotated-token", interviewId })),
+    getRegenerateLinkOperation: vi.fn(async () => null),
     addParticipants: vi.fn(async (_interviewId: string, people: { name: string }[]) => people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited", answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" }))),
     getParticipant: vi.fn(async () => ({
       id: personId,
@@ -179,7 +181,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, regenerateTokenWithOperation, getRegenerateLinkOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -204,6 +206,8 @@ beforeEach(() => {
   vi.mocked(getCreateInterviewOperation).mockClear().mockResolvedValue(null);
   vi.mocked(addParticipantsWithOperation).mockClear();
   vi.mocked(getAddPeopleOperation).mockClear().mockResolvedValue(null);
+  vi.mocked(regenerateTokenWithOperation).mockClear().mockResolvedValue({ kind: "rotated", token: "rotated-token", interviewId });
+  vi.mocked(getRegenerateLinkOperation).mockClear().mockResolvedValue(null);
   vi.mocked(deleteInterview).mockReset().mockResolvedValue(true);
   vi.mocked(createAnalyticsRun).mockClear();
 });
@@ -859,6 +863,18 @@ describe("MCP tools", () => {
     const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
     expect(conflictBody.result).toMatchObject({ isError: true, structuredContent: { code: "operation_id_conflict" } });
     expect(addParticipantsWithOperation).not.toHaveBeenCalled();
+  });
+
+  it("accepts regenerate_link operationId and replays the same private link", async () => {
+    const first = await call("regenerate_link", { personId, operationId: "rotate-1" });
+    const body = await first.json() as { result: { structuredContent: { token?: string; interviewId?: string } } };
+    expect(body.result.structuredContent).toMatchObject({ token: "rotated-token", interviewId });
+    expect(regenerateTokenWithOperation).toHaveBeenCalledWith(personId, expect.objectContaining({ operationId: "rotate-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
+    vi.mocked(getRegenerateLinkOperation).mockResolvedValueOnce({ kind: "replayed", token: "prior-token", interviewId });
+    const replay = await call("regenerate_link", { personId, operationId: "rotate-1" });
+    const replayBody = await replay.json() as { result: { structuredContent: { token?: string } } };
+    expect(replayBody.result.structuredContent.token).toBe("prior-token");
+    expect(regenerateTokenWithOperation).toHaveBeenCalledOnce();
   });
 
   it("does not switch the mode when the people list is refused", async () => {

@@ -1017,27 +1017,95 @@ export async function deleteParticipant(id: string): Promise<boolean | "invite_p
 }
 
 export async function regenerateToken(id: string): Promise<string | null | "invite_pending"> {
+  const result = await regenerateTokenCore(id);
+  return result === null || result === "invite_pending" ? result : result === "conflict" ? null : result.token;
+}
+
+export type RegenerateLinkOperationResult =
+  | { kind: "rotated" | "replayed"; token: string; interviewId: string }
+  | { kind: "conflict" }
+  | { kind: "not_found" }
+  | { kind: "invite_pending" };
+
+export async function getRegenerateLinkOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<RegenerateLinkOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "regenerate_link", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  return existing.argumentDigest === operation.argumentDigest
+    ? { ...(existing.result as { token: string; interviewId: string }), kind: "replayed" }
+    : { kind: "conflict" };
+}
+
+export async function regenerateTokenWithOperation(id: string, operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<RegenerateLinkOperationResult> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const scope = mcpOperationScope(tenantId, "regenerate_link", operation);
+  const existing = await (await col.mcpOperations()).findOne(scope);
+  if (existing && existing.expiresAt > new Date()) {
+    return existing.argumentDigest === operation.argumentDigest
+      ? { ...(existing.result as { token: string; interviewId: string }), kind: "replayed" }
+      : { kind: "conflict" };
+  }
+  const rotated = await regenerateTokenCore(id, { scope, argumentDigest: operation.argumentDigest });
+  if (!rotated) return { kind: "not_found" };
+  if (rotated === "invite_pending") return { kind: "invite_pending" };
+  if (rotated === "conflict") return { kind: "conflict" };
+  return rotated;
+}
+
+async function regenerateTokenCore(
+  id: string,
+  operation?: { scope: ReturnType<typeof mcpOperationScope>; argumentDigest: string },
+): Promise<{ token: string; interviewId: string; kind: "rotated" | "replayed" } | null | "invite_pending" | "conflict"> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
   const token = newToken();
-  return withMongoTransaction(async (session) => {
+  const run = async () => withMongoTransaction(async (session) => {
+    if (operation) {
+      const operations = await col.mcpOperations();
+      const existing = await operations.findOne(operation.scope, { session });
+      if (existing && existing.expiresAt > new Date()) {
+        return existing.argumentDigest === operation.argumentDigest
+          ? { ...(existing.result as { token: string; interviewId: string }), kind: "replayed" as const }
+          : "conflict" as const;
+      }
+      if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    }
     const participants = await col.participants();
-    const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
+    const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1, interviewId: 1 } });
     if (!current) return null;
     const pendingInvite = await (await col.mail()).findOne(
       tenantFilter(tenantId, { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false } }),
       { session, projection: { _id: 1 } },
     );
-    if (pendingInvite) return "invite_pending";
+    if (pendingInvite) return "invite_pending" as const;
     const res = await participants.updateOne(
       tenantFilter(tenantId, { _id: oid }),
       { $set: { token, updatedAt: new Date() }, $inc: { inviteAttemptRevision: 1 } },
       { session },
     );
-    return res.matchedCount ? token : null;
+    if (!res.matchedCount) return null;
+    if (!operation) return { token, interviewId: current.interviewId.toHexString(), kind: "rotated" as const };
+    const result = { token, interviewId: current.interviewId.toHexString() };
+    const createdAt = new Date();
+    await (await col.mcpOperations()).insertOne({
+      _id: new ObjectId(), ...operation.scope, argumentDigest: operation.argumentDigest, result,
+      createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
+    }, { session });
+    return { ...result, kind: "rotated" as const };
   });
+  try { return await run(); }
+  catch (error) {
+    if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await (await col.mcpOperations()).findOne(operation.scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    return committed.argumentDigest === operation.argumentDigest
+      ? { ...(committed.result as { token: string; interviewId: string }), kind: "replayed" }
+      : "conflict";
+  }
 }
 
 export type InviteResolutionResult = "resolved" | "not_found" | "stale" | "already_resolved";
