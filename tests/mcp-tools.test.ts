@@ -204,6 +204,24 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.nextCursor).toBe("more");
   });
 
+  it("continues list_people pages with the supplied cursor and limit", async () => {
+    const firstPerson = { id: personId, interviewId, token: "page-one", name: "First", status: "invited", answers: {}, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z", revision: 0 };
+    const secondPerson = { id: anotherPersonId, interviewId, token: "page-two", name: "Second", status: "invited", answers: {}, createdAt: "2026-11-12T00:00:00.000Z", updatedAt: "2026-11-12T00:00:00.000Z", revision: 0 };
+    vi.mocked(listParticipantPage).mockReset()
+      .mockResolvedValueOnce({ people: [firstPerson] as never, nextCursor: "page-2" })
+      .mockResolvedValueOnce({ people: [secondPerson] as never, nextCursor: null });
+
+    const first = await call("list_people", { interviewId, limit: 1 });
+    const firstBody = await first.json() as { result: { structuredContent: { people: { id: string }[]; nextCursor: string } } };
+    const second = await call("list_people", { interviewId, cursor: firstBody.result.structuredContent.nextCursor, limit: 1 });
+    const secondBody = await second.json() as { result: { structuredContent: { people: { id: string }[]; nextCursor: string | null } } };
+
+    expect(firstBody.result.structuredContent.people.map(({ id }) => id)).toEqual([personId]);
+    expect(secondBody.result.structuredContent.people.map(({ id }) => id)).toEqual([anotherPersonId]);
+    expect(secondBody.result.structuredContent.nextCursor).toBeNull();
+    expect(vi.mocked(listParticipantPage).mock.calls.map(([, cursor, limit]) => [cursor, limit])).toEqual([[null, 1], ["page-2", 1]]);
+  });
+
   it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {
     const repeatManifest = {
       ...analyticsManifest,
