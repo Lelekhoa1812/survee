@@ -34,7 +34,8 @@ The following changes are pushed to `main` and deployed:
 - Respondent deletion now erases linked activity events and stale analytics runs, including legacy event/mail rows without a tenant field. Deletion, invitee additions, and reopening submitted answers increment the respondent revision in their transaction.
 - Paged analytics cache creation now fences against concurrent respondent writes and questionnaire publication. A stale scan returns `analysis_run_stale` rather than caching results after a conflicting change.
 - Public accessibility auditing now checks for an `h1` in each questionnaire document while allowing the respondent shell to identify its embedded questionnaire through the iframe title.
-- Public respondent GET, save, and submit APIs now have separate hashed per-link and per-Vercel-IP rate limits; an unavailable shared limiter fails closed with 503.
+- Public respondent load, frame, save, and submit APIs now have separate hashed per-link and per-Vercel-IP rate limits; an unavailable shared limiter fails closed with 503.
+- Host Overview and People pages now retain progress counts but omit answer, repeat-record, and order-history payloads; assignment history is not queried until the Answers tab loads.
 
 ## Ranked remaining gaps
 
@@ -53,16 +54,16 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **950 tests passed across 138 files**; TypeScript check and optimized Next.js production build passed.
+- Full automated suite: **958 tests passed across 139 files**; TypeScript check and optimized Next.js production build passed.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
-- Production release `1ca5a10` reached **READY**. Runtime error review found no errors in the 15 minutes after deployment. The homepage returns HTTP 200; unauthenticated MCP POST returns 401. A live rate-limit probe against a fabricated nonexistent respondent token returned 180 expected 404s followed by 429 on request 181. Public accessibility audit covered five public routes at four viewport widths (20 samples): zero automated violations, six axe contrast needs-review results, and no authenticated host or respondent fixture coverage. An authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools; disposable interviews were created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
+- Production release `f19cf12` reached **READY**. Runtime error review found no errors in the 15 minutes after deployment. The homepage returns HTTP 200, an unknown frame token returns 404, and unauthenticated MCP POST returns 401. A live rate-limit probe against a fabricated nonexistent respondent token returned 180 expected 404s followed by 429 on request 181. Public accessibility audit covered five public routes at four viewport widths (20 samples): zero automated violations, six axe contrast needs-review results, and no authenticated host or respondent fixture coverage. An authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools; disposable interviews were created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
 
 Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The public-route accessibility audit has been run previously; authenticated host and respondent flows still need a dedicated browser audit with a disposable account and interview fixture.
 
 ## Next review order
 
-1. Add host answer-matrix paging and reduce People-list payloads that currently include unnecessary answer/history fields.
+1. Add host answer-matrix paging; the initial People/Overview payload is now answer-free, but the answer matrix still shows only its newest page.
 2. Add workspace asset quotas and usage visibility.
 3. Decide and implement consent, retention, withdrawal, and complete participant-erasure workflows.
 4. Settle delivery attempts with no delivery-status notice through provider reconciliation or a host resolution workflow.
