@@ -104,9 +104,10 @@ The following changes are pushed to `main` and deployed:
 - Production release `81bb9fb` reached **READY** as deployment `dpl_FNNmS23ts9PFLUxyzskaq4NFihLg`. Guided-section and guided-question generation passed the local static checker; the production homepage returned HTTP 200 and its unauthenticated checker route returned 401.
 - Production release `bc34acc` reached **READY** as deployment `dpl_FR1w65xG3mzW1cY6th4qqg2bR8Wi`. Numeric routing generation passed the local static checker; the production homepage returned HTTP 200 and its unauthenticated checker route returned 401.
 - Production release `c6ff6de` reached **READY** as deployment `dpl_4KX4bxJKgLM7x5eNuWqHN56HESSt`. Repeat-group generation passed the local static checker; the production homepage returned HTTP 200 and its unauthenticated checker route returned 401.
-- A read-only production checker probe of a generated repeat group with a scale field returned three false-positive KQA320 warnings for the radio option values. The local checker now treats scale radio values as declared options; generated HTML and a focused checker regression pass locally. Recheck the exact file against production after the checker fix deploys.
+- Production release `63b0aec` reached **READY** as deployment `dpl_CxzX6yuuaxdtkNH2pBm4JJMyar4J`. The exact generated guided-question repeat file passed the production checker with zero errors, warnings, or notes; the homepage returned HTTP 200 and the unauthenticated checker route returned 401. A disposable no-email respondent flow covered row add/edit/remove, reload restoration, review, and submit; cleanup and absence were verified.
+- A read-only production checker probe against release `c6ff6de` found three false-positive KQA320 warnings for repeat scale radio option values; release `63b0aec` fixes the checker and the same generated file now passes production with zero diagnostics.
 
-Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The authenticated host console still needs a dedicated browser audit; respondent E2E coverage is currently focused on offline saving, validation, and submission locking.
+Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The authenticated host console still needs a dedicated browser audit. Respondent E2E coverage now includes offline recovery, validation, stale-tab fencing, guided navigation, repeat-row persistence, answer review, and submission locking.
 
 ## Next review order
 
