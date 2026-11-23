@@ -173,6 +173,7 @@ describe("host questionnaire version preview", () => {
     expect(host.textContent).toContain("Current live preview");
     expect(host.textContent).toContain("Version history");
     expect(host.textContent).not.toContain("Upload a new version");
+    expect(host.textContent).not.toContain("Download source file");
     expect(host.textContent).not.toContain("Make this version live");
   });
 
