@@ -27,7 +27,7 @@ function isolatedMongoUri(): { uri: string; dbName: string } {
 
 const integration = configuredTestUri ? describe : describe.skip;
 
-integration("addParticipantsWithOperation MongoDB replica-set integration", () => {
+integration("MCP operation retries MongoDB replica-set integration", () => {
   let dbName: string;
   let client!: import("mongodb").MongoClient;
   let mongo!: typeof import("mongodb");
@@ -150,6 +150,113 @@ integration("addParticipantsWithOperation MongoDB replica-set integration", () =
       tool: "add_people",
       operationIdHash,
     })).toBe(1);
+  });
+
+  it("erases respondent-linked records once and replays removal after a lost response", async () => {
+    const database = client.db(dbName);
+    const participantId = new mongo.ObjectId();
+    const now = new Date();
+    const operation = {
+      operationId: `remove-lost-response-${randomUUID()}`,
+      credentialId: "api_key:integration-key",
+      argumentDigest: "digest-remove-grace",
+    };
+    const priorOperationId = `add-before-remove-${randomUUID()}`;
+    const priorOperationIdHash = createHash("sha256").update(priorOperationId).digest("hex");
+    const credentialIdHash = createHash("sha256").update(operation.credentialId).digest("hex");
+    const participant = {
+      _id: participantId,
+      tenantId: "integration-workspace",
+      interviewId,
+      token: "respondent-secret-token",
+      name: "Grace Erased",
+      email: "grace-erased@example.com",
+      note: "private host note",
+      status: "submitted",
+      answers: { favorite: "private response" },
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+      submittedAt: now,
+    };
+    await database.collection("participants").insertOne(participant);
+    await database.collection("question_order_assignments").insertOne({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId, participantId,
+      surveyVersion: 1, algorithmVersion: "v1", groups: { section: ["q1", "q2"] }, assignedAt: now,
+    });
+    await database.collection("events").insertOne({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId, participantId,
+      type: "submit", at: now, meta: { answer: "private response" },
+    });
+    await database.collection("mail_messages").insertOne({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId, participantId,
+      kind: "invite", to: participant.email, token: participant.token, status: "sent", sentAt: now, triggeredBy: "mcp",
+    });
+    await database.collection("analytics_runs").insertOne({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId, slot: 0,
+      surveyVersion: 1, createdAt: now, expiresAt: new Date(now.getTime() + 60_000), result: { total: 1 },
+    });
+    await database.collection("mcp_operations").insertOne({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", tool: "add_people", credentialIdHash,
+      operationIdHash: priorOperationIdHash, argumentDigest: "prior-add-digest", interviewId,
+      participantIds: [participantId], result: { people: [{ id: participantId.toHexString(), name: participant.name, email: participant.email, token: participant.token }] },
+      createdAt: now, expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    const remove = () => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.deleteParticipantWithOperation(participantId.toHexString(), operation),
+    );
+    const before = await database.collection("interviews").findOne({ _id: interviewId });
+
+    await expect(remove().then(() => {
+      throw new Error("simulated lost response after commit");
+    })).rejects.toThrow("simulated lost response after commit");
+
+    const afterDelete = await database.collection("interviews").findOne({ _id: interviewId });
+    expect(afterDelete?.respondentWriteRevision).toBe((before?.respondentWriteRevision ?? 0) + 1);
+    expect(await database.collection("participants").countDocuments({ _id: participantId })).toBe(0);
+    expect(await database.collection("question_order_assignments").countDocuments({ participantId })).toBe(0);
+    expect(await database.collection("events").countDocuments({ participantId })).toBe(0);
+    expect(await database.collection("mail_messages").countDocuments({ participantId })).toBe(0);
+    expect(await database.collection("analytics_runs").countDocuments({ interviewId })).toBe(0);
+
+    const priorOperation = await database.collection("mcp_operations").findOne({ tool: "add_people", operationIdHash: priorOperationIdHash });
+    expect(priorOperation).toMatchObject({ result: { deleted: true }, deletedAt: expect.any(Date) });
+    expect(priorOperation).not.toHaveProperty("argumentDigest");
+    expect(priorOperation).not.toHaveProperty("interviewId");
+    expect(priorOperation).not.toHaveProperty("participantIds");
+    expect(Object.keys(priorOperation ?? {}).sort()).toEqual([
+      "_id", "createdAt", "credentialIdHash", "deletedAt", "expiresAt", "operationIdHash", "result", "tenantId", "tool",
+    ]);
+    expect(JSON.stringify(priorOperation)).not.toContain(participant.email);
+    expect(JSON.stringify(priorOperation)).not.toContain(participant.token);
+    expect(JSON.stringify(priorOperation)).not.toContain(participant.name);
+
+    const operationIdHash = createHash("sha256").update(operation.operationId).digest("hex");
+    const removeOperation = await database.collection("mcp_operations").findOne({
+      tenantId: "integration-workspace", tool: "remove_person", credentialIdHash, operationIdHash,
+    });
+    expect(removeOperation).toMatchObject({
+      result: { ok: true }, interviewId, participantIds: [participantId], argumentDigest: operation.argumentDigest,
+    });
+    expect(Object.keys(removeOperation ?? {}).sort()).toEqual([
+      "_id", "argumentDigest", "createdAt", "credentialIdHash", "expiresAt", "interviewId", "operationIdHash", "participantIds", "result", "tenantId", "tool",
+    ]);
+    expect(JSON.stringify(removeOperation)).not.toContain(operation.credentialId);
+    expect(JSON.stringify(removeOperation)).not.toContain(participant.email);
+    expect(JSON.stringify(removeOperation)).not.toContain(participant.token);
+    expect(await database.collection("mcp_operations").countDocuments({ tool: "remove_person", operationIdHash })).toBe(1);
+
+    const retries = await Promise.all([remove(), remove()]);
+    expect(retries).toEqual([{ kind: "replayed" }, { kind: "replayed" }]);
+    expect((await database.collection("interviews").findOne({ _id: interviewId }))?.respondentWriteRevision).toBe((before?.respondentWriteRevision ?? 0) + 1);
+    expect(await database.collection("mcp_operations").countDocuments({ tool: "remove_person", operationIdHash })).toBe(1);
+    expect(await database.collection("participants").countDocuments({ _id: participantId })).toBe(0);
+    expect(await database.collection("question_order_assignments").countDocuments({ participantId })).toBe(0);
+    expect(await database.collection("events").countDocuments({ participantId })).toBe(0);
+    expect(await database.collection("mail_messages").countDocuments({ participantId })).toBe(0);
+    expect(await database.collection("analytics_runs").countDocuments({ interviewId })).toBe(0);
   });
 
   it("recovers the unique-index E11000 race as an operation-id conflict", async () => {
