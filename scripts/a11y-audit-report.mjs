@@ -51,7 +51,7 @@ export function createAuditReport({ generatedAt, targetOrigin, commit, sourceTre
       axeVersion,
       wcagTags: [...wcagTags],
       viewports: viewports.map(({ name, width, height }) => ({ name, width, height })),
-      checks: ["HTTP response", "document title, non-empty h1, and horizontal overflow for each document including iframes", "reduced motion at desktop width for each document including iframes"],
+      checks: ["HTTP response", "document title, route-appropriate h1, and horizontal overflow for each document including iframes", "reduced motion at desktop width for each document including iframes"],
       limitations: [
         "Automated accessibility checks do not establish WCAG conformance.",
         "Keyboard, assistive technology, content, visual contrast, and complete task review remain manual work.",

@@ -86,10 +86,10 @@ async function checkReducedMotion(document) {
   }));
 }
 
-function pushCheckFailures(failures, documentName, viewportName, checks) {
+function pushCheckFailures(failures, documentName, viewportName, checks, options = {}) {
   const label = `${documentName} @ ${viewportName}`;
   if (!checks.titlePresent) failures.push(`${label}: missing document title`);
-  if (!checks.mainHeadingPresent) failures.push(`${label}: missing non-empty h1`);
+  if (options.requireMainHeading !== false && !checks.mainHeadingPresent) failures.push(`${label}: missing non-empty h1`);
   if (checks.horizontalOverflow) failures.push(`${label}: horizontal overflow`);
 }
 
@@ -247,7 +247,9 @@ try {
         }
 
         sample.page = await auditDocument(page, wcagTags);
-        pushCheckFailures(sample.checks.failures, route.name, viewport.name, sample.page.checks);
+        // The respondent shell names its questionnaire iframe with `title`; the
+        // separately scanned iframe document owns the questionnaire heading.
+        pushCheckFailures(sample.checks.failures, route.name, viewport.name, sample.page.checks, { requireMainHeading: route.kind !== "respondent" });
         for (const violation of sample.page.axe.violations) {
           console.error(`  ${violation.impact ?? "unknown"} ${violation.id}: ${violation.help} [${violation.targets.join(", ")}]`);
         }
