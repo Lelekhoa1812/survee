@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   events: [] as Record<string, unknown>[],
   eventOptions: [] as Record<string, unknown>[],
   failEvent: false,
-  findOneAndUpdate: vi.fn(async () => ({ _id: new ObjectId(), name: "Renamed", status: "open" })),
+  findOneAndUpdate: vi.fn(async (..._args: unknown[]) => ({ _id: new ObjectId(), name: "Renamed", status: "open" })),
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -37,6 +37,7 @@ describe("updateInterview audit events", () => {
     expect(mocks.events).toHaveLength(1);
     expect(mocks.events[0]).toMatchObject({ type: "update", meta: { fields: ["name", "description"] } });
     expect(mocks.eventOptions[0]).toEqual({ session: { transaction: true } });
+    expect(mocks.findOneAndUpdate.mock.calls[0][1]).toMatchObject({ $inc: { respondentWriteRevision: 1 } });
   });
 
   it("does not log an update event for a status-only change", async () => {

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   participant: {} as Record<string, any> | null,
   records: new Map<string, Record<string, any>>(),
   insertOne: vi.fn(),
+  revisionUpdates: [] as unknown[][],
   withMongoTransaction: vi.fn(),
   forceDuplicate: false,
 }));
@@ -19,6 +20,7 @@ vi.mock("../src/lib/db", () => ({
       findOne: async (filter: Record<string, any>) => mocks.records.get(`${filter.participantId.toHexString()}:${filter.surveyVersion}`) ?? null,
       insertOne: mocks.insertOne,
     }),
+    interviews: async () => ({ updateOne: async (...args: unknown[]) => { mocks.revisionUpdates.push(args); return { matchedCount: 1 }; } }),
   },
 }));
 
@@ -33,6 +35,7 @@ beforeEach(() => {
   mocks.interviewId = new ObjectId();
   mocks.participant = { _id: mocks.participantId, interviewId: mocks.interviewId, tenantId, revision: 8 };
   mocks.records.clear();
+  mocks.revisionUpdates.length = 0;
   mocks.forceDuplicate = false;
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => {
     const result = await work({ id: "session" });
@@ -58,19 +61,23 @@ describe("versioned question-order persistence", () => {
     surveyVersion, algorithmVersion: "kqa-question-order-v1", groups,
   });
 
-  it("stores one immutable assignment per participant and survey version without changing answer revision", async () => {
+  it("stores one immutable assignment per participant and survey version and advances the export revision", async () => {
     const first = await asTenant(() => ensureQuestionOrderAssignment(input(3, { block: ["a", "b"] })));
     const nextVersion = await asTenant(() => ensureQuestionOrderAssignment(input(4, { block: ["b", "a"] })));
     expect(first).toMatchObject({ surveyVersion: 3, algorithmVersion: "kqa-question-order-v1", groups: { block: ["a", "b"] } });
     expect(nextVersion).toMatchObject({ surveyVersion: 4, groups: { block: ["b", "a"] } });
     expect(mocks.records.size).toBe(2);
     expect(mocks.participant?.revision).toBe(8);
+    expect(mocks.revisionUpdates).toHaveLength(2);
+    expect(mocks.revisionUpdates[0][1]).toEqual({ $inc: { respondentWriteRevision: 1 } });
+    expect(mocks.revisionUpdates[0][2]).toEqual({ session: { id: "session" } });
   });
 
   it("returns the saved winner after a concurrent first-load insert", async () => {
     mocks.forceDuplicate = true;
     const stored = await asTenant(() => ensureQuestionOrderAssignment(input(3, { block: ["a", "b"] })));
     expect(stored).toMatchObject({ surveyVersion: 3, algorithmVersion: "stored-v1", groups: { block: ["b", "a"] } });
+    expect(mocks.revisionUpdates).toHaveLength(0);
   });
 
   it("does not create presentation data for a participant deleted before assignment", async () => {

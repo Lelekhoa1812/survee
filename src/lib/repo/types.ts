@@ -150,7 +150,7 @@ export interface InterviewDoc {
   status: InterviewStatus;
   /** The survey version people are answering now. */
   currentVersion: number;
-  /** Written by respondent saves/submits and version publication to serialize the version fence. */
+  /** Advances on export-visible interview, participant, assignment, and version changes. */
   respondentWriteRevision?: number;
   /** Updated when an aggregate cache is created so cache creation conflicts with participant erasure. */
   analyticsRunRevision?: number;

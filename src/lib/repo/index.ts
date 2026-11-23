@@ -150,7 +150,7 @@ export async function updateInterview(id: string, patch: { name?: string; descri
     else set.description = patch.description;
   }
   if (patch.status !== undefined) set.status = patch.status;
-  const update: Record<string, unknown> = { $set: set };
+  const update: Record<string, unknown> = { $set: set, $inc: { respondentWriteRevision: 1 } };
   if (Object.keys(unset).length) update.$unset = unset;
   const changed = [patch.name !== undefined && "name", patch.description !== undefined && "description"].filter((f): f is string => Boolean(f));
   return withMongoTransaction(async (session) => {
@@ -441,6 +441,12 @@ export async function ensureQuestionOrderAssignment(input: {
         groups: input.groups, assignedAt,
       };
       await collection.insertOne(doc, { session });
+      const touched = await (await col.interviews()).updateOne(
+        tenantFilter(input.tenantId, { _id: interviewId }),
+        { $inc: { respondentWriteRevision: 1 } },
+        { session },
+      );
+      if (!touched.matchedCount) throw new Error("Cannot assign question order to a deleted interview.");
       return asView(doc);
     });
   } catch (error) {
@@ -659,6 +665,12 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   return withMongoTransaction(async (session) => {
     const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
     if (!res) return null;
+    const touched = await (await col.interviews()).updateOne(
+      tenantFilter(tenantId, { _id: res.interviewId }),
+      { $inc: { respondentWriteRevision: 1 } },
+      { session },
+    );
+    if (!touched.matchedCount) throw new Error("Could not update respondent revision for interview.");
     await insertEvent(tenantId, res.interviewId, "update", res._id, session, { fields: Object.keys(patch).sort() });
     return participantView(res);
   });

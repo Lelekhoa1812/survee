@@ -21,6 +21,20 @@ async function csvPage(id: string, cursor: string | null) {
   throw new Error("CSV export page could not be loaded.");
 }
 
+class StaleExportError extends Error {
+  constructor() {
+    super("Interview data changed while the export was being created. Run the export again.");
+    this.name = "StaleExportError";
+  }
+}
+
+async function assertExportSnapshot(id: string, version: number, revision: number): Promise<void> {
+  const current = await getInterview(id);
+  if (!current || current.currentVersion !== version || (current.respondentWriteRevision ?? 0) !== revision) {
+    throw new StaleExportError();
+  }
+}
+
 export const GET = withServerErrors("admin/interviews/[id]/export", async function GET(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ roles: ["owner", "admin"] });
   if (denied) return denied;
@@ -31,6 +45,13 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
   if (!interview) return fail(404, "Interview not found.");
   const version = await getVersion(interview._id, interview.currentVersion);
   if (!version) return fail(404, "Survey version not found.");
+  const snapshot = { version: interview.currentVersion, revision: interview.respondentWriteRevision ?? 0 };
+  try {
+    await assertExportSnapshot(id, snapshot.version, snapshot.revision);
+  } catch (error) {
+    if (error instanceof StaleExportError) return fail(409, error.message, { code: "export_stale" });
+    throw error;
+  }
   const base = {
     interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, createdAt: interview.createdAt.toISOString() },
     manifest: version.manifest,
@@ -42,8 +63,11 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     {
       let firstPage;
       try {
+        await assertExportSnapshot(id, snapshot.version, snapshot.revision);
         firstPage = await csvPage(id, null);
+        await assertExportSnapshot(id, snapshot.version, snapshot.revision);
       } catch (error) {
+        if (error instanceof StaleExportError) return fail(409, error.message, { code: "export_stale" });
         if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_page_limit", limitBytes: error.limitBytes });
         return fail(503, "The export could not be started. Try again in a moment.", { code: "export_stream_unavailable" });
       }
@@ -95,7 +119,9 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
                 return;
               }
               cursor = page.nextCursor;
+              await assertExportSnapshot(id, snapshot.version, snapshot.revision);
               page = await csvPage(id, cursor);
+              await assertExportSnapshot(id, snapshot.version, snapshot.revision);
               personIndex = 0;
             }
           } catch (error) {
@@ -110,8 +136,11 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
   }
   let people;
   try {
+    await assertExportSnapshot(id, snapshot.version, snapshot.revision);
     people = await listParticipants(id);
+    await assertExportSnapshot(id, snapshot.version, snapshot.revision);
   } catch (error) {
+    if (error instanceof StaleExportError) return fail(409, error.message, { code: "export_stale" });
     if (error instanceof ParticipantReadLimitError) return fail(413, `This interview is too large for a single export request. Export supports up to ${error.limit} people per request.`, { code: "export_participant_limit", limit: error.limit });
     if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_payload_limit", limitBytes: error.limitBytes });
     throw error;
