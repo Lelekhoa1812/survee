@@ -26,6 +26,8 @@ import {
   getAddPeopleOperation,
   deleteInterview,
   deleteParticipant,
+  deleteParticipantWithOperation,
+  getRemovePersonOperation,
   getInterview,
   getInterviewParticipantCounts,
   getAnalyticsRun,
@@ -1974,11 +1976,27 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "remove_person",
-    description: "Remove a person, their answers, and their invite history. Refuses while an invite outcome is unconfirmed so a pending send cannot recreate erased mail or event records.",
-    inputSchema: obj({ personId: str }, ["personId"]),
+    description: "Remove a person, their answers, and their invite history. Refuses while an invite outcome is unconfirmed so a pending send cannot recreate erased mail or event records. Optional operationId replays the successful removal result for seven days.",
+    inputSchema: obj({ personId: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId"]),
     async run(args) {
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ personId: id })).digest("hex") };
+        const existing = await getRemovePersonOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained result was cleared because the interview was deleted. Use a new operationId to remove another person.", "operation_result_unavailable");
+        if (existing?.kind === "conflict") return err("operationId was already used with different remove_person arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ ok: true });
+        const result = await deleteParticipantWithOperation(id, operation);
+        if (result.kind === "deleted") return err("This operation's retained result was cleared because the interview was deleted. Use a new operationId to remove another person.", "operation_result_unavailable");
+        if (result.kind === "conflict") return err("operationId was already used with different remove_person arguments.", "operation_id_conflict");
+        if (result.kind === "not_found") return err("Person not found.", "not_found");
+        if (result.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before deleting their data.", "invite_outcome_pending");
+        return ok({ ok: true });
+      }
       const result = await deleteParticipant(id);
       if (result === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before deleting their data.", "invite_outcome_pending");
       return result ? ok({ ok: true }) : err("Person not found.", "not_found");

@@ -1157,23 +1157,49 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   });
 }
 
-export async function deleteParticipant(id: string): Promise<boolean | "invite_pending"> {
-  const oid = toOid(id);
-  if (!oid) return false;
+export type DeleteParticipantOperationResult =
+  | { kind: "removed" | "replayed" }
+  | { kind: "conflict" | "deleted" | "not_found" | "invite_pending" };
+
+export async function getRemovePersonOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<DeleteParticipantOperationResult | null> {
   const tenantId = await currentTenantId();
-  if (!tenantId) return false;
-  const deleted = await withMongoTransaction(async (session) => {
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "remove_person", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
+  return existing.argumentDigest === operation.argumentDigest ? { kind: "replayed" } : { kind: "conflict" };
+}
+
+async function deleteParticipantInternal(
+  id: string,
+  operation?: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<boolean | "invite_pending" | DeleteParticipantOperationResult> {
+  const oid = toOid(id);
+  if (!oid) return operation ? { kind: "not_found" } : false;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return operation ? { kind: "not_found" } : false;
+  const scope = operation ? mcpOperationScope(tenantId, "remove_person", operation) : null;
+  const run = async () => withMongoTransaction(async (session) => {
+    if (operation && scope) {
+      const existing = await (await col.mcpOperations()).findOne(scope, { session });
+      if (existing && existing.expiresAt > new Date()) {
+        if (existing.deletedAt) return { kind: "deleted" as const };
+        return existing.argumentDigest === operation.argumentDigest ? { kind: "replayed" as const } : { kind: "conflict" as const };
+      }
+      if (existing) await (await col.mcpOperations()).deleteOne({ _id: existing._id }, { session });
+    }
     const participants = await col.participants();
     const participant = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { interviewId: 1 } });
-    if (!participant) return false;
+    if (!participant) return operation ? { kind: "not_found" as const } : false;
     const pendingInvite = await (await col.mail()).findOne(
       { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } },
       { session, projection: { _id: 1 } },
     );
-    if (pendingInvite) return "invite_pending";
+    if (pendingInvite) return operation ? { kind: "invite_pending" as const } : "invite_pending";
     const res = await participants.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
-    if (!res.deletedCount) return false;
-    await (await col.mcpOperations()).updateMany(
+    if (!res.deletedCount) return operation ? { kind: "not_found" as const } : false;
+    const operations = await col.mcpOperations();
+    await operations.updateMany(
       tenantFilter(tenantId, { participantIds: oid }),
       { $set: { result: { deleted: true }, deletedAt: new Date() }, $unset: { participantIds: "", interviewId: "", argumentDigest: "" } },
       { session },
@@ -1192,9 +1218,41 @@ export async function deleteParticipant(id: string): Promise<boolean | "invite_p
     await (await col.events()).deleteMany({ participantId: oid }, { session });
     await deleteMailForPerson(oid, session);
     await (await col.analyticsRuns()).deleteMany(tenantFilter(tenantId, { interviewId: participant.interviewId }), { session });
+    if (operation && scope) {
+      const createdAt = new Date();
+      await operations.insertOne({
+        _id: new ObjectId(), ...scope, interviewId: participant.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest,
+        result: { ok: true }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+      }, { session });
+      return { kind: "removed" as const };
+    }
     return true;
   });
+  let deleted: Awaited<ReturnType<typeof run>>;
+  try {
+    deleted = await run();
+  } catch (error) {
+    if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await (await col.mcpOperations()).findOne(scope!);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
+    return committed.argumentDigest === operation.argumentDigest ? { kind: "replayed" } : { kind: "conflict" };
+  }
   return deleted;
+}
+
+export async function deleteParticipant(id: string): Promise<boolean | "invite_pending"> {
+  return await deleteParticipantInternal(id) as boolean | "invite_pending";
+}
+
+export async function deleteParticipantWithOperation(
+  id: string,
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<DeleteParticipantOperationResult> {
+  const result = await deleteParticipantInternal(id, operation);
+  if (result === "invite_pending") return { kind: "invite_pending" };
+  if (result === false) return { kind: "not_found" };
+  return result as DeleteParticipantOperationResult;
 }
 
 export async function regenerateToken(id: string): Promise<string | null | "invite_pending"> {
