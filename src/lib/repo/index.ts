@@ -132,6 +132,7 @@ export async function createInterview(input: { name: string; description?: strin
     await (await col.versions()).insertOne(versionDoc(tenantId, doc._id, 1, input.survey), { session });
     if (initialParticipant) await (await col.participants()).insertOne(initialParticipant, { session });
     await insertEvent(tenantId, doc._id, "created", undefined, session);
+    return true;
   });
   return doc;
 }
@@ -759,6 +760,7 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
           { $set: { lastSeenAt: now } }, { session },
         );
         if (touched.matchedCount) await insertEvent(tenantId, p.interviewId, "open", p._id, session);
+        return true;
       }).catch(() => console.error("[audit] interview event persistence failed"));
     } else {
       void participants.updateOne(tenantFilter(tenantId, { _id: p._id }), { $set: { lastSeenAt: now } }).catch(() => {});

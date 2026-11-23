@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
   failVersionInsert: false,
   failParticipantInsert: false,
   failEventInsert: false,
-  withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true })),
+  withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => {
+    const result = await work({ transaction: true });
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  }),
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -38,7 +42,11 @@ beforeEach(() => {
   mocks.failVersionInsert = false;
   mocks.failParticipantInsert = false;
   mocks.failEventInsert = false;
-  mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => work({ transaction: true }));
+  mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => {
+    const result = await work({ transaction: true });
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  });
 });
 
 describe("createInterview", () => {

@@ -19,7 +19,11 @@ vi.mock("../src/lib/db", () => ({
     }),
     imageAssets: async () => ({ updateOne: mocks.touchAsset }),
   },
-  withMongoTransaction: async (work: (session: object) => Promise<unknown>) => work({}),
+  withMongoTransaction: async (work: (session: object) => Promise<unknown>) => {
+    const result = await work({});
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  },
 }));
 
 import { getQuestionnaireReviewDraft, saveQuestionnaireReviewDraft } from "../src/lib/repo";

@@ -17,7 +17,9 @@ vi.mock("../src/lib/db", () => ({
     for (let attempt = 0; ; attempt += 1) {
       const session = { assetRevisionAtStart: state.asset?.referenceRevision ?? null };
       try {
-        return await work(session);
+        const result = await work(session);
+        if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+        return result;
       } catch (error) {
         if ((error as any)?.code !== 112 || attempt >= 3) throw error;
       }

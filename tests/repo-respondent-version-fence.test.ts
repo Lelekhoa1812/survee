@@ -98,7 +98,9 @@ beforeEach(() => {
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => {
     if (mocks.publishBeforeTransaction) mocks.currentVersion = 5;
     mocks.beforeTransaction?.();
-    return work(mocks.session);
+    const result = await work(mocks.session);
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
   });
 });
 

@@ -10,7 +10,11 @@ const mongoMocks = vi.hoisted(() => {
   const participants = vi.fn(async () => ({ find }));
   const analyticsRuns = vi.fn(async () => ({ deleteMany, insertOne, findOne }));
   const interviews = vi.fn(async () => ({ updateOne: interviewUpdateOne }));
-  const withMongoTransaction = vi.fn(async (work: (session: object) => Promise<unknown>) => work({}));
+  const withMongoTransaction = vi.fn(async (work: (session: object) => Promise<unknown>) => {
+    const result = await work({});
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  });
   return { find, participants, deleteMany, insertOne, findOne, analyticsRuns, interviewUpdateOne, interviews, withMongoTransaction };
 });
 

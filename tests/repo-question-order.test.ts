@@ -34,7 +34,11 @@ beforeEach(() => {
   mocks.participant = { _id: mocks.participantId, interviewId: mocks.interviewId, tenantId, revision: 8 };
   mocks.records.clear();
   mocks.forceDuplicate = false;
-  mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => work({ id: "session" }));
+  mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => {
+    const result = await work({ id: "session" });
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  });
   mocks.insertOne.mockReset().mockImplementation(async (doc: Record<string, any>) => {
     const key = `${doc.participantId.toHexString()}:${doc.surveyVersion}`;
     if (mocks.forceDuplicate) {

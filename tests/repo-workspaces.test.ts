@@ -64,7 +64,11 @@ vi.mock("../src/lib/db", () => ({
     }),
     events: async () => ({ insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; } }),
   },
-  withMongoTransaction: async (work: (session: object) => Promise<unknown>) => work({}),
+  withMongoTransaction: async (work: (session: object) => Promise<unknown>) => {
+    const result = await work({});
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  },
 }));
 
 vi.mock("../src/lib/repo/accounts", () => ({ hashPassword: async (password: string) => `test-hash:${password}` }));

@@ -11,7 +11,11 @@ const store = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/lib/db", () => ({
-  withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true }),
+  withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => {
+    const result = await work({ transaction: true });
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  },
   col: {
     tenants: async () => ({ updateOne: async () => ({ matchedCount: 1, modifiedCount: 1 }) }),
     imageAssets: async () => ({

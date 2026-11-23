@@ -82,6 +82,7 @@ export async function addImageAsset(input: { name?: string; fileName: string; da
     const usedBytes = current[0]?.totalBytes ?? 0;
     if (usedBytes + doc.bytes > WORKSPACE_IMAGE_QUOTA_BYTES) throw new ImageAssetQuotaError(usedBytes, doc.bytes);
     await (await col.imageAssets()).insertOne(doc, { session });
+    return true;
   });
   return summary(doc);
 }

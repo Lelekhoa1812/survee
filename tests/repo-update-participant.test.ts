@@ -1,7 +1,11 @@
 import { ObjectId } from "mongodb";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ insertedEvents: [] as Record<string, unknown>[], eventOptions: [] as Record<string, unknown>[], failEvent: false, withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true })) }));
+const mocks = vi.hoisted(() => ({ insertedEvents: [] as Record<string, unknown>[], eventOptions: [] as Record<string, unknown>[], failEvent: false, withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => {
+  const result = await work({ transaction: true });
+  if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+  return result;
+}) }));
 
 vi.mock("../src/lib/db", () => ({
   withMongoTransaction: mocks.withMongoTransaction,

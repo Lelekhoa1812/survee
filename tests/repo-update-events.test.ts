@@ -9,7 +9,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/lib/db", () => ({
-  withMongoTransaction: async (work: (s: unknown) => Promise<unknown>) => work({ transaction: true }),
+  withMongoTransaction: async (work: (s: unknown) => Promise<unknown>) => {
+    const result = await work({ transaction: true });
+    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+    return result;
+  },
   col: {
     interviews: async () => ({ findOneAndUpdate: mocks.findOneAndUpdate }),
     events: async () => ({ insertOne: async (doc: Record<string, unknown>, options: Record<string, unknown>) => { mocks.events.push(doc); mocks.eventOptions.push(options); if (mocks.failEvent) throw new Error("event insert failed"); return { acknowledged: true }; } }),
