@@ -139,6 +139,7 @@ import {
   revokeWorkspaceInvitation,
   revokeWorkspaceInvitationByToken,
   transferWorkspaceOwnership,
+  updateWorkspaceInvitationMail,
 } from "../src/lib/repo/workspaces";
 
 const ownerId = new ObjectId("000000000000000000000001");
@@ -170,6 +171,16 @@ beforeEach(() => {
 });
 
 describe("workspace membership and invitations", () => {
+  it("does not let a superseded mail attempt update a replacement invitation", async () => {
+    const id = new ObjectId();
+    const currentMessageId = "<replacement-message@example.test>";
+    store.invitations.push({ _id: id, tenantId: "axion", email: "person@example.test", messageId: currentMessageId, mailStatus: "pending" });
+
+    await expect(updateWorkspaceInvitationMail("axion", id.toHexString(), "<old-message@example.test>", { mailStatus: "sent" })).resolves.toBe(false);
+    expect(store.invitations[0]).toMatchObject({ messageId: currentMessageId, mailStatus: "pending" });
+    expect(store.invitations[0].delivery).toBeUndefined();
+  });
+
   it("lists only active workspaces for the account and remembers only an actual membership", async () => {
     addMembership("workspace-b", ownerId, "admin", new Date("2026-02-01T00:00:00Z"));
     addMembership("workspace-suspended", ownerId, "member", new Date("2026-03-01T00:00:00Z"));

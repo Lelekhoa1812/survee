@@ -109,7 +109,7 @@ export async function createWorkspaceInvitation(input: {
   return { ok: true, id: saved._id.toHexString(), token, expiresAt: invitation.expiresAt };
 }
 
-export async function updateWorkspaceInvitationMail(tenantId: string, invitationId: string, patch: {
+export async function updateWorkspaceInvitationMail(tenantId: string, invitationId: string, expectedMessageId: string, patch: {
   mailStatus?: "pending" | "sent";
   messageId?: string;
   delivery?: "delivered" | "bounced" | "unknown";
@@ -119,7 +119,7 @@ export async function updateWorkspaceInvitationMail(tenantId: string, invitation
   const id = objectId(invitationId);
   if (!id || !tenantId) return false;
   const result = await (await col.workspaceInvitations()).updateOne(
-    { _id: id, tenantId },
+    { _id: id, tenantId, messageId: expectedMessageId },
     { $set: patch },
   );
   return result.matchedCount === 1;

@@ -12,7 +12,7 @@ export const POST = withServerErrors("admin/workspace-invitations/[id]/delivery"
   try {
     const result = await checkWorkspaceInvitationDelivery(session.tenantId, id);
     if (!result.ok) {
-      const status = result.code === "not_found" ? 404 : result.code === "not_sent" ? 409 : result.code === "rate_limited" ? 429 : 503;
+      const status = result.code === "not_found" ? 404 : result.code === "not_sent" || result.code === "superseded" ? 409 : result.code === "rate_limited" ? 429 : 503;
       return fail(status, result.error, { code: result.code });
     }
     return json({ ok: true, delivery: result.delivery, checkedAt: result.checkedAt, detail: result.detail });

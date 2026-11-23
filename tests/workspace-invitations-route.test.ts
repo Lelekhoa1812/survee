@@ -4,7 +4,7 @@ const state = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => true),
   createWorkspaceInvitation: vi.fn(async (): Promise<{ ok: true; id: string; token: string } | { ok: false; reason: "invalid" | "already_member" | "pending" }> => ({ ok: true, id: "invite-1", token: "invite-token" })),
   updateWorkspaceInvitationMail: vi.fn(async () => true),
-  sendSmtp: vi.fn(async () => undefined),
+  sendSmtp: vi.fn(async (message: { messageId: string }) => ({ messageId: message.messageId })),
 }));
 
 vi.mock("@/lib/http", () => ({
@@ -42,7 +42,7 @@ beforeEach(() => {
   state.rateLimit.mockReset().mockResolvedValue(true);
   state.createWorkspaceInvitation.mockReset().mockResolvedValue({ ok: true, id: "invite-1", token: "invite-token" });
   state.updateWorkspaceInvitationMail.mockReset().mockResolvedValue(true);
-  state.sendSmtp.mockReset().mockResolvedValue(undefined);
+  state.sendSmtp.mockReset().mockImplementation(async (message: { messageId: string }) => ({ messageId: message.messageId }));
 });
 
 describe("workspace invitation email throttling", () => {
@@ -74,7 +74,19 @@ describe("workspace invitation email throttling", () => {
     expect(state.createWorkspaceInvitation).toHaveBeenCalledOnce();
     expect(state.createWorkspaceInvitation).toHaveBeenCalledWith(expect.objectContaining({ messageId: "<invite@example.test>" }));
     expect(state.sendSmtp).toHaveBeenCalledOnce();
-    expect(state.updateWorkspaceInvitationMail).toHaveBeenCalledWith("tenant-a", "invite-1", { mailStatus: "sent", messageId: "<invite@example.test>" });
+    expect(state.updateWorkspaceInvitationMail).toHaveBeenCalledWith("tenant-a", "invite-1", "<invite@example.test>", { mailStatus: "sent", messageId: "<invite@example.test>" });
+  });
+
+  it("persists the SMTP-returned Message-ID while matching the original attempt ID", async () => {
+    state.sendSmtp.mockResolvedValueOnce({ messageId: "<accepted-by-transport@example.test>" });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(201);
+    expect(state.updateWorkspaceInvitationMail).toHaveBeenCalledWith(
+      "tenant-a", "invite-1", "<invite@example.test>",
+      { mailStatus: "sent", messageId: "<accepted-by-transport@example.test>" },
+    );
   });
 
   it("does not send or rotate an already pending invitation", async () => {

@@ -4,7 +4,7 @@ import { getWorkspaceInvitationMail, updateWorkspaceInvitationMail } from "../re
 
 export type WorkspaceDeliveryResult =
   | { ok: true; delivery: "delivered" | "bounced" | "unknown"; checkedAt: string; detail?: string }
-  | { ok: false; code: "not_found" | "not_sent" | "rate_limited" | "rate_limit_unavailable"; error: string };
+  | { ok: false; code: "not_found" | "not_sent" | "rate_limited" | "rate_limit_unavailable" | "superseded"; error: string };
 
 export interface WorkspaceDeliveryDeps {
   load?: typeof getWorkspaceInvitationMail;
@@ -35,10 +35,11 @@ export async function checkWorkspaceInvitationDelivery(
   const checked = await (deps.check ?? checkMessageIds)([invitation.messageId]);
   const result = checked.get(invitation.messageId) ?? { status: "unknown" as const, detail: "Not confirmed yet." };
   const checkedAt = new Date();
-  await (deps.save ?? updateWorkspaceInvitationMail)(tenantId, invitation.id, {
+  const saved = await (deps.save ?? updateWorkspaceInvitationMail)(tenantId, invitation.id, invitation.messageId, {
     delivery: result.status,
     deliveryCheckedAt: checkedAt,
     deliveryDetail: result.detail,
   });
+  if (!saved) return { ok: false, code: "superseded", error: "This invitation changed while delivery was being checked. Reload the pending invitations and check the current message." };
   return { ok: true, delivery: result.status, checkedAt: checkedAt.toISOString(), detail: result.detail };
 }

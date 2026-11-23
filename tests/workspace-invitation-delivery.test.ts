@@ -20,7 +20,7 @@ describe("workspace invitation delivery checks", () => {
 
     expect(result).toMatchObject({ ok: true, delivery: "unknown" });
     expect(d.check).toHaveBeenCalledWith([invitation.messageId]);
-    expect(d.save).toHaveBeenCalledWith("tenant-a", "invite-1", expect.objectContaining({ delivery: "unknown", deliveryDetail: "Not confirmed yet." }));
+    expect(d.save).toHaveBeenCalledWith("tenant-a", "invite-1", invitation.messageId, expect.objectContaining({ delivery: "unknown", deliveryDetail: "Not confirmed yet." }));
     expect(d.rateLimit).toHaveBeenNthCalledWith(1, "workspace-invite-delivery:tenant-a:invite-1", 3, 60);
     expect(d.rateLimit).toHaveBeenNthCalledWith(2, "workspace-invite-delivery-tenant:tenant-a", 100, 60);
   });
@@ -30,6 +30,15 @@ describe("workspace invitation delivery checks", () => {
 
     expect(await checkWorkspaceInvitationDelivery("tenant-a", "invite-1", d)).toMatchObject({ ok: false, code: "not_sent" });
     expect(d.check).not.toHaveBeenCalled();
+  });
+
+  it("does not report a stale delivery result if the invitation was replaced during the check", async () => {
+    const d = deps({ save: vi.fn(async () => false) });
+
+    const result = await checkWorkspaceInvitationDelivery("tenant-a", "invite-1", d);
+
+    expect(result).toMatchObject({ ok: false, code: "superseded" });
+    expect(d.save).toHaveBeenCalledWith("tenant-a", "invite-1", invitation.messageId, expect.any(Object));
   });
 
   it("honors rate limits before searching the mailbox", async () => {

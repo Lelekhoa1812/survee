@@ -59,14 +59,14 @@ export const POST = withServerErrors("admin/workspace-invitations", async functi
   joinUrl.searchParams.set("token", invitation.token);
   const escapedUrl = escapeHtml(joinUrl.toString());
   try {
-    await sendSmtp({
+    const sent = await sendSmtp({
       to: parsed.email,
       subject: `Join ${session.tenantName} on survee`,
       text: `You have been invited to join ${session.tenantName} as a workspace ${role}. Accept the invitation: ${joinUrl.toString()}\n\nThis link expires in 7 days. If you did not expect this invitation, you can ignore this message.`,
       html: `<p>You have been invited to join <strong>${escapeHtml(session.tenantName)}</strong> as a workspace ${role}.</p><p><a href="${escapedUrl}">Accept the invitation</a></p><p>This link expires in 7 days. If you did not expect this invitation, you can ignore this message.</p>`,
       messageId,
     });
-    const stored = await updateWorkspaceInvitationMail(session.tenantId, invitation.id, { mailStatus: "sent", messageId });
+    const stored = await updateWorkspaceInvitationMail(session.tenantId, invitation.id, messageId, { mailStatus: "sent", messageId: sent.messageId });
     if (!stored) throw new Error("Invitation delivery status could not be saved.");
     return json({ ok: true, message: `Invitation sent to ${parsed.email}.` }, 201);
   } catch {
