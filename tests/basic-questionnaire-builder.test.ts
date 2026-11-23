@@ -87,6 +87,23 @@ describe("basic questionnaire HTML generator", () => {
     expect(question).toContain('"presentation": "guided-question"');
   });
 
+  it("generates a native repeat-group template with bounded rows and typed fields", () => {
+    const html = generateBasicQuestionnaireHtml({
+      title: "Asset check", description: "", questions: [{ id: "assets", type: "repeat", label: "Which assets did you inspect?", help: "One row per asset.", required: true, options: [], itemLabel: "asset", maxRows: 5, minRows: 1, fields: [
+        { id: "name", type: "text", label: "Asset identifier", required: true, maxLength: 80 },
+        { id: "condition", type: "select", label: "Condition", options: [{ value: "ok", label: "OK" }, { value: "follow-up", label: "Follow up" }] },
+      ] }],
+    });
+    const report = checkHtml(html, { fileName: "repeat.html" });
+    expect(report.ok).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+    expect(html).toContain('"type": "repeat"');
+    expect(html).toContain('"maxRows": 5');
+    expect(html).toContain('data-kqa-repeat-template="assets"');
+    expect(html).toContain('data-kqa-repeat-field="name"');
+    expect(html).toContain('data-kqa-repeat-field="condition"');
+  });
+
   it("rejects invalid identifiers, duplicate ids, and malformed choice sets", () => {
     const base = { title: "Questionnaire", description: "", questions: [{ id: "invalid ID", type: "text" as const, label: "Question", help: "", required: false, options: [] }] };
     expect(() => generateBasicQuestionnaireHtml(base)).toThrow(/questions\.0\.id/);

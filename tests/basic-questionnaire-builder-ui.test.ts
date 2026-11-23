@@ -194,6 +194,32 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it("builds a bounded repeat group with required typed fields", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "repeat");
+    await change("#builder-label-0", "Which locations did you visit?");
+    expect(host.textContent).toContain("Stable field ID");
+    await change('input[value="Field 1"]', "Location name");
+    const fieldType = Array.from(host.querySelectorAll("select")).find((select) => select.closest("label")?.textContent?.includes("Type"));
+    expect(fieldType).toBeTruthy();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(fieldType!), "value")?.set?.call(fieldType!, "single");
+      fieldType!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"type": "repeat"');
+    expect(html).toContain('"maxRows": 5');
+    expect(html).toContain('"label": "Location name"');
+    expect(html).toContain('data-kqa-repeat-template="question-1"');
+    expect(html).toContain('data-kqa-repeat-field="field-1" value="option-1"');
+    expect(checkHtml(html, { fileName: "generated-repeat.html" }).ok).toBe(true);
+  });
+
   it("selects guided sections and assigns current questions automatically", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");

@@ -1,17 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { generateBasicQuestionnaireHtml, type BasicQuestion, type BasicQuestionSection, type BasicQuestionType, type BasicQuestionnaire } from "@/lib/builder/basic-questionnaire";
+import { generateBasicQuestionnaireHtml, type BasicQuestion, type BasicQuestionSection, type BasicQuestionType, type BasicQuestionnaire, type BasicRepeatField } from "@/lib/builder/basic-questionnaire";
 import type { Condition } from "@/lib/format/schema";
 
 const questionTypes: Array<{ value: BasicQuestionType; label: string }> = [
-  { value: "single", label: "Single choice" }, { value: "multi", label: "Checkboxes" }, { value: "select", label: "Dropdown" }, { value: "rank", label: "Full-order ranking" },
+  { value: "single", label: "Single choice" }, { value: "multi", label: "Checkboxes" }, { value: "select", label: "Dropdown" }, { value: "rank", label: "Full-order ranking" }, { value: "repeat", label: "Repeatable records" },
   { value: "text", label: "Short text" }, { value: "longtext", label: "Paragraph" }, { value: "number", label: "Number" },
   { value: "scale", label: "Scale" }, { value: "date", label: "Date" },
 ];
 
 function freshQuestion(index: number): BasicQuestion {
   return { id: `question-${index + 1}`, type: "single", label: "Your question", help: "", required: false, options: [{ value: "option-1", label: "Option 1" }, { value: "option-2", label: "Option 2" }] };
+}
+
+function freshRepeatField(index: number): BasicRepeatField {
+  return { id: `field-${index + 1}`, type: "text", label: `Field ${index + 1}` };
 }
 
 function routeCondition(question: BasicQuestion): Condition | undefined {
@@ -138,7 +142,21 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
       maxSelections: type === "multi" ? current.maxSelections : undefined,
       step: undefined,
       maxLength: undefined,
+      fields: type === "repeat" ? current.fields ?? [freshRepeatField(0)] : undefined,
+      maxRows: type === "repeat" ? current.maxRows ?? 5 : undefined,
+      minRows: type === "repeat" ? current.minRows : undefined,
+      itemLabel: type === "repeat" ? current.itemLabel ?? "item" : undefined,
     });
+  }
+
+  function updateRepeatField(index: number, fieldIndex: number, patch: Partial<BasicRepeatField>) {
+    const fields = data.questions[index]?.fields ?? [];
+    const field = fields[fieldIndex];
+    if (!field) return;
+    const nextType = patch.type ?? field.type;
+    const needsOptions = nextType === "single" || nextType === "select";
+    const options = needsOptions ? (patch.options ?? (field.options?.length ? field.options : [{ value: "option-1", label: "Option 1" }, { value: "option-2", label: "Option 2" }])) : undefined;
+    updateQuestion(index, { fields: fields.map((item, itemIndex) => itemIndex === fieldIndex ? { ...item, ...patch, options, min: nextType === "scale" ? item.min ?? 1 : nextType === "number" ? item.min : undefined, max: nextType === "scale" ? item.max ?? 5 : nextType === "number" ? item.max : undefined, step: nextType === "number" ? item.step : undefined, maxLength: ["text", "longtext"].includes(nextType) ? item.maxLength : undefined } : item) });
   }
 
   function move(index: number, by: -1 | 1) {
@@ -232,9 +250,27 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
           <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Maximum</span><input className="input" type="number" value={question.max ?? (question.type === "scale" ? 5 : "")} onChange={(event) => updateQuestion(index, { max: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
         </div>}
         {question.type === "number" && <div className="field"><label htmlFor={`builder-step-${index}`}>Increment <span className="muted">(optional)</span></label><input id={`builder-step-${index}`} className="input" type="number" min="0.0000001" step="any" value={question.step ?? ""} onChange={(event) => updateQuestion(index, { step: event.target.value === "" ? undefined : Number(event.target.value) })} /><span className="hint">Leave blank to accept any numeric precision.</span></div>}
+        {question.type === "repeat" && <div className="stack" style={{ marginTop: 14 }}>
+          <div className="row wrap">
+            <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Row label</span><input className="input" maxLength={80} value={question.itemLabel ?? "item"} onChange={(event) => updateQuestion(index, { itemLabel: event.target.value })} /></label>
+            <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Maximum rows</span><input className="input" type="number" min={1} max={20} value={question.maxRows ?? 5} onChange={(event) => updateQuestion(index, { maxRows: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
+            <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Minimum complete rows <span className="muted">(optional)</span></span><input className="input" type="number" min={0} max={question.maxRows ?? 5} value={question.minRows ?? ""} onChange={(event) => updateQuestion(index, { minRows: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
+          </div>
+          <span className="hint">Use for a small finite set of similar records. Keep the cap low and explain what one row represents.</span>
+          {(question.fields ?? []).map((field, fieldIndex) => <fieldset className="card" key={field.id} style={{ padding: 14, margin: 0 }}><legend className="sr-only">Record field {fieldIndex + 1}</legend>
+            <div className="row wrap" style={{ justifyContent: "space-between" }}><strong>Record field {fieldIndex + 1}</strong><button className="btn danger sm" type="button" disabled={(question.fields?.length ?? 0) <= 1} onClick={() => updateQuestion(index, { fields: question.fields?.filter((_, item) => item !== fieldIndex) })}>Remove field</button></div>
+            <div className="row wrap"><label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Stable field ID</span><input className="input mono" maxLength={64} pattern="[a-z0-9][a-z0-9_-]{0,63}" value={field.id} onChange={(event) => updateRepeatField(index, fieldIndex, { id: event.target.value })} /></label>
+              <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Type</span><select className="select" value={field.type} onChange={(event) => updateRepeatField(index, fieldIndex, { type: event.target.value as BasicRepeatField["type"] })}>{["single", "select", "text", "longtext", "number", "scale", "date"].map((type) => <option key={type} value={type}>{type === "single" ? "Single choice" : type === "select" ? "Dropdown" : type === "longtext" ? "Paragraph" : type[0].toUpperCase() + type.slice(1)}</option>)}</select></label></div>
+            <div className="field"><label>Field label</label><input className="input" maxLength={300} value={field.label} onChange={(event) => updateRepeatField(index, fieldIndex, { label: event.target.value })} /></div>
+            <label className="choice"><input type="checkbox" checked={field.required ?? false} onChange={(event) => updateRepeatField(index, fieldIndex, { required: event.target.checked })} /><span>Required in each row</span></label>
+            {["single", "select"].includes(field.type) && <div className="stack" style={{ marginTop: 10 }}><strong>Field choices</strong>{(field.options ?? []).map((option, optionIndex) => <div className="row wrap" key={optionIndex}><input aria-label={`Record field ${fieldIndex + 1} choice ${optionIndex + 1} value`} className="input mono" value={option.value} onChange={(event) => updateRepeatField(index, fieldIndex, { options: field.options?.map((optionItem, itemIndex) => itemIndex === optionIndex ? { ...optionItem, value: event.target.value } : optionItem) })} /><input aria-label={`Record field ${fieldIndex + 1} choice ${optionIndex + 1} label`} className="input" value={option.label} onChange={(event) => updateRepeatField(index, fieldIndex, { options: field.options?.map((optionItem, itemIndex) => itemIndex === optionIndex ? { ...optionItem, label: event.target.value } : optionItem) })} /><button className="btn danger sm" type="button" disabled={(field.options?.length ?? 0) <= 2} onClick={() => updateRepeatField(index, fieldIndex, { options: field.options?.filter((_, itemIndex) => itemIndex !== optionIndex) })}>Remove choice</button></div>)}<button className="btn sm" type="button" disabled={(field.options?.length ?? 0) >= 50} onClick={() => updateRepeatField(index, fieldIndex, { options: [...(field.options ?? []), { value: `option-${(field.options?.length ?? 0) + 1}`, label: `Option ${(field.options?.length ?? 0) + 1}` }] })}>Add field choice</button></div>}
+            {["number", "scale"].includes(field.type) && <div className="row wrap"><label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Minimum</span><input className="input" type="number" value={field.min ?? (field.type === "scale" ? 1 : "")} onChange={(event) => updateRepeatField(index, fieldIndex, { min: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Maximum</span><input className="input" type="number" value={field.max ?? (field.type === "scale" ? 5 : "")} onChange={(event) => updateRepeatField(index, fieldIndex, { max: event.target.value === "" ? undefined : Number(event.target.value) })} /></label></div>}
+          </fieldset>)}
+          <button className="btn sm" type="button" disabled={(question.fields?.length ?? 0) >= 12} onClick={() => updateQuestion(index, { fields: [...(question.fields ?? []), freshRepeatField(question.fields?.length ?? 0)] })}>Add record field</button>
+        </div>}
       </fieldset>)}
       <div className="row wrap"><button className="btn" type="button" disabled={data.questions.length >= 500} onClick={addQuestion}>Add question</button><span className="muted">{data.questions.length} question{data.questions.length === 1 ? "" : "s"}</span></div>
-      <p className="hint">This composer covers common question types, sections, routing comparisons, and input limits. For repeat groups, custom controls, or an existing interview version, use the HTML upload workflow so those details stay explicit and reviewable.</p>
+      <p className="hint">This composer covers common question types, repeatable records, sections, routing comparisons, and input limits. For custom controls or an existing interview version, use the HTML upload workflow so those details stay explicit and reviewable.</p>
       {(built.error || error) && <pre className="callout err" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error || built.error}</pre>}
       <div className="row wrap" style={{ justifyContent: "flex-end" }}><button className="btn" type="button" disabled={!built.html} onClick={download}>Download HTML</button><button className="btn primary" type="button" disabled={!built.html} onClick={() => { setError(""); onUse(built.html); }}>Use questionnaire</button></div>
     </div>
