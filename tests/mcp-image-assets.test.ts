@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   renameImageAsset: vi.fn(),
   inspectImage: vi.fn(),
   noteMcp: vi.fn(async () => {}),
+  ImageAssetQuotaError: class ImageAssetQuotaError extends Error { usedBytes = 10; },
 }));
 
 vi.mock("../src/lib/repo/assets", () => ({
@@ -15,6 +16,8 @@ vi.mock("../src/lib/repo/assets", () => ({
   listImageAssets: mocks.listImageAssets,
   renameImageAsset: mocks.renameImageAsset,
   inspectImage: mocks.inspectImage,
+  ImageAssetQuotaError: mocks.ImageAssetQuotaError,
+  WORKSPACE_IMAGE_QUOTA_BYTES: 100,
 }));
 vi.mock("../src/lib/repo", () => ({ noteMcp: mocks.noteMcp }));
 
@@ -58,6 +61,13 @@ describe("MCP image asset tools", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ error: "dataBase64 must be valid base64 image data within the 2 MB size limit." });
     expect(mocks.addImageAsset).not.toHaveBeenCalled();
+  });
+
+  it("reports workspace image quota exhaustion as a typed tool error", async () => {
+    mocks.addImageAsset.mockRejectedValueOnce(Object.assign(new mocks.ImageAssetQuotaError("limit"), { usedBytes: 99 }));
+    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: png.toString("base64") });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: "workspace_image_quota_exceeded" });
   });
 
   it("pages library reads and requires exact-name delete confirmation", async () => {

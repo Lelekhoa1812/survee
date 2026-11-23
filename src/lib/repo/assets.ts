@@ -2,11 +2,19 @@ import { createHash, randomBytes } from "node:crypto";
 import { Binary, ObjectId } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { currentTenantId, tenantFilter } from "../tenant-context";
-import { MAX_IMAGE_BYTES, type ImageAssetSummary } from "../image-assets";
+import { MAX_IMAGE_BYTES, WORKSPACE_IMAGE_QUOTA_BYTES, type ImageAssetSummary } from "../image-assets";
 import type { ImageAssetDoc } from "./types";
 
 export { MAX_IMAGE_BYTES } from "../image-assets";
+export { WORKSPACE_IMAGE_QUOTA_BYTES } from "../image-assets";
 export type { ImageAssetSummary } from "../image-assets";
+
+export class ImageAssetQuotaError extends Error {
+  constructor(readonly usedBytes: number, readonly requestedBytes: number, readonly quotaBytes = WORKSPACE_IMAGE_QUOTA_BYTES) {
+    super("The workspace image storage limit has been reached.");
+    this.name = "ImageAssetQuotaError";
+  }
+}
 
 function normalizedFileName(value: string): string {
   const leaf = value.replace(/\\/g, "/").split("/").pop() ?? "image";
@@ -60,7 +68,21 @@ export async function addImageAsset(input: { name?: string; fileName: string; da
     sha256: createHash("sha256").update(input.data).digest("hex"), data: Buffer.from(input.data),
     createdAt: now, updatedAt: now,
   };
-  await (await col.imageAssets()).insertOne(doc);
+  await withMongoTransaction(async (session) => {
+    const guard = await (await col.tenants()).updateOne(
+      { _id: tenantId, status: "active" },
+      { $inc: { imageAssetWriteEpoch: 1 } },
+      { session },
+    );
+    if (guard.matchedCount !== 1) throw new Error("The active workspace could not be confirmed.");
+    const current = await (await col.imageAssets()).aggregate<{ _id: null; totalBytes: number }>([
+      { $match: { tenantId } },
+      { $group: { _id: null, totalBytes: { $sum: "$bytes" } } },
+    ], { session }).toArray();
+    const usedBytes = current[0]?.totalBytes ?? 0;
+    if (usedBytes + doc.bytes > WORKSPACE_IMAGE_QUOTA_BYTES) throw new ImageAssetQuotaError(usedBytes, doc.bytes);
+    await (await col.imageAssets()).insertOne(doc, { session });
+  });
   return summary(doc);
 }
 
@@ -77,14 +99,14 @@ export async function listImageAssets(input: { cursor?: string; limit?: number }
   return { assets: page.map(summary), nextCursor: hasMore && page.length ? page[page.length - 1]._id.toHexString() : null };
 }
 
-export async function getImageAssetUsage(): Promise<{ assetCount: number; totalBytes: number }> {
+export async function getImageAssetUsage(): Promise<{ assetCount: number; totalBytes: number; quotaBytes: number }> {
   const tenantId = await currentTenantId();
-  if (!tenantId) return { assetCount: 0, totalBytes: 0 };
+  if (!tenantId) return { assetCount: 0, totalBytes: 0, quotaBytes: WORKSPACE_IMAGE_QUOTA_BYTES };
   const rows = await (await col.imageAssets()).aggregate([
     { $match: tenantFilter(tenantId) },
     { $group: { _id: null, assetCount: { $sum: 1 }, totalBytes: { $sum: "$bytes" } } },
   ]).toArray();
-  return rows[0] ? { assetCount: rows[0].assetCount ?? 0, totalBytes: rows[0].totalBytes ?? 0 } : { assetCount: 0, totalBytes: 0 };
+  return rows[0] ? { assetCount: rows[0].assetCount ?? 0, totalBytes: rows[0].totalBytes ?? 0, quotaBytes: WORKSPACE_IMAGE_QUOTA_BYTES } : { assetCount: 0, totalBytes: 0, quotaBytes: WORKSPACE_IMAGE_QUOTA_BYTES };
 }
 
 export async function getPublicImageAsset(publicId: string): Promise<{ mimeType: string; data: Buffer; fileName: string; sha256: string } | null> {
@@ -117,6 +139,12 @@ export async function deleteImageAsset(id: string, expectedName: string): Promis
     const asset = await assets.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { name: 1, publicId: 1 } });
     if (!asset) return "not_found" as const;
     if (asset.name !== expectedName) return "confirmation_mismatch" as const;
+    const guard = await (await col.tenants()).updateOne(
+      { _id: tenantId, status: "active" },
+      { $inc: { imageAssetWriteEpoch: 1 } },
+      { session },
+    );
+    if (guard.matchedCount !== 1) throw new Error("The active workspace could not be confirmed.");
 
     // Publication conditionally updates this same asset row in its transaction.
     // The delete write therefore conflicts with a concurrent publish, forcing

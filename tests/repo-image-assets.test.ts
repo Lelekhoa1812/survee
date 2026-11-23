@@ -7,11 +7,13 @@ const store = vi.hoisted(() => ({
   versions: [] as any[],
   drafts: [] as any[],
   renameBeforeDelete: false,
+  assetWriteEpoch: 0,
 }));
 
 vi.mock("../src/lib/db", () => ({
   withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true }),
   col: {
+    tenants: async () => ({ updateOne: async () => ({ matchedCount: 1, modifiedCount: 1 }) }),
     imageAssets: async () => ({
       insertOne: async (doc: any) => { store.assets.push(doc); return { insertedId: doc._id }; },
       findOne: async (filter: any, options?: any) => {
@@ -31,7 +33,8 @@ vi.mock("../src/lib/db", () => ({
       },
       aggregate: (pipeline: any[]) => {
         const rows = store.assets.filter((doc) => matches(doc, pipeline[0].$match));
-        return { toArray: async () => rows.length ? [{ assetCount: rows.length, totalBytes: rows.reduce((sum, doc) => sum + doc.bytes, 0) }] : [] };
+        const totalBytes = rows.reduce((sum, doc) => sum + doc.bytes, 0);
+        return { toArray: async () => rows.length ? [pipeline[1].$group.assetCount ? { assetCount: rows.length, totalBytes } : { _id: null, totalBytes }] : [] };
       },
       findOneAndUpdate: async (filter: any, update: any) => {
         const doc = store.assets.find((item) => matches(item, filter));
@@ -72,7 +75,7 @@ function matches(doc: any, filter: any): boolean {
   return true;
 }
 
-import { addImageAsset, deleteImageAsset, getImageAssetUsage, getPublicImageAsset, inspectImage, listImageAssets, MAX_IMAGE_BYTES, renameImageAsset } from "../src/lib/repo/assets";
+import { addImageAsset, deleteImageAsset, getImageAssetUsage, getPublicImageAsset, inspectImage, listImageAssets, MAX_IMAGE_BYTES, renameImageAsset, ImageAssetQuotaError, WORKSPACE_IMAGE_QUOTA_BYTES } from "../src/lib/repo/assets";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
 
@@ -131,9 +134,16 @@ describe("workspace image assets", () => {
     await addImageAsset({ name: "one", fileName: "one.png", data: png });
     await addImageAsset({ name: "two", fileName: "two.png", data: Buffer.concat([png, png]) });
 
-    await expect(getImageAssetUsage()).resolves.toEqual({ assetCount: 2, totalBytes: png.length * 3 });
+    await expect(getImageAssetUsage()).resolves.toEqual({ assetCount: 2, totalBytes: png.length * 3, quotaBytes: WORKSPACE_IMAGE_QUOTA_BYTES });
     store.tenantId = "tenant-b";
-    await expect(getImageAssetUsage()).resolves.toEqual({ assetCount: 0, totalBytes: 0 });
+    await expect(getImageAssetUsage()).resolves.toEqual({ assetCount: 0, totalBytes: 0, quotaBytes: WORKSPACE_IMAGE_QUOTA_BYTES });
+  });
+
+  it("rejects an upload that would exceed the workspace quota while preserving existing assets", async () => {
+    store.assets.push({ _id: new ObjectId(), tenantId: "tenant-a", bytes: WORKSPACE_IMAGE_QUOTA_BYTES - png.length + 1 });
+    await expect(addImageAsset({ name: "Another", fileName: "another.png", data: png }))
+      .rejects.toBeInstanceOf(ImageAssetQuotaError);
+    expect(store.assets).toHaveLength(1);
   });
 
   it("renames images, blocks deleting referenced assets, and requires the exact name to delete", async () => {

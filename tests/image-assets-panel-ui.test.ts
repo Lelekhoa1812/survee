@@ -46,7 +46,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   state.api.mockReset().mockImplementation(async (url: string) => url.includes("/usage")
-    ? { ok: true, data: { usage: { assetCount: 4, totalBytes: 2048 } } }
+    ? { ok: true, data: { usage: { assetCount: 4, totalBytes: 2048, quotaBytes: 100 * 1024 * 1024 } } }
     : { ok: true, data: { assets: [], nextCursor: null } });
   state.toast.mockReset();
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
@@ -65,7 +65,7 @@ describe("workspace image library uploader", () => {
   it("shows workspace-wide image storage usage", async () => {
     await act(async () => root.render(createElement(ImageAssetsPanel)));
 
-    expect(host.textContent).toContain("4 images · 2.0 KB stored");
+    expect(host.textContent).toContain("4 images · 2.0 KB of 100.00 MB stored");
     expect(state.api).toHaveBeenCalledWith("/api/admin/assets/usage");
   });
 

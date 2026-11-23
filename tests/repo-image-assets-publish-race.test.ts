@@ -24,6 +24,7 @@ vi.mock("../src/lib/db", () => ({
     }
   },
   col: {
+    tenants: async () => ({ updateOne: async () => ({ matchedCount: 1, modifiedCount: 1 }) }),
     imageAssets: async () => ({
       findOne: async (filter: any) => state.asset && matches(state.asset, filter) ? state.asset : null,
       updateOne: async (filter: any, update: any) => {

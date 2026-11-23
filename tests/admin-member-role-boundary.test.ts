@@ -54,6 +54,7 @@ vi.mock("../src/lib/repo/assets", () => ({
   addImageAsset: state.addImageAsset,
   renameImageAsset: state.renameImageAsset,
   deleteImageAsset: state.deleteImageAsset,
+  ImageAssetQuotaError: class ImageAssetQuotaError extends Error {},
 }));
 
 import { GET as listInterviews } from "../src/app/api/admin/interviews/route";

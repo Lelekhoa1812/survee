@@ -1,5 +1,5 @@
 import { fail, guardAdmin, json, str, withServerErrors } from "@/lib/http";
-import { addImageAsset, listImageAssets, MAX_IMAGE_BYTES } from "@/lib/repo/assets";
+import { addImageAsset, ImageAssetQuotaError, listImageAssets, MAX_IMAGE_BYTES } from "@/lib/repo/assets";
 
 export const GET = withServerErrors("admin/assets", async function GET(req: Request) {
   const denied = await guardAdmin();
@@ -48,6 +48,7 @@ export const POST = withServerErrors("admin/assets", async function POST(req: Re
     const asset = await addImageAsset({ name, fileName: upload.name, data: Buffer.from(await upload.arrayBuffer()) });
     return json({ ok: true, asset }, 201);
   } catch (error) {
+    if (error instanceof ImageAssetQuotaError) return fail(413, error.message, { code: "workspace_image_quota_exceeded", usedBytes: error.usedBytes, requestedBytes: error.requestedBytes, quotaBytes: error.quotaBytes });
     const message = error instanceof Error && error.message.startsWith("Use a valid ") ? error.message
       : error instanceof Error && error.message.startsWith("Each image ") ? error.message
         : "The image could not be saved.";

@@ -65,7 +65,7 @@ import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
 import { patchQuestionnaireBlocks, type QuestionnaireBlockOperation } from "./questionnaire-block-patch";
 import { patchRequiredQuestions, type RequiredQuestionChange } from "./questionnaire-required-patch";
-import { addImageAsset, deleteImageAsset, listImageAssets, renameImageAsset, inspectImage } from "../repo/assets";
+import { addImageAsset, deleteImageAsset, listImageAssets, renameImageAsset, inspectImage, ImageAssetQuotaError, WORKSPACE_IMAGE_QUOTA_BYTES } from "../repo/assets";
 import { MAX_IMAGE_BASE64_CHARS } from "../image-assets";
 
 export interface ToolResult {
@@ -402,7 +402,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "upload_image_asset",
-    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB. The returned URL can be used in questionnaire HTML as <img src> or in CSS url().",
+    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB and each workspace has 100 MiB total image storage. The returned URL can be used in questionnaire HTML as <img src> or in CSS url().",
     inputSchema: obj({ name: str, fileName: str, dataBase64: { type: "string", minLength: 1, maxLength: MAX_IMAGE_BASE64_CHARS + 64 } }, ["fileName", "dataBase64"]),
     async run(args) {
       if (typeof args.fileName !== "string" || !args.fileName.trim()) return err("fileName is required.");
@@ -411,7 +411,13 @@ const TOOLS: ToolDef[] = [
       if (!data) return err("dataBase64 must be valid base64 image data within the 2 MB size limit.");
       const checked = inspectImage(data);
       if (!checked.ok) return err(checked.error, "invalid_image");
-      const asset = await addImageAsset({ name: asString(args.name, 120), fileName: asString(args.fileName, 160) || "image", data });
+      let asset;
+      try {
+        asset = await addImageAsset({ name: asString(args.name, 120), fileName: asString(args.fileName, 160) || "image", data });
+      } catch (error) {
+        if (error instanceof ImageAssetQuotaError) return err(`${error.message} ${error.usedBytes} of ${WORKSPACE_IMAGE_QUOTA_BYTES} bytes are in use.`, "workspace_image_quota_exceeded");
+        throw error;
+      }
       const alt = escapeHtml(asset.name);
       return ok({ asset, htmlExample: `<img src="${asset.url}" alt="${alt}">` });
     },

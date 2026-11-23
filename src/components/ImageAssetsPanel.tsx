@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { api, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
-import { IMAGE_ASSET_ACCEPT, MAX_IMAGE_BYTES, type ImageAssetSummary } from "@/lib/image-assets";
+import { IMAGE_ASSET_ACCEPT, MAX_IMAGE_BYTES, WORKSPACE_IMAGE_QUOTA_BYTES, type ImageAssetSummary } from "@/lib/image-assets";
 
 interface Page {
   assets?: ImageAssetSummary[];
   nextCursor?: string | null;
 }
 
-interface Usage { assetCount: number; totalBytes: number }
+interface Usage { assetCount: number; totalBytes: number; quotaBytes: number }
 
 function formatStorage(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -138,7 +138,7 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
           </div>
         </div>
         <div className="card-pad stack">
-          <p className="hint" style={{ margin: 0 }}>PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG are supported. Each image can be up to {MAX_IMAGE_BYTES / 1024 / 1024} MB. Image URLs can be opened by anyone who has the URL so respondents can load them. Upload a replacement as a new image to keep saved questionnaire versions reproducible.</p>
+          <p className="hint" style={{ margin: 0 }}>PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG are supported. Each image can be up to {MAX_IMAGE_BYTES / 1024 / 1024} MB, with {formatStorage(usage?.quotaBytes ?? WORKSPACE_IMAGE_QUOTA_BYTES)} total storage for this workspace. Image URLs can be opened by anyone who has the URL so respondents can load them. Upload a replacement as a new image to keep saved questionnaire versions reproducible.</p>
           {!canManage && <p className="hint" style={{ margin: 0 }}>Member access is view-only. Ask a workspace owner or admin to add, rename, or remove images.</p>}
           {canManage && <div className="row wrap" style={{ alignItems: "end" }}>
             <label className="field" style={{ flex: "1 1 180px", margin: 0 }}>
@@ -155,7 +155,7 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
           <div className="row wrap" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>Saved images</h3>
             <div className="row wrap">
-              {usage && <span className="muted" role="status">{usage.assetCount} images · {formatStorage(usage.totalBytes)} stored</span>}
+              {usage && <span className="muted" role="status">{usage.assetCount} images · {formatStorage(usage.totalBytes)} of {formatStorage(usage.quotaBytes)} stored</span>}
               <button className="btn sm" type="button" disabled={loading} onClick={() => { void load(); void loadUsage(); }}>Refresh</button>
             </div>
           </div>

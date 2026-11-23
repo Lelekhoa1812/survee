@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/http", () => ({
   withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
-  fail: (status: number, error: string) => Response.json({ ok: false, error }, { status }),
+  fail: (status: number, error: string, extra?: Record<string, unknown>) => Response.json({ ok: false, error, ...extra }, { status }),
   json: (data: unknown, status = 200, extra?: Record<string, string>) => Response.json(data, { status, headers: extra }),
   str: (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : undefined,
   readJson: async (req: Request) => {
@@ -30,6 +30,7 @@ vi.mock("@/lib/repo/assets", () => ({
   getPublicImageAsset: state.getPublicImageAsset,
   getImageAssetUsage: state.getImageAssetUsage,
   MAX_IMAGE_BYTES: 2 * 1024 * 1024,
+  ImageAssetQuotaError: class ImageAssetQuotaError extends Error { usedBytes = 100; requestedBytes = 10; quotaBytes = 100; constructor(_message?: string) { super(_message); } },
 }));
 
 import { GET as listAssets, POST as uploadAsset } from "../src/app/api/admin/assets/route";
@@ -97,6 +98,15 @@ describe("image asset routes", () => {
     const tooLarge = routeRequest("/api/admin/assets", { method: "POST", body: new Uint8Array(2 * 1024 * 1024 + 64 * 1024 + 1) });
     expect((await uploadAsset(tooLarge)).status).toBe(413);
     expect(state.addImageAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a typed workspace quota error when the storage ceiling is reached", async () => {
+    state.addImageAsset.mockRejectedValueOnce(new (await import("@/lib/repo/assets")).ImageAssetQuotaError(100, 10));
+    const form = new FormData();
+    form.set("file", new Blob([png]), "logo.png");
+    const response = await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", body: form }));
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ code: "workspace_image_quota_exceeded", usedBytes: 100, quotaBytes: 100 });
   });
 
   it("renames assets and protects deletion with exact-name confirmation", async () => {

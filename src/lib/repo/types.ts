@@ -18,6 +18,8 @@ export interface TenantDoc {
   status: "active" | "suspended";
   /** Incremented transactionally when an owner membership is removed to serialize last-owner checks. */
   membershipEpoch?: number;
+  /** Incremented transactionally to serialize workspace image quota checks with asset deletions. */
+  imageAssetWriteEpoch?: number;
   createdAt: Date;
   updatedAt: Date;
 }
