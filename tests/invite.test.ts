@@ -22,6 +22,7 @@ function ctx(overrides: Partial<InviteContext["person"]> & { status?: "open" | "
 
 function harness(context: InviteContext | null, extra: Partial<SendInviteDeps> = {}) {
   const send = vi.fn(async (message: OutboundMail) => ({ messageId: "<sent-id@example.com>" }));
+  const rateLimit = vi.fn(async () => true);
   const recorded: unknown[] = [];
   const deps: SendInviteDeps = {
     load: async () => context,
@@ -29,9 +30,10 @@ function harness(context: InviteContext | null, extra: Partial<SendInviteDeps> =
     record: async (row) => { recorded.push(row); },
     linkFor: () => ({ ok: true, link: `https://kqa.example/${TOKEN}` }),
     smtpReady: () => ({ ok: true, from: "host@example.com" }),
+    rateLimit,
     ...extra,
   };
-  return { send, recorded, deps };
+  return { send, rateLimit, recorded, deps };
 }
 
 describe("sendInvite", () => {
@@ -84,6 +86,26 @@ describe("sendInvite", () => {
     const again = harness(ctx({ email: "ada@example.com", rows }));
     expect(await sendInvite({ personId, triggeredBy: "mcp", resend: true }, again.deps)).toMatchObject({ ok: true, result: "sent" });
     expect(again.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks an invite when a per-person rate limit is exhausted", async () => {
+    const rateLimit = vi.fn(async () => false);
+    const { send, recorded, deps } = harness(ctx({ email: "ada@example.com" }), { rateLimit });
+
+    expect(await sendInvite({ personId, triggeredBy: "admin", resend: true }, deps)).toMatchObject({ ok: false, code: "rate_limited" });
+    expect(rateLimit).toHaveBeenCalledWith(`invite-person:test-scope:${personId}`, 1, 1);
+    expect(send).not.toHaveBeenCalled();
+    expect(recorded).toHaveLength(0);
+  });
+
+  it("fails closed if the durable rate-limit store is unavailable", async () => {
+    const { send, recorded, deps } = harness(ctx({ email: "ada@example.com" }), {
+      rateLimit: async () => { throw new Error("database unavailable"); },
+    });
+
+    expect(await sendInvite({ personId, triggeredBy: "admin" }, deps)).toMatchObject({ ok: false, code: "rate_limit_unavailable" });
+    expect(send).not.toHaveBeenCalled();
+    expect(recorded).toHaveLength(0);
   });
 
   it("does not record a successful send as a failure when the mail row cannot be saved", async () => {

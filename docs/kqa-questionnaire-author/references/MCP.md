@@ -128,8 +128,8 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `list_events` | Recent audit rows |
 | `export_interview` | `json`, `csv-wide`, `csv-long`, `md`, or `xlsx` (base64) |
 | `get_mail_status` | Stored send and delivery state for a person or interview. Does not open the mailbox |
-| `send_invite` | Ask SMTP to send one person's private link. One message per call |
-| `check_invite_delivery` | IMAP check of a stored message id. Returns `delivered`, `bounced`, or `unknown` |
+| `send_invite` | Ask SMTP to send one person's private link. One message per call; per-person, per-recipient, and workspace limits prevent repeated sends |
+| `check_invite_delivery` | IMAP check of a stored message id. Returns `delivered`, `bounced`, or `unknown`; per-person and workspace limits constrain mailbox checks |
 
 `get_answers` keeps ordinary question answers in its existing `answers` array. When a person has saved repeat-group rows, it adds a separate `recordGroups` object keyed by repeat question ID; each value is an array in respondent display order and each row contains only its stable `id` and `values` map keyed by field ID. Match field IDs to the current question's `fields` in the questionnaire manifest. Internal row and field revision counters are not exposed. The `json` interview export adds the same lossless public group data only when at least one record row exists, while preserving the legacy JSON shape when none exists. Excel adds a normalized `Records` sheet only when record data exists; it has one row per declared field for every saved record row, including absent/empty fields, and marks value presence explicitly. Existing wide and long CSV formats intentionally keep their question-only columns/rows and omit repeat-group records; the host export screen warns when this applies. Markdown remains a question-answer report and does not include repeat rows.
 
@@ -209,6 +209,8 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `closed` | `send_invite` refused because the interview is closed, so the link would not open. Reopen it first. |
 | `no_public_url` | `send_invite` refused because `KQA_PUBLIC_URL` is not set, so no valid link can be written. Nothing was sent. |
 | `mail_not_configured` | `send_invite` refused because SMTP is not configured. Nothing was sent. |
+| `rate_limited` | A private-link invite, workspace invitation, or IMAP delivery check exceeded its current recipient/person/workspace limit. Wait before retrying. |
+| `rate_limit_unavailable` | The durable throttle could not be checked, so the outbound action was refused. Retry later. |
 | `send_failed` | SMTP rejected the message or the send did not complete. Check `get_mail_status` before resending, since the message may have been accepted. |
 | `not_sent` | `check_invite_delivery` was called for a person whose invite has not been sent. |
 | `analysis_run_too_large` | `analyze_answers` could not keep the aggregate result as a run. Select up to 20 outcomes with `questionIds`, or analyze fewer at a time. |

@@ -25,14 +25,14 @@ export const POST = withServerErrors("admin/people/[pid]/[action]", async functi
     if (!body.ok) return body.res;
     const result = await sendInvite({ personId: pid, triggeredBy: "admin", resend: body.data.resend === true });
     if (!result.ok) {
-      const status = result.code === "not_found" ? 404 : result.code === "closed" ? 409 : result.code === "send_failed" ? 502 : 400;
+      const status = result.code === "not_found" ? 404 : result.code === "closed" ? 409 : result.code === "send_failed" ? 502 : result.code === "rate_limited" ? 429 : result.code === "rate_limit_unavailable" ? 503 : 400;
       return fail(status, result.error, { code: result.code });
     }
     return json({ ok: true, result: result.result, sentAt: result.sentAt });
   }
   if (action === "delivery") {
     const result = await checkInviteDelivery(pid);
-    if (!result.ok) return fail(result.code === "not_found" ? 404 : 400, result.error, { code: result.code });
+    if (!result.ok) return fail(result.code === "not_found" ? 404 : result.code === "rate_limited" ? 429 : result.code === "rate_limit_unavailable" ? 503 : 400, result.error, { code: result.code });
     return json({ ok: true, delivery: result.delivery, detail: result.detail ?? null, checkedAt: result.checkedAt });
   }
   return fail(404, "Unknown action.");

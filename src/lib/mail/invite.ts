@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 import { smtpSettings } from "../env";
 import { col } from "../db";
 import { currentTenantId } from "../tenant-context";
-import { getInterview, getParticipant } from "../repo";
+import { consumeRateLimit, getInterview, getParticipant } from "../repo";
 import { insertMail, listMailByPerson, mailRecord } from "../repo/mail";
 import { domainOf, parseEmail } from "./address";
 import { inviteLink } from "./policy";
@@ -10,7 +10,7 @@ import { currentMail, type MailRecord } from "./state";
 import { newMessageId, publicSmtpFailure, sendSmtp, type OutboundMail } from "./smtp";
 import { inviteMessage } from "./template";
 
-export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "send_failed";
+export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "send_failed";
 
 export type SendInviteResult =
   | { ok: true; result: "sent" | "already_sent"; to: string; sentAt: string; messageId?: string; interviewId: string; personId: string }
@@ -29,6 +29,7 @@ export interface SendInviteDeps {
   record?: (row: Parameters<typeof insertMail>[0]) => Promise<void>;
   linkFor?: (token: string) => { ok: true; link: string } | { ok: false; error: string };
   smtpReady?: () => { ok: true; from: string } | { ok: false; error: string };
+  rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
 }
 
 async function loadFromDb(personId: string): Promise<InviteContext | null> {
@@ -82,6 +83,21 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     return cfg.ok ? { ok: true as const, from: cfg.user } : { ok: false as const, error: cfg.error };
   })();
   if (!ready.ok) return { ok: false, code: "mail_not_configured", error: ready.error };
+
+  const tenantId = await currentTenantId();
+  if (!tenantId && !deps.rateLimit) return { ok: false, code: "rate_limit_unavailable", error: "Invite sending is temporarily unavailable. Try again." };
+  const scope = tenantId ?? "test-scope";
+  const consume = deps.rateLimit ?? consumeRateLimit;
+  try {
+    // The per-person minute bucket prevents concurrent clicks from sending duplicates.
+    // Recipient and workspace buckets cap repeated sends across a broader set of links.
+    const allowed = await consume(`invite-person:${scope}:${ctx.person.id}`, 1, 1)
+      && await consume(`invite-recipient:${scope}:${parsed.email}`, 5, 60)
+      && await consume(`invite-workspace:${scope}`, 100, 60);
+    if (!allowed) return { ok: false, code: "rate_limited", error: "An invite was sent recently. Wait before sending another." };
+  } catch {
+    return { ok: false, code: "rate_limit_unavailable", error: "Invite sending is temporarily unavailable. Try again." };
+  }
 
   const message = inviteMessage(ctx.person.name, ctx.interview.name, link.link);
   const messageId = newMessageId(ready.from);

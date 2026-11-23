@@ -87,6 +87,7 @@ vi.mock("../src/lib/repo", async () => {
   const actual = await vi.importActual<typeof import("../src/lib/repo")>("../src/lib/repo");
   return {
     ...actual,
+    consumeRateLimit: vi.fn(async () => true),
     noteMcp: vi.fn(async () => {}),
     reopenParticipant: vi.fn(async () => null),
     promoteToMultiUser: vi.fn(async () => {}),

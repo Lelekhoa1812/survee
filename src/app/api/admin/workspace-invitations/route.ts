@@ -3,6 +3,7 @@ import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors }
 import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { publicBaseUrl, smtpSettings } from "@/lib/env";
+import { consumeRateLimit } from "@/lib/repo";
 import { createWorkspaceInvitation, listWorkspaceAccess, revokeWorkspaceInvitationByToken } from "@/lib/repo/workspaces";
 
 function escapeHtml(value: string): string {
@@ -35,6 +36,14 @@ export const POST = withServerErrors("admin/workspace-invitations", async functi
   const smtp = smtpSettings();
   const base = publicBaseUrl();
   if (!smtp.ok || !base.ok) return fail(503, "Workspace invitations are temporarily unavailable.");
+
+  try {
+    const allowed = await consumeRateLimit(`workspace-invite-recipient:${session.tenantId}:${parsed.email}`, 3, 60)
+      && await consumeRateLimit(`workspace-invite-tenant:${session.tenantId}`, 100, 60);
+    if (!allowed) return fail(429, "An invitation was sent recently. Wait before trying again.", { code: "rate_limited" });
+  } catch {
+    return fail(503, "Workspace invitations are temporarily unavailable.", { code: "rate_limit_unavailable" });
+  }
 
   let invitation: Awaited<ReturnType<typeof createWorkspaceInvitation>>;
   try {
