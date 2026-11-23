@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { AXION_TENANT_ID } from "@/lib/env";
 import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { adminSession } from "@/lib/http";
-import { auditTenantMigration, backfillLegacyTenant } from "@/lib/tenant-migration";
+import { auditTenantMigration, backfillLegacyTenant, TenantMigrationInProgressError } from "@/lib/tenant-migration";
 
 export const GET = withServerErrors("admin/tenant-migration", async function GET() {
   const denied = await guardAdmin();
@@ -31,6 +31,7 @@ export const POST = withServerErrors("admin/tenant-migration", async function PO
     const modified = await backfillLegacyTenant(await db());
     return json({ ok: true, modified, audit: await auditTenantMigration(await db()) });
   } catch (error) {
+    if (error instanceof TenantMigrationInProgressError) return fail(409, error.message, { code: "tenant_migration_in_progress" });
     const message = error instanceof Error && error.message === "Tenant preflight is not ready; no records were changed."
       ? error.message
       : "The migration did not finish. It is safe to review the counts and retry after checking the database.";

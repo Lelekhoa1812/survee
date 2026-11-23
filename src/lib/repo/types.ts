@@ -20,6 +20,16 @@ export interface TenantDoc {
   membershipEpoch?: number;
   /** Incremented transactionally to serialize workspace image quota checks with asset deletions. */
   imageAssetWriteEpoch?: number;
+  /** Lease and per-collection checkpoints for the reviewed legacy tenant backfill. */
+  legacyTenantMigration?: {
+    owner?: string;
+    leaseExpiresAt?: Date;
+    state?: "running" | "interrupted" | "needs_review" | "complete";
+    startedAt?: Date;
+    finishedAt?: Date;
+    completedCollections?: string[];
+    modifiedByCollection?: Record<string, number>;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

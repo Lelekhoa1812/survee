@@ -9,6 +9,8 @@ const state = vi.hoisted(() => ({
   readJsonCalls: 0,
   audit: { preflight: { readyForReviewedBackfill: true }, collections: {} },
   modified: { interviews: 1 },
+  migrationBusy: false,
+  TenantMigrationInProgressError: class TenantMigrationInProgressError extends Error {},
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -24,13 +26,14 @@ vi.mock("@/lib/http", () => ({
     return { ok: true, data: { confirmation: "ASSIGN LEGACY DATA TO AXION", backupConfirmed: true } };
   },
   str: (value: unknown) => typeof value === "string" ? value.trim() : undefined,
-  fail: (status: number, error: string) => new Response(JSON.stringify({ ok: false, error }), { status }),
+  fail: (status: number, error: string, extra?: Record<string, unknown>) => new Response(JSON.stringify({ ok: false, error, ...extra }), { status }),
   json: (data: unknown) => new Response(JSON.stringify(data), { status: 200 }),
 }));
 
 vi.mock("@/lib/tenant-migration", () => ({
   auditTenantMigration: async () => { state.auditCalls += 1; return state.audit; },
-  backfillLegacyTenant: async () => { state.backfillCalls += 1; return state.modified; },
+  backfillLegacyTenant: async () => { state.backfillCalls += 1; if (state.migrationBusy) throw new state.TenantMigrationInProgressError(); return state.modified; },
+  TenantMigrationInProgressError: state.TenantMigrationInProgressError,
 }));
 
 import { GET, POST } from "../src/app/api/admin/tenant-migration/route";
@@ -47,6 +50,7 @@ describe("legacy tenant migration route authorization", () => {
     state.auditCalls = 0;
     state.backfillCalls = 0;
     state.readJsonCalls = 0;
+    state.migrationBusy = false;
   });
 
   it("does not expose instance-wide audit counts to another workspace owner", async () => {
@@ -83,6 +87,13 @@ describe("legacy tenant migration route authorization", () => {
     expect(state.backfillCalls).toBe(1);
     expect(state.auditCalls).toBe(1);
     expect(state.dbCalls).toBe(2);
+  });
+
+  it("returns a clear conflict when another migration holds the lease", async () => {
+    state.migrationBusy = true;
+    const response = await POST(request());
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "tenant_migration_in_progress" });
   });
 
   it("denies non-owners in Axion", async () => {

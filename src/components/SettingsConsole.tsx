@@ -26,6 +26,14 @@ interface KeyRow {
 
 interface TenantAudit {
   axionLegacyTenantFallbackEnabled: boolean;
+  migrationProgress?: {
+    state: "not_started" | "running" | "interrupted" | "needs_review" | "complete";
+    startedAt: string | null;
+    finishedAt: string | null;
+    leaseExpiresAt: string | null;
+    completedCollections: string[];
+    modifiedByCollection: Record<string, number>;
+  };
   collections: Record<string, { documents: number; alreadyTenantScoped: number; missingTenant: number; otherTenant: number }>;
   blockingIntegrity: Record<string, number>;
   legacyEventReferences: Record<string, number>;
@@ -120,7 +128,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
     return res.data;
   }
 
-  const legacyCollections = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes"];
+  const legacyCollections = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes", "analytics_runs"];
   const unscopedLegacyCount = legacyCollections.reduce((sum, name) => sum + (tenantAudit?.collections[name]?.missingTenant ?? 0), 0);
   const otherTenantCount = legacyCollections.reduce((sum, name) => sum + (tenantAudit?.collections[name]?.otherTenant ?? 0), 0);
   const integrityFindings = [
@@ -339,6 +347,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
           ) : (
             <div className="card-pad stack">
               <p className="settings-legacy-intro">Review the ownership audit here. No records change during this review; a separate owner-only assignment requires a typed confirmation and your attestation that a current database backup is available. The app cannot verify the backup.</p>
+              {tenantAudit.migrationProgress && tenantAudit.migrationProgress.state !== "not_started" && <p className="hint" role="status">Latest assignment status: {tenantAudit.migrationProgress.state.replaceAll("_", " ")}. {tenantAudit.migrationProgress.completedCollections.length} of 8 collections have checkpoints{tenantAudit.migrationProgress.leaseExpiresAt ? `; the current lease expires ${new Date(tenantAudit.migrationProgress.leaseExpiresAt).toLocaleString()}` : ""}.</p>}
               {unscopedLegacyCount === 0 ? (
                 otherTenantCount > 0
                   ? <p className="muted" role="status">{otherTenantCount.toLocaleString()} records already belong to another tenant and need review before Axion assignment.</p>
@@ -434,7 +443,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
           }
         >
           <div className="stack">
-            <p>This writes <code>tenantId: axion</code> onto {unscopedLegacyCount.toLocaleString()} existing records, including interviews, survey versions, participants, events, mail, API keys, and active OAuth codes. It preserves record IDs, answers, links, keys, and event history.</p>
+            <p>This writes <code>tenantId: axion</code> onto {unscopedLegacyCount.toLocaleString()} existing records, including interviews, survey versions, participants, events, mail, API keys, active OAuth codes, and analytics runs. It preserves record IDs, answers, links, keys, and event history.</p>
             <p className="muted">The audit passed the parent-record checks. Legacy events with missing or incomplete references are retained and assigned to Axion.</p>
             <p className="callout warn">Verify a current MongoDB backup is available before continuing. This app cannot verify the backup itself.</p>
             <label className="row wrap" style={{ alignItems: "flex-start", gap: 8 }}>
