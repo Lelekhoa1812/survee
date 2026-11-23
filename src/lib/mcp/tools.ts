@@ -965,7 +965,15 @@ const TOOLS: ToolDef[] = [
       if (!interview) return err("Interview not found.", "not_found");
       const version = await getVersion(interview._id, interview.currentVersion);
       if (!version) return err("Survey version not found.", "not_found");
+      const snapshot = { version: interview.currentVersion, revision: interview.respondentWriteRevision ?? 0 };
+      const snapshotIsCurrent = async () => {
+        const current = await getInterview(id);
+        return Boolean(current && current.currentVersion === snapshot.version && (current.respondentWriteRevision ?? 0) === snapshot.revision);
+      };
+      const stale = () => err("Interview data changed while the export was being created. Run the export again.", "export_stale");
+      if (!await snapshotIsCurrent()) return stale();
       const people = await listParticipants(id);
+      if (!await snapshotIsCurrent()) return stale();
       const file = await exportInterview(
         {
           interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, createdAt: interview.createdAt.toISOString() },
@@ -976,6 +984,7 @@ const TOOLS: ToolDef[] = [
         },
         format,
       );
+      if (!await snapshotIsCurrent()) return stale();
       const binary = typeof file.body !== "string";
       const body = typeof file.body === "string" ? file.body : file.body.toString("base64");
       const textBody = !binary && Buffer.byteLength(body, "utf8") <= 64 * 1024

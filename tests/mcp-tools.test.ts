@@ -243,6 +243,41 @@ describe("MCP tools", () => {
     expect(oversizedBody.result.structuredContent).toMatchObject({ code: "export_payload_limit", limitBytes: 8 * 1024 * 1024 });
   });
 
+  it("rejects an MCP export when participant data changes during the buffered read", async () => {
+    const snapshot = {
+      _id: new ObjectId(interviewId), name: "Investor interview", mode: "multi", status: "open",
+      currentVersion: 1, respondentWriteRevision: 3, createdAt: new Date(), updatedAt: new Date(),
+    };
+    vi.mocked(getInterview)
+      .mockResolvedValueOnce(snapshot as never)
+      .mockResolvedValueOnce(snapshot as never)
+      .mockResolvedValueOnce({ ...snapshot, respondentWriteRevision: 4 } as never);
+
+    const response = await call("export_interview", { interviewId, format: "json" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toBe("export_stale");
+  });
+
+  it("checks the MCP export revision again after file serialization", async () => {
+    const snapshot = {
+      _id: new ObjectId(interviewId), name: "Investor interview", mode: "multi", status: "open",
+      currentVersion: 1, respondentWriteRevision: 3, createdAt: new Date(), updatedAt: new Date(),
+    };
+    vi.mocked(getInterview)
+      .mockResolvedValueOnce(snapshot as never)
+      .mockResolvedValueOnce(snapshot as never)
+      .mockResolvedValueOnce(snapshot as never)
+      .mockResolvedValueOnce({ ...snapshot, respondentWriteRevision: 4 } as never);
+
+    const response = await call("export_interview", { interviewId, format: "json" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toBe("export_stale");
+  });
+
   it("caps the encoded MCP envelope after JSON escaping expands a valid file", async () => {
     vi.mocked(listParticipants).mockResolvedValueOnce([
       { id: personId, name: "Quote-heavy", status: "submitted", answers: { fit: { value: '"'.repeat(7 * 1024 * 1024), updatedAt: "2026-11-13T00:00:00.000Z" } } },

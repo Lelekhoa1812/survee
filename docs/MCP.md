@@ -207,6 +207,7 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
 | `analysis_run_stale` | Participant answers or the questionnaire changed while the analysis was running, so its aggregate page set was not cached. Run the analysis again. |
 | `participant_read_limit` | A full export has more than 100 people. The result is not truncated; use aggregate tools or read answers with `get_answers` cursor pages. |
+| `export_stale` | Interview data changed while the export was being created. Discard the result and run the export again. This revision check detects changes around bounded reads but does not provide database snapshot isolation. |
 | `export_payload_limit` | A buffered export exceeds 8 MiB of source participant data. The file was not created; use the streamed host CSV export where available. |
 | `export_output_limit` | A generated export exceeds the 16 MiB output cap. The file was not returned. |
 | `participant_cursor_invalid` | A participant or answer page cursor is malformed. Restart the read without a cursor. |
