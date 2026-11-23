@@ -45,7 +45,10 @@ vi.mock("../src/lib/db", () => ({
       },
     }),
     questionOrderAssignments: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "questionOrderAssignments", filter, options }); } }),
-    events: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events", filter, options }); } }),
+    events: async () => ({
+      insertOne: async (_event: unknown, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events.insert", filter: {}, options }); },
+      deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events", filter, options }); },
+    }),
     analyticsRuns: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "analyticsRuns", filter, options }); } }),
     mail: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mail", filter, options }); } }),
   },
@@ -129,7 +132,7 @@ describe("respondent revision writes", () => {
 
     expect(reopened?.status).toBe("in_progress");
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants", "interviews"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants", "interviews", "events.insert"]);
     expect(mocks.calls[0].options).toMatchObject({ session });
     expect(mocks.calls[1].options).toEqual({ session });
   });

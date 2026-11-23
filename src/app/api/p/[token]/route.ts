@@ -30,7 +30,7 @@ export const GET = withServerErrors("p/questionnaire", async function GET(req: R
     : question);
   return json({
     ok: true,
-    participant: { name: ctx.participant.name, status: ctx.participant.status, revision: ctx.participant.revision, submittedAt: ctx.participant.submittedAt },
+    participant: { name: ctx.participant.name, status: ctx.participant.status, revision: ctx.participant.revision, writeEpoch: ctx.participant.writeEpoch ?? 0, submittedAt: ctx.participant.submittedAt },
     interview: { name: ctx.interview.name, status: ctx.interview.status },
     version: ctx.version.version,
     title: manifest.title,

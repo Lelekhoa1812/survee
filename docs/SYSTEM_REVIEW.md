@@ -27,7 +27,7 @@ The following changes are pushed to `main` and deployed:
 - Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries, an on-demand IMAP check can resolve a matching delivery-status notice, and explicit resend warns of possible duplicates.
 - Active workspace invitation links no longer rotate on repeated requests or concurrent sends; SMTP ambiguity leaves the invitation active, with revoke-before-replacement behavior shown in settings.
 - Workspace invitation attempts persist their exact Message-ID before SMTP; hosts can check that id for delivery-status evidence with per-invitation and workspace throttles.
-- The host People list, host Answers matrix, and MCP people/status/mail-status reads paginate in bounded cursor pages. MCP interview-wide answer reads page through bounded 50-row results (maximum 100) and apply `submittedOnly` in the database query; full exports remain capped at 100. Targeted MCP answer reads load one tenant-scoped person.
+- The host People list, host Answers matrix, and MCP people/status/mail-status reads paginate in bounded cursor pages. MCP interview-wide answer reads page through bounded 50-row results (maximum 100) and apply `submittedOnly` in the database query; buffered host and MCP export formats cap cohorts at 100. Targeted MCP answer reads load one tenant-scoped person.
 - A rejected cold-start Mongo connection now clears only its own cached promise so a warm worker can retry when the database recovers.
 - Published questionnaire assets and asset deletion now share a transactional coordination point; a concurrent deletion cannot leave a newly published version pointing at a missing image.
 - Preview-draft saves now touch referenced assets in a transaction, coordinating draft creation and reclamation with asset deletion.
@@ -43,6 +43,8 @@ The following changes are pushed to `main` and deployed:
 - Host CSV-wide and CSV-long downloads use a stable newest-first creation order at every cohort size; files above 100 people stream through bounded 10-person cursor pages. The host keeps buffered JSON, Markdown and Excel downloads capped at 100 people.
 - Buffered host and MCP exports now check the cohort’s aggregate BSON size before answer documents are hydrated and reject payloads above 8 MiB with a typed limit response; streamed host CSV remains available for larger cohorts.
 - The owner-only Axion tenant backfill now uses an expiring cross-invocation lease, records per-collection update checkpoints, exposes the latest progress in Settings, and remains safe to retry after an interrupted collection update.
+- Save, submit, reopen, and first-open respondent events now commit with their participant writes, so erasure cannot race a late audit insert. A respondent write epoch rejects saves and submissions from tabs opened before a submit/reopen transition.
+- Rejected questionnaire replacements now clear the previously accepted upload state, preventing a host flow from accidentally publishing the prior file. Logout now returns 503 when server-side session revocation fails while still clearing the current browser cookie.
 
 ## Ranked remaining gaps
 
@@ -63,7 +65,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **981 tests passed across 140 files**; TypeScript check and optimized Next.js production build passed. The answer-pagination interaction also has a DOM test that exercises loading and appending an older page. Host export regressions cover paged streaming for large CSV downloads, matching CSV order above and below the streaming threshold, byte-budget rejection before participant hydration, and parity between streamed and buffered row generation. Asset quota regressions cover repository enforcement, the host API, MCP errors, and Settings display. Tenant-migration coverage checks leases, interruption recovery, per-collection progress, and route conflicts. Host, API, and MCP regressions cover oversized add-people batches; survey-tab coverage checks that the publish warning labels its page-limited answer count; source MCP coverage verifies disjoint cursor pages and export encoding/limit errors.
+- Full automated suite: **984 tests passed across 142 files**; TypeScript check and optimized Next.js production build passed. The answer-pagination interaction also has a DOM test that exercises loading and appending an older page. Host export regressions cover paged streaming for large CSV downloads, matching CSV order above and below the streaming threshold, byte-budget rejection before participant hydration, and parity between streamed and buffered row generation. Asset quota regressions cover repository enforcement, the host API, MCP errors, and Settings display. Tenant-migration coverage checks leases, interruption recovery, per-collection progress, and route conflicts. Host, API, and MCP regressions cover oversized add-people batches; survey-tab coverage checks that the publish warning labels its page-limited answer count; source MCP coverage verifies disjoint cursor pages and export encoding/limit errors. New regressions cover stale respondent tabs, transactional event writes, rejected uploader replacements, and logout revocation outages.
 - Static questionnaire checker: **18** starter, example, and authoring-reference files passed with zero errors, warnings, or notes.
 - `npm audit --audit-level=moderate` and `npm audit --omit=dev --audit-level=moderate` found no known package vulnerabilities.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
@@ -79,7 +81,7 @@ Some repository evaluation scripts require provider-generated result JSON and we
 
 ## Next review order
 
-1. Bound bytes and snapshot semantics for streamed CSV and buffered formats; consider stable consistent sorting for large CSV.
+1. Bound serialized output bytes and define snapshot semantics for streamed CSV and buffered formats; consider consistent point-in-time ordering for large CSV.
 2. Decide whether workspace image capacity needs tenant-specific plan settings.
 3. Decide and implement consent, retention, withdrawal, and complete participant-erasure workflows.
 4. Settle delivery attempts with no delivery-status notice through provider reconciliation or a host resolution workflow.

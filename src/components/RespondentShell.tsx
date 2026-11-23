@@ -10,7 +10,7 @@ import { api, BrandMark, CopyButton, Icon, Modal, Spinner, useToast } from "./ui
 type Phase = "loading" | "ready" | "invalid" | "error";
 type SaveState = "idle" | "saving" | "saved" | "error" | "failed" | "offline";
 interface Loaded {
-  participant: { name: string; status: "invited" | "in_progress" | "submitted"; submittedAt?: string };
+  participant: { name: string; status: "invited" | "in_progress" | "submitted"; writeEpoch: number; submittedAt?: string };
   interview: { name: string; status: "open" | "closed" };
   version: number;
   title: string;
@@ -170,6 +170,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const recordGroupsRef = useRef<RepeatRecordMap>({});
   const authoritativeRecordGroupsRef = useRef<RepeatRecordMap>({});
   const version = useRef(0);
+  const writeEpoch = useRef(0);
   const refreshRequiredRef = useRef(false);
   const staleDraftRef = useRef<{ question: Question; patch: Patch[string] }[]>([]);
   const questions = useRef<Question[]>([]);
@@ -435,6 +436,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     if (res.status === 404) { setPhase("invalid"); return; }
     if (!res.ok || !res.data.questions) { setPhase("error"); return; }
     version.current = res.data.version;
+    writeEpoch.current = res.data.participant.writeEpoch;
     refreshRequiredRef.current = false;
     staleDraftRef.current = [];
     setStaleDraft([]);
@@ -470,7 +472,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     pendingRecordOperations.current = [];
     inflight.current = true;
     setSave("saving");
-    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string; code?: string; params?: Record<string, number> }[]; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) } });
+    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string; code?: string; params?: Record<string, number> }[]; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, writeEpoch: writeEpoch.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) } });
     if (res.ok) {
       inflight.current = false;
       attempts.current = 0;
@@ -501,6 +503,12 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       return;
     }
     if (res.status === 403) {
+      inflight.current = false;
+      handleLockedWrite(batch, recordBatch);
+      toast(t("lockedError"), "err", localeMeta);
+      return;
+    }
+    if (res.status === 409 && res.data.code === "respondent_state_changed") {
       inflight.current = false;
       handleLockedWrite(batch, recordBatch);
       toast(t("lockedError"), "err", localeMeta);
@@ -793,7 +801,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         inflight.current = true;
         setSave("saving");
         void api<{ savedAt?: string; code?: string; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, {
-          method: "PUT", body: { version: version.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) }, keepalive: true,
+          method: "PUT", body: { version: version.current, writeEpoch: writeEpoch.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) }, keepalive: true,
         }).then((res) => {
           if (res.ok) {
             inflight.current = false;
@@ -819,6 +827,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
             inflight.current = false;
             handleLockedWrite(batch, recordBatch);
             if (document.visibilityState === "visible") toast(t("lockedError"), "err", localeMeta);
+            return;
+          }
+          if (res.status === 409 && res.data.code === "respondent_state_changed") {
+            inflight.current = false;
+            handleLockedWrite(batch, recordBatch);
             return;
           }
           if (res.status === 409 && (res.data.code === "record_row_conflict" || res.data.code === "record_field_conflict")) {
@@ -874,7 +887,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     if (recordConflictRefreshFailedRef.current.size) { setSubmitting(false); return; }
     if (rejectedRecordDraftsRef.current.length) { setSubmitting(false); toast(t("repeatRejectedTitle"), "err", localeMeta); return; }
     if (inflight.current || Object.keys(pending.current).length || pendingRecordOperations.current.length) { setSubmitting(false); toast(t("notSavedYet"), "err", localeMeta); return; }
-    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RecordIssue[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current } });
+    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RecordIssue[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current, writeEpoch: writeEpoch.current } });
     setSubmitting(false);
     if (res.ok) {
       submittedFocusPending.current = true;
@@ -889,6 +902,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
         setConfirming(false);
         handleVersionConflict();
+        return;
+      }
+      if (res.status === 409 && res.data.code === "respondent_state_changed") {
+        handleLockedWrite({}, []);
+        toast(t("lockedError"), "err", localeMeta);
         return;
       }
       if (res.status === 422) {

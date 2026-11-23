@@ -114,6 +114,16 @@ describe("respondent version fence", () => {
     expect(mocks.participantUpdate).toHaveBeenCalledOnce();
   });
 
+  it("rejects saves from a tab opened before the response was submitted and reopened", async () => {
+    mocks.participant.writeEpoch = 2;
+
+    const result = await asAxion(() => saveAnswers(token, 4, { q1: { value: "stale tab" } }, [], 1));
+
+    expect(result).toMatchObject({ ok: false, status: 409, code: "respondent_state_changed" });
+    expect(mocks.participantUpdate).not.toHaveBeenCalled();
+    expect(mocks.events).not.toContain("save");
+  });
+
   it("lets respondents reduce legacy over-limit multi answers, but blocks additions and submission until valid", async () => {
     const options = ["a", "b", "c", "d"].map((value) => ({ value, label: value }));
     mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [{ id: "q1", type: "multi", label: "Choices", options, maxSelections: 2 }] };

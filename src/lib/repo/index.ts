@@ -26,7 +26,7 @@ function participantView(p: ParticipantDoc): ParticipantView {
   return {
     id: p._id.toHexString(), interviewId: p.interviewId.toHexString(), token: p.token, name: p.name, email: p.email, note: p.note, status: p.status, answers: p.answers ?? {},
     recordGroups: visibleRecordGroups(p.recordGroups ?? {}),
-    revision: p.revision, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), lastSeenAt: iso(p.lastSeenAt), lastSavedAt: iso(p.lastSavedAt), submittedAt: iso(p.submittedAt),
+    revision: p.revision, writeEpoch: p.writeEpoch ?? 0, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), lastSeenAt: iso(p.lastSeenAt), lastSavedAt: iso(p.lastSavedAt), submittedAt: iso(p.submittedAt),
   };
 }
 
@@ -39,6 +39,10 @@ function logEvent(tenantId: string, interviewId: ObjectId, type: string, partici
   void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {
     console.error("[audit] interview event persistence failed");
   });
+}
+
+async function insertEvent(tenantId: string, interviewId: ObjectId, type: string, participantId: ObjectId, session: ClientSession, meta?: Record<string, unknown>) {
+  await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta }, { session });
 }
 
 // ------------------------------------------------------------------------------------------ interviews
@@ -680,7 +684,7 @@ export async function reopenParticipant(id: string): Promise<ParticipantView | n
   const reopened = await withMongoTransaction(async (session) => {
     const res = await (await col.participants()).findOneAndUpdate(
       tenantFilter(tenantId, { _id: oid, status: "submitted" }),
-      { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" } },
+      { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" }, $inc: { writeEpoch: 1 } },
       { returnDocument: "after", session },
     );
     if (!res) return null;
@@ -690,9 +694,10 @@ export async function reopenParticipant(id: string): Promise<ParticipantView | n
       { session },
     );
     if (!touched.matchedCount) throw new Error("Could not update respondent revision for interview.");
+    res.writeEpoch ??= 1;
+    await insertEvent(tenantId, res.interviewId, "reopen", res._id, session);
     return res;
   });
-  if (reopened) logEvent(tenantId, reopened.interviewId, "reopen", reopened._id);
   return reopened ? participantView(reopened) : null;
 }
 
@@ -719,8 +724,17 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
   if (!version) return null;
   if (opts.touch) {
     const now = new Date();
-    void participants.updateOne(tenantFilter(tenantId, { _id: p._id }), { $set: { lastSeenAt: now } }).catch(() => {});
-    if (!p.lastSeenAt || now.getTime() - p.lastSeenAt.getTime() > 10 * 60 * 1000) logEvent(tenantId, p.interviewId, "open", p._id);
+    if (!p.lastSeenAt || now.getTime() - p.lastSeenAt.getTime() > 10 * 60 * 1000) {
+      void withMongoTransaction(async (session) => {
+        const touched = await participants.updateOne(
+          tenantFilter(tenantId, { _id: p._id, ...(p.lastSeenAt ? { lastSeenAt: p.lastSeenAt } : { lastSeenAt: { $exists: false } }) }),
+          { $set: { lastSeenAt: now } }, { session },
+        );
+        if (touched.matchedCount) await insertEvent(tenantId, p.interviewId, "open", p._id, session);
+      }).catch(() => console.error("[audit] interview event persistence failed"));
+    } else {
+      void participants.updateOne(tenantFilter(tenantId, { _id: p._id }), { $set: { lastSeenAt: now } }).catch(() => {});
+    }
   }
   return {
     tenantId,
@@ -766,7 +780,7 @@ async function fenceRespondentWrite(
 }
 
 /** Validate respondent operations against the manifest and apply them without replacing stale group snapshots. */
-export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch, operations: RepeatRecordOperation[] = []): Promise<SaveResult> {
+export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch, operations: RepeatRecordOperation[] = [], expectedWriteEpoch?: number): Promise<SaveResult> {
   const ids = Object.keys(patch);
   if (ids.length === 0 && operations.length === 0) return { ok: false, status: 400, error: "Nothing to save.", code: "invalid_args" };
   if (ids.length + operations.length > 200) return { ok: false, status: 413, error: "Too many answer operations in one request.", code: "payload_too_large" };
@@ -779,6 +793,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   if (ctx.version.version !== expectedVersion) return versionConflict();
   if (ctx.interview.status !== "open") return { ok: false, status: 403, error: "This interview is closed.", code: "invalid_state" };
   if (ctx.participant.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them.", code: "invalid_state" };
+  const writeEpoch = expectedWriteEpoch ?? ctx.participant.writeEpoch ?? 0;
 
   const now = new Date();
   const nowIso = now.toISOString();
@@ -790,6 +805,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     // callback after transient write conflicts, so sibling field operations merge on retry.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), token }), { session });
     if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
+    if ((current.writeEpoch ?? 0) !== writeEpoch) return { ok: false, status: 409, error: "This response was reopened in another window. Reload the page before continuing.", code: "respondent_state_changed" };
     if (current.status === "submitted") return { ok: false, status: 403, error: "Your answers were submitted, so they are locked. Ask your host to reopen them.", code: "invalid_state" };
     const byId = new Map<string, Question>(ctx.version.manifest.questions.map((q) => [q.id, q]));
     const problems: AnswerProblem[] = [];
@@ -942,17 +958,17 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       { returnDocument: "after", session },
     );
     if (!res) return { ok: false, status: 409, error: "Your answers were submitted in another window, so they are locked.", code: "invalid_state" };
+    await insertEvent(ctx.tenantId, new ObjectId(ctx.interview.id), "save", new ObjectId(ctx.participant.id), session, { ids: ids.slice(0, 20) });
     const returnedGroups: RepeatRecordMap = {};
     for (const id of touched) returnedGroups[id] = (res.recordGroups?.[id] ?? []).filter((row) => !row.deletedAt);
     return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status, ...(touched.size ? { recordGroups: returnedGroups } : {}) };
   });
-  if (result.ok) logEvent(ctx.tenantId, new ObjectId(ctx.interview.id), "save", new ObjectId(ctx.participant.id), { ids: ids.slice(0, 20) });
   return result;
 }
 
 export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RepeatRecordIssue[] };
 
-export async function submitAnswers(token: string, expectedVersion: number): Promise<SubmitResult> {
+export async function submitAnswers(token: string, expectedVersion: number, expectedWriteEpoch?: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
   if (!ctx) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
   if (ctx.version.version !== expectedVersion) return versionConflict();
@@ -960,6 +976,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
   const participants = await col.participants();
   const interviewId = new ObjectId(ctx.interview.id);
   const participantId = new ObjectId(ctx.participant.id);
+  const writeEpoch = expectedWriteEpoch ?? ctx.participant.writeEpoch ?? 0;
   const result = await withMongoTransaction(async (session): Promise<SubmitResult & { newlySubmitted?: boolean }> => {
     const fence = await fenceRespondentWrite(session, ctx.tenantId, interviewId, expectedVersion);
     if (!fence.ok) return fence;
@@ -967,6 +984,7 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
     // wins the fence must be reflected in the answers used for validation.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: participantId, token }), { session });
     if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
+    if ((current.writeEpoch ?? 0) !== writeEpoch) return { ok: false, status: 409, error: "This response changed in another window. Reload the page before continuing.", code: "respondent_state_changed" };
     if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
     const pr = progress(ctx.version.manifest, current.answers, current.recordGroups ?? {});
     if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length || pr.repeatErrors.length) {
@@ -988,13 +1006,13 @@ export async function submitAnswers(token: string, expectedVersion: number): Pro
     const now = new Date();
     const res = await participants.findOneAndUpdate(
       tenantFilter(ctx.tenantId, { _id: participantId, token, revision: current.revision, status: { $ne: "submitted" } }),
-      { $set: { status: "submitted", submittedAt: now, updatedAt: now } },
+      { $set: { status: "submitted", submittedAt: now, updatedAt: now }, $inc: { writeEpoch: 1 } },
       { returnDocument: "after", session },
     );
     if (!res) return { ok: false, status: 409, error: "Your answers changed in another window. Please try submitting again.", code: "concurrent_change" };
+    await insertEvent(ctx.tenantId, interviewId, "submit", participantId, session);
     return { ok: true, submittedAt: (res.submittedAt ?? now).toISOString(), newlySubmitted: true };
   });
-  if (result.ok && result.newlySubmitted) logEvent(ctx.tenantId, interviewId, "submit", participantId);
   if (result.ok) return { ok: true, submittedAt: result.submittedAt };
   return result;
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   context: {
-    participant: { name: "Ada", status: "invited", revision: 0, answers: {}, recordGroups: { people: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } },
+    participant: { name: "Ada", status: "invited", revision: 0, writeEpoch: 0, answers: {}, recordGroups: { people: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } },
     interview: { name: "Study", status: "open" },
     version: { version: 7, html: "<!doctype html><title>Study</title>", manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] as { id: string }[] } as Record<string, any> },
   },
@@ -124,27 +124,27 @@ describe("respondent questionnaire version routes", () => {
   });
 
   it("requires and forwards the loaded version on answer saves", async () => {
-    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, answers: { q1: { value: "answer" } } }), params);
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, answers: { q1: { value: "answer" } } }), params);
 
     expect(response.status).toBe(200);
-    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, { q1: { value: "answer" } }, []);
+    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, { q1: { value: "answer" } }, [], 0);
   });
 
   it("forwards explicit record operations alongside scalar answers", async () => {
     const recordOperations = [{ op: "set", questionId: "people", rowId: "row-1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }];
-    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, recordOperations }), params);
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, recordOperations }), params);
     expect(response.status).toBe(200);
-    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, {}, recordOperations);
+    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, {}, recordOperations, 0);
   });
 
   it("rejects malformed record operations before repository access", async () => {
-    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, recordOperations: [{ op: "set", questionId: "people", rowId: "row.1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }] }), params);
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, recordOperations: [{ op: "set", questionId: "people", rowId: "row.1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }] }), params);
     expect(response.status).toBe(400);
     expect(mocks.saveAnswers).not.toHaveBeenCalled();
   });
 
   it("returns a coded invalid_args error for a malformed answers object", async () => {
-    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, answers: ["not", "an", "object"] }), params);
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, answers: ["not", "an", "object"] }), params);
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ ok: false, code: "invalid_args" });
@@ -160,10 +160,10 @@ describe("respondent questionnaire version routes", () => {
   });
 
   it("requires and forwards the loaded version on submit", async () => {
-    const response = await submitRespondentAnswers(request(`https://kqa.local/api/p/${token}/submit`, "POST", { version: 7 }), params);
+    const response = await submitRespondentAnswers(request(`https://kqa.local/api/p/${token}/submit`, "POST", { version: 7, writeEpoch: 0 }), params);
 
     expect(response.status).toBe(200);
-    expect(mocks.submitAnswers).toHaveBeenCalledWith(token, 7);
+    expect(mocks.submitAnswers).toHaveBeenCalledWith(token, 7, 0);
   });
 
   it("rejects submit without a version before reaching the repository", async () => {
@@ -177,7 +177,7 @@ describe("respondent questionnaire version routes", () => {
   it("preserves the stale-version code returned by the repository", async () => {
     mocks.submitAnswers.mockResolvedValue({ ok: false, status: 409, error: "Reload", code: "questionnaire_version_changed" });
 
-    const response = await submitRespondentAnswers(request(`https://kqa.local/api/p/${token}/submit`, "POST", { version: 6 }), params);
+    const response = await submitRespondentAnswers(request(`https://kqa.local/api/p/${token}/submit`, "POST", { version: 6, writeEpoch: 0 }), params);
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "questionnaire_version_changed" });

@@ -30,10 +30,13 @@ export function Uploader({ interviewId, onChange, compact, disabled = false }: {
   useEffect(() => { onChange?.(state); }, [state, onChange]);
 
   const handle = useCallback(async (file: File) => {
+    const id = ++run.current;
     setError("");
+    setState({ settled: false, ok: false });
+    setPhase("idle");
+    if (input.current) input.current.value = "";
     if (!/\.html?$/i.test(file.name)) { setError("That is not an HTML file. Upload a file that ends in .html."); return; }
     if (file.size > LIMITS.maxFileBytes) { setError(`That file is ${(file.size / 1048576).toFixed(1)} MB. The limit is ${LIMITS.maxFileBytes / 1048576} MB.`); return; }
-    const id = ++run.current;
     const html = await file.text();
     setState({ fileName: file.name, html, settled: false, ok: false });
     setPhase("static");

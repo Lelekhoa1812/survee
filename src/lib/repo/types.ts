@@ -191,6 +191,8 @@ export interface ParticipantDoc {
   recordGroups?: RepeatRecordMap;
   /** Incremented on every successful save. */
   revision: number;
+  /** Incremented on submit and reopen to invalidate respondent tabs from an earlier state. */
+  writeEpoch?: number;
   createdAt: Date;
   updatedAt: Date;
   lastSeenAt?: Date;
@@ -388,6 +390,7 @@ export interface ParticipantView {
   recordGroups?: RepeatRecordMap;
   questionOrderAssignments?: QuestionOrderAssignmentView[];
   revision: number;
+  writeEpoch?: number;
   createdAt: string;
   updatedAt: string;
   lastSeenAt?: string;
