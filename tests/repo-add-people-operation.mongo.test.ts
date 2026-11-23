@@ -33,6 +33,7 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
   let mongo!: typeof import("mongodb");
   let dbModule!: typeof import("../src/lib/db");
   let repository!: typeof import("../src/lib/repo");
+  let mailRepository!: typeof import("../src/lib/repo/mail");
   let withTenantPrincipal!: typeof import("../src/lib/tenant-context").withTenantPrincipal;
   let interviewId!: import("mongodb").ObjectId;
   const previousEnv = {
@@ -53,6 +54,7 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     mongo = await import("mongodb");
     dbModule = await import("../src/lib/db");
     repository = await import("../src/lib/repo");
+    mailRepository = await import("../src/lib/repo/mail");
     ({ withTenantPrincipal } = await import("../src/lib/tenant-context"));
     client = await new mongo.MongoClient(isolated.uri, { serverSelectionTimeoutMS: 8_000 }).connect();
     await dbModule.db(); // Also exercises the real index setup, including the unique operation scope index.
@@ -445,5 +447,35 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
       if (previousFallback === undefined) delete process.env.KQA_AXION_LEGACY_TENANT_FALLBACK;
       else process.env.KQA_AXION_LEGACY_TENANT_FALLBACK = previousFallback;
     }
+  });
+
+  it("pages unresolved mail attempts through an index-backed participant order", async () => {
+    const database = client.db(dbName);
+    const participantId = new mongo.ObjectId();
+    const now = Date.now();
+    await database.collection("mail_messages").insertMany(Array.from({ length: 180 }, (_, index) => ({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", participantId,
+      status: index < 120 ? "pending" : "sent",
+      delivery: index < 120 ? "unknown" : "delivered",
+      sentAt: new Date(now + index),
+    })));
+
+    const first = await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => mailRepository.listPendingMailByPerson(participantId, undefined, 50),
+    );
+    expect(first).toMatchObject({ total: 120, nextCursor: expect.any(String) });
+    expect(first.rows).toHaveLength(50);
+    const second = await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => mailRepository.listPendingMailByPerson(participantId, new mongo.ObjectId(first.nextCursor!), 50),
+    );
+    expect(second.rows).toHaveLength(50);
+    expect(second.rows.some((row) => first.rows.some((prior) => row._id.equals(prior._id)))).toBe(false);
+
+    const plan = await database.collection("mail_messages").find({
+      tenantId: "integration-workspace", participantId, status: "pending", delivery: { $nin: ["delivered", "bounced"] },
+    }).sort({ _id: -1 }).limit(50).explain("executionStats");
+    expect(JSON.stringify(plan.queryPlanner.winningPlan)).not.toMatch(/"stage"\s*:\s*"SORT"/);
   });
 });

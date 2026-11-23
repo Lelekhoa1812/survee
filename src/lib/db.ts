@@ -195,6 +195,7 @@ async function ensureIndexes(d: Db) {
     d.collection("user_sessions").createIndex({ userId: 1, authVersion: 1, createdAt: -1 }, { name: "user_sessions_by_user" }),
     d.collection("user_sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "user_sessions_ttl" }),
     d.collection("mail_messages").createIndex({ participantId: 1, sentAt: -1 }, { name: "by_participant" }),
+    d.collection("mail_messages").createIndex({ participantId: 1, status: 1, _id: -1 }, { name: "pending_attempts_by_person" }),
     d.collection("mail_messages").createIndex({ interviewId: 1, sentAt: -1 }, { name: "by_interview" }),
     d.collection("api_keys").createIndex({ hash: 1 }, { unique: true, name: "hash_unique" }),
     d.collection("api_keys").createIndex({ refreshHash: 1 }, { unique: true, sparse: true, name: "refresh_unique" }),
