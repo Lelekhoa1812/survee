@@ -214,6 +214,90 @@ export async function createInterview(input: { name: string; description?: strin
   return doc;
 }
 
+const MCP_CREATE_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type CreateInterviewOperationResult =
+  | { kind: "created" | "replayed"; result: CreateInterviewMcpResult }
+  | { kind: "conflict" };
+export interface CreateInterviewMcpResult { id: string; interviewId: string; report: Record<string, unknown> }
+
+function createInterviewOperationScope(tenantId: string, operation: { operationId: string; credentialId: string }) {
+  return {
+    tenantId,
+    tool: "create_interview",
+    credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
+    operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
+  };
+}
+
+/** Read a retained successful result before rechecking a caller's retry under newer checker rules. */
+export async function getCreateInterviewOperation(
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<CreateInterviewOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(createInterviewOperationScope(tenantId, operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", result: existing.result as unknown as CreateInterviewMcpResult }
+    : { kind: "conflict" };
+}
+
+/** Create an interview and retain its exact MCP response in the same transaction. */
+export async function createInterviewWithOperation(
+  input: { name: string; description?: string; mode: InterviewMode; survey: NewSurvey },
+  operation: { operationId: string; credentialId: string; argumentDigest: string; report: Record<string, unknown> },
+): Promise<CreateInterviewOperationResult> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const scope = createInterviewOperationScope(tenantId, operation);
+  const now = new Date();
+  const doc: InterviewDoc = {
+    _id: new ObjectId(), tenantId, name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1,
+    ...(input.mode === "single" ? { respondentWriteRevision: 1 } : {}), createdAt: now, updatedAt: now,
+  };
+  const initialParticipant: ParticipantDoc | undefined = input.mode === "single" ? {
+    _id: new ObjectId(), tenantId, interviewId: doc._id, token: newToken(), name: "Respondent", status: "invited", answers: {}, revision: 0,
+    createdAt: now, updatedAt: now,
+  } : undefined;
+  const operations = await col.mcpOperations();
+  const run = async () => withMongoTransaction(async (session) => {
+    const existing = await operations.findOne(scope, { session });
+    if (existing && existing.expiresAt > new Date()) {
+      return existing.argumentDigest === operation.argumentDigest
+        ? { kind: "replayed" as const, result: existing.result as unknown as CreateInterviewMcpResult }
+        : { kind: "conflict" as const };
+    }
+    if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+
+    await (await col.interviews()).insertOne(doc, { session });
+    await (await col.versions()).insertOne(versionDoc(tenantId, doc._id, 1, input.survey), { session });
+    if (initialParticipant) await (await col.participants()).insertOne(initialParticipant, { session });
+    await insertEvent(tenantId, doc._id, "created", undefined, session);
+    const interviewId = doc._id.toHexString();
+    const result = { id: interviewId, interviewId, report: operation.report };
+    const createdAt = new Date();
+    await operations.insertOne({
+      _id: new ObjectId(), ...scope, argumentDigest: operation.argumentDigest, result,
+      createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
+    }, { session });
+    return { kind: "created" as const, result };
+  });
+
+  try {
+    return await run();
+  } catch (error) {
+    // A concurrent transaction may win the unique operation-key insert. Resolve
+    // that race from the committed record so same-key retries receive its result.
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await operations.findOne(scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    return committed.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", result: committed.result as unknown as CreateInterviewMcpResult }
+      : { kind: "conflict" };
+  }
+}
+
 export async function updateInterview(id: string, patch: { name?: string; description?: string | null; status?: InterviewStatus }): Promise<InterviewDoc | null> {
   const oid = toOid(id);
   if (!oid) return null;

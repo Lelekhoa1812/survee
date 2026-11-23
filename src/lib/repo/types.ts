@@ -141,6 +141,19 @@ export interface RateLimitBucketDoc {
   expireAt: Date;
 }
 
+/** collection: mcp_operations. Successful MCP writes retained for bounded caller retries. */
+export interface McpOperationDoc {
+  _id: ObjectId;
+  tenantId: string;
+  tool: string;
+  credentialIdHash: string;
+  operationIdHash: string;
+  argumentDigest: string;
+  result: Record<string, unknown>;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
 /** collection: interviews */
 export interface InterviewDoc {
   _id: ObjectId;

@@ -5,13 +5,21 @@ const mocks = vi.hoisted(() => ({
   versionInserts: [] as Array<{ document: Record<string, unknown>; options: Record<string, unknown> }>,
   participantInserts: [] as Array<{ document: Record<string, unknown>; options: Record<string, unknown> }>,
   events: [] as Array<{ document: Record<string, unknown>; options: Record<string, unknown> }>,
+  operations: [] as Array<Record<string, unknown>>,
   failVersionInsert: false,
   failParticipantInsert: false,
   failEventInsert: false,
+  transactionTail: Promise.resolve() as Promise<void>,
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => {
-    const result = await work({ transaction: true });
-    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
-    return result;
+    const previous = mocks.transactionTail;
+    let release!: () => void;
+    mocks.transactionTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      const result = await work({ transaction: true });
+      if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+      return result;
+    } finally { release(); }
   }),
 }));
 
@@ -22,10 +30,19 @@ vi.mock("../src/lib/db", () => ({
     versions: async () => ({ insertOne: async (document: Record<string, unknown>, options: Record<string, unknown>) => { mocks.versionInserts.push({ document, options }); if (mocks.failVersionInsert) throw new Error("version insert failed"); } }),
     participants: async () => ({ insertOne: async (document: Record<string, unknown>, options: Record<string, unknown>) => { mocks.participantInserts.push({ document, options }); if (mocks.failParticipantInsert) throw new Error("participant insert failed"); } }),
     events: async () => ({ insertOne: async (document: Record<string, unknown>, options: Record<string, unknown>) => { mocks.events.push({ document, options }); if (mocks.failEventInsert) throw new Error("event insert failed"); return {}; } }),
+    mcpOperations: async () => ({
+      findOne: async (filter: Record<string, unknown>) => mocks.operations.find((row) => Object.entries(filter).every(([key, value]) => row[key] === value)) ?? null,
+      deleteOne: async (filter: { _id: unknown }) => { const index = mocks.operations.findIndex((row) => row._id === filter._id); if (index >= 0) mocks.operations.splice(index, 1); return { deletedCount: index >= 0 ? 1 : 0 }; },
+      insertOne: async (row: Record<string, unknown>) => {
+        if (mocks.operations.some((current) => ["tenantId", "tool", "credentialIdHash", "operationIdHash"].every((key) => current[key] === row[key]))) throw Object.assign(new Error("duplicate key"), { code: 11000 });
+        mocks.operations.push(row);
+        return { insertedId: row._id };
+      },
+    }),
   },
 }));
 
-import { createInterview } from "../src/lib/repo";
+import { createInterview, createInterviewWithOperation } from "../src/lib/repo";
 import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 const survey = {
@@ -39,13 +56,21 @@ beforeEach(() => {
   mocks.versionInserts.length = 0;
   mocks.participantInserts.length = 0;
   mocks.events.length = 0;
+  mocks.operations.length = 0;
+  mocks.transactionTail = Promise.resolve();
   mocks.failVersionInsert = false;
   mocks.failParticipantInsert = false;
   mocks.failEventInsert = false;
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => {
-    const result = await work({ transaction: true });
-    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
-    return result;
+    const previous = mocks.transactionTail;
+    let release!: () => void;
+    mocks.transactionTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      const result = await work({ transaction: true });
+      if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+      return result;
+    } finally { release(); }
   });
 });
 
@@ -91,5 +116,44 @@ describe("createInterview", () => {
     mocks.failEventInsert = true;
     await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "session" }, () => createInterview({ name: "Solo", mode: "single", survey }))).rejects.toThrow("event insert failed");
     expect(mocks.interviewInserts.at(-1)?.options.session).toBe(mocks.events.at(-1)?.options.session);
+  });
+
+  it("replays the original create result for the same operation key and arguments", async () => {
+    const operation = { operationId: "request-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", report: { ok: true, counts: { error: 0 }, diagnostics: [] } };
+    const first = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
+    const replay = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
+    expect(first.kind).toBe("created");
+    expect(replay).toEqual({ kind: "replayed", result: first.kind === "conflict" ? undefined : first.result });
+    expect(mocks.interviewInserts).toHaveLength(1);
+    expect(mocks.operations).toHaveLength(1);
+    expect(mocks.operations[0]).toMatchObject({ tool: "create_interview", tenantId: "workspace-1", expiresAt: expect.any(Date) });
+    expect((mocks.operations[0].expiresAt as Date).getTime() - (mocks.operations[0].createdAt as Date).getTime()).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("rejects reuse of a create operation key with different arguments", async () => {
+    const base = { operationId: "request-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", report: { ok: true } };
+    await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, base));
+    const mismatch = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Different", mode: "multi", survey }, { ...base, argumentDigest: "digest-b" }));
+    expect(mismatch).toEqual({ kind: "conflict" });
+    expect(mocks.interviewInserts).toHaveLength(1);
+  });
+
+  it("isolates operation keys by tenant and credential", async () => {
+    const operation = { operationId: "request-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", report: { ok: true } };
+    const first = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
+    const credential = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, { ...operation, credentialId: "api_key:key-b" }));
+    const tenant = await withTenantPrincipal({ tenantId: "workspace-2", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
+    expect([first.kind, credential.kind, tenant.kind]).toEqual(["created", "created", "created"]);
+    expect(mocks.interviewInserts).toHaveLength(3);
+    expect(mocks.operations).toHaveLength(3);
+  });
+
+  it("creates only one interview for concurrent duplicate operation keys", async () => {
+    const operation = { operationId: "request-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", report: { ok: true } };
+    const results = await Promise.all([1, 2].map(() => withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation))));
+    expect(results.map((result) => result.kind).sort()).toEqual(["created", "replayed"]);
+    expect(results[0].kind === "conflict" ? null : results[0].result.id).toBe(results[1].kind === "conflict" ? undefined : results[1].result.id);
+    expect(mocks.interviewInserts).toHaveLength(1);
+    expect(mocks.operations).toHaveLength(1);
   });
 });

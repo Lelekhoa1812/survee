@@ -20,6 +20,8 @@ import {
   addParticipants,
   createAnalyticsRun,
   createInterview,
+  createInterviewWithOperation,
+  getCreateInterviewOperation,
   deleteInterview,
   deleteParticipant,
   getInterview,
@@ -51,7 +53,7 @@ import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   createQuestionnairePreviewToken,
   fileNameHash,
@@ -90,6 +92,21 @@ interface ToolDef {
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 const str = { type: "string" };
 const bool = { type: "boolean" };
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function stableMcpCredentialId(): string | null {
+  const principal = currentPrincipal();
+  if (!principal) return null;
+  return principal.auditActor ? `${principal.auditActor.kind}:${principal.auditActor.id}` : `${principal.source}:${principal.tenantId}`;
+}
+
 const DEFAULT_INTERVIEW_PAGE_SIZE = 25;
 const MAX_INTERVIEW_PAGE_SIZE = 100;
 const requiredChanges = {
@@ -1092,20 +1109,42 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "create_interview",
-    description: "Create and immediately open a live version-1 interview from a questionnaire file after a static check. This is a persistent workspace mutation, not a draft or preview; single mode also creates a default Respondent. Use check_questionnaire first and only call after the accountable host has approved fielding.",
-    inputSchema: obj({ name: str, description: str, mode: { type: "string", enum: ["single", "multi"] }, html: str, fileName: str }, ["name", "mode", "html"]),
+    description: "Create and immediately open a live version-1 interview from a questionnaire file after a static check. This is a persistent workspace mutation, not a draft or preview; single mode also creates a default Respondent. Use check_questionnaire first and only call after the accountable host has approved fielding. Optional operationId makes retries return the original result for seven days.",
+    inputSchema: obj({ name: str, description: str, mode: { type: "string", enum: ["single", "multi"] }, html: str, fileName: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["name", "mode", "html"]),
     async run(args) {
       const name = asString(args.name, 120);
       if (!name) return err("Give the interview a name.");
       if (args.mode !== "single" && args.mode !== "multi") return err("mode must be single or multi.");
       if (typeof args.html !== "string") return err("html is required.");
       if (args.html.length > LIMITS.maxFileBytes) return err("That file is too large.");
-      const prepared = prepareSurvey(args.html, asString(args.fileName, 200));
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      const mode = args.mode as "single" | "multi";
+      const description = asString(args.description, 500) || undefined;
+      const fileName = asString(args.fileName, 200);
+      const inputHtml = args.html.replace(/^\uFEFF/, "");
+      let operation: { operationId: string; credentialId: string; argumentDigest: string } | undefined;
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const argumentDigest = createHash("sha256").update(canonicalJson({ name, description, mode, html: inputHtml, fileName })).digest("hex");
+        operation = { operationId: args.operationId, credentialId, argumentDigest };
+        const existing = await getCreateInterviewOperation(operation);
+        if (existing?.kind === "conflict") return err("operationId was already used with different create_interview arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ ...existing.result });
+      }
+      const prepared = prepareSurvey(args.html, fileName);
       if (!prepared.survey || !prepared.report.ok) {
         return { ...err("The file did not pass the checker.", "checker"), structuredContent: { ok: false, error: "The file did not pass the checker.", code: "checker", markdown: prepared.markdown } };
       }
-      const doc = await createInterview({ name, description: asString(args.description, 500) || undefined, mode: args.mode, survey: prepared.survey });
-      return ok({ id: doc._id.toHexString(), interviewId: doc._id.toHexString(), report: { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics } });
+      const input = { name, description, mode, survey: prepared.survey };
+      const report = { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics };
+      if (operation) {
+        const created = await createInterviewWithOperation(input, { ...operation, report });
+        if (created.kind === "conflict") return err("operationId was already used with different create_interview arguments.", "operation_id_conflict");
+        return ok({ ...created.result });
+      }
+      const doc = await createInterview(input);
+      return ok({ id: doc._id.toHexString(), interviewId: doc._id.toHexString(), report });
     },
   },
   {
