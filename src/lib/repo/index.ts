@@ -630,7 +630,7 @@ async function deleteInterviewInternal(
     await (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
-    await (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }, { session });
+    await (await col.analyticsRuns()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await deleteMailForInterview(oid, session);
     await (await col.questionnaireReviewDrafts()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     if (scope && operation && operations) {

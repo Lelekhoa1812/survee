@@ -418,4 +418,32 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
       tenantId: "integration-workspace", tool: "delete_interview", operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
     })).toBe(1);
   });
+
+  it("deletes a legacy unscoped analytics run with its Axion interview", async () => {
+    const database = client.db(dbName);
+    const id = new mongo.ObjectId();
+    await database.collection("interviews").insertOne({
+      _id: id, name: "Legacy Axion fixture", mode: "multi", status: "open", currentVersion: 1,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await database.collection("analytics_runs").insertOne({
+      _id: new mongo.ObjectId(), interviewId: id, slot: 0, surveyVersion: 1,
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000), result: { aggregate: true },
+    });
+
+    const previousFallback = process.env.KQA_AXION_LEGACY_TENANT_FALLBACK;
+    process.env.KQA_AXION_LEGACY_TENANT_FALLBACK = "true";
+    try {
+      const deleted = await withTenantPrincipal(
+        { tenantId: "axion", role: "admin", source: "api_key" },
+        () => repository.deleteInterview(id.toHexString()),
+      );
+      expect(deleted).toBe(true);
+      expect(await database.collection("interviews").findOne({ _id: id })).toBeNull();
+      expect(await database.collection("analytics_runs").countDocuments({ interviewId: id })).toBe(0);
+    } finally {
+      if (previousFallback === undefined) delete process.env.KQA_AXION_LEGACY_TENANT_FALLBACK;
+      else process.env.KQA_AXION_LEGACY_TENANT_FALLBACK = previousFallback;
+    }
+  });
 });
