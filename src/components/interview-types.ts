@@ -4,7 +4,7 @@ import type { QuestionSummary } from "@/lib/analytics/summary";
 import type { ParticipantStatus, QuestionOrderAssignmentView } from "@/lib/repo/types";
 
 export interface PersonMail {
-  state: "unsent" | "sent" | "failed";
+  state: "unsent" | "pending" | "sent" | "failed";
   sentAt?: string;
   error?: string;
   delivery: "delivered" | "bounced" | "unknown";

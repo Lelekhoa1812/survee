@@ -929,7 +929,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_mail_status",
-    description: "Read stored invite results. Does not open the mailbox.",
+    description: "Read stored invite results, including unconfirmed pending attempts. Does not open the mailbox.",
     inputSchema: obj({ personId: str, interviewId: str }),
     async run(args) {
       const personId = asString(args.personId, 40);
@@ -1687,7 +1687,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "send_invite",
-    description: "Email one person their private link. Refuses when they have no email, the interview is closed, or the public URL is unset. Does not send a second message unless resend is true.",
+    description: "Email one person their private link. Refuses when they have no email, the interview is closed, or the public URL is unset. A pending outcome is not retried automatically; pass resend: true only when you accept that a duplicate may be delivered.",
     inputSchema: obj({ personId: str, resend: bool }, ["personId"]),
     guard(args) {
       if ("personIds" in args || Array.isArray(args.personId)) return err("Send to one person at a time.");

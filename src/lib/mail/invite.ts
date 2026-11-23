@@ -3,19 +3,20 @@ import { smtpSettings } from "../env";
 import { col } from "../db";
 import { currentTenantId } from "../tenant-context";
 import { consumeRateLimit, getInterview, getParticipant } from "../repo";
-import { insertMail, listMailByPerson, mailRecord } from "../repo/mail";
+import { insertMail, listMailByPerson, mailRecord, updateMailAttempt } from "../repo/mail";
 import { domainOf, parseEmail } from "./address";
 import { inviteLink } from "./policy";
 import { currentMail, type MailRecord } from "./state";
-import { newMessageId, publicSmtpFailure, sendSmtp, type OutboundMail } from "./smtp";
+import { newMessageId, sendSmtp, type OutboundMail } from "./smtp";
 import { inviteMessage } from "./template";
 
-export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "send_failed";
+export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "outcome_unknown" | "attempt_unavailable";
 
 export type SendInviteResult =
   | { ok: true; result: "sent" | "already_sent"; to: string; sentAt: string; messageId?: string; interviewId: string; personId: string }
-  | { ok: false; code: Exclude<SendCode, "send_failed">; error: string }
-  | { ok: false; code: "send_failed"; error: string; interviewId: string; personId: string };
+  | { ok: false; code: Exclude<SendCode, "attempt_unavailable" | "outcome_unknown">; error: string }
+  | { ok: false; code: "outcome_unknown"; error: string; interviewId: string; personId: string }
+  | { ok: false; code: "attempt_unavailable"; error: string; interviewId: string; personId: string };
 
 export interface InviteContext {
   person: { id: string; interviewId: string; name: string; email?: string; token: string; status: string };
@@ -26,7 +27,8 @@ export interface InviteContext {
 export interface SendInviteDeps {
   load?: (personId: string) => Promise<InviteContext | null>;
   send?: (message: OutboundMail) => Promise<{ messageId: string }>;
-  record?: (row: Parameters<typeof insertMail>[0]) => Promise<void>;
+  begin?: (row: Parameters<typeof insertMail>[0]) => Promise<string>;
+  finish?: (id: string, patch: { status: "sent"; messageId: string }) => Promise<boolean>;
   linkFor?: (token: string) => { ok: true; link: string } | { ok: false; error: string };
   smtpReady?: () => { ok: true; from: string } | { ok: false; error: string };
   rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
@@ -46,13 +48,6 @@ async function loadFromDb(personId: string): Promise<InviteContext | null> {
   };
 }
 
-function storedSendError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : "";
-  if (!raw || /pass(word)?\s*[:=]|smtp_password|secret/i.test(raw)) return "The message could not be sent. Check the address and try again.";
-  if (/^(The |Could |Email |Set |Delivery |We )/.test(raw)) return raw.slice(0, 240);
-  return publicSmtpFailure(err).slice(0, 240);
-}
-
 async function logInvite(interviewId: string, participantId: string, result: "sent" | "failed", domain: string) {
   const interviewOid = /^[0-9a-f]{24}$/i.test(interviewId) ? new ObjectId(interviewId) : null;
   const personOid = /^[0-9a-f]{24}$/i.test(participantId) ? new ObjectId(participantId) : null;
@@ -64,7 +59,7 @@ async function logInvite(interviewId: string, participantId: string, result: "se
   });
 }
 
-/** One person, one SMTP conversation. Refusals (no email, closed, unset public URL) do not write a mail row. */
+/** One durable mail attempt is recorded before SMTP. Refusals never create an attempt. */
 export async function sendInvite(input: { personId: string; triggeredBy: "admin" | "mcp"; resend?: boolean }, deps: SendInviteDeps = {}): Promise<SendInviteResult> {
   const ctx = await (deps.load ?? loadFromDb)(input.personId);
   if (!ctx) return { ok: false, code: "not_found", error: "Person not found." };
@@ -79,6 +74,9 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   const current = currentMail({ email: parsed.email, token: ctx.person.token }, ctx.rows);
   if (current.state === "sent" && !input.resend) {
     return { ok: true, result: "already_sent", to: parsed.email, sentAt: current.sentAt ?? new Date().toISOString(), messageId: current.messageId, interviewId: ctx.interview.id, personId: ctx.person.id };
+  }
+  if (current.state === "pending" && !input.resend) {
+    return { ok: false, code: "outcome_unknown", error: "The previous invite outcome is unconfirmed. Check mail status; sending again may deliver a duplicate.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
   const ready = deps.smtpReady ? deps.smtpReady() : (() => {
     const cfg = smtpSettings();
@@ -104,7 +102,9 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   const message = inviteMessage(ctx.person.name, ctx.interview.name, link.link);
   const messageId = newMessageId(ready.from);
   const send = deps.send ?? sendSmtp;
-  const record = deps.record ?? (async (row: Parameters<typeof insertMail>[0]) => { await insertMail(row); });
+  const begin = deps.begin ?? (async (row: Parameters<typeof insertMail>[0]) => (await insertMail(row))._id.toHexString());
+  const finish = deps.finish ?? (async (id: string, patch: { status: "sent"; messageId: string }) =>
+    updateMailAttempt(new ObjectId(id), patch));
   const base = {
     interviewId: new ObjectId(ctx.interview.id),
     participantId: new ObjectId(ctx.person.id),
@@ -114,23 +114,26 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     triggeredBy: input.triggeredBy,
     sentAt: new Date(),
   };
+  let attemptId: string;
+  try {
+    attemptId = await begin({ ...base, status: "pending", messageId });
+  } catch {
+    return { ok: false, code: "attempt_unavailable", error: "The invite attempt could not be recorded, so no email was sent. Try again later.", interviewId: ctx.interview.id, personId: ctx.person.id };
+  }
   let sent: { messageId: string };
   try {
     sent = await send({ to: parsed.email, subject: message.subject, text: message.text, html: message.html, messageId });
-  } catch (err) {
-    const error = storedSendError(err);
-    try {
-      await record({ ...base, status: "failed", error });
-      if (!deps.record) void logInvite(ctx.interview.id, ctx.person.id, "failed", domainOf(parsed.email));
-    } catch { /* the send already failed; do not hide that behind a second write error */ }
-    return { ok: false, code: "send_failed", error, interviewId: ctx.interview.id, personId: ctx.person.id };
+  } catch {
+    // SMTP errors can occur after remote acceptance. Keep the durable intent pending;
+    // a normal retry must not imply that the previous message was definitely rejected.
+    return { ok: false, code: "outcome_unknown", error: "The invite outcome is unconfirmed. Check mail status; sending again may deliver a duplicate.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
   try {
-    await record({ ...base, status: "sent", messageId: sent.messageId });
+    const updated = await finish(attemptId, { status: "sent", messageId: sent.messageId });
+    if (!updated) throw new Error("Mail attempt was not updated.");
   } catch {
-    // The message left. A failed row here would tell the host it did not, and the next click would send it again.
-    return { ok: false, code: "send_failed", error: "The message was sent, but it could not be recorded. Do not send it again unless you mean to.", interviewId: ctx.interview.id, personId: ctx.person.id };
+    return { ok: false, code: "outcome_unknown", error: "The invite outcome is unconfirmed. Check mail status; sending again may deliver a duplicate.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
-  if (!deps.record) void logInvite(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
+  if (!deps.begin && !deps.finish) void logInvite(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
   return { ok: true, result: "sent", to: parsed.email, sentAt: base.sentAt.toISOString(), messageId: sent.messageId, interviewId: ctx.interview.id, personId: ctx.person.id };
 }

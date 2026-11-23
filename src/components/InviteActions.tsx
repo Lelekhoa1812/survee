@@ -55,12 +55,15 @@ export function InviteActions({ person, interviewOpen, publicOrigin, refresh }: 
   async function send(resend: boolean) {
     setConfirm(false);
     setPhase("sending");
-    const res = await api<{ result?: string }>(`/api/admin/people/${person.id}/invite`, { method: "POST", body: { resend } });
+    const res = await api<{ result?: string; code?: string }>(`/api/admin/people/${person.id}/invite`, { method: "POST", body: { resend } });
     setPhase("idle");
     if (res.ok) {
       toast(res.data.result === "already_sent" ? `${person.name} already has this link.` : `Link sent to ${person.name}.`);
       refresh();
-    } else toast(res.data.error ?? "The message could not be sent. Check the address and try again.", "err");
+    } else {
+      toast(res.data.error ?? "The message could not be sent. Check the address and try again.", "err");
+      if (res.data.code === "outcome_unknown") refresh();
+    }
   }
 
   async function check() {
@@ -80,7 +83,7 @@ export function InviteActions({ person, interviewOpen, publicOrigin, refresh }: 
       : !email
         ? "Add an email to send the link."
         : null;
-  const showHistory = mail.state === "sent" || mail.state === "failed";
+  const showHistory = mail.state === "pending" || mail.state === "sent" || mail.state === "failed";
   if (refusal && !showHistory) return <p className="invite-meta">{refusal}</p>;
 
   return (
@@ -103,12 +106,18 @@ export function InviteActions({ person, interviewOpen, publicOrigin, refresh }: 
             {phase === "checking" ? <><Spinner /> Checking…</> : "Check delivery"}
           </button>
         </>
+      ) : mail.state === "pending" ? (
+        <>
+          <span className="invite-meta">Outcome unconfirmed{mail.sentAt ? ` ${relTime(mail.sentAt)}` : ""}</span>
+          <p className="field-error">The mail server may have accepted this invite. Sending again may deliver a duplicate.</p>
+          {!refusal && <button className="btn sm" type="button" onClick={() => setConfirm(true)}>Send again</button>}
+        </>
       ) : (
         <button className="btn sm primary" type="button" onClick={() => void send(false)}><Icon name="inbox" size={14} /> Send link</button>
       )}
       {confirm && (
-        <Modal title="Send the link again?" onClose={() => setConfirm(false)} actions={<><button className="btn" type="button" onClick={() => setConfirm(false)}>Cancel</button><button className="btn primary" type="button" onClick={() => void send(true)}>Send again</button></>}>
-          <p className="muted">{person.name} already received a link at {email}. Send another?</p>
+        <Modal title={mail.state === "pending" ? "Send despite the unconfirmed result?" : "Send the link again?"} onClose={() => setConfirm(false)} actions={<><button className="btn" type="button" onClick={() => setConfirm(false)}>Cancel</button><button className="btn primary" type="button" onClick={() => void send(true)}>Send again</button></>}>
+          <p className="muted">{mail.state === "pending" ? `The mail server may already have accepted this invite to ${email}. Sending again may deliver a duplicate.` : `${person.name} already received a link at ${email}. Send another?`}</p>
         </Modal>
       )}
     </div>

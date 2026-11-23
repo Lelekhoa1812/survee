@@ -27,6 +27,17 @@ export async function insertMail(doc: Omit<MailMessageDoc, "_id" | "tenantId">):
   return row;
 }
 
+/** Persist the attempt before contacting SMTP, so an interrupted/ambiguous send stays visible. */
+export async function updateMailAttempt(id: ObjectId, patch: Pick<MailMessageDoc, "status" | "messageId" | "error">): Promise<boolean> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) return false;
+  const result = await (await col.mail()).updateOne(
+    tenantFilter(tenantId, { _id: id, status: "pending" }),
+    { $set: patch },
+  );
+  return result.matchedCount === 1;
+}
+
 export async function listMailByInterview(interviewId: ObjectId): Promise<MailMessageDoc[]> {
   const tenantId = await currentTenantId();
   if (!tenantId) return [];

@@ -27,7 +27,8 @@ function harness(context: InviteContext | null, extra: Partial<SendInviteDeps> =
   const deps: SendInviteDeps = {
     load: async () => context,
     send,
-    record: async (row) => { recorded.push(row); },
+    begin: async (row) => { recorded.push(row); return "attempt-1"; },
+    finish: async (id, patch) => { recorded.push({ id, ...patch }); return true; },
     linkFor: () => ({ ok: true, link: `https://kqa.example/${TOKEN}` }),
     smtpReady: () => ({ ok: true, from: "host@example.com" }),
     rateLimit,
@@ -74,8 +75,11 @@ describe("sendInvite", () => {
     expect(message.text).not.toContain("data-kqa");
     expect(message.html).not.toContain("data-kqa");
     expect(JSON.stringify(message)).not.toContain(SECRET);
-    expect(recorded).toHaveLength(1);
-    expect(recorded[0]).toMatchObject({ status: "sent", to: "ada@example.com", token: TOKEN, messageId: "<sent-id@example.com>" });
+    expect(recorded).toHaveLength(2);
+    expect(recorded[0]).toMatchObject({ status: "pending", to: "ada@example.com", token: TOKEN });
+    expect(recorded[0]).not.toHaveProperty("text");
+    expect(recorded[0]).not.toHaveProperty("html");
+    expect(recorded[1]).toMatchObject({ id: "attempt-1", status: "sent", messageId: "<sent-id@example.com>" });
   });
 
   it("does not send again until resend is asked", async () => {
@@ -108,22 +112,45 @@ describe("sendInvite", () => {
     expect(recorded).toHaveLength(0);
   });
 
-  it("does not record a successful send as a failure when the mail row cannot be saved", async () => {
-    const recorded: { status?: string }[] = [];
+  it("persists a pending attempt before SMTP and does not send if that insert fails", async () => {
+    const sequence: string[] = [];
     const { send, deps } = harness(ctx({ email: "ada@example.com" }), {
-      record: async (row) => {
-        recorded.push(row as { status?: string });
-        if ((row as { status?: string }).status === "sent") throw new Error("db write failed");
-      },
+      begin: async () => { sequence.push("insert"); throw new Error("db write failed"); },
+      send: async () => { sequence.push("smtp"); return { messageId: "<sent-id@example.com>" }; },
     });
     const result = await sendInvite({ personId, triggeredBy: "admin" }, deps);
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ ok: false, code: "send_failed" });
-    if (!result.ok) expect(result.error).toMatch(/was sent/i);
-    expect(recorded.some((row) => row.status === "failed")).toBe(false);
+    expect(result).toMatchObject({ ok: false, code: "attempt_unavailable" });
+    expect(sequence).toEqual(["insert"]);
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it("stores a failed attempt without the password", async () => {
+  it("leaves an accepted send pending when final persistence fails and suppresses ordinary retry", async () => {
+    const rows: InviteContext["rows"] = [];
+    const first = harness(ctx({ email: "ada@example.com", rows }), {
+      begin: async (row) => {
+        rows.push({
+          id: "attempt-1", to: row.to, token: row.token, status: row.status,
+          sentAt: row.sentAt.toISOString(), messageId: row.messageId,
+        });
+        return "attempt-1";
+      },
+      finish: async () => { throw new Error("db write failed"); },
+    });
+    const result = await sendInvite({ personId, triggeredBy: "admin" }, first.deps);
+    expect(first.send).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ ok: false, code: "outcome_unknown" });
+    expect(rows[0]).toMatchObject({ status: "pending", messageId: expect.any(String) });
+
+    const ordinaryRetry = harness(ctx({ email: "ada@example.com", rows }));
+    expect(await sendInvite({ personId, triggeredBy: "admin" }, ordinaryRetry.deps)).toMatchObject({ ok: false, code: "outcome_unknown" });
+    expect(ordinaryRetry.send).not.toHaveBeenCalled();
+
+    const explicitRetry = harness(ctx({ email: "ada@example.com", rows }));
+    expect(await sendInvite({ personId, triggeredBy: "admin", resend: true }, explicitRetry.deps)).toMatchObject({ ok: true, result: "sent" });
+    expect(explicitRetry.send).toHaveBeenCalledOnce();
+  });
+
+  it("keeps SMTP errors pending without storing provider details or the password", async () => {
     const { recorded, deps } = harness(ctx({ email: "ada@example.com" }), {
       send: async () => { throw new Error(`535 password=${SECRET}`); },
     });
@@ -131,6 +158,7 @@ describe("sendInvite", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).not.toContain(SECRET);
     expect(JSON.stringify(recorded)).not.toContain(SECRET);
+    expect(recorded[0]).toMatchObject({ status: "pending" });
     expect(publicSmtpFailure(new Error(`535 password=${SECRET}`), SECRET)).not.toContain(SECRET);
   });
 });

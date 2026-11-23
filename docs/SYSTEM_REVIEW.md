@@ -24,12 +24,13 @@ The following changes are pushed to `main` and deployed:
 - IMAP checks and logout cleanup have bounded deadlines; timeouts retain the existing `unknown` result.
 - Authentication distinguishes invalid/revoked sessions (401) from account-store outages (503 on API/frame routes).
 - Audit event write failures produce sanitized operational logs, and unknown MCP tool attempts enter the audit path.
+- Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries and an explicit resend warns of possible duplicates.
 
 ## Ranked remaining gaps
 
 | Priority | Gap | Impact | Recommended next step |
 | --- | --- | --- | --- |
-| P1 | **SMTP delivery and persistence are not one durable operation.** A provider can accept a message before local persistence fails. Retrying can duplicate mail; workspace-invite retries rotate the stored token and can invalidate a previously delivered link. | Invite status can be ambiguous and recipients can receive stale links. Rate limits reduce repetition but do not make retries idempotent. | Add a transactional outbox with stable attempt IDs, durable send states, idempotent retries, and reconciliation for provider-accepted/local-ack-failed cases. |
+| P1 | **Outbound mail still needs reconciliation and workspace invites remain ambiguous.** Participant invite attempts are now persisted before SMTP; an ambiguous attempt stays pending and normal retries are suppressed. There is no worker or provider reconciliation to resolve pending attempts. Workspace invitation sends still rotate the stored token on retries and are not backed by the same attempt flow. | A host may need to make a duplicate-risk decision manually; retries of workspace invites can invalidate a previously delivered link. | Add provider reconciliation or an operator resolution workflow for pending participant attempts, and extend durable attempt semantics to workspace invitations without rotating a delivered token unexpectedly. |
 | P1 | **Participant reads and exports load the full interview.** `listParticipants()` hydrates all matching people, and the export route builds the complete export in memory. | Large interviews can increase response time and function memory until they fail. | Add cursor pagination to host/MCP listing and stream or background large exports; set explicit per-request bounds and show continuation/export status. |
 | P1 | **Asset storage has no workspace quota, and reference-check/delete can race publication.** The current per-file limit does not bound aggregate workspace usage. A version can potentially reference an asset after the deletion scan. | Storage costs can grow without a tenant bound; concurrent changes can leave a published questionnaire with a broken image. | Add configurable workspace quotas and coordinate asset deletion with version publication through a shared atomic protocol or a staged tombstone/garbage-collection flow. |
 | P1 | **Consent, retention, and withdrawal rely on host procedures.** The app stores person-linked answers and supports manual deletion, but it does not manage notice versions, consent records, retention windows, or respondent withdrawal. | Hosts can collect data without a consistent in-product record of the notice or planned deletion. | Design a versioned notice and optional consent gate, plus workspace-configured retention, dry-run review, audited deletion, and a respondent withdrawal route. Avoid legal defaults; make policy owner-configurable. |
@@ -42,7 +43,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **906 tests passed across 131 files** after the current code changes.
+- Full automated suite: **907 tests passed across 131 files** after the current code changes.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production deployment for the reviewed code release `e0589cf` and the report snapshot `4513d33` both reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST returned 401. A fresh authenticated MCP `initialize` and `tools/list` both returned 200 with 40 tools.

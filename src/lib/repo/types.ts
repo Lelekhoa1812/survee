@@ -5,7 +5,7 @@ import type { McpCapability } from "../mcp/capabilities";
 export type InterviewMode = "single" | "multi";
 export type InterviewStatus = "open" | "closed";
 export type ParticipantStatus = "invited" | "in_progress" | "submitted";
-export type MailStatus = "sent" | "failed";
+export type MailStatus = "pending" | "sent" | "failed";
 export type MailDelivery = "delivered" | "bounced" | "unknown";
 export type MailTrigger = "admin" | "mcp";
 export type TenantRole = "owner" | "admin" | "member";
@@ -242,6 +242,7 @@ export interface QuestionnaireReviewDraftDoc {
 
 /**
  * collection: mail_messages. One row per send attempt. The body is not stored.
+ * Pending rows represent an unconfirmed SMTP outcome and are not retried automatically.
  * "Sent" for the current person is the latest row whose `to` and `token` still match them.
  */
 export interface MailMessageDoc {

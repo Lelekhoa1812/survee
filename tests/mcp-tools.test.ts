@@ -63,7 +63,12 @@ vi.mock("../src/lib/db", () => ({
     mail: async () => ({
       insertOne: async (row: Record<string, unknown>) => { mailRows.push(row); return { insertedId: row._id }; },
       find: () => ({ sort: () => ({ limit: () => ({ toArray: async () => mailRows }) }) }),
-      updateOne: async () => ({ matchedCount: 1 }),
+      updateOne: async (filter: Record<string, unknown>, update: { $set?: Record<string, unknown> }) => {
+        const criteria = Array.isArray(filter.$and) ? filter.$and[1] as Record<string, unknown> : filter;
+        const row = mailRows.find((item) => String(item._id) === String(criteria._id) && item.status === criteria.status);
+        if (row && update.$set) Object.assign(row, update.$set);
+        return { matchedCount: row ? 1 : 0 };
+      },
       deleteMany: async () => ({ deletedCount: 0 }),
     }),
     events: async () => ({ insertOne: async () => ({}) }),

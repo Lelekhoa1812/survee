@@ -15,7 +15,7 @@ export interface MailRecord {
 }
 
 export interface MailView {
-  state: "unsent" | "sent" | "failed";
+  state: "unsent" | "pending" | "sent" | "failed";
   sentAt?: string;
   error?: string;
   messageId?: string;
@@ -31,6 +31,9 @@ export function currentMail(person: { email?: string | null; token: string }, ro
     .sort((a, b) => (a.sentAt < b.sentAt ? 1 : a.sentAt > b.sentAt ? -1 : 0));
   const latest = matching[0];
   if (!latest) return { state: "unsent", delivery: "unknown" };
+  if (latest.status === "pending") {
+    return { state: "pending", sentAt: latest.sentAt, messageId: latest.messageId, delivery: "unknown" };
+  }
   if (latest.status === "failed") {
     return { state: "failed", sentAt: latest.sentAt, error: latest.error, delivery: "unknown" };
   }
