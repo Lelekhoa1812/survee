@@ -6,12 +6,13 @@ import type { PersonRow } from "../../components/interview-types";
 
 /** Shape bounded participant pages consistently for the host people and answer surfaces. */
 export function participantRows(manifest: Manifest, people: ParticipantView[], mailRows: MailRecord[], includeAnswerData = true): PersonRow[] {
-  const mailByToken = new Map<string, MailRecord[]>();
+  const mailByParticipantToken = new Map<string, MailRecord[]>();
   const unresolvedByParticipant = new Map<string, MailRecord[]>();
   for (const row of mailRows) {
-    const rows = mailByToken.get(row.token) ?? [];
+    const key = `${row.participantId ?? ""}:${row.token}`;
+    const rows = mailByParticipantToken.get(key) ?? [];
     rows.push(row);
-    mailByToken.set(row.token, rows);
+    mailByParticipantToken.set(key, rows);
     if (row.participantId) {
       const pending = unresolvedByParticipant.get(row.participantId) ?? [];
       if (row.status === "pending" && row.delivery !== "delivered" && row.delivery !== "bounced") pending.push(row);
@@ -20,7 +21,7 @@ export function participantRows(manifest: Manifest, people: ParticipantView[], m
   }
   return people.map((person) => {
     const result = progress(manifest, person.answers, person.recordGroups);
-    const mail = currentMail(person, mailByToken.get(person.token) ?? []);
+    const mail = currentMail(person, mailByParticipantToken.get(`${person.id}:${person.token}`) ?? []);
     return {
       id: person.id, token: person.token, name: person.name, email: person.email, note: person.note, status: person.status,
       answered: result.answered, total: result.total, requiredMissing: result.missingRequired.length,

@@ -40,6 +40,15 @@ describe("participant host rows", () => {
     expect(row.mail).toMatchObject({ state: "unsent", pendingAttemptCount: 1, pendingAttempts: [{ attemptId: "attempt-old", email: "old@example.test" }] });
   });
 
+  it("does not associate a different participant's mail attempt when link tokens match", () => {
+    const [row] = participantRows(manifest, [person], [{
+      id: "other-participant-attempt", participantId: "cccccccccccccccccccccccc", to: "other@example.test", token: person.token,
+      status: "sent", sentAt: "2026-11-23T00:00:00.000Z", delivery: "delivered",
+    }]);
+    expect(row.mail.state).toBe("unsent");
+    expect(row.mail.pendingAttempts).toEqual([]);
+  });
+
   it("marks a repeat question incomplete when a retained row fails required-field validation", () => {
     const repeatManifest = {
       format: "kqa/1", title: "Records", questions: [{
