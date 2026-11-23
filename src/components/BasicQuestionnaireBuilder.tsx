@@ -61,7 +61,13 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     }
     const currentCondition = routeCondition(data.questions[index]);
     const value = currentCondition && "value" in currentCondition ? currentCondition.value : undefined;
-    updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "equals" | "notEquals" | "contains" | "notContains", value: typeof value === "string" ? value : source.options[0]?.value ?? "" }] } });
+    if (["number", "scale"].includes(source.type)) {
+      updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: typeof value === "number" ? value : source.min ?? (source.type === "scale" ? 1 : 0) }] } });
+    } else if (source.type === "date") {
+      updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: typeof value === "string" ? value : "2020-01-01" }] } });
+    } else {
+      updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "equals" | "notEquals" | "contains" | "notContains", value: typeof value === "string" ? value : source.options[0]?.value ?? "" }] } });
+    }
   }
 
   function addSection() {
@@ -191,13 +197,18 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
             const source = data.questions.slice(0, index).find((item) => item.id === condition.question);
             if (!source) return <p className="hint">Choose a valid earlier question to continue this rule.</p>;
             const hasChoices = ["single", "multi", "select"].includes(source.type);
+            const hasTypedComparison = ["number", "scale", "date"].includes(source.type);
             const operators = hasChoices
               ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, ...(source.type === "multi" ? [{ value: "contains", label: "contains this choice" }, { value: "notContains", label: "does not contain this choice" }] : [{ value: "equals", label: "equals this choice" }, { value: "notEquals", label: "does not equal this choice" }])]
-              : [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }];
+              : hasTypedComparison
+                ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, { value: "lt", label: "is less than" }, { value: "lte", label: "is at most" }, { value: "gt", label: "is greater than" }, { value: "gte", label: "is at least" }, { value: "eq", label: "equals" }, { value: "ne", label: "does not equal" }]
+                : [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }];
             const value = "value" in condition ? condition.value : "";
             const choiceRule = ["equals", "notEquals", "contains", "notContains"].includes(condition.operator);
+            const typedRule = ["lt", "lte", "gt", "gte", "eq", "ne"].includes(condition.operator);
             return <div className="row wrap"><label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Rule</span><select className="select" value={condition.operator} onChange={(event) => selectRouteOperator(index, source.id, event.target.value)}>{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select></label>
               {hasChoices && choiceRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Choice</span><select className="select" value={typeof value === "string" ? value : ""} onChange={(event) => updateQuestion(index, { when: { all: [{ question: source.id, operator: condition.operator as "equals" | "notEquals" | "contains" | "notContains", value: event.target.value }] } })}>{source.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+              {hasTypedComparison && typedRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>{source.type === "date" ? "Date" : "Value"}</span><input className="input" type={source.type === "date" ? "date" : "number"} step={source.type === "number" ? source.step ?? "any" : undefined} value={typeof value === "number" || typeof value === "string" ? value : ""} onChange={(event) => updateQuestion(index, { when: { all: [{ question: source.id, operator: condition.operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: source.type === "date" ? event.target.value : Number(event.target.value) }] } })} /></label>}
             </div>;
           })()}
         </div>}
@@ -223,7 +234,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         {question.type === "number" && <div className="field"><label htmlFor={`builder-step-${index}`}>Increment <span className="muted">(optional)</span></label><input id={`builder-step-${index}`} className="input" type="number" min="0.0000001" step="any" value={question.step ?? ""} onChange={(event) => updateQuestion(index, { step: event.target.value === "" ? undefined : Number(event.target.value) })} /><span className="hint">Leave blank to accept any numeric precision.</span></div>}
       </fieldset>)}
       <div className="row wrap"><button className="btn" type="button" disabled={data.questions.length >= 500} onClick={addQuestion}>Add question</button><span className="muted">{data.questions.length} question{data.questions.length === 1 ? "" : "s"}</span></div>
-      <p className="hint">This composer covers common question types, sections, simple routing, and input limits. For repeat groups, guided presentation, typed comparisons, custom controls, or an existing interview version, use the HTML upload workflow so those details stay explicit and reviewable.</p>
+      <p className="hint">This composer covers common question types, sections, routing comparisons, and input limits. For repeat groups, custom controls, or an existing interview version, use the HTML upload workflow so those details stay explicit and reviewable.</p>
       {(built.error || error) && <pre className="callout err" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error || built.error}</pre>}
       <div className="row wrap" style={{ justifyContent: "flex-end" }}><button className="btn" type="button" disabled={!built.html} onClick={download}>Download HTML</button><button className="btn primary" type="button" disabled={!built.html} onClick={() => { setError(""); onUse(built.html); }}>Use questionnaire</button></div>
     </div>

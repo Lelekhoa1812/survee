@@ -114,6 +114,35 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it("routes a later question using a numeric comparison", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "number");
+    await click("Add question");
+    await change("#builder-route-source-1", "question-1");
+    const rule = Array.from(host.querySelectorAll("select")).find((select) => Array.from(select.options).some((option) => option.textContent === "is greater than"));
+    expect(rule).toBeTruthy();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(rule!), "value")?.set?.call(rule!, "gt");
+      rule!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const value = Array.from(host.querySelectorAll("input[type=number]")).find((input) => input.closest("label")?.textContent?.includes("Value"));
+    expect(value).toBeTruthy();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(value!), "value")?.set?.call(value!, "5");
+      value!.dispatchEvent(new Event("input", { bubbles: true }));
+      value!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"operator": "gt"');
+    expect(html).toContain('"value": 5');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
+
   it("generates optional comment fields and bounded checkbox selections", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");
