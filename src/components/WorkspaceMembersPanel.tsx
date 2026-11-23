@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, Icon, Modal, Spinner, useToast } from "./ui";
 
 interface WorkspaceMember { userId: string; email: string; role: string; createdAt: string }
-interface PendingInvitation { id: string; email: string; role: "admin" | "member"; expiresAt: string }
+interface PendingInvitation { id: string; email: string; role: "admin" | "member"; expiresAt: string; mailStatus?: "pending" | "sent"; delivery?: "delivered" | "bounced" | "unknown"; deliveryCheckedAt?: string; canCheckDelivery?: boolean }
 interface AccessList { members?: WorkspaceMember[]; invitations?: PendingInvitation[]; ownerCount?: number }
 
 export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: string; userId: string }) {
@@ -66,6 +66,21 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
     await load();
   }
 
+  async function checkDelivery(invitation: PendingInvitation) {
+    if (busy) return;
+    setBusy(true);
+    const result = await api<{ delivery?: PendingInvitation["delivery"]; checkedAt?: string }>(`/api/admin/workspace-invitations/${invitation.id}/delivery`, { method: "POST" });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.data.error ?? "Invitation delivery could not be checked.");
+      return;
+    }
+    setInvitations((current) => current.map((item) => item.id === invitation.id
+      ? { ...item, delivery: result.data.delivery, deliveryCheckedAt: result.data.checkedAt }
+      : item));
+    toast(result.data.delivery === "delivered" ? "The mail server confirmed delivery." : result.data.delivery === "bounced" ? "The mail server reported a bounce." : "Delivery is not confirmed yet.");
+  }
+
   async function remove(member: WorkspaceMember) {
     if (busy) return;
     setBusy(true);
@@ -112,7 +127,10 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
               <p className="hint">Removing someone revokes access to this workspace and linked OAuth connections. Their survee account and membership in other workspaces remain.</p>
             </section>
             <section className="stack" aria-labelledby="workspace-pending-invites"><h3 id="workspace-pending-invites">Pending invitations ({invitations.length})</h3>
-              {invitations.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{invitations.map((invitation) => <li key={invitation.id} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{invitation.email}<small className="muted" style={{ display: "block" }}>{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</small></span><button className="btn sm" type="button" disabled={busy} onClick={() => void revoke(invitation)}>Revoke</button></li>)}</ul> : <p className="muted">No pending invitations.</p>}
+              {invitations.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{invitations.map((invitation) => {
+                const deliveryLabel = invitation.delivery === "delivered" ? "delivery confirmed" : invitation.delivery === "bounced" ? "bounced" : invitation.mailStatus === "pending" ? "send outcome unknown" : invitation.mailStatus === "sent" ? "delivery unconfirmed" : "delivery status unavailable";
+                return <li key={invitation.id} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{invitation.email}<small className="muted" style={{ display: "block" }}>{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()} · {deliveryLabel}{invitation.deliveryCheckedAt ? ` · checked ${new Date(invitation.deliveryCheckedAt).toLocaleString()}` : ""}</small></span><span className="row wrap">{invitation.canCheckDelivery && <button className="btn sm" type="button" disabled={busy} onClick={() => void checkDelivery(invitation)}>Check delivery</button>}<button className="btn sm" type="button" disabled={busy} onClick={() => void revoke(invitation)}>Revoke</button></span></li>;
+              })}</ul> : <p className="muted">No pending invitations.</p>}
             </section>
           </div>
         )}

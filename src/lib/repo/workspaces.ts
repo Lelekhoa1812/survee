@@ -55,7 +55,8 @@ export async function createWorkspaceInvitation(input: {
   invitedByUserId: string;
   email: string;
   role: "admin" | "member";
-}): Promise<{ ok: true; token: string; expiresAt: Date } | { ok: false; reason: "invalid" | "already_member" | "pending" }> {
+  messageId?: string;
+}): Promise<{ ok: true; id: string; token: string; expiresAt: Date } | { ok: false; reason: "invalid" | "already_member" | "pending" }> {
   const inviterId = objectId(input.invitedByUserId);
   const email = normalizeEmail(input.email);
   if (!inviterId || !input.tenantId || !email || (input.role !== "admin" && input.role !== "member")) return { ok: false, reason: "invalid" };
@@ -75,6 +76,7 @@ export async function createWorkspaceInvitation(input: {
     tenantId: input.tenantId, email, role: input.role, invitedBy: inviterId,
     tokenHash: createHash("sha256").update(token).digest("hex"), createdAt: now,
     expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
+    ...(input.messageId ? { messageId: input.messageId, mailStatus: "pending" as const } : {}),
   };
   const replaceable = {
     tenantId: input.tenantId,
@@ -102,7 +104,32 @@ export async function createWorkspaceInvitation(input: {
     if (current) return { ok: false, reason: "pending" };
     throw error;
   }
-  return { ok: true, token, expiresAt: invitation.expiresAt };
+  const saved = await (await col.workspaceInvitations()).findOne({ tenantId: input.tenantId, email, tokenHash: invitation.tokenHash }, { projection: { _id: 1 } });
+  if (!saved) throw new Error("Workspace invitation could not be reloaded.");
+  return { ok: true, id: saved._id.toHexString(), token, expiresAt: invitation.expiresAt };
+}
+
+export async function updateWorkspaceInvitationMail(tenantId: string, invitationId: string, patch: {
+  mailStatus?: "pending" | "sent";
+  messageId?: string;
+  delivery?: "delivered" | "bounced" | "unknown";
+  deliveryCheckedAt?: Date;
+  deliveryDetail?: string;
+}): Promise<boolean> {
+  const id = objectId(invitationId);
+  if (!id || !tenantId) return false;
+  const result = await (await col.workspaceInvitations()).updateOne(
+    { _id: id, tenantId },
+    { $set: patch },
+  );
+  return result.matchedCount === 1;
+}
+
+export async function getWorkspaceInvitationMail(tenantId: string, invitationId: string): Promise<{ id: string; messageId?: string; mailStatus?: "pending" | "sent" } | null> {
+  const id = objectId(invitationId);
+  if (!id || !tenantId) return null;
+  const invitation = await (await col.workspaceInvitations()).findOne({ _id: id, tenantId }, { projection: { _id: 1, messageId: 1, mailStatus: 1 } });
+  return invitation ? { id: invitation._id.toHexString(), messageId: invitation.messageId, mailStatus: invitation.mailStatus } : null;
 }
 
 export async function revokeWorkspaceInvitation(tenantId: string, invitationId: string): Promise<boolean> {
@@ -117,7 +144,7 @@ export async function revokeWorkspaceInvitation(tenantId: string, invitationId: 
 
 export async function listWorkspaceAccess(tenantId: string): Promise<{
   members: { userId: string; email: string; role: TenantRole; createdAt: string }[];
-  invitations: { id: string; email: string; role: "admin" | "member"; expiresAt: string }[];
+  invitations: { id: string; email: string; role: "admin" | "member"; expiresAt: string; mailStatus?: "pending" | "sent"; delivery?: "delivered" | "bounced" | "unknown"; deliveryCheckedAt?: string; canCheckDelivery: boolean }[];
   ownerCount: number;
 }> {
   if (!tenantId) return { members: [], invitations: [], ownerCount: 0 };
@@ -135,7 +162,12 @@ export async function listWorkspaceAccess(tenantId: string): Promise<{
       const user = userById.get(membership.userId.toHexString());
       return user ? [{ userId: membership.userId.toHexString(), email: user.email, role: membership.role, createdAt: membership.createdAt.toISOString() }] : [];
     }),
-    invitations: invitations.map((invitation) => ({ id: invitation._id.toHexString(), email: invitation.email, role: invitation.role, expiresAt: invitation.expiresAt.toISOString() })),
+    invitations: invitations.map((invitation) => ({
+      id: invitation._id.toHexString(), email: invitation.email, role: invitation.role,
+      expiresAt: invitation.expiresAt.toISOString(), mailStatus: invitation.mailStatus,
+      delivery: invitation.delivery, deliveryCheckedAt: invitation.deliveryCheckedAt?.toISOString(),
+      canCheckDelivery: !!invitation.messageId,
+    })),
   };
 }
 

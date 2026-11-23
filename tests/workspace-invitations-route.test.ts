@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => true),
-  createWorkspaceInvitation: vi.fn(async (): Promise<{ ok: true; token: string } | { ok: false; reason: "invalid" | "already_member" | "pending" }> => ({ ok: true, token: "invite-token" })),
+  createWorkspaceInvitation: vi.fn(async (): Promise<{ ok: true; id: string; token: string } | { ok: false; reason: "invalid" | "already_member" | "pending" }> => ({ ok: true, id: "invite-1", token: "invite-token" })),
+  updateWorkspaceInvitationMail: vi.fn(async () => true),
   sendSmtp: vi.fn(async () => undefined),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("@/lib/repo", () => ({ consumeRateLimit: state.rateLimit }));
 vi.mock("@/lib/repo/workspaces", () => ({
   createWorkspaceInvitation: state.createWorkspaceInvitation,
   listWorkspaceAccess: vi.fn(),
+  updateWorkspaceInvitationMail: state.updateWorkspaceInvitationMail,
 }));
 
 import { POST } from "../src/app/api/admin/workspace-invitations/route";
@@ -38,7 +40,8 @@ function request() {
 
 beforeEach(() => {
   state.rateLimit.mockReset().mockResolvedValue(true);
-  state.createWorkspaceInvitation.mockReset().mockResolvedValue({ ok: true, token: "invite-token" });
+  state.createWorkspaceInvitation.mockReset().mockResolvedValue({ ok: true, id: "invite-1", token: "invite-token" });
+  state.updateWorkspaceInvitationMail.mockReset().mockResolvedValue(true);
   state.sendSmtp.mockReset().mockResolvedValue(undefined);
 });
 
@@ -69,7 +72,9 @@ describe("workspace invitation email throttling", () => {
     expect(state.rateLimit).toHaveBeenNthCalledWith(1, "workspace-invite-recipient:tenant-a:person@example.com", 3, 60);
     expect(state.rateLimit).toHaveBeenNthCalledWith(2, "workspace-invite-tenant:tenant-a", 100, 60);
     expect(state.createWorkspaceInvitation).toHaveBeenCalledOnce();
+    expect(state.createWorkspaceInvitation).toHaveBeenCalledWith(expect.objectContaining({ messageId: "<invite@example.test>" }));
     expect(state.sendSmtp).toHaveBeenCalledOnce();
+    expect(state.updateWorkspaceInvitationMail).toHaveBeenCalledWith("tenant-a", "invite-1", { mailStatus: "sent", messageId: "<invite@example.test>" });
   });
 
   it("does not send or rotate an already pending invitation", async () => {
@@ -90,5 +95,16 @@ describe("workspace invitation email throttling", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ code: "delivery_unknown" });
     expect(state.createWorkspaceInvitation).toHaveBeenCalledOnce();
+    expect(state.updateWorkspaceInvitationMail).not.toHaveBeenCalled();
+  });
+
+  it("keeps the stored attempt pending if delivery succeeds but status persistence fails", async () => {
+    state.updateWorkspaceInvitationMail.mockRejectedValueOnce(new Error("database unavailable"));
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "delivery_unknown" });
+    expect(state.createWorkspaceInvitation).toHaveBeenCalledWith(expect.objectContaining({ messageId: "<invite@example.test>" }));
   });
 });

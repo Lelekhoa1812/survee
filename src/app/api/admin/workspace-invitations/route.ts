@@ -4,7 +4,7 @@ import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { publicBaseUrl, smtpSettings } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/repo";
-import { createWorkspaceInvitation, listWorkspaceAccess } from "@/lib/repo/workspaces";
+import { createWorkspaceInvitation, listWorkspaceAccess, updateWorkspaceInvitationMail } from "@/lib/repo/workspaces";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
@@ -45,9 +45,10 @@ export const POST = withServerErrors("admin/workspace-invitations", async functi
     return fail(503, "Workspace invitations are temporarily unavailable.", { code: "rate_limit_unavailable" });
   }
 
+  const messageId = newMessageId(smtp.user);
   let invitation: Awaited<ReturnType<typeof createWorkspaceInvitation>>;
   try {
-    invitation = await createWorkspaceInvitation({ tenantId: session.tenantId, invitedByUserId: session.userId, email: parsed.email, role });
+    invitation = await createWorkspaceInvitation({ tenantId: session.tenantId, invitedByUserId: session.userId, email: parsed.email, role, messageId });
   } catch {
     return fail(503, "The workspace invitation could not be created. Try again.");
   }
@@ -63,8 +64,10 @@ export const POST = withServerErrors("admin/workspace-invitations", async functi
       subject: `Join ${session.tenantName} on survee`,
       text: `You have been invited to join ${session.tenantName} as a workspace ${role}. Accept the invitation: ${joinUrl.toString()}\n\nThis link expires in 7 days. If you did not expect this invitation, you can ignore this message.`,
       html: `<p>You have been invited to join <strong>${escapeHtml(session.tenantName)}</strong> as a workspace ${role}.</p><p><a href="${escapedUrl}">Accept the invitation</a></p><p>This link expires in 7 days. If you did not expect this invitation, you can ignore this message.</p>`,
-      messageId: newMessageId(smtp.user),
+      messageId,
     });
+    const stored = await updateWorkspaceInvitationMail(session.tenantId, invitation.id, { mailStatus: "sent", messageId });
+    if (!stored) throw new Error("Invitation delivery status could not be saved.");
     return json({ ok: true, message: `Invitation sent to ${parsed.email}.` }, 201);
   } catch {
     return fail(503, "The email delivery could not be confirmed. The invitation remains active because the mail server may have accepted it. Check the pending invitations before revoking or replacing it.", { code: "delivery_unknown" });

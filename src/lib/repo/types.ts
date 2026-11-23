@@ -57,6 +57,11 @@ export interface WorkspaceInvitationDoc {
   tokenHash: string;
   createdAt: Date;
   expiresAt: Date;
+  messageId?: string;
+  mailStatus?: "pending" | "sent";
+  delivery?: MailDelivery;
+  deliveryCheckedAt?: Date;
+  deliveryDetail?: string;
   acceptedAt?: Date;
   acceptedByUserId?: ObjectId;
   revokedAt?: Date;
