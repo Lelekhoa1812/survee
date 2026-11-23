@@ -1,6 +1,7 @@
 import { displayValue, eligibilityQuestionIds, evaluateEligibility, progress } from "../format/answers";
 import { LIMITS } from "../format/schema";
 import { analyticsCohortForStatuses } from "../analytics/cohorts";
+import { suppressSmallCohortAnalytics } from "../analytics/disclosure";
 import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "../analytics/segments";
 import { createQuestionSummaryAccumulator, summarizeSelectedQuestionCohort, withCurrentEligibility, type QuestionSummary } from "../analytics/summary";
 import { getAnalyticsGuidance } from "../analytics/guidance";
@@ -62,6 +63,7 @@ import {
   updateParticipant,
 } from "../repo";
 import { listCurrentMailByParticipants, listMailByPerson, mailRecord } from "../repo/mail";
+import { getWorkspacePolicy } from "../repo/workspace-policy";
 import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
@@ -274,6 +276,13 @@ type AnalyticsRunPayload = Record<string, unknown> & {
   outcomes?: AnalyticsPageRow[];
   segments?: AnalyticsSegmentPage[];
 };
+
+function disclosureControlledAnalytics<T extends Record<string, unknown>>(value: T, minimumCellSize: number): Record<string, unknown> {
+  const result = suppressSmallCohortAnalytics(value, minimumCellSize);
+  return result.suppressed
+    ? { suppressed: true, reason: result.reason, minimumCellSize: result.minimumCellSize, message: `Aggregate results are hidden because at least one positive count is below the workspace minimum of ${result.minimumCellSize}. This reduces small-group disclosure but does not guarantee anonymity.` }
+    : { ...result.value, disclosureControl: { minimumCellSize: result.minimumCellSize, suppressed: false } };
+}
 
 function pageAnalyticsRunResult(
   result: AnalyticsRunPayload,
@@ -793,16 +802,23 @@ const TOOLS: ToolDef[] = [
         }
         const interview = await getInterview(id);
         if (!interview) return err("Interview not found.", "not_found");
+        const workspacePolicy = await getWorkspacePolicy(interview.tenantId ?? currentPrincipal()?.tenantId ?? "");
+        const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
         const run = await getAnalyticsRun(runId, id);
         if (!run) return err("This analysis run expired or is no longer available. Start a new analysis with analyze_answers.", "analysis_run_expired");
         const payload = run.result as AnalyticsRunPayload;
         if (!payload || !Number.isInteger(payload.questionCount) || payload.questionCount < 0) {
           return err("This analysis run could not be read. Start a new analysis with analyze_answers.", "analysis_run_invalid");
         }
-        return ok(pageAnalyticsRunResult(payload, offset, limit, runId, run.expiresAt.toISOString()));
+        const guarded = disclosureControlledAnalytics(payload, minimumCellSize);
+        return ok(guarded.suppressed === true
+          ? guarded
+          : pageAnalyticsRunResult(guarded as AnalyticsRunPayload, offset, limit, runId, run.expiresAt.toISOString()));
       }
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
+      const workspacePolicy = await getWorkspacePolicy(interview.tenantId ?? currentPrincipal()?.tenantId ?? "");
+      const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
       const version = await getVersion(interview._id, interview.currentVersion);
       if (!version) return err("Survey version not found.", "not_found");
       // Repeated rows stay respondent-linked records and are not scalar outcomes or participants.
@@ -873,24 +889,27 @@ const TOOLS: ToolDef[] = [
           withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, [segmentQuestion.id, crossTabQuestion.id]), { statuses })),
           statuses,
         );
-        return ok({
+        return ok(disclosureControlledAnalytics({
           interviewId: id,
           surveyVersion: version.version,
           asOf: crossTab.asOf,
           rowBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
           columnBy: { id: crossTabQuestion.id, type: crossTabQuestion.type, label: crossTabQuestion.label },
-          scope: { statuses, participantCount: crossTab.participantCount, statusCounts: crossTab.statusCounts },
-          rows: crossTab.rows,
-          columns: crossTab.columns,
-          cells: crossTab.cells,
+          scope: { statuses, participantCount: crossTab.participantCount },
+          rows: crossTab.rows.map(({ statusCounts: _statusCounts, ...row }) => row),
+          columns: crossTab.columns.map(({ statusCounts: _statusCounts, ...column }) => column),
+          cells: crossTab.cells.map(({ statusCounts: _statusCounts, disclosureRisk, ...cell }) => ({
+            ...cell,
+            disclosureRisk: { singletonSegment: disclosureRisk.singletonSegment, singletonStatusGroups: [] },
+          })),
           overlapping: crossTab.overlapping,
           methodology: [
             "This bounded cross-tab uses two closed categorical questions in the current survey version and only the participant statuses shown in scope. It is computed from one projected live scan; changes during the scan are not isolated by a database snapshot.",
             "Each cell counts distinct people for that answer pair. Row percentages use the row's participant count as denominator. If either question is a checkbox, people can appear in multiple rows or columns and counts and percentages can overlap or sum above 100%.",
             "No stored answer includes blank and note-only responses; it does not mean the person was eligible to see a routed question. Invalid stored values appear as Unmapped answer.",
-            "No minimum group threshold is applied. Every valid answer pair, including zero-count cells, is returned; observed no-answer and unmapped groups are also included. disclosureRisk.singletonSegment flags cells with one person and singletonStatusGroups lists one-person status counts. These signals do not assess attribute combinations or guarantee anonymity.",
+            `The workspace minimum cell size is ${minimumCellSize}; if any positive count is below it, the complete aggregate result is withheld. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity.`,
           ],
-        });
+        }, minimumCellSize));
       }
       if (segmentQuestion && canSegmentByAnswer(segmentQuestion)) {
         const segmented = await summarizeAnswerSegments(
@@ -925,8 +944,8 @@ const TOOLS: ToolDef[] = [
             value: segment.value ?? null,
             label: segment.label,
             participantCount: segment.participantCount,
-            disclosureRisk: segment.disclosureRisk,
-            statusCounts: segment.statusCounts,
+            disclosureRisk: compareRequested ? segment.disclosureRisk : { singletonSegment: segment.disclosureRisk.singletonSegment, singletonStatusGroups: [] },
+            ...(compareRequested ? { statusCounts: segment.statusCounts } : {}),
             questions: analysisQuestions.map((question) => ({ id: question.id, type: question.type, label: question.label, ...segment.summaries[question.id] })),
             ...(compareRequested ? {
               statusCohorts: statuses.map((status) => ({
@@ -940,7 +959,7 @@ const TOOLS: ToolDef[] = [
             "Answer segments use the selected current-version question and only the participant statuses shown in scope. Outcome summaries exclude the segmentation question and use the same projected participant scan.",
             "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
             "No stored answer includes blank and note-only dimension responses; it does not mean the person was eligible to see a routed question. Invalid stored dimension values appear as Unmapped answer.",
-            "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Each segment includes disclosureRisk.singletonSegment and, when status summaries are returned, disclosureRisk.singletonStatusGroups. Every outcome QuestionSummary also carries singleton signals for its cohort, answer, no-answer, note-only, unmapped, valid-answer denominator, distribution values, and numeric summaries. These signals only detect counts of one; they do not assess attribute combinations or guarantee anonymity. Outcome percentages use that segment's valid-answer denominator.",
+            `The workspace minimum cell size is ${minimumCellSize}; if any positive count is below it, the complete aggregate result is withheld. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity. Outcome percentages use each segment's valid-answer denominator.`,
             "This result is computed from one live participant scan; changes during the scan are not isolated by a database snapshot.",
             ...(compareRequested ? ["Status summaries for all selected answer segments share one participant scan and this asOf time."] : []),
             ...(createRun ? ["This completed aggregate run supports stable pagination for up to one hour. Pages share the same asOf and completed output; participant changes during the initial live scan were not isolated by a database snapshot."] : []),
@@ -957,9 +976,10 @@ const TOOLS: ToolDef[] = [
               : "This tenant already has the maximum number of active analysis runs. Retry after an existing run expires.",
             stored.reason === "stale" ? "analysis_run_stale" : stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
           );
-          return ok(pageAnalyticsRunResult(fullResult as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
+          const guarded = disclosureControlledAnalytics(fullResult, minimumCellSize);
+          return ok(guarded.suppressed === true ? guarded : pageAnalyticsRunResult(guarded as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
         }
-        return ok(fullResult);
+        return ok(disclosureControlledAnalytics(fullResult, minimumCellSize));
       }
       const statusCounts: Record<typeof allStatuses[number], number> = { invited: 0, in_progress: 0, submitted: 0 };
       const statusSummaries = {} as Record<typeof allStatuses[number], Record<string, QuestionSummary>>;
@@ -1029,7 +1049,7 @@ const TOOLS: ToolDef[] = [
           "For multi-select questions, each option percentage is a share of valid respondents and percentages can sum above 100%.",
           "All summaries in this result use one live participant scan; changes during the scan are not isolated by a database snapshot.",
           ...(createRun ? ["This completed aggregate run supports stable pagination for up to one hour. Pages share the same asOf and completed output; participant changes during the initial live scan were not isolated by a database snapshot."] : []),
-          "Number summaries are descriptive. numeric.quantiles reports exact Hyndman-Fan type-7 quantiles through n=256, or approximate mergeable DDSketch quartiles after that (2% relative-value accuracy setting, 512 bins per sign); it reports whether bins collapsed, values exceeded the mapped range, and the resulting error-guarantee status. Relative-value accuracy is not rank error, and no bound applies after bin collapse or when values exceed the mapped range. Minimum, maximum, and mean use all valid numeric answers. This internal memory limit does not suppress any cohort or numeric result. Scale responses are ordinal: scaleMedian is the lower central category retained for compatibility, and scaleMedianRange gives the one or two central observed categories. Category codes are never averaged and no scale mean is calculated. Text is not interpreted, scored, or returned.",
+          `Number summaries are descriptive. numeric.quantiles reports exact Hyndman-Fan type-7 quantiles through n=256, or approximate mergeable DDSketch quartiles after that (2% relative-value accuracy setting, 512 bins per sign); it reports whether bins collapsed, values exceeded the mapped range, and the resulting error-guarantee status. Relative-value accuracy is not rank error, and no bound applies after bin collapse or when values exceed the mapped range. Minimum, maximum, and mean use all valid numeric answers. The workspace minimum cell size is ${minimumCellSize}; if any positive count is below it, the complete aggregate result is withheld. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity. Scale responses are ordinal: scaleMedian is the lower central category retained for compatibility, and scaleMedianRange gives the one or two central observed categories. Category codes are never averaged and no scale mean is calculated. Text is not interpreted, scored, or returned.`,
         ],
       };
       if (createRun) {
@@ -1043,9 +1063,10 @@ const TOOLS: ToolDef[] = [
             : "This tenant already has the maximum number of active analysis runs. Retry after an existing run expires.",
           stored.reason === "stale" ? "analysis_run_stale" : stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
         );
-        return ok(pageAnalyticsRunResult(fullResult as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
+        const guarded = disclosureControlledAnalytics(fullResult, minimumCellSize);
+        return ok(guarded.suppressed === true ? guarded : pageAnalyticsRunResult(guarded as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
       }
-      return ok(fullResult);
+      return ok(disclosureControlledAnalytics(fullResult, minimumCellSize));
     },
   },
   {

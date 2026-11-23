@@ -30,7 +30,7 @@ const HEADERS = [
 ];
 
 const NO_ANSWER_NOTE = "Eligibility is inferred from current routing rules, not recorded display. no_answer counts eligible people without a non-empty stored answer; inactive people are reported separately.";
-const DISCLOSURE_RISK_NOTE = "Singleton signals cover counts of one only; no minimum threshold or anonymity guarantee, and attribute combinations can add risk.";
+const DISCLOSURE_RISK_NOTE = "Workspace minimum cell size is applied to this aggregate output; singleton signals do not assess attribute combinations or guarantee anonymity.";
 
 function cell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
@@ -103,7 +103,7 @@ export function buildAnswerCrossTabCsv(
   ])];
   const rowByKey = new Map(result.rows.map((item) => [item.key, item]));
   const columnByKey = new Map(result.columns.map((item) => [item.key, item]));
-  const note = "No minimum group threshold or anonymity guarantee; checkbox dimensions overlap.";
+  const note = "Workspace minimum cell size is applied to this aggregate output; no anonymity guarantee; checkbox dimensions overlap.";
   for (const item of result.cells) {
     const rowValue = rowByKey.get(item.rowKey);
     const columnValue = columnByKey.get(item.columnKey);

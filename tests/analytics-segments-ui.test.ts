@@ -51,6 +51,8 @@ function buildAnalysis() {
     asOf: "2026-11-15T00:00:00.000Z",
     statusCounts: { invited: 1, in_progress: 1, submitted: 1 },
     summaries,
+    availableCohorts: ANALYTICS_COHORTS.map((cohort) => cohort.key),
+    canCompareStatuses: true,
   };
 }
 
@@ -237,6 +239,26 @@ async function resolveDeferredRequest() {
 }
 
 describe("answer-segment analytics UI", () => {
+  it("disables unavailable status comparisons and does not show sub-threshold status counts", async () => {
+    const constrained = {
+      ...data,
+      analysis: {
+        ...data.analysis!,
+        statusCounts: undefined,
+        availableCohorts: ["everyone", "submitted"] as const,
+        canCompareStatuses: false,
+        summaries: { everyone: data.analysis!.summaries.everyone, submitted: data.analysis!.summaries.submitted },
+      },
+    } as InterviewData;
+    await act(async () => root.render(createElement(AnalyticsTab, { data: constrained })));
+
+    const compare = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Compare statuses")!;
+    expect(compare.disabled).toBe(true);
+    expect(host.querySelector(".analysis-cohort-options")?.textContent).not.toContain("(1)");
+    expect(host.querySelector<HTMLInputElement>(".analysis-cohort-options input")?.disabled).toBe(true);
+    expect(host.textContent).toContain("Status comparison is unavailable");
+  });
+
   it("renders and exports a two-question count matrix", async () => {
     await act(async () => root.render(createElement(AnalyticsTab, { data })));
     await click([...host.querySelectorAll("button")].find((button) => button.textContent === "Cross-tab answers")!);
@@ -255,7 +277,7 @@ describe("answer-segment analytics UI", () => {
     expect(copied).toHaveLength(1);
     expect(copied[0]).toContain('"row_question","row_answer","column_question","column_answer"');
     expect(copied[0]).toContain('"Region","North","Satisfaction","Agree"');
-    expect(copied[0]).toContain("No minimum group threshold or anonymity guarantee");
+    expect(copied[0]).toContain("Workspace minimum cell size is applied to this aggregate output");
   });
 
   it("updates loaded dimension and outcome results, compares statuses, and copies the refreshed CSV", async () => {
@@ -270,7 +292,7 @@ describe("answer-segment analytics UI", () => {
     expect(host.textContent).toContain("Operations");
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain("segmentBy=department");
     expect(host.querySelector(".analysis-segment-result-head")?.textContent).toContain("Region");
-    expect(host.querySelector(".analysis-disclosure-note")?.textContent).toContain("does not apply a minimum size");
+    expect(host.querySelector(".analysis-disclosure-note")?.textContent).toContain("workspace minimum cell size is applied");
     expect(host.querySelector(".analysis-disclosure-flag")?.textContent).toContain("Singleton group");
 
     await clickInput(host.querySelector<HTMLInputElement>('[data-question-id="satisfaction"]')!);
@@ -295,7 +317,7 @@ describe("answer-segment analytics UI", () => {
     expect(copied[0]).toContain('"region","Region","single","Department = Operations · Invited · not started"');
     expect(copied[0]).toContain('"interview-1","1","2026-11-15T00:01:00.000Z"');
     expect(copied[0]).toContain('"true","invited",');
-    expect(copied[0]).toContain("Singleton signals cover counts of one only");
+    expect(copied[0]).toContain("Workspace minimum cell size is applied to this aggregate output");
   });
 
   it("hides and disables stale results while compare and cohort scopes are loading", async () => {

@@ -186,9 +186,14 @@ vi.mock("../src/lib/repo/mail", async () => {
   return { ...actual, listCurrentMailByParticipants: vi.fn(async () => []) };
 });
 
+vi.mock("../src/lib/repo/workspace-policy", () => ({
+  getWorkspacePolicy: vi.fn(async () => ({ analyticsMinimumCellSize: 5, respondentPolicy: null })),
+}));
+
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
+import { getWorkspacePolicy } from "../src/lib/repo/workspace-policy";
 import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
@@ -220,6 +225,7 @@ beforeEach(() => {
   vi.mocked(deleteInterviewWithOperation).mockReset().mockResolvedValue({ kind: "deleted" });
   vi.mocked(getDeleteInterviewOperation).mockReset().mockResolvedValue(null);
   vi.mocked(createAnalyticsRun).mockClear();
+  vi.mocked(getWorkspacePolicy).mockReset().mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
 });
 
 describe("MCP tools", () => {
@@ -1063,19 +1069,9 @@ describe("MCP tools", () => {
     const res = await call("analyze_answers", { interviewId, submittedOnly: false });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { surveyVersion?: number; scope?: { participantCount: number; respondentCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number; numeric: { mean: number } | null; disclosureRisk: { singletonUnmappedResponseCount: boolean; singletonDistributionDenominator: boolean; singletonDistributionValues: string[] } }[]; methodology?: string[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.surveyVersion).toBe(1);
-    expect(body.result.structuredContent.scope?.participantCount).toBe(2);
-    expect(body.result.structuredContent.scope?.respondentCount).toBe(2);
-    const fit = body.result.structuredContent.questions?.find((question) => question.id === "fit");
-    expect(fit).toMatchObject({ answeredCount: 2, unmappedResponseCount: 1 });
-    expect(fit?.disclosureRisk).toMatchObject({ singletonUnmappedResponseCount: true, singletonDistributionDenominator: true, singletonDistributionValues: ["yes"] });
-    const budget = body.result.structuredContent.questions?.find((question) => question.id === "budget");
-    expect(budget?.numeric).toMatchObject({ n: 2, mean: 3, median: 3, q1: 2.5, q3: 3.5 });
-    expect(body.result.structuredContent.methodology?.join(" ")).toContain("exact Hyndman-Fan type-7 quantiles through n=256");
-    expect(body.result.structuredContent.methodology?.join(" ")).toContain("no bound applies after bin collapse");
+    expect(body.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5, reason: "minimum_cell_size" });
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain('"participantCount"');
     expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
-    expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
-    expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");
   });
 
   it("rejects blank or oversized analytics selectors before scanning respondents", async () => {
@@ -1105,19 +1101,9 @@ describe("MCP tools", () => {
       methodology: string[];
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.segmentBy).toMatchObject({ id: "fit", label: "Strategic fit" });
-    expect(body.result.structuredContent.scope).toMatchObject({ participantCount: 2, statuses: ["invited", "in_progress", "submitted"] });
-    const yes = body.result.structuredContent.segments.find((segment) => segment.label === "Yes");
-    expect(yes).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, statusCohorts: [{ status: "invited", participantCount: 0 }, { status: "in_progress", participantCount: 0 }, { status: "submitted", participantCount: 1 }] });
-    expect(yes?.questions[0]).toMatchObject({ id: "budget", numeric: { n: 1, mean: 2 } });
-    expect(yes?.questions[0].disclosureRisk.singletonNumericSummary).toBe(true);
-    const unmapped = body.result.structuredContent.segments.find((segment) => segment.kind === "unmapped");
-    expect(unmapped).toMatchObject({ label: "Unmapped answer", participantCount: 1, statusCounts: { invited: 1, in_progress: 0, submitted: 0 } });
-    expect(unmapped?.questions[0]).toMatchObject({ numeric: { n: 1, mean: 4 } });
-    expect(body.result.structuredContent.methodology.join(" ")).toContain("Checkbox answers can place one person in several option segments");
+    expect(body.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain('"participantCount"');
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
-    expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
-    expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
   });
 
   it("returns a bounded aggregate cross-tab through MCP without raw answers", async () => {
@@ -1130,19 +1116,10 @@ describe("MCP tools", () => {
       overlapping: boolean; methodology: string[];
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent).toMatchObject({
-      rowBy: { id: "fit" }, columnBy: { id: "confidence" },
-      scope: { participantCount: 2, statuses: ["invited", "in_progress", "submitted"] },
-      overlapping: false,
-    });
-    const yes = body.result.structuredContent.rows.find((row) => row.key === "answer:yes")!;
-    const high = body.result.structuredContent.columns.find((column) => column.key === "answer:high")!;
-    expect(body.result.structuredContent.cells.find((cell) => cell.rowKey === yes.key && cell.columnKey === high.key)).toMatchObject({ participantCount: 1, rowDenominator: 1, rowPercent: 100, disclosureRisk: { singletonSegment: true } });
-    expect(body.result.structuredContent.methodology.join(" ")).toContain("No minimum group threshold is applied");
+    expect(body.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain('"participantCount"');
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls.at(-1)?.[1]).toEqual(["fit", "confidence"]);
-    expect(JSON.stringify(body.result.structuredContent)).not.toContain("Ada Lovelace");
-    expect(JSON.stringify(body.result.structuredContent)).not.toContain("retired");
   });
 
   it("validates MCP cross-tab dimensions and complete matrix limits before a scan", async () => {
@@ -1171,12 +1148,7 @@ describe("MCP tools", () => {
       methodology: string[];
     } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.outcomes.map(({ id }) => id)).toEqual(["budget", "confidence"]);
-    const yes = body.result.structuredContent.segments.find((segment) => segment.questions.some((question) => question.id === "budget"));
-    expect(yes?.questions.map(({ id }) => id)).toEqual(["budget", "confidence"]);
-    expect(yes?.questions[0].numeric).toMatchObject({ n: 1 });
-    expect(yes?.statusCohorts[2].questions.map(({ id }) => id)).toEqual(["budget", "confidence"]);
-    expect(body.result.structuredContent.methodology.join(" ")).toContain("one participant scan");
+    expect(body.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls.at(-1)?.[1]).toEqual(["fit", "budget", "confidence"]);
   });
@@ -1207,8 +1179,8 @@ describe("MCP tools", () => {
     const res = await call("analyze_answers", { interviewId, statuses: ["invited"] });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { scope?: { statuses: string[]; participantCount: number; respondentCount: number; submittedCount: number }; questions?: { id: string; answeredCount: number; unmappedResponseCount: number }[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(body.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1, submittedCount: 0, submittedOnly: false });
-    expect(body.result.structuredContent.questions?.find((question) => question.id === "fit")).toMatchObject({ answeredCount: 1, unmappedResponseCount: 1 });
+    expect(body.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain('"participantCount"');
   });
 
   it("compares selected statuses from one scan and one shared asOf", async () => {
@@ -1216,18 +1188,8 @@ describe("MCP tools", () => {
     const res = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { asOf: string; scope: { participantCount: number; respondentCount: number; statuses: string[] }; statusCohorts: { status: string; participantCount: number; respondentCount: number; questions: { id: string; cohortCount: number; eligibleCount: number; answeredCount: number; noAnswerCount: number; missingCount: number; unmappedResponseCount: number; disclosureRisk: { singletonCohort: boolean; singletonUnmappedResponseCount: boolean; singletonDistributionDenominator: boolean; singletonDistributionValues: string[] } }[] }[]; methodology: string[] } } };
     expect(body.result.isError).toBeFalsy();
-    expect(Number.isNaN(Date.parse(body.result.structuredContent.asOf))).toBe(false);
-    expect(body.result.structuredContent.scope).toMatchObject({ participantCount: 2, respondentCount: 2, statuses: ["invited", "submitted"] });
-    expect(body.result.structuredContent.statusCohorts.map(({ status, participantCount, respondentCount }) => ({ status, participantCount, respondentCount }))).toEqual([
-      { status: "invited", participantCount: 1, respondentCount: 1 },
-      { status: "submitted", participantCount: 1, respondentCount: 1 },
-    ]);
-    expect(body.result.structuredContent.statusCohorts[0].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 1 });
-    expect(body.result.structuredContent.statusCohorts[1].questions[0]).toMatchObject({ id: "fit", cohortCount: 1, eligibleCount: 1, answeredCount: 1, noAnswerCount: 0, missingCount: 0, unmappedResponseCount: 0 });
-    expect(body.result.structuredContent.statusCohorts[0].questions[0].disclosureRisk).toMatchObject({ singletonCohort: true, singletonUnmappedResponseCount: true });
-    expect(body.result.structuredContent.statusCohorts[1].questions[0].disclosureRisk).toMatchObject({ singletonCohort: true, singletonDistributionDenominator: true, singletonDistributionValues: ["yes"] });
-    expect(body.result.structuredContent.methodology.join(" ")).toContain("including invited people with no answers");
-    expect(body.result.structuredContent.methodology.join(" ")).toContain("not historical display telemetry");
+    expect(body.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(body.result.structuredContent)).not.toContain('"statusCohorts"');
     expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore + 1);
   });
 
@@ -1235,29 +1197,90 @@ describe("MCP tools", () => {
     const first = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: 0, limit: 1 });
     const firstBody = await first.json() as { result: { isError?: boolean; structuredContent: { analysisRunId: string; analysisRunExpiresAt: string; offset: number; limit: number; questionCount: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string }[]; methodology: string[] } } };
     expect(firstBody.result.isError).toBeFalsy();
-    expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 3, nextOffset: 1 });
-    expect(firstBody.result.structuredContent.analysisRunId).toMatch(/^[a-f0-9]{24}$/);
-    expect(firstBody.result.structuredContent.analysisRunExpiresAt).toBe("2026-11-16T01:00:00.000Z");
-    expect(createAnalyticsRun).toHaveBeenCalledWith(interviewId, 1, expect.any(Object), 0);
-    expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
-    expect(firstBody.result.structuredContent.questions.map((question) => question.id)).toEqual(["fit"]);
-    expect(firstBody.result.structuredContent.methodology.join(" ")).toContain("participant changes during the initial live scan were not isolated");
+    expect(firstBody.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(firstBody.result.structuredContent)).not.toContain('"participantCount"');
+  });
 
-    const nextOffset = firstBody.result.structuredContent.nextOffset;
-    const callsAfterFirstPage = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
-    const second = await call("analyze_answers", { interviewId, runId: firstBody.result.structuredContent.analysisRunId, offset: nextOffset!, limit: 1 });
-    const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; scope: { statuses: string[]; participantCount: number; respondentCount: number }; questions: { id: string; numeric: { mean: number } | null }[] } } };
-    expect(secondBody.result.isError).toBeFalsy();
-    expect(secondBody.result.structuredContent).toMatchObject({ offset: 1, limit: 1, nextOffset: 2 });
-    expect(secondBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
-    expect(secondBody.result.structuredContent.questions[0]).toMatchObject({ id: "budget", numeric: { mean: 4, q1: 4, q3: 4 } });
-    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsAfterFirstPage);
+  it("rechecks the current workspace threshold before returning previously cached MCP run pages", async () => {
+    const first = await call("analyze_answers", { interviewId, statuses: ["invited"], offset: 0, limit: 1 });
+    const firstBody = await first.json() as { result: { structuredContent: Record<string, unknown> } };
+    expect(firstBody.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(createAnalyticsRun).toHaveBeenCalledOnce();
 
-    const third = await call("analyze_answers", { interviewId, runId: firstBody.result.structuredContent.analysisRunId, offset: secondBody.result.structuredContent.nextOffset!, limit: 1 });
-    const thirdBody = await third.json() as { result: { isError?: boolean; structuredContent: { offset: number; limit: number; nextOffset: number | null; questions: { id: string }[] } } };
-    expect(thirdBody.result.isError).toBeFalsy();
-    expect(thirdBody.result.structuredContent).toMatchObject({ offset: 2, limit: 1, nextOffset: null });
-    expect(thirdBody.result.structuredContent.questions.map(({ id }) => id)).toEqual(["confidence"]);
+    const cached = await call("analyze_answers", { interviewId, runId: "111111111111111111111111", offset: 0, limit: 1 });
+    const cachedBody = await cached.json() as { result: { structuredContent: Record<string, unknown> } };
+    expect(cachedBody.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(cachedBody.result.structuredContent)).not.toContain('"participantCount"');
+    expect(JSON.stringify(cachedBody.result.structuredContent)).not.toContain('"questions"');
+  });
+
+  it("returns above-threshold summaries, cohorts, segments, cross-tabs, and cached pages", async () => {
+    const previousImplementation = vi.mocked(iterateAnalyticsParticipants).getMockImplementation()!;
+    vi.mocked(getWorkspacePolicy).mockResolvedValue({ analyticsMinimumCellSize: 2, respondentPolicy: null });
+    const people = Array.from({ length: 8 }, (_, index) => {
+      const slot = index % 4;
+      return {
+        status: index < 4 ? "invited" as const : "submitted" as const,
+        answers: {
+          fit: { value: slot % 2 === 0 ? "yes" : "no", updatedAt: "2026-11-13T00:00:00.000Z" },
+          budget: { value: index + 1, updatedAt: "2026-11-13T00:00:00.000Z" },
+          confidence: { value: slot < 2 ? "high" : "low", updatedAt: "2026-11-13T00:00:00.000Z" },
+        },
+      };
+    });
+    vi.mocked(iterateAnalyticsParticipants).mockImplementation(async function* (_id, _questionIds, scope = {}) {
+      const statuses = typeof scope === "object" ? scope.statuses : undefined;
+      for (const person of people) if (!statuses || statuses.includes(person.status)) yield person;
+    });
+
+    try {
+      const ordinary = await call("analyze_answers", { interviewId });
+      const ordinaryBody = await ordinary.json() as { result: { isError?: boolean; structuredContent: { disclosureControl?: { suppressed: boolean; minimumCellSize: number }; scope?: { participantCount: number }; questions?: { id: string }[] } } };
+      expect(ordinaryBody.result.isError).toBeFalsy();
+      expect(ordinaryBody.result.structuredContent.disclosureControl).toEqual({ suppressed: false, minimumCellSize: 2 });
+      expect(ordinaryBody.result.structuredContent.scope?.participantCount).toBe(8);
+      expect(ordinaryBody.result.structuredContent.questions?.map(({ id }) => id)).toEqual(["fit", "budget", "confidence"]);
+
+      const cohorts = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true });
+      const cohortsBody = await cohorts.json() as { result: { isError?: boolean; structuredContent: { disclosureControl?: { suppressed: boolean }; statusCohorts?: { status: string; participantCount: number }[] } } };
+      expect(cohortsBody.result.isError).toBeFalsy();
+      expect(cohortsBody.result.structuredContent.disclosureControl?.suppressed).toBe(false);
+      expect(cohortsBody.result.structuredContent.statusCohorts?.map(({ status, participantCount }) => [status, participantCount])).toEqual([["invited", 4], ["submitted", 4]]);
+
+      const segmented = await call("analyze_answers", { interviewId, segmentBy: "fit", questionId: "budget" });
+      const segmentedBody = await segmented.json() as { result: { isError?: boolean; structuredContent: { disclosureControl?: { suppressed: boolean }; segments?: { key: string; participantCount: number }[] } } };
+      expect(segmentedBody.result.isError).toBeFalsy();
+      expect(segmentedBody.result.structuredContent.disclosureControl?.suppressed).toBe(false);
+      expect(segmentedBody.result.structuredContent.segments?.map(({ key, participantCount }) => [key, participantCount])).toEqual([["answer:yes", 4], ["answer:no", 4]]);
+
+      const crossTab = await call("analyze_answers", { interviewId, segmentBy: "fit", crossTabWith: "confidence" });
+      const crossTabBody = await crossTab.json() as { result: { isError?: boolean; structuredContent: { disclosureControl?: { suppressed: boolean }; cells?: { participantCount: number }[] } } };
+      expect(crossTabBody.result.isError).toBeFalsy();
+      expect(crossTabBody.result.structuredContent.disclosureControl?.suppressed).toBe(false);
+      expect(crossTabBody.result.structuredContent.cells?.map(({ participantCount }) => participantCount)).toEqual([2, 2, 2, 2]);
+
+      const firstPage = await call("analyze_answers", { interviewId, statuses: ["invited", "submitted"], compareStatuses: true, offset: 0, limit: 1 });
+      const firstPageBody = await firstPage.json() as { result: { isError?: boolean; structuredContent: { disclosureControl?: { suppressed: boolean }; analysisRunId?: string; offset?: number; nextOffset?: number | null; questionCount?: number } } };
+      expect(firstPageBody.result.isError).toBeFalsy();
+      expect(firstPageBody.result.structuredContent.disclosureControl?.suppressed).toBe(false);
+      expect(firstPageBody.result.structuredContent).toMatchObject({ offset: 0, nextOffset: 1, questionCount: 3 });
+      const runId = firstPageBody.result.structuredContent.analysisRunId!;
+
+      const secondPage = await call("analyze_answers", { interviewId, runId, offset: 1, limit: 1 });
+      const secondPageBody = await secondPage.json() as { result: { isError?: boolean; structuredContent: { disclosureControl?: { suppressed: boolean }; offset?: number; nextOffset?: number | null } } };
+      expect(secondPageBody.result.isError).toBeFalsy();
+      expect(secondPageBody.result.structuredContent.disclosureControl?.suppressed).toBe(false);
+      expect(secondPageBody.result.structuredContent).toMatchObject({ offset: 1, nextOffset: 2 });
+
+      vi.mocked(getWorkspacePolicy).mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
+      const stricterCachedPage = await call("analyze_answers", { interviewId, runId, offset: 1, limit: 1 });
+      const stricterCachedBody = await stricterCachedPage.json() as { result: { structuredContent: Record<string, unknown> } };
+      expect(stricterCachedBody.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5, reason: "minimum_cell_size" });
+      expect(JSON.stringify(stricterCachedBody.result.structuredContent)).not.toContain('"participantCount"');
+      expect(JSON.stringify(stricterCachedBody.result.structuredContent)).not.toContain('"questions"');
+    } finally {
+      vi.mocked(iterateAnalyticsParticipants).mockImplementation(previousImplementation);
+    }
   });
 
   it("returns analysis_run_stale when participant data changes during a paged scan", async () => {
@@ -1285,57 +1308,8 @@ describe("MCP tools", () => {
       segments: { key: string; participantCount: number; disclosureRisk: { singletonSegment: boolean }; questions: { id: string }[]; statusCohorts: { status: string; questions: { id: string }[] }[] }[];
     } } };
     expect(firstBody.result.isError).toBeFalsy();
-    expect(firstBody.result.structuredContent).toMatchObject({ nextOffset: 1, scope: { participantCount: 2 } });
-    const zeroCount = firstBody.result.structuredContent.segments.find(({ key }) => key === "answer:no");
-    expect(zeroCount).toMatchObject({ participantCount: 0, questions: [{ id: "budget" }] });
-    expect(firstBody.result.structuredContent.segments.find(({ key }) => key === "answer:yes")).toMatchObject({
-      participantCount: 1,
-      disclosureRisk: { singletonSegment: true },
-      questions: [{ id: "budget" }],
-      statusCohorts: [
-        { status: "invited", questions: [{ id: "budget" }] },
-        { status: "submitted", questions: [{ id: "budget" }] },
-      ],
-    });
-
-    const callsAfterFirstPage = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
-    vi.mocked(iterateAnalyticsParticipants).mockImplementation(async function* () {});
-    const second = await call("analyze_answers", {
-      interviewId,
-      runId: firstBody.result.structuredContent.analysisRunId,
-      offset: firstBody.result.structuredContent.nextOffset!,
-      limit: 1,
-    });
-    const secondBody = await second.json() as { result: { isError?: boolean; structuredContent: {
-      asOf: string; offset: number; nextOffset: number | null; scope: { participantCount: number };
-      segments: { key: string; participantCount: number; questions: { id: string; numeric: { mean: number } | null }[]; statusCohorts: { status: string; questions: { id: string }[] }[] }[];
-    } } };
-    expect(secondBody.result.isError).toBeFalsy();
-    expect(secondBody.result.structuredContent).toMatchObject({
-      asOf: firstBody.result.structuredContent.asOf,
-      offset: 1,
-      nextOffset: null,
-      scope: { participantCount: 2 },
-    });
-    expect(secondBody.result.structuredContent.segments.find(({ key }) => key === "answer:no")).toMatchObject({
-      participantCount: 0,
-      questions: [{ id: "confidence" }],
-    });
-    expect(secondBody.result.structuredContent.segments.find(({ key }) => key === "answer:yes")).toMatchObject({
-      participantCount: 1,
-      questions: [{ id: "confidence", distribution: [
-        { value: "high", count: 1, percent: 100 },
-        { value: "low", count: 0, percent: 0 },
-      ] }],
-      statusCohorts: [
-        { status: "invited", questions: [{ id: "confidence" }] },
-        { status: "submitted", questions: [{ id: "confidence", distribution: [
-          { value: "high", count: 1, percent: 100 },
-          { value: "low", count: 0, percent: 0 },
-        ] }] },
-      ],
-    });
-    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsAfterFirstPage);
+    expect(firstBody.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5 });
+    expect(JSON.stringify(firstBody.result.structuredContent)).not.toContain('"participantCount"');
   });
 
   it("rejects empty or conflicting analytics status filters", async () => {

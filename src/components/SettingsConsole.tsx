@@ -6,6 +6,7 @@ import { fullTime, relTime } from "@/lib/time";
 import { AccountSettingsPanel } from "./AccountSettingsPanel";
 import { ImageAssetsPanel } from "./ImageAssetsPanel";
 import { WorkspaceMembersPanel } from "./WorkspaceMembersPanel";
+import { WorkspacePolicyPanel } from "./WorkspacePolicyPanel";
 import { DEFAULT_MCP_CAPABILITIES, describeCapabilities, MCP_CAPABILITIES, MCP_CAPABILITY_INFO, type McpCapability } from "@/lib/mcp/capabilities";
 
 interface KeyRow {
@@ -170,6 +171,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
       <nav className="settings-section-nav" aria-label="Settings sections">
         {account && <a href="#workspace-account">Workspace account</a>}
         {canManageKeys && <a href="#workspace-members">Members</a>}
+        {account?.role === "owner" && <a href="#workspace-policy">Workspace policies</a>}
         <a href="#agent-connection">Agent connection</a>
         <a href="#image-assets">Workspace images</a>
         {canManageKeys && <a href="#api-keys">API keys</a>}
@@ -178,6 +180,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
 
       {account && <div id="workspace-account" className="settings-anchor"><AccountSettingsPanel account={account} /></div>}
       {canManageKeys && account && <WorkspaceMembersPanel role={account.role} userId={account.userId} />}
+      {account?.role === "owner" && <WorkspacePolicyPanel />}
 
       <div id="agent-connection" className="settings-grid settings-anchor">
         <section className="card">

@@ -6,11 +6,11 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/17");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/18");
     const analysis = getAnalyticsGuidance();
     expect(analysis.principles.find((principle) => principle.id === "explore-answer-segments")?.guidance).toContain("crossTabWith");
     expect(analysis.productConstraints.join(" ")).toContain("400 cells");
-    expect(analysis.productConstraints.join(" ")).toContain("No minimum group threshold applies");
+    expect(analysis.productConstraints.join(" ")).toContain("current workspace threshold is applied to reported cells, margins, and denominators");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -65,13 +65,17 @@ describe("versioned analytics guidance", () => {
     expect(guidance.sources.map((source) => source.name)).toContain("R stats, Sample Quantiles");
   });
 
-  it("documents that analytics does not suppress small cohorts", () => {
+  it("documents workspace-level small-cohort suppression and its limits", () => {
     const constraints = getAnalyticsGuidance().productConstraints.join(" ").toLowerCase();
-    expect(constraints).toContain("does not enforce a minimum cohort-size threshold");
-    expect(constraints).toContain("singleton counts and percentages may be returned");
+    expect(constraints).toContain("analyticsminimumcellsize");
+    expect(constraints).toContain("default 5");
+    expect(constraints).toContain("complete result for a requested aggregate is withheld");
+    expect(constraints).toContain("combined-cohort outputs omit per-status counts");
+    expect(constraints).toContain("operational progress counts in interview status views are not governed");
+    expect(constraints).toContain("does not guarantee anonymity");
     expect(constraints).toContain("disclosurerisk metadata flags singleton segments");
     expect(constraints).toContain("questionsummary.disclosurerisk flags singleton");
-    expect(constraints).toContain("disclosure rules");
+    expect(constraints).toContain("differencing across repeated queries");
     expect(constraints).toContain("reuse analysisrunid as runid");
     expect(constraints).toContain("initial participant scan is live");
   });

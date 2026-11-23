@@ -1,9 +1,11 @@
 import { ANALYTICS_STATUSES } from "@/lib/analytics/cohorts";
 import { answerCrossTabError, answerSegmentationError, canCrossTabByAnswer, canSegmentByAnswer, summarizeAnswerCrossTab, summarizeAnswerSegments } from "@/lib/analytics/segments";
 import { withCurrentEligibility } from "@/lib/analytics/summary";
+import { suppressSmallCohortAnalytics } from "@/lib/analytics/disclosure";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
-import { fail, guardAdmin, json, withServerErrors } from "@/lib/http";
+import { adminSession, fail, guardAdmin, json, withServerErrors } from "@/lib/http";
 import { getInterview, getVersion, iterateAnalyticsParticipants } from "@/lib/repo";
+import { getWorkspacePolicy } from "@/lib/repo/workspace-policy";
 import type { ParticipantStatus } from "@/lib/repo/types";
 
 /** Return aggregate-only answer segments for up to 20 selected outcome questions in one scan. */
@@ -18,6 +20,9 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
   }
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
+  const session = await adminSession();
+  const workspacePolicy = await getWorkspacePolicy(session?.tenantId ?? "");
+  const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
   if (interview.currentVersion !== Number(requestedVersion)) {
     return fail(409, "This survey changed while the page was open. Reload the interview to view analysis for the latest version.");
   }
@@ -46,25 +51,32 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
       withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, [rowQuestion.id, columnQuestion.id]), { statuses })),
       statuses,
     );
-    return json({
+    const result = {
       ok: true,
       interviewId: id,
       surveyVersion: version.version,
       asOf: analysis.asOf,
       rowBy: { id: rowQuestion.id, type: rowQuestion.type, label: rowQuestion.label },
       columnBy: { id: columnQuestion.id, type: columnQuestion.type, label: columnQuestion.label },
-      scope: { statuses, participantCount: analysis.participantCount, statusCounts: analysis.statusCounts },
-      rows: analysis.rows,
-      columns: analysis.columns,
-      cells: analysis.cells,
+      scope: { statuses, participantCount: analysis.participantCount },
+      rows: analysis.rows.map(({ statusCounts: _statusCounts, ...row }) => row),
+      columns: analysis.columns.map(({ statusCounts: _statusCounts, ...column }) => column),
+      cells: analysis.cells.map(({ statusCounts: _statusCounts, disclosureRisk, ...cell }) => ({
+        ...cell,
+        disclosureRisk: { singletonSegment: disclosureRisk.singletonSegment, singletonStatusGroups: [] },
+      })),
       overlapping: analysis.overlapping,
       methodology: [
         "The cross-tab uses two closed categorical questions from the current survey version and only the participant statuses shown in scope. It is computed from one projected live scan; updates during the scan are not isolated by a database snapshot.",
         "Each cell counts distinct people for that answer pair. Row percentages use the row's participant count as denominator. If either question is a checkbox, people can appear in multiple rows or columns and cell counts and percentages can overlap or sum above 100%.",
         "Inactive by current rules is a separate dimension group. Eligibility is inferred from current rules and saved answers, not historical display. No stored answer includes blank and note-only responses among eligible people. Invalid stored values appear as Unmapped answer.",
-        "No minimum group threshold is applied. Every valid answer pair, including zero-count cells, is returned; observed no-answer and unmapped groups are also included. disclosureRisk.singletonSegment flags cells with one person and singletonStatusGroups lists one-person status counts. These signals do not assess attribute combinations or guarantee anonymity.",
+        `The workspace minimum cell size is ${minimumCellSize}; if a reported cell, margin, denominator, or derived count is below it, the complete aggregate result is withheld. Non-comparison results omit per-status counts. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity or prevent differencing across repeated queries.`,
       ],
-    });
+    };
+    const disclosure = suppressSmallCohortAnalytics(result, minimumCellSize);
+    return json(disclosure.suppressed
+      ? { ok: true, suppressed: true, minimumCellSize: disclosure.minimumCellSize, reason: disclosure.reason, interviewId: id, surveyVersion: version.version, asOf: analysis.asOf, rowBy: { id: rowQuestion.id, type: rowQuestion.type, label: rowQuestion.label }, columnBy: { id: columnQuestion.id, type: columnQuestion.type, label: columnQuestion.label }, scope: { statuses }, rows: [], columns: [], cells: [], overlapping: analysis.overlapping, methodology: [] }
+      : { ...disclosure.value, disclosureControl: { minimumCellSize: disclosure.minimumCellSize, suppressed: false } });
   }
   const outcomeIds = url.searchParams.getAll("questionId").map((id) => id.trim());
   if (!segmentById || !outcomeIds.length || outcomeIds.some((id) => !id)) return fail(400, "Choose a segmentation question and one or more outcome questions.");
@@ -93,7 +105,7 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
     compareStatuses,
   );
   const participantCount = statuses.reduce((count, status) => count + analysis.statusCounts[status], 0);
-  return json({
+  const result = {
     ok: true,
     interviewId: id,
     surveyVersion: version.version,
@@ -101,14 +113,21 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
     segmentBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label },
     outcomes: selectedOutcomes.map((question) => ({ id: question.id, type: question.type, label: question.label })),
     ...(selectedOutcomes.length === 1 ? { outcome: { id: selectedOutcomes[0].id, type: selectedOutcomes[0].type, label: selectedOutcomes[0].label } } : {}),
-    scope: { statuses, participantCount, statusCounts: analysis.statusCounts, compareStatuses },
-    segments: analysis.segments,
+    scope: { statuses, participantCount, ...(compareStatuses ? { statusCounts: analysis.statusCounts } : {}), compareStatuses },
+    segments: compareStatuses ? analysis.segments : analysis.segments.map(({ statusCounts: _statusCounts, disclosureRisk, ...segment }) => ({
+      ...segment,
+      disclosureRisk: { ...disclosureRisk, singletonStatusGroups: [] },
+    })),
     methodology: [
       "Answer segments use the selected current-version question and only the participant statuses shown in scope. All selected outcome summaries exclude the segmentation question and use the same projected participant scan and asOf.",
       "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
       "Inactive by current rules is a separate dimension group. Eligibility is inferred from current rules and saved answers, not historical display. No stored answer includes blank and note-only dimension responses among eligible people. Invalid stored dimension values appear as Unmapped answer.",
-      "No minimum group threshold is applied; every answer option is returned, including groups with one person or zero people. Each segment includes disclosureRisk.singletonSegment and, when status summaries are returned, disclosureRisk.singletonStatusGroups. Every outcome QuestionSummary also carries singleton signals for its cohort, answer, no-answer, note-only, unmapped, valid-answer denominator, distribution values, and numeric summaries. These signals only detect counts of one; they do not assess attribute combinations or guarantee anonymity. Outcome percentages use that segment's valid-answer denominator.",
+      `The workspace minimum cell size is ${minimumCellSize}; if a reported cell, margin, denominator, or derived count is below it, the complete aggregate result is withheld. Non-comparison results omit per-status counts. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity or prevent differencing across repeated queries.`,
       ...(compareStatuses ? ["Status summaries for all selected answer segments share this asOf and one participant scan; updates during the live read are not isolated by a database snapshot."] : []),
     ],
-  });
+  };
+  const disclosure = suppressSmallCohortAnalytics(result, minimumCellSize);
+  return json(disclosure.suppressed
+    ? { ok: true, suppressed: true, minimumCellSize: disclosure.minimumCellSize, reason: disclosure.reason, interviewId: id, surveyVersion: version.version, asOf: analysis.asOf, segmentBy: { id: segmentQuestion.id, type: segmentQuestion.type, label: segmentQuestion.label }, outcomes: selectedOutcomes.map((question) => ({ id: question.id, type: question.type, label: question.label })), scope: { statuses, compareStatuses }, segments: [], methodology: [] }
+    : { ...disclosure.value, disclosureControl: { minimumCellSize: disclosure.minimumCellSize, suppressed: false } });
 });

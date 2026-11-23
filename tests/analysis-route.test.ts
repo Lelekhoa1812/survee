@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   denied: null as Response | null,
-  interview: { _id: "interview", currentVersion: 1 },
+  interview: { _id: "interview", tenantId: "tenant", currentVersion: 1 },
   version: {
     version: 1,
     manifest: { questions: [
@@ -15,11 +15,13 @@ const state = vi.hoisted(() => ({
   getInterview: vi.fn(),
   getVersion: vi.fn(),
   iterate: vi.fn(),
+  getWorkspacePolicy: vi.fn(),
 }));
 
 vi.mock("@/lib/http", () => ({
   withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
+  adminSession: async () => ({ tenantId: "tenant", role: "owner" }),
   fail: (status: number, error: string) => new Response(JSON.stringify({ ok: false, error }), { status }),
   json: (value: unknown) => new Response(JSON.stringify(value), { status: 200 }),
 }));
@@ -29,6 +31,7 @@ vi.mock("@/lib/repo", () => ({
   getVersion: state.getVersion,
   iterateAnalyticsParticipants: state.iterate,
 }));
+vi.mock("@/lib/repo/workspace-policy", () => ({ getWorkspacePolicy: state.getWorkspacePolicy }));
 
 import { GET } from "../src/app/api/admin/interviews/[id]/analysis/route";
 
@@ -39,12 +42,13 @@ function request(query: string) {
 describe("interview answer-segmentation route", () => {
   beforeEach(() => {
     state.denied = null;
-    state.interview = { _id: "interview", currentVersion: 1 };
+    state.interview = { _id: "interview", tenantId: "tenant", currentVersion: 1 };
     state.rows = [
-      { status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } },
-      { status: "invited", answers: { fit: { value: "retired" }, budget: { value: 4 }, confidence: { value: "low" } } },
-      { status: "in_progress", answers: { fit: { note: "private note" }, budget: { value: 3 }, confidence: { value: "high" } } },
+      ...Array.from({ length: 5 }, () => ({ status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } })),
+      ...Array.from({ length: 5 }, () => ({ status: "invited", answers: { fit: { value: "no" }, budget: { value: 4 }, confidence: { value: "low" } } })),
+      ...Array.from({ length: 5 }, () => ({ status: "in_progress", answers: { fit: { value: "retired" }, budget: { value: 3 }, confidence: { value: "high" } } })),
     ];
+    state.getWorkspacePolicy.mockReset().mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
     state.getInterview.mockReset().mockResolvedValue(state.interview);
     state.getVersion.mockReset().mockResolvedValue(state.version);
     state.iterate.mockReset().mockImplementation((_id: string, _questionIds: string[], options: { statuses: string[] }) => (async function* () {
@@ -66,8 +70,18 @@ describe("interview answer-segmentation route", () => {
     expect(state.iterate).not.toHaveBeenCalled();
   });
 
+  it("withholds complete aggregate segment output when any cell is below the workspace default", async () => {
+    state.rows = [{ status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } }];
+    state.getWorkspacePolicy.mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
+    const response = await GET(request("segmentBy=fit&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ ok: true, suppressed: true, minimumCellSize: 5, reason: "minimum_cell_size" });
+    expect(body.segments).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain('"participantCount"');
+  });
+
   it("rejects stale survey versions before scanning participant answers", async () => {
-    state.interview = { _id: "interview", currentVersion: 2 };
+    state.interview = { _id: "interview", tenantId: "tenant", currentVersion: 2 };
     state.getInterview.mockResolvedValue(state.interview);
     const response = await GET(request("segmentBy=fit&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
     const body = await response.json() as { error: string };
@@ -82,18 +96,35 @@ describe("interview answer-segmentation route", () => {
     const body = await response.json() as { ok: boolean; interviewId: string; surveyVersion: number; asOf: string; scope: { participantCount: number; compareStatuses: boolean }; segments: { label: string; kind: string; participantCount: number; disclosureRisk: { singletonSegment: boolean; singletonStatusGroups: string[] }; summaries: { budget: { numeric: { n: number; mean: number } | null; disclosureRisk: { singletonNumericSummary: boolean } } }; statusSummaries?: Record<string, Record<string, unknown>> }[]; methodology: string[] };
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ interviewId: "interview", surveyVersion: 1 });
-    expect(body).toMatchObject({ ok: true, scope: { participantCount: 3, compareStatuses: true } });
+    expect(body).toMatchObject({ ok: true, scope: { participantCount: 15, compareStatuses: true } });
     expect(Number.isNaN(Date.parse(body.asOf))).toBe(false);
-    expect(body.segments.find((segment) => segment.label === "Yes")).toMatchObject({ participantCount: 1, disclosureRisk: { singletonSegment: true, singletonStatusGroups: ["submitted"] }, summaries: { budget: { numeric: { n: 1, mean: 2 } } } });
-    expect(body.segments.find((segment) => segment.label === "Yes")?.summaries.budget.disclosureRisk.singletonNumericSummary).toBe(true);
-    expect(body.segments.find((segment) => segment.kind === "no_answer")).toMatchObject({ label: "No stored answer", participantCount: 1, disclosureRisk: { singletonSegment: true } });
-    expect(body.segments.find((segment) => segment.kind === "unmapped")).toMatchObject({ label: "Unmapped answer", participantCount: 1, disclosureRisk: { singletonSegment: true }, summaries: { budget: { numeric: { n: 1, mean: 4 } } } });
-    expect(body.segments.find((segment) => segment.label === "No")?.participantCount).toBe(0);
+    expect(body.segments.find((segment) => segment.label === "Yes")).toMatchObject({ participantCount: 5, disclosureRisk: { singletonSegment: false, singletonStatusGroups: [] }, summaries: { budget: { numeric: { n: 5, mean: 2 } } } });
+    const unmapped = body.segments.find((segment) => segment.kind === "unmapped");
+    expect(unmapped).toMatchObject({ label: "Unmapped answer", participantCount: 5, disclosureRisk: { singletonSegment: false }, summaries: { budget: { numeric: { n: 5 } } } });
+    expect(unmapped?.summaries.budget.numeric?.mean).toBeCloseTo(3);
+    expect(body.segments.find((segment) => segment.label === "No")?.participantCount).toBe(5);
     expect(state.iterate).toHaveBeenCalledOnce();
     expect(state.iterate).toHaveBeenCalledWith("interview", ["fit", "budget"], { statuses: ["invited", "in_progress", "submitted"] });
     expect(JSON.stringify(body)).not.toContain("private note");
     expect(JSON.stringify(body)).not.toContain("retired");
-    expect(body.methodology.join(" ")).toContain("No minimum group threshold is applied");
+    expect(body.methodology.join(" ")).toContain("workspace minimum cell size is 5");
+  });
+
+  it("keeps a safe combined analysis when every status subgroup is below the minimum", async () => {
+    state.rows = [
+      ...Array.from({ length: 3 }, () => ({ status: "invited", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } })),
+      ...Array.from({ length: 3 }, () => ({ status: "in_progress", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } })),
+      ...Array.from({ length: 3 }, () => ({ status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } })),
+    ];
+    const response = await GET(request("segmentBy=fit&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
+    const body = await response.json() as { ok: boolean; suppressed?: boolean; scope: { participantCount: number; statusCounts?: Record<string, number> }; segments: { participantCount: number; statusCounts?: Record<string, number>; disclosureRisk: { singletonStatusGroups: string[] } }[] };
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, scope: { participantCount: 9 } });
+    expect(body.suppressed).not.toBe(true);
+    expect(body.scope.statusCounts).toBeUndefined();
+    expect(body.segments[0].participantCount).toBe(9);
+    expect(body.segments[0].statusCounts).toBeUndefined();
+    expect(body.segments[0].disclosureRisk.singletonStatusGroups).toEqual([]);
   });
 
   it("summarizes several selected outcomes from one projected participant scan", async () => {
@@ -112,21 +143,22 @@ describe("interview answer-segmentation route", () => {
     const response = await GET(request("segmentBy=fit&crossTabWith=confidence"), { params: Promise.resolve({ id: "interview" }) });
     const body = await response.json() as {
       ok: boolean; rowBy: { id: string }; columnBy: { id: string };
-      scope: { participantCount: number; statusCounts: Record<string, number> };
+      scope: { participantCount: number; statusCounts?: Record<string, number> };
       rows: { key: string; label: string; participantCount: number }[];
       columns: { key: string; label: string; participantCount: number }[];
       cells: { rowKey: string; columnKey: string; participantCount: number; rowDenominator: number; rowPercent: number | null; disclosureRisk: { singletonSegment: boolean } }[];
       overlapping: boolean; methodology: string[];
     };
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({ ok: true, rowBy: { id: "fit" }, columnBy: { id: "confidence" }, scope: { participantCount: 3, statusCounts: { invited: 1, in_progress: 1, submitted: 1 } }, overlapping: false });
+    expect(body).toMatchObject({ ok: true, rowBy: { id: "fit" }, columnBy: { id: "confidence" }, scope: { participantCount: 15 }, overlapping: false });
+    expect(body.scope.statusCounts).toBeUndefined();
     const yes = body.rows.find((row) => row.key === "answer:yes")!;
     const high = body.columns.find((column) => column.key === "answer:high")!;
-    expect(body.cells.find((cell) => cell.rowKey === yes.key && cell.columnKey === high.key)).toMatchObject({ participantCount: 1, rowDenominator: 1, rowPercent: 100, disclosureRisk: { singletonSegment: true } });
-    expect(body.cells.find((cell) => cell.rowKey === "answer:no" && cell.columnKey === high.key)).toMatchObject({ participantCount: 0, rowDenominator: 0, rowPercent: null });
+    expect(body.cells.find((cell) => cell.rowKey === yes.key && cell.columnKey === high.key)).toMatchObject({ participantCount: 5, rowDenominator: 5, rowPercent: 100, disclosureRisk: { singletonSegment: false } });
+    expect(body.cells.find((cell) => cell.rowKey === "answer:no" && cell.columnKey === high.key)).toMatchObject({ participantCount: 0, rowDenominator: 5, rowPercent: 0 });
     expect(state.iterate).toHaveBeenCalledOnce();
     expect(state.iterate).toHaveBeenCalledWith("interview", ["fit", "confidence"], { statuses: ["invited", "in_progress", "submitted"] });
-    expect(body.methodology.join(" ")).toContain("No minimum group threshold is applied");
+    expect(body.methodology.join(" ")).toContain("workspace minimum cell size is 5");
     expect(JSON.stringify(body)).not.toContain("private note");
     expect(JSON.stringify(body)).not.toContain("retired");
   });

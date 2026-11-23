@@ -54,7 +54,7 @@ describe("analytics CSV export", () => {
     expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_question_summary"');
     expect(csv).toContain("singletonDistributionValues");
     expect(csv).toContain('""singletonDistributionValues"":[""email"",""phone""]');
-    expect(csv).toContain("Singleton signals cover counts of one only");
+    expect(csv).toContain("Workspace minimum cell size is applied to this aggregate output");
     expect(csv).toContain("Eligibility is inferred from current routing rules, not recorded display");
     expect(csv).toContain('"2","2","0","2","0","Eligibility is inferred');
     expect(csv).toContain('"2","2","0","1","1","Eligibility is inferred');
@@ -112,7 +112,7 @@ describe("analytics CSV export", () => {
 
     expect(csv.split("\r\n")[0]).toContain('"disclosure_risk_singleton_segment","disclosure_risk_singleton_status_groups","disclosure_risk_question_summary","disclosure_risk_note"');
     expect(csv).toContain('"true","submitted",');
-    expect(csv).toContain("Singleton signals cover counts of one only");
+    expect(csv).toContain("Workspace minimum cell size is applied to this aggregate output");
     expect(csv).toContain("singletonNumericSummary");
     expect(csv).toContain('""singletonNumericSummary"":true');
   });

@@ -5,10 +5,14 @@ import { publicBaseUrl } from "@/lib/env";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
 import { summarizeQuestionCohorts, withCurrentEligibility } from "@/lib/analytics/summary";
 import { getCachedHostSummary } from "@/lib/analytics/host-summary-cache";
+import { suppressSmallCohortAnalytics } from "@/lib/analytics/disclosure";
 import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listEventPage, listParticipantPage, listVersions } from "@/lib/repo";
 import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
 import { participantRows } from "@/lib/host/participant-rows";
 import { adminSession } from "@/lib/http";
+import { getWorkspacePolicy } from "@/lib/repo/workspace-policy";
+import { ANALYTICS_COHORTS, type AnalyticsCohortKey } from "@/lib/analytics/cohorts";
+import type { QuestionSummary } from "@/lib/analytics/summary";
 
 export const dynamic = "force-dynamic";
 
@@ -39,14 +43,55 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   const mailRows = !canManage || analysisOnly ? [] : await listCurrentMailByParticipants(interview._id, peoplePage.people);
   const people = participantRows(current.manifest, peoplePage.people, mailRows.map(mailRecord), answersIncluded);
   let analysis: InterviewData["analysis"];
+  let analysisSuppressed: InterviewData["analysisSuppressed"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
-    analysis = await getCachedHostSummary({
+    const [summary, workspacePolicy] = await Promise.all([getCachedHostSummary({
       tenantId: session.tenantId,
       interviewId: id,
       surveyVersion: current.version,
       respondentRevision: interview.respondentWriteRevision ?? 0,
-    }, () => summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds)))));
+    }, () => summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds))))), getWorkspacePolicy(session.tenantId)]);
+    const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
+    const statusCountsAreSafe = Object.values(summary.statusCounts).every((count) => count === 0 || count >= minimumCellSize);
+    const summaries: Partial<Record<AnalyticsCohortKey, Record<string, QuestionSummary>>> = {};
+    const baseCohortSafe = new Set<string>();
+    const statusPayloadSafe = new Set<string>();
+    for (const cohort of ANALYTICS_COHORTS.filter((item) => item.key !== "everyone" && item.statuses.length === 1)) {
+      const count = summary.statusCounts[cohort.statuses[0]];
+      const cohortSummary = summary.summaries[cohort.key] ?? {};
+      const result = count === 0 || count >= minimumCellSize ? suppressSmallCohortAnalytics(cohortSummary, minimumCellSize) : null;
+      if (result && !result.suppressed && Object.keys(result.value).length > 0) statusPayloadSafe.add(cohort.key);
+      if (result && !result.suppressed && Object.keys(result.value).length > 0) {
+        if (count === 0 || count >= minimumCellSize) {
+          summaries[cohort.key] = result.value;
+          baseCohortSafe.add(cohort.key);
+        }
+      }
+    }
+    for (const cohort of ANALYTICS_COHORTS) {
+      if (cohort.key === "everyone") {
+        const result = suppressSmallCohortAnalytics(summary.summaries[cohort.key] ?? {}, minimumCellSize);
+        if (!result.suppressed && Object.keys(result.value).length > 0) summaries[cohort.key] = result.value;
+        continue;
+      }
+      if (cohort.statuses.length < 2 || !cohort.statuses.every((status) => baseCohortSafe.has(status))) continue;
+      const result = suppressSmallCohortAnalytics(summary.summaries[cohort.key] ?? {}, minimumCellSize);
+      if (!result.suppressed && Object.keys(result.value).length > 0) summaries[cohort.key] = result.value;
+    }
+    const canCompareStatuses = statusCountsAreSafe
+      && ["invited", "in_progress", "submitted"].every((status) => statusPayloadSafe.has(status));
+    if (Object.keys(summaries).length) {
+      analysis = {
+        asOf: summary.asOf,
+        summaries,
+        availableCohorts: ANALYTICS_COHORTS.filter((cohort) => cohort.key in summaries).map((cohort) => cohort.key),
+        canCompareStatuses,
+        ...(canCompareStatuses ? { statusCounts: summary.statusCounts } : {}),
+      };
+    } else {
+      analysisSuppressed = { minimumCellSize };
+    }
   }
   const base = publicBaseUrl();
 
@@ -56,6 +101,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     manifest: current.manifest,
     publicOrigin: base.ok ? base.origin : null,
     ...(analysis ? { analysis } : {}),
+    ...(analysisSuppressed ? { analysisSuppressed } : {}),
     people,
     answersIncluded,
     peopleNextCursor: peoplePage.nextCursor,

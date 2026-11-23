@@ -73,7 +73,10 @@ export interface InterviewData {
   /** Aggregate-only answers for analysis routes. No respondent identifiers or raw text values. */
   analysis?: {
     asOf: string;
-    statusCounts: Record<ParticipantStatus, number>;
-    summaries: Record<AnalyticsCohortKey, Record<string, QuestionSummary>>;
+    statusCounts?: Record<ParticipantStatus, number>;
+    summaries: Partial<Record<AnalyticsCohortKey, Record<string, QuestionSummary>>>;
+    availableCohorts?: AnalyticsCohortKey[];
+    canCompareStatuses?: boolean;
   };
+  analysisSuppressed?: { minimumCellSize: number };
 }

@@ -6,13 +6,15 @@ const state = vi.hoisted(() => ({
   listCurrentMailByParticipants: vi.fn(async () => [{ participantId: { toHexString: () => "person-1" } }]),
   listEventPage: vi.fn(async () => ({ events: [{ id: "event-1", participantId: "person-1", type: "submit", at: "2026-11-16T00:00:00.000Z" }], nextCursor: "next-events" })),
   hostSummaryCache: vi.fn(async (_key: unknown, compute: () => Promise<unknown>) => compute()),
+  summary: { asOf: "2026-11-16T00:00:00.000Z", statusCounts: { invited: 0, in_progress: 0, submitted: 1 }, summaries: {} as Record<string, Record<string, unknown>> },
 }));
 
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not found"); } }));
 vi.mock("@/lib/http", () => ({ adminSession: async () => ({ role: state.role, tenantId: "tenant-1" }) }));
 vi.mock("@/lib/env", () => ({ publicBaseUrl: () => ({ ok: true, origin: "https://kqa.test" }) }));
-vi.mock("@/lib/analytics/summary", () => ({ summarizeQuestionCohorts: async () => ({ asOf: "2026-11-16T00:00:00.000Z", statusCounts: { invited: 0, in_progress: 0, submitted: 1 }, summaries: {} }), withCurrentEligibility: (_manifest: unknown, respondents: unknown) => respondents }));
+vi.mock("@/lib/analytics/summary", () => ({ summarizeQuestionCohorts: async () => state.summary, withCurrentEligibility: (_manifest: unknown, respondents: unknown) => respondents }));
 vi.mock("@/lib/analytics/host-summary-cache", () => ({ getCachedHostSummary: state.hostSummaryCache }));
+vi.mock("@/lib/repo/workspace-policy", () => ({ getWorkspacePolicy: async () => ({ analyticsMinimumCellSize: 5, respondentPolicy: null }) }));
 vi.mock("@/lib/format/answers", () => ({ progress: () => ({ answered: 1, total: 1, missingRequired: [] }), eligibilityQuestionIds: (_manifest: unknown, ids: string[]) => ids }));
 vi.mock("@/lib/mail/state", () => ({ currentMail: () => ({ state: "sent", sentAt: "2026-11-16T00:00:00.000Z", delivery: "unknown" }) }));
 vi.mock("@/lib/repo/mail", () => ({ listCurrentMailByParticipants: state.listCurrentMailByParticipants, mailRecord: (row: unknown) => row }));
@@ -51,7 +53,8 @@ describe("member interview server page", () => {
     const element = await InterviewPage({ params: Promise.resolve({ id: "0123456789abcdef01234567" }), searchParams: Promise.resolve({ tab: "analysis" }) });
 
     expect(element.props.initialTab).toBe("analysis");
-    expect(element.props.data.analysis).toMatchObject({ statusCounts: { submitted: 1 } });
+    expect(element.props.data.analysis).toBeUndefined();
+    expect(element.props.data.analysisSuppressed).toEqual({ minimumCellSize: 5 });
     expect(element.props.data.people).toEqual([]);
     expect(state.listParticipantPage).not.toHaveBeenCalled();
     expect(state.hostSummaryCache).toHaveBeenCalledWith({ tenantId: "tenant-1", interviewId: "0123456789abcdef01234567", surveyVersion: 1, respondentRevision: 0 }, expect.any(Function));
@@ -66,5 +69,32 @@ describe("member interview server page", () => {
     expect(state.listParticipantPage).toHaveBeenCalledOnce();
     expect(element.props.data.peopleNextCursor).toBeNull();
     expect(element.props.data.eventsNextCursor).toBe("next-events");
+  });
+
+  it("keeps safe Everyone analysis available when an unrelated status group is small", async () => {
+    const summaryFor = (cohortCount: number) => ({
+      cohortCount, eligibleCount: cohortCount, inactiveCount: 0, answeredCount: cohortCount, noAnswerCount: 0, missingCount: 0,
+      noteOnlyCount: 0, unmappedResponseCount: 0, distributionDenominator: cohortCount, distribution: [], numeric: null,
+      numericUnmappedResponseCount: 0, numericCount: cohortCount, disclosureRisk: { singletonCohort: false, singletonAnsweredCount: false,
+        singletonNoAnswerCount: false, singletonNoteOnlyCount: false, singletonUnmappedResponseCount: false,
+        singletonDistributionDenominator: false, singletonDistributionValues: [], singletonNumericSummary: false },
+    });
+    state.summary = {
+      asOf: "2026-11-16T00:00:00.000Z",
+      statusCounts: { invited: 2, in_progress: 2, submitted: 5 },
+      summaries: {
+        everyone: { q1: summaryFor(9) }, invited: { q1: summaryFor(2) }, in_progress: { q1: summaryFor(2) }, submitted: { q1: summaryFor(5) },
+        "invited,in_progress": { q1: summaryFor(4) }, "invited,submitted": { q1: summaryFor(7) }, "in_progress,submitted": { q1: summaryFor(7) },
+      },
+    };
+
+    const element = await InterviewPage({ params: Promise.resolve({ id: "0123456789abcdef01234567" }), searchParams: Promise.resolve({ tab: "analysis" }) });
+
+    expect(element.props.data.analysisSuppressed).toBeUndefined();
+    expect(element.props.data.analysis.availableCohorts).toEqual(["everyone", "submitted"]);
+    expect(element.props.data.analysis.statusCounts).toBeUndefined();
+    expect(element.props.data.analysis.canCompareStatuses).toBe(false);
+    expect(element.props.data.analysis.summaries.everyone.q1.cohortCount).toBe(9);
+    expect(element.props.data.analysis.summaries.invited).toBeUndefined();
   });
 });

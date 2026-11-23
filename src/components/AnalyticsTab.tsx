@@ -410,23 +410,27 @@ export function ComparisonQuestion({ question, summaries, showHeading = true, di
 }
 
 interface SegmentAnalysisResponse {
+  suppressed?: boolean;
+  minimumCellSize?: number;
   interviewId: string;
   surveyVersion: number;
   asOf: string;
   segmentBy: { id: string; type: QuestionType; label: string };
   outcomes: { id: string; type: QuestionType; label: string }[];
-  scope: { statuses: ParticipantStatus[]; participantCount: number; statusCounts: Record<ParticipantStatus, number>; compareStatuses: boolean };
+  scope: { statuses: ParticipantStatus[]; participantCount?: number; statusCounts?: Record<ParticipantStatus, number>; compareStatuses: boolean };
   segments: AnswerSegmentGroup[];
   methodology: string[];
 }
 
 interface CrossTabAnalysisResponse {
+  suppressed?: boolean;
+  minimumCellSize?: number;
   interviewId: string;
   surveyVersion: number;
   asOf: string;
   rowBy: { id: string; type: QuestionType; label: string };
   columnBy: { id: string; type: QuestionType; label: string };
-  scope: { statuses: ParticipantStatus[]; participantCount: number; statusCounts: Record<ParticipantStatus, number> };
+  scope: { statuses: ParticipantStatus[]; participantCount?: number; statusCounts?: Record<ParticipantStatus, number> };
   rows: AnswerCrossTabValue[];
   columns: AnswerCrossTabValue[];
   cells: AnswerCrossTabCell[];
@@ -435,6 +439,7 @@ interface CrossTabAnalysisResponse {
 }
 
 function CrossTabResults({ result, compareStatuses }: { result: CrossTabAnalysisResponse; compareStatuses: boolean }) {
+  if (result.suppressed) return <section className="card analysis-segment-message" role="status">Cross-tab hidden: at least one count is below the workspace minimum of {result.minimumCellSize ?? 5} people. This reduces small-group disclosure but does not guarantee anonymity.</section>;
   const cellByKey = new Map(result.cells.map((cell) => [JSON.stringify([cell.rowKey, cell.columnKey]), cell]));
   return (
     <section className="card analysis-segment-list" aria-label={`Cross-tab of ${result.rowBy.label} by ${result.columnBy.label}`}>
@@ -444,7 +449,7 @@ function CrossTabResults({ result, compareStatuses }: { result: CrossTabAnalysis
           <p className="muted">{result.scope.participantCount} people in selected statuses · one shared scan · row percentages</p>
         </div>
       </header>
-      <p className="analysis-disclosure-note">Small groups and combinations of answers can make people identifiable. survee keeps every cell visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
+      <p className="analysis-disclosure-note">The workspace minimum cell size is applied to cells, margins, and derived values. Combinations of answers can still make people identifiable; this setting does not guarantee anonymity.</p>
       {result.overlapping && <p className="analysis-text-note analysis-cross-tab-note">At least one question uses checkboxes. A person can appear in multiple rows or columns, so counts and percentages can overlap or sum above 100%.</p>}
       <div className="table-wrap analysis-cross-tab-wrap">
         <table className="t analysis-cross-tab-table">
@@ -459,12 +464,13 @@ function CrossTabResults({ result, compareStatuses }: { result: CrossTabAnalysis
               const cell = cellByKey.get(JSON.stringify([row.key, column.key]));
               if (!cell) return <td key={column.key}>—</td>;
               const percent = cell.rowPercent === null ? "—" : formatPercentage(cell.rowPercent);
-              const statusDetail = compareStatuses
+              const statusBreakdownAvailable = compareStatuses && !!result.scope.statusCounts && !!cell.statusCounts;
+              const statusDetail = statusBreakdownAvailable
                 ? `Invited ${cell.statusCounts.invited}; in progress ${cell.statusCounts.in_progress}; submitted ${cell.statusCounts.submitted}. `
                 : "";
               return <td key={column.key} aria-label={`${cell.participantCount} of ${cell.rowDenominator} people in row, ${percent}. ${statusDetail}${cell.disclosureRisk.singletonSegment ? "Singleton cell: one person." : ""}`}>
                 <span>{cell.participantCount} <span className="muted">({percent})</span></span>
-                {compareStatuses && <small>Inv {cell.statusCounts.invited} · Prog {cell.statusCounts.in_progress} · Sub {cell.statusCounts.submitted}</small>}
+                {statusBreakdownAvailable && <small>Inv {cell.statusCounts.invited} · Prog {cell.statusCounts.in_progress} · Sub {cell.statusCounts.submitted}</small>}
                 {cell.disclosureRisk.singletonSegment && <small className="analysis-disclosure-flag">1 person</small>}
               </td>;
             })}
@@ -477,6 +483,7 @@ function CrossTabResults({ result, compareStatuses }: { result: CrossTabAnalysis
 }
 
 function SegmentResults({ questions, result, compareStatuses, display }: { questions: Question[]; result: SegmentAnalysisResponse; compareStatuses: boolean; display: Display }) {
+  if (result.suppressed) return <section className="card analysis-segment-message" role="status">Segment analysis hidden: at least one count is below the workspace minimum of {result.minimumCellSize ?? 5} people. This reduces small-group disclosure but does not guarantee anonymity.</section>;
   return (
     <section className="card analysis-segment-list" aria-label={`Results grouped by ${result.segmentBy.label}`}>
       <header className="analysis-segment-result-head">
@@ -486,7 +493,7 @@ function SegmentResults({ questions, result, compareStatuses, display }: { quest
         </div>
         {questions.length === 1 && <span className="code-chip">{questions[0].id}</span>}
       </header>
-      <p className="analysis-disclosure-note">Small groups and combinations of attributes can make people identifiable. survee keeps every group visible and does not apply a minimum size; follow your disclosure rules before sharing.</p>
+      <p className="analysis-disclosure-note">The workspace minimum cell size is applied to groups, denominators, and derived values. Attribute combinations can still identify people; this setting does not guarantee anonymity.</p>
       {result.segments.map((segment) => {
         const statusSummaries = segment.statusSummaries;
         const singletonStatuses = segment.disclosureRisk.singletonStatusGroups.map((status) => STATUS_SHORT_LABELS[status]);
@@ -521,7 +528,9 @@ function SegmentResults({ questions, result, compareStatuses, display }: { quest
 }
 
 export function AnalyticsTab({ data }: { data: InterviewData }) {
-  const [cohortKey, setCohortKey] = useState<AnalyticsCohortKey>("everyone");
+  const [cohortKey, setCohortKey] = useState<AnalyticsCohortKey>(() => data.analysis?.availableCohorts?.includes("everyone")
+    ? "everyone"
+    : data.analysis?.availableCohorts?.[0] ?? "everyone");
   const [compareStatuses, setCompareStatuses] = useState(false);
   const [display, setDisplay] = useState<Display>("chart");
   const [segmentMode, setSegmentMode] = useState(false);
@@ -537,10 +546,15 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const [crossTabError, setCrossTabError] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<QuestionType | "all">("all");
-  const cohort = ANALYTICS_COHORTS.find((item) => item.key === cohortKey) ?? ANALYTICS_COHORTS[0];
+  const availableCohortKeys = data.analysis?.availableCohorts ?? [];
+  const cohort = ANALYTICS_COHORTS.find((item) => item.key === cohortKey && availableCohortKeys.includes(item.key))
+    ?? ANALYTICS_COHORTS.find((item) => availableCohortKeys.includes(item.key))
+    ?? ANALYTICS_COHORTS[0];
   const cohortLabel = cohort.label;
-  const statusCounts = data.analysis?.statusCounts ?? { invited: 0, in_progress: 0, submitted: 0 };
-  const cohortCount = cohort.statuses.reduce((count, status) => count + statusCounts[status], 0);
+  const statusCounts = data.analysis?.statusCounts;
+  const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
+  const cohortCount = Object.values(cohortSummaries)[0]?.cohortCount ?? 0;
+  const compareAvailable = data.analysis?.canCompareStatuses === true;
   const hasRepeatQuestions = data.manifest.questions.some((question) => question.type === "repeat");
   const questions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -588,10 +602,9 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     ? crossTabResult
     : null;
   const segmentResultsPending = segmentMode && !segmentError && selectedOutcomeQuestions.length > 0 && !currentSegmentResult;
-  const cohortSummaries = data.analysis?.summaries[cohort.key] ?? {};
   const summaries = useMemo(() => new Map(questions.map((question) => [question.id, cohortSummaries[question.id]])), [questions, cohortSummaries]);
   const exportItems = useMemo(() => compareStatuses
-    ? questions.flatMap((question) => COMPARE_STATUSES.map((status) => ({ question, summary: data.analysis!.summaries[status][question.id], cohort: STATUS_LABELS[status] })))
+    ? questions.flatMap((question) => COMPARE_STATUSES.map((status) => ({ question, summary: data.analysis!.summaries[status]![question.id], cohort: STATUS_LABELS[status] })))
     : questions.map((question) => ({ question, summary: summaries.get(question.id)! })),
   [questions, summaries, compareStatuses, data.analysis]);
   const segmentExportItems = useMemo(() => {
@@ -625,17 +638,26 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     columnQuestionLabel: currentCrossTabResult.columnBy.label,
   }) : "";
   const activeCsv = crossTabMode ? crossTabCsv : csv;
-  const exportReady = crossTabMode ? !!currentCrossTabResult : segmentMode ? !!currentSegmentResult : !!questions.length;
-  const submitted = cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : 0;
-  const inProgress = cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : 0;
+  const exportReady = crossTabMode ? !!currentCrossTabResult && !currentCrossTabResult.suppressed : segmentMode ? !!currentSegmentResult && !currentSegmentResult.suppressed : !!questions.length;
+  const submitted = statusCounts && cohort.statuses.some((status) => status === "submitted") ? statusCounts.submitted : null;
+  const inProgress = statusCounts && cohort.statuses.some((status) => status === "in_progress") ? statusCounts.in_progress : null;
   const selectedParticipantCount = compareStatuses
-    ? statusCounts.invited + statusCounts.in_progress + statusCounts.submitted
+    ? (statusCounts?.invited ?? 0) + (statusCounts?.in_progress ?? 0) + (statusCounts?.submitted ?? 0)
     : cohortCount;
 
   function toggleStatus(status: ParticipantStatus, checked: boolean) {
     const next = checked ? [...cohort.statuses, status] : cohort.statuses.filter((item) => item !== status);
     const match = analyticsCohortForStatuses(next);
-    if (match) setCohortKey(match.key);
+    if (match && availableCohortKeys.includes(match.key)) setCohortKey(match.key);
+  }
+
+  function canToggleStatus(status: ParticipantStatus) {
+    const statuses: ParticipantStatus[] = [...cohort.statuses];
+    const next = statuses.includes(status)
+      ? statuses.filter((item) => item !== status)
+      : [...statuses, status];
+    const match = analyticsCohortForStatuses(next);
+    return !!match && availableCohortKeys.includes(match.key);
   }
 
   function toggleSegmentOutcome(questionId: string, checked: boolean) {
@@ -751,13 +773,20 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
     return out;
   }, [data.manifest.sections, questions]);
 
+  if (data.analysisSuppressed) return <div className="stack">
+    <section className="card analysis-intro">
+      <div className="analysis-intro-head"><div><h2>Response analysis</h2><p>Aggregate results are hidden because at least one cohort or cell is smaller than the workspace minimum of {data.analysisSuppressed.minimumCellSize} people.</p></div><Badge kind="info" plain>Privacy threshold</Badge></div>
+      <p className="analysis-caveat">Change the threshold in Workspace policies or collect more responses. This setting reduces small-group disclosure; it does not guarantee anonymity. Authorized person-level answers and exports remain available in their separate views.</p>
+    </section>
+  </div>;
+
   return (
     <div className="stack">
       <section className="card analysis-intro">
         <div className="analysis-intro-head">
           <div>
             <h2>Response analysis</h2>
-            <p>Descriptive summaries for the current survey version. Earlier wording is not separated from current wording. No minimum group size is applied.</p>
+            <p>Descriptive summaries for the current survey version. Earlier wording is not separated from current wording. Small aggregate groups are suppressed using the workspace minimum.</p>
           </div>
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
@@ -767,12 +796,12 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       </section>
 
       {compareStatuses ? <div className="stats analysis-stats">
-        {COMPARE_STATUSES.map((status) => <div className="stat" key={status}><b>{statusCounts[status]}</b><span>{STATUS_LABELS[status]}</span></div>)}
+        {COMPARE_STATUSES.map((status) => <div className="stat" key={status}><b>{statusCounts?.[status]}</b><span>{STATUS_LABELS[status]}</span></div>)}
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
       </div> : <div className="stats analysis-stats">
         <div className="stat"><b>{cohortCount}</b><span>{cohortLabel} in cohort</span></div>
-        <div className="stat"><b>{submitted}</b><span>Submitted in cohort</span></div>
-        <div className="stat"><b>{inProgress}</b><span>In progress in cohort</span></div>
+        {submitted !== null && <div className="stat"><b>{submitted}</b><span>Submitted in cohort</span></div>}
+        {inProgress !== null && <div className="stat"><b>{inProgress}</b><span>In progress in cohort</span></div>}
         <div className="stat"><b>{questions.length}</b><span>Questions shown</span></div>
       </div>}
 
@@ -794,12 +823,13 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           <div className="seg" role="group" aria-label="Analysis view">
             <button type="button" aria-pressed={!segmentMode && !crossTabMode} onClick={() => { setSegmentMode(false); setCrossTabMode(false); }}>Question summaries</button>
             <button type="button" aria-pressed={segmentMode} disabled={!segmentQuestions.length} onClick={() => { setCrossTabMode(false); setSegmentMode(true); }}>Break down by answer</button>
-            <button type="button" aria-pressed={crossTabMode} disabled={!canMakeCrossTab} onClick={() => { setSegmentMode(false); setCrossTabMode(true); }}>Cross-tab answers</button>
+            <button type="button" aria-pressed={crossTabMode} disabled={!canMakeCrossTab} onClick={() => { setSegmentMode(false); setCrossTabMode(true); setCompareStatuses(false); }}>Cross-tab answers</button>
           </div>
           <div className="seg" role="group" aria-label="Cohort view">
             <button type="button" aria-pressed={!compareStatuses} onClick={() => setCompareStatuses(false)}>One cohort</button>
-            <button type="button" aria-pressed={compareStatuses} onClick={() => setCompareStatuses(true)}>Compare statuses</button>
+            <button type="button" aria-pressed={compareStatuses} disabled={!compareAvailable || crossTabMode} onClick={() => setCompareStatuses(true)}>Compare statuses</button>
           </div>
+          {!compareAvailable && <p className="muted" role="note">Status comparison is unavailable because one or more status groups are below the workspace minimum.</p>}
           {!compareStatuses && <fieldset className="analysis-cohort-options">
             <legend>Include participant statuses</legend>
             {(["invited", "in_progress", "submitted"] as const).map((status) => (
@@ -807,10 +837,10 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
                 <input
                   type="checkbox"
                   checked={cohort.statuses.some((item) => item === status)}
-                  disabled={cohort.statuses.length === 1 && cohort.statuses.some((item) => item === status)}
+                  disabled={!canToggleStatus(status)}
                   onChange={(event) => toggleStatus(status, event.target.checked)}
                 />
-                <span>{STATUS_LABELS[status]} <span className="muted">({statusCounts[status]})</span></span>
+                <span>{STATUS_LABELS[status]}{statusCounts ? <span className="muted"> ({statusCounts[status]})</span> : null}</span>
               </label>
             ))}
           </fieldset>}
@@ -888,9 +918,9 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
       </section>
 
       <p className="muted analysis-result-count" aria-live="polite">{segmentMode
-        ? segmentLoading || segmentResultsPending ? "Calculating answer groups…" : `${currentSegmentResult?.segments.length ?? 0} answer groups · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`
+        ? segmentLoading || segmentResultsPending ? "Calculating answer groups…" : currentSegmentResult?.suppressed ? "Answer groups hidden by the workspace privacy threshold" : `${currentSegmentResult?.segments.length ?? 0} answer groups · ${compareStatuses ? "Invited, in-progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`
         : crossTabMode
-          ? crossTabLoading ? "Calculating cross-tab…" : `${currentCrossTabResult?.cells.length ?? 0} cells · ${selectedParticipantCount} ${selectedParticipantCount === 1 ? "person" : "people"} in this cohort`
+          ? crossTabLoading ? "Calculating cross-tab…" : currentCrossTabResult?.suppressed ? "Cross-tab hidden by the workspace privacy threshold" : `${currentCrossTabResult?.cells.length ?? 0} cells · ${selectedParticipantCount} ${selectedParticipantCount === 1 ? "person" : "people"} in this cohort`
           : `Showing ${questions.length} of ${data.manifest.questions.length} questions · ${compareStatuses ? "Invited, in progress, and submitted groups are shown separately" : `${cohortCount} ${cohortCount === 1 ? "person" : "people"} in this cohort`}`}</p>
       {segmentMode ? <>
         {!segmentQuestions.length && <div className="card empty"><h3>No categorical questions to segment by</h3><p>Add a single-choice, dropdown, checkbox, or scale question to define answer groups.</p></div>}
@@ -899,7 +929,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
         {(segmentLoading || segmentResultsPending) && <p className="card analysis-segment-message" role="status">Calculating answer groups…</p>}
         {segmentError && <p className="card analysis-segment-message question-warning" role="alert">{segmentError}</p>}
         {currentSegmentResult && selectedOutcomeQuestions.length > 0 && <>
-          <p className="analysis-freshness" role="status">Segment analysis completed {fullTime(currentSegmentResult.asOf)} for n={currentSegmentResult.scope.participantCount}. All selected outcome summaries share one live scan.</p>
+          {!currentSegmentResult.suppressed && <p className="analysis-freshness" role="status">Segment analysis completed {fullTime(currentSegmentResult.asOf)} for n={currentSegmentResult.scope.participantCount}. All selected outcome summaries share one live scan.</p>}
           <SegmentResults questions={selectedOutcomeQuestions} result={currentSegmentResult} compareStatuses={compareStatuses} display={display} />
         </>}
       </> : crossTabMode ? <>
@@ -913,7 +943,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           <h2 className="section-title">{group.title}</h2>
           <div className="card analysis-question-list">
             {group.questions.map((question) => compareStatuses
-              ? <ComparisonQuestion key={question.id} question={question} display={display} summaries={{ invited: data.analysis!.summaries.invited[question.id], in_progress: data.analysis!.summaries.in_progress[question.id], submitted: data.analysis!.summaries.submitted[question.id] }} />
+              ? <ComparisonQuestion key={question.id} question={question} display={display} summaries={{ invited: data.analysis!.summaries.invited![question.id], in_progress: data.analysis!.summaries.in_progress![question.id], submitted: data.analysis!.summaries.submitted![question.id] }} />
               : <QuestionAnalysis key={question.id} question={question} summary={summaries.get(question.id)!} display={display} />)}
           </div>
         </section>

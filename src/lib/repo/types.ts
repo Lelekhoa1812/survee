@@ -21,6 +21,19 @@ export interface TenantDoc {
   membershipEpoch?: number;
   /** Incremented transactionally to serialize workspace image quota checks with asset deletions. */
   imageAssetWriteEpoch?: number;
+  /** Minimum cohort size for aggregate analytics. Missing legacy values use the product default (5). */
+  analyticsMinimumCellSize?: number;
+  /** Host-authored policy only. Empty/unset fields mean no notice or legal default is configured. */
+  respondentPolicy?: {
+    revision: number;
+    notice?: string;
+    purpose?: string;
+    retention?: string;
+    contact?: string;
+    withdrawal?: string;
+    updatedAt: Date;
+    updatedBy: string;
+  };
   /** Lease and per-collection checkpoints for the reviewed legacy tenant backfill. */
   legacyTenantMigration?: {
     owner?: string;
@@ -246,7 +259,7 @@ export interface EventDoc {
   /** Absent for workspace-level or agent events that are not about one interview. */
   interviewId?: ObjectId;
   participantId?: ObjectId;
-  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed" | "workspace_owner_transferred" | "workspace_member_role_changed" | "workspace_invitation_created" | "workspace_invitation_accepted" | "workspace_invitation_revoked";
+  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed" | "workspace_owner_transferred" | "workspace_member_role_changed" | "workspace_invitation_created" | "workspace_invitation_accepted" | "workspace_invitation_revoked" | "workspace_policy_updated";
   at: Date;
   meta?: Record<string, unknown>;
 }
