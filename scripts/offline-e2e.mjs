@@ -42,7 +42,10 @@ try {
 
   // 2. server refusal: an out-of-range number is rejected, shown, and the page reverts to what is stored
   await typeInto(frame, '[data-kqa="team-size"]', "999999");
-  await page.waitForSelector(".toast.err", { timeout: 8000 });
+  // A remote production write can spend several seconds in the rate limiter and MongoDB
+  // transaction before the refusal toast is rendered. Keep this longer than the UI's
+  // debounce and the API's usual local round trip so the harness checks behavior, not timing.
+  await page.waitForSelector(".toast.err", { timeout: 15000 });
   const toast = await page.$eval(".toast.err", (e) => e.textContent);
   check("refused value names the question and the limit", /How many people are in your team/.test(toast) && /5,?000/.test(toast), toast);
   // The page puts a refused value back after it has re-read the saved answers, which takes a network round trip.
@@ -74,7 +77,7 @@ try {
   check("first window submitted", true);
   await two.page.bringToFront();
   await typeInto(two.frame, '[data-kqa="company"]', "Sneaky overwrite");
-  await two.page.waitForSelector(".toast.err", { timeout: 8000 });
+  await two.page.waitForSelector(".toast.err", { timeout: 15000 });
   const toast2 = await two.page.$eval(".toast.err", (e) => e.textContent);
   check("second window is refused", /locked|submitted/i.test(toast2), toast2);
   const after = await page.evaluate(async (t) => (await (await fetch(`/api/p/${t}`)).json()).answers.company?.value, token);
