@@ -18,8 +18,8 @@ function freshRepeatField(index: number): BasicRepeatField {
   return { id: `field-${index + 1}`, type: "text", label: `Field ${index + 1}` };
 }
 
-function routeCondition(question: BasicQuestion): Condition | undefined {
-  return question.when?.all?.[0];
+function routeCondition(question: BasicQuestion, conditionIndex = 0): Condition | undefined {
+  return question.when?.all?.[conditionIndex];
 }
 
 export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => void }) {
@@ -46,32 +46,75 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     });
   }
 
-  function selectRouteSource(index: number, sourceId: string) {
+  function setRouteCondition(index: number, conditionIndex: number, condition?: Condition) {
+    setData((current) => {
+      const question = current.questions[index];
+      if (!question) return current;
+      const all = [...(question.when?.all ?? [])];
+      if (condition) all[conditionIndex] = condition;
+      else all.splice(conditionIndex, 1);
+      return { ...current, questions: current.questions.map((item, itemIndex) => itemIndex === index ? { ...item, when: all.length ? { all } : undefined } : item) };
+    });
+  }
+
+  function selectRouteSource(index: number, sourceId: string, conditionIndex = 0) {
     const source = data.questions.slice(0, index).find((question) => question.id === sourceId);
-    if (!source) return updateQuestion(index, { when: undefined });
+    if (!source) return setRouteCondition(index, conditionIndex);
     const choice = ["single", "multi", "select"].includes(source.type);
     const condition = choice
       ? { question: source.id, operator: source.type === "multi" ? "contains" as const : "equals" as const, value: source.options?.[0]?.value ?? "" }
-      : { question: source.id, operator: "answered" as const };
-    updateQuestion(index, { when: { all: [condition] } });
+      : ["number", "scale"].includes(source.type)
+        ? { question: source.id, operator: "gte" as const, value: source.min ?? (source.type === "scale" ? 1 : 0) }
+        : source.type === "date"
+          ? { question: source.id, operator: "gte" as const, value: "" }
+          : { question: source.id, operator: "answered" as const };
+    setRouteCondition(index, conditionIndex, condition);
   }
 
-  function selectRouteOperator(index: number, sourceId: string, operator: string) {
+  function selectRouteOperator(index: number, sourceId: string, operator: string, conditionIndex = 0) {
     const source = data.questions.slice(0, index).find((question) => question.id === sourceId);
     if (!source) return;
     if (operator === "answered" || operator === "notAnswered") {
-      updateQuestion(index, { when: { all: [{ question: source.id, operator }] } });
+      setRouteCondition(index, conditionIndex, { question: source.id, operator });
       return;
     }
-    const currentCondition = routeCondition(data.questions[index]);
+    const currentCondition = routeCondition(data.questions[index], conditionIndex);
     const value = currentCondition && "value" in currentCondition ? currentCondition.value : undefined;
     if (["number", "scale"].includes(source.type)) {
-      updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: typeof value === "number" ? value : source.min ?? (source.type === "scale" ? 1 : 0) }] } });
+      setRouteCondition(index, conditionIndex, { question: source.id, operator: operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: typeof value === "number" ? value : source.min ?? (source.type === "scale" ? 1 : 0) });
     } else if (source.type === "date") {
-      updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: typeof value === "string" ? value : "" }] } });
+      setRouteCondition(index, conditionIndex, { question: source.id, operator: operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: typeof value === "string" ? value : "" });
     } else {
-      updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "equals" | "notEquals" | "contains" | "notContains", value: typeof value === "string" ? value : source.options?.[0]?.value ?? "" }] } });
+      setRouteCondition(index, conditionIndex, { question: source.id, operator: operator as "equals" | "notEquals" | "contains" | "notContains", value: typeof value === "string" ? value : source.options?.[0]?.value ?? "" });
     }
+  }
+
+  function addRouteCondition(index: number) {
+    const source = data.questions[index - 1];
+    if (!source || (data.questions[index].when?.all?.length ?? 0) >= 20) return;
+    selectRouteSource(index, source.id, data.questions[index].when?.all?.length ?? 0);
+  }
+
+  function renderRouteCondition(index: number, conditionIndex: number) {
+    const question = data.questions[index];
+    const condition = routeCondition(question, conditionIndex);
+    if (!condition) return null;
+    const source = data.questions.slice(0, index).find((item) => item.id === condition.question);
+    if (!source) return <p className="hint">Choose an earlier question to continue this rule.</p>;
+    const hasChoices = ["single", "multi", "select"].includes(source.type);
+    const hasTypedComparison = ["number", "scale", "date"].includes(source.type);
+    const operators = hasChoices
+      ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, ...(source.type === "multi" ? [{ value: "contains", label: "contains this choice" }, { value: "notContains", label: "does not contain this choice" }] : [{ value: "equals", label: "equals this choice" }, { value: "notEquals", label: "does not equal this choice" }])]
+      : hasTypedComparison
+        ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, { value: "lt", label: "is less than" }, { value: "lte", label: "is at most" }, { value: "gt", label: "is greater than" }, { value: "gte", label: "is at least" }, { value: "eq", label: "equals" }, { value: "ne", label: "does not equal" }]
+        : [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }];
+    const value = "value" in condition ? condition.value : "";
+    const choiceRule = ["equals", "notEquals", "contains", "notContains"].includes(condition.operator);
+    const typedRule = ["lt", "lte", "gt", "gte", "eq", "ne"].includes(condition.operator);
+    return <div className="row wrap"><label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Rule</span><select className="select" value={condition.operator} onChange={(event) => selectRouteOperator(index, source.id, event.target.value, conditionIndex)}>{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select></label>
+      {hasChoices && choiceRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Choice</span><select className="select" value={typeof value === "string" ? value : ""} onChange={(event) => setRouteCondition(index, conditionIndex, { question: source.id, operator: condition.operator as "equals" | "notEquals" | "contains" | "notContains", value: event.target.value })}>{(source.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+      {hasTypedComparison && typedRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>{source.type === "date" ? "Date" : "Value"}</span><input className="input" type={source.type === "date" ? "date" : "number"} step={source.type === "number" ? source.step ?? "any" : undefined} value={typeof value === "number" || typeof value === "string" ? value : ""} onChange={(event) => { if (source.type !== "date" && event.target.value === "") return; setRouteCondition(index, conditionIndex, { question: source.id, operator: condition.operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: source.type === "date" ? event.target.value : Number(event.target.value) }); }} /></label>}
+    </div>;
   }
 
   function addSection() {
@@ -223,26 +266,9 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         <div className="field"><label htmlFor={`builder-id-${index}`}>Stable question ID</label><input id={`builder-id-${index}`} className="input mono" maxLength={64} pattern="[a-z0-9][a-z0-9_-]{0,63}" value={question.id} onChange={(event) => updateQuestion(index, { id: event.target.value })} /><span className="hint">Lowercase letters, numbers, hyphens and underscores. Keep this ID if you revise the file after collecting answers.</span></div>
         <div className="field"><label htmlFor={`builder-type-${index}`}>Answer type</label><select id={`builder-type-${index}`} className="select" value={question.type} onChange={(event) => changeType(index, event.target.value as BasicQuestionType)}>{questionTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
         {(data.sections?.length ?? 0) > 0 && <div className="field"><label htmlFor={`builder-section-${index}`}>Section</label><select id={`builder-section-${index}`} className="select" value={question.section ?? ""} onChange={(event) => updateQuestion(index, { section: event.target.value || undefined })}><option value="">No section</option>{data.sections?.map((section) => <option key={section.id} value={section.id}>{section.title || section.id}</option>)}</select></div>}
-        {index > 0 && <div className="stack" style={{ marginTop: 12 }}><div className="field"><label htmlFor={`builder-route-source-${index}`}>Show this question when</label><select id={`builder-route-source-${index}`} className="select" value={question.when?.all?.[0]?.question ?? ""} onChange={(event) => selectRouteSource(index, event.target.value)}><option value="">It is always shown</option>{data.questions.slice(0, index).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select><span className="hint">Only earlier questions can control this question. Inactive answers remain saved.</span></div>
-          {question.when?.all?.[0] && (() => {
-            const condition = routeCondition(question)!;
-            const source = data.questions.slice(0, index).find((item) => item.id === condition.question);
-            if (!source) return <p className="hint">Choose a valid earlier question to continue this rule.</p>;
-            const hasChoices = ["single", "multi", "select"].includes(source.type);
-            const hasTypedComparison = ["number", "scale", "date"].includes(source.type);
-            const operators = hasChoices
-              ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, ...(source.type === "multi" ? [{ value: "contains", label: "contains this choice" }, { value: "notContains", label: "does not contain this choice" }] : [{ value: "equals", label: "equals this choice" }, { value: "notEquals", label: "does not equal this choice" }])]
-              : hasTypedComparison
-                ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, { value: "lt", label: "is less than" }, { value: "lte", label: "is at most" }, { value: "gt", label: "is greater than" }, { value: "gte", label: "is at least" }, { value: "eq", label: "equals" }, { value: "ne", label: "does not equal" }]
-                : [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }];
-            const value = "value" in condition ? condition.value : "";
-            const choiceRule = ["equals", "notEquals", "contains", "notContains"].includes(condition.operator);
-            const typedRule = ["lt", "lte", "gt", "gte", "eq", "ne"].includes(condition.operator);
-            return <div className="row wrap"><label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Rule</span><select className="select" value={condition.operator} onChange={(event) => selectRouteOperator(index, source.id, event.target.value)}>{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select></label>
-              {hasChoices && choiceRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Choice</span><select className="select" value={typeof value === "string" ? value : ""} onChange={(event) => updateQuestion(index, { when: { all: [{ question: source.id, operator: condition.operator as "equals" | "notEquals" | "contains" | "notContains", value: event.target.value }] } })}>{(source.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
-              {hasTypedComparison && typedRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>{source.type === "date" ? "Date" : "Value"}</span><input className="input" type={source.type === "date" ? "date" : "number"} step={source.type === "number" ? source.step ?? "any" : undefined} value={typeof value === "number" || typeof value === "string" ? value : ""} onChange={(event) => { if (source.type !== "date" && event.target.value === "") return; updateQuestion(index, { when: { all: [{ question: source.id, operator: condition.operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: source.type === "date" ? event.target.value : Number(event.target.value) }] } }); }} /></label>}
-            </div>;
-          })()}
+        {index > 0 && <div className="stack" style={{ marginTop: 12 }}><strong>Show this question when all these rules match</strong>
+          {(question.when?.all ?? []).map((condition, conditionIndex) => <div className="stack" key={`${conditionIndex}-${condition.question}`}><div className="row wrap" style={{ alignItems: "flex-end" }}><label className="field" style={{ flex: "1 1 220px", margin: 0 }}><span>Earlier question</span><select id={`builder-route-source-${index}-${conditionIndex}`} className="select" value={condition.question} onChange={(event) => selectRouteSource(index, event.target.value, conditionIndex)}>{data.questions.slice(0, index).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select></label>{renderRouteCondition(index, conditionIndex)}<button className="btn danger sm" type="button" aria-label={`Remove routing rule ${conditionIndex + 1} from question ${index + 1}`} onClick={() => setRouteCondition(index, conditionIndex)}>Remove rule</button></div></div>)}
+          <button className="btn sm" type="button" aria-label={`Add routing rule to question ${index + 1}`} disabled={(question.when?.all?.length ?? 0) >= 20} onClick={() => addRouteCondition(index)}>Add routing rule</button><span className="hint">Only earlier questions can control this question. All listed rules must match. Inactive answers remain saved.</span>
         </div>}
         <div className="field"><label htmlFor={`builder-label-${index}`}>Question text</label><input id={`builder-label-${index}`} className="input" maxLength={300} value={question.label} onChange={(event) => updateQuestion(index, { label: event.target.value })} /></div>
         <div className="field"><label htmlFor={`builder-help-${index}`}>Help text <span className="muted">(optional)</span></label><textarea id={`builder-help-${index}`} className="textarea" rows={2} maxLength={1000} value={question.help} onChange={(event) => updateQuestion(index, { help: event.target.value })} /></div>

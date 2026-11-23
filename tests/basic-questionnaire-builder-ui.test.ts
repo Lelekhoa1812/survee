@@ -10,7 +10,7 @@ let root: Root;
 const useHtml = vi.fn();
 
 async function click(label: string) {
-  const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes(label));
+  const button = Array.from(host.querySelectorAll("button")).find((item) => item.getAttribute("aria-label") === label || item.textContent?.includes(label));
   if (!button) throw new Error(`Button not found: ${label}`);
   await act(async () => { button.click(); });
 }
@@ -105,13 +105,36 @@ describe("basic questionnaire builder UI", () => {
     root = createRoot(host);
     await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
     await click("Add question");
-    await change("#builder-route-source-1", "question-1");
+    await click("Add routing rule");
+    await change("#builder-route-source-1-0", "question-1");
     await change("#builder-id-0", "customer-type");
     await click("Use questionnaire");
     const html = useHtml.mock.calls[0][0] as string;
     expect(html).toContain('"question": "customer-type"');
     expect(html).toContain('"operator": "equals"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
+
+  it("supports multiple earlier-answer rules that must all match", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "single");
+    await click("Add question");
+    await change("#builder-type-1", "number");
+    await click("Add question");
+    await click("Add routing rule to question 3");
+    await change("#builder-route-source-2-0", "question-2");
+    await click("Add routing rule to question 3");
+    await change("#builder-route-source-2-1", "question-1");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"all": [');
+    expect(html).toContain('"question": "question-2"');
+    expect(html).toContain('"question": "question-1"');
+    expect(checkHtml(html, { fileName: "multiple-rules.html" }).ok).toBe(true);
   });
 
   it("routes a later question using a numeric comparison", async () => {
@@ -122,7 +145,8 @@ describe("basic questionnaire builder UI", () => {
     await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
     await change("#builder-type-0", "number");
     await click("Add question");
-    await change("#builder-route-source-1", "question-1");
+    await click("Add routing rule");
+    await change("#builder-route-source-1-0", "question-1");
     const rule = Array.from(host.querySelectorAll("select")).find((select) => Array.from(select.options).some((option) => option.textContent === "is greater than"));
     expect(rule).toBeTruthy();
     await act(async () => {
@@ -151,7 +175,8 @@ describe("basic questionnaire builder UI", () => {
     await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
     await change("#builder-type-0", "date");
     await click("Add question");
-    await change("#builder-route-source-1", "question-1");
+    await click("Add routing rule");
+    await change("#builder-route-source-1-0", "question-1");
     const rule = Array.from(host.querySelectorAll("select")).find((select) => Array.from(select.options).some((option) => option.textContent === "is less than"));
     expect(rule).toBeTruthy();
     await act(async () => {
