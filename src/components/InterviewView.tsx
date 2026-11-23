@@ -83,6 +83,7 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
     const url = new URL(window.location.href);
     url.searchParams.set("tab", t);
     if (t === "analysis" || analysisOnly || (t === "answers" && !data.answersIncluded)) {
+      window.sessionStorage.setItem(tabFocusStorageKey, t);
       router.push(`${url.pathname}${url.search}`);
       return;
     }
@@ -115,7 +116,6 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
     event.preventDefault();
     const next = tabs[nextIndex][0];
     tabRefs.current[next]?.focus();
-    if (next === "analysis" || analysisOnly) window.sessionStorage.setItem(tabFocusStorageKey, next);
     select(next);
   }
 

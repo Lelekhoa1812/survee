@@ -122,6 +122,17 @@ describe("interview section tabs", () => {
     expect(window.sessionStorage.getItem("kqa:interview:interview-1:tab-focus")).toBeNull();
   });
 
+  it("restores keyboard focus after loading answer details", () => {
+    renderInterview();
+    press(tab("People"), "ArrowRight");
+    expect(routerState.push).toHaveBeenCalledWith(expect.stringContaining("tab=answers"));
+    expect(window.sessionStorage.getItem("kqa:interview:interview-1:tab-focus")).toBe("answers");
+
+    renderInterview("answers", false, true, true);
+    expect(document.activeElement).toBe(tab("Answers"));
+    expect(window.sessionStorage.getItem("kqa:interview:interview-1:tab-focus")).toBeNull();
+  });
+
   it("limits members to interview overview, aggregate analysis, and read-only survey", () => {
     renderInterview("overview", false, false);
 
