@@ -26,6 +26,12 @@ async function change(selector: string, value: string) {
   });
 }
 
+async function toggle(selector: string) {
+  const input = host.querySelector<HTMLInputElement>(selector);
+  if (!input) throw new Error(`Checkbox not found: ${selector}`);
+  await act(async () => { input.click(); });
+}
+
 describe("basic questionnaire builder UI", () => {
   afterEach(() => {
     if (root) act(() => root.unmount());
@@ -251,6 +257,28 @@ describe("basic questionnaire builder UI", () => {
     expect(html).toContain('"maxSelections": 2');
     expect(html).toContain('data-kqa-note="question-1"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
+
+  it("randomizes choice order with fixed and exclusive options", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "multi");
+    await toggle("#builder-randomize-options-0");
+    expect(host.querySelector<HTMLInputElement>("#builder-fixed-option-0-0")?.disabled).toBe(true);
+    await click("Add choice");
+    expect(host.querySelector<HTMLInputElement>("#builder-fixed-option-0-0")?.disabled).toBe(false);
+    await toggle("#builder-fixed-option-0-0");
+    await toggle("#builder-exclusive-option-0-1");
+    await change('input[value="option-1"]', "primary");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"randomizeOptions": true');
+    expect(html).toContain('"fixedOptionValues": [\n        "primary"');
+    expect(html).toContain('"exclusiveOptions": [\n        "option-2"');
+    expect(checkHtml(html, { fileName: "randomized-choices.html" }).ok).toBe(true);
   });
 
   it("sets a text answer length limit", async () => {

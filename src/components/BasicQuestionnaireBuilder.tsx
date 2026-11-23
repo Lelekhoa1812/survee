@@ -43,7 +43,25 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
       return {
         ...current,
         questions: current.questions.map((question, item) => {
-          if (item === index) return { ...question, ...patch };
+          if (item === index) {
+            const updated = { ...question, ...patch };
+            if (patch.options && question.options) {
+              const nextValues = new Set(patch.options.map((option) => option.value));
+              const remap = (values: string[] | undefined) => {
+                if (!values) return undefined;
+                const sameCount = question.options!.length === patch.options!.length;
+                return values.map((value) => {
+                  if (nextValues.has(value)) return value;
+                  if (!sameCount) return null;
+                  const oldIndex = question.options!.findIndex((option) => option.value === value);
+                  return oldIndex >= 0 ? patch.options![oldIndex]?.value ?? null : null;
+                }).filter((value): value is string => value !== null && nextValues.has(value));
+              };
+              updated.fixedOptionValues = remap(question.fixedOptionValues);
+              updated.exclusiveOptions = remap(question.exclusiveOptions);
+            }
+            return updated;
+          }
           if (!previousId || !nextId || previousId === nextId || !question.when) return question;
           const replace = (condition: Condition): Condition => condition.question === previousId ? { ...condition, question: nextId } : condition;
           return { ...question, when: { ...question.when, ...(question.when.all ? { all: question.when.all.map(replace) } : {}), ...(question.when.any ? { any: question.when.any.map(replace) } : {}) } };
@@ -191,6 +209,9 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
       type,
       note: type === "repeat" ? undefined : current.note,
       options: needsOptions ? ((current.options ?? []).length >= 2 ? current.options!.slice(0, optionLimit) : [{ value: "option-1", label: "Option 1" }, { value: "option-2", label: "Option 2" }]) : [],
+      randomizeOptions: ["single", "multi", "select"].includes(type) ? current.randomizeOptions : undefined,
+      fixedOptionValues: ["single", "multi", "select"].includes(type) ? current.fixedOptionValues : undefined,
+      exclusiveOptions: type === "multi" ? current.exclusiveOptions : undefined,
       min: type === "scale" ? 1 : undefined,
       max: type === "scale" ? 5 : undefined,
       minSelections: type === "multi" ? current.minSelections : undefined,
@@ -295,6 +316,16 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
           <label className="field" style={{ flex: "2 1 180px", margin: 0 }}><span>Displayed label</span><input className="input" maxLength={300} value={option.label} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, label: event.target.value } : item) })} /></label>
           <button className="btn danger sm" type="button" disabled={(question.options?.length ?? 0) <= 2} aria-label={`Remove choice ${optionIndex + 1} from question ${index + 1}`} onClick={() => updateQuestion(index, { options: (question.options ?? []).filter((_, i) => i !== optionIndex) })}>Remove choice</button>
         </div>)}<button className="btn sm" type="button" disabled={(question.options?.length ?? 0) >= (question.type === "rank" ? 8 : 50)} onClick={() => updateQuestion(index, { options: [...(question.options ?? []), { value: `option-${(question.options?.length ?? 0) + 1}`, label: `Option ${(question.options?.length ?? 0) + 1}` }] })}>Add choice</button>{question.type === "rank" && <span className="hint">Respondents order all 2–8 options; KQA stores the full permutation without scoring responses.</span>}</div>}
+        {["single", "multi", "select"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}>
+          <label className="choice"><input id={`builder-randomize-options-${index}`} type="checkbox" checked={question.randomizeOptions ?? false} onChange={(event) => updateQuestion(index, { randomizeOptions: event.target.checked })} /><span>Randomize choice order for each respondent</span></label>
+          <span className="hint">Use for choices without a natural order. Keep ordered categories in their authored order.</span>
+          {question.randomizeOptions && <div className="stack" style={{ paddingLeft: 18 }}><strong>Keep choices in their authored positions <span className="muted">(optional)</span></strong>{(question.options ?? []).map((option, optionIndex) => {
+            const fixed = (question.fixedOptionValues ?? []).includes(option.value);
+            const fixedLimit = Math.max(0, (question.options?.length ?? 0) - 2);
+            return <label className="choice" key={option.value}><input id={`builder-fixed-option-${index}-${optionIndex}`} type="checkbox" checked={fixed} disabled={!fixed && (question.fixedOptionValues?.length ?? 0) >= fixedLimit} onChange={(event) => updateQuestion(index, { fixedOptionValues: event.target.checked ? [...(question.fixedOptionValues ?? []), option.value] : (question.fixedOptionValues ?? []).filter((value) => value !== option.value) })} /><span>{option.label || option.value}</span></label>;
+          })}<span className="hint">At least two choices must remain available to rotate.</span></div>}
+          {question.type === "multi" && <div className="stack" style={{ paddingLeft: 18 }}><strong>Choices respondents must select alone <span className="muted">(optional)</span></strong>{(question.options ?? []).map((option, optionIndex) => <label className="choice" key={option.value}><input id={`builder-exclusive-option-${index}-${optionIndex}`} type="checkbox" checked={(question.exclusiveOptions ?? []).includes(option.value)} onChange={(event) => updateQuestion(index, { exclusiveOptions: event.target.checked ? [...(question.exclusiveOptions ?? []), option.value] : (question.exclusiveOptions ?? []).filter((value) => value !== option.value) })} /><span>{option.label || option.value}</span></label>)}<span className="hint">Use for choices such as “None of these” or “Prefer not to say.”</span></div>}
+        </div>}
         {question.type === "multi" && <div className="row wrap" style={{ marginTop: 14 }}>
           <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Minimum selections <span className="muted">(optional)</span></span><input id={`builder-min-selections-${index}`} className="input" type="number" min={1} max={question.options?.length} value={question.minSelections ?? ""} onChange={(event) => updateQuestion(index, { minSelections: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
           <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Maximum selections <span className="muted">(optional)</span></span><input id={`builder-max-selections-${index}`} className="input" type="number" min={1} max={question.options?.length} value={question.maxSelections ?? ""} onChange={(event) => updateQuestion(index, { maxSelections: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>

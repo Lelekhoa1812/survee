@@ -13,6 +13,9 @@ export type BasicQuestion = {
   section?: string;
   when?: { all?: Condition[]; any?: Condition[] };
   options?: Array<{ value: string; label: string }>;
+  randomizeOptions?: boolean;
+  fixedOptionValues?: string[];
+  exclusiveOptions?: string[];
   minSelections?: number;
   maxSelections?: number;
   min?: number;
@@ -130,6 +133,9 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
       ...(question.required ? { required: true } : {}),
       ...(question.note ? { note: true } : {}),
       ...(["single", "multi", "select", "rank"].includes(question.type) ? { options: question.options } : {}),
+      ...(question.randomizeOptions && ["single", "multi", "select"].includes(question.type) ? { randomizeOptions: true } : {}),
+      ...(question.randomizeOptions && question.fixedOptionValues?.length && ["single", "multi", "select"].includes(question.type) ? { fixedOptionValues: question.fixedOptionValues } : {}),
+      ...(question.type === "multi" && question.exclusiveOptions?.length ? { exclusiveOptions: question.exclusiveOptions } : {}),
       ...(question.minSelections !== undefined ? { minSelections: question.minSelections } : {}),
       ...(question.maxSelections !== undefined ? { maxSelections: question.maxSelections } : {}),
       ...(question.min !== undefined ? { min: question.min } : {}),
