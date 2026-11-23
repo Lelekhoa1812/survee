@@ -91,14 +91,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback((text: string, kind: "ok" | "err" = "ok", metadata?: ToastMetadata) => {
     const id = ++seq.current;
     setItems((x) => [...x.slice(-2), { id, text, kind, ...metadata }]);
-    setTimeout(() => setItems((x) => x.filter((t) => t.id !== id)), kind === "err" ? 6000 : 2800);
+    setTimeout(() => setItems((x) => x.filter((t) => t.id !== id)), kind === "err" ? 12000 : 2800);
   }, []);
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="toasts" role="status" aria-live="polite">
+      <div className="toasts">
         {items.map((t) => (
-          <div key={t.id} className={`toast ${t.kind === "err" ? "err" : ""}`} lang={t.lang} dir={t.dir}>
+          <div key={t.id} className={`toast ${t.kind === "err" ? "err" : ""}`} role={t.kind === "err" ? "alert" : "status"} aria-live={t.kind === "err" ? "assertive" : "polite"} aria-atomic="true" lang={t.lang} dir={t.dir}>
             <Icon name={t.kind === "err" ? "alert" : "check"} size={16} />
             {t.text}
           </div>
