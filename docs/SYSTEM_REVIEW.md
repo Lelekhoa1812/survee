@@ -207,12 +207,13 @@ The entries below summarize work completed during this review. The validation ev
 - Retry audit and follow-up fixes: `reopen_person` now accepts `operationId` and transactionally replays its exact person result; deleting an image removes its upload replay record, and replay lookups also clear legacy rows whose asset is gone. The session list explains that it is capped at 50 and may omit sign-ins when registry writes fail, while sign-out-others invalidates the entire account regardless of list visibility. Add-people and link-rotation retries preserve the private token, while the absolute URL follows the current `KQA_PUBLIC_URL` and can change origin.
 - Current local validation after those changes: **1,234 tests across 175 files passed**, optimized Next.js production build and TypeScript check passed, `git diff --check` passed, and both dependency audits reported zero vulnerabilities. The first full test run caught an outdated bundled MCP reference and a missing `mcpOperations` test mock; both were updated before the passing rerun.
 - Retry audit evidence limitation remains: Mongo transaction and unique-index race behavior is tested with mocks, not a replica-set integration test that reproduces a committed write with a lost response.
+- Connected-client schema inspection: the owned private KQA plugin package contains only `.app.json` and `.codex-plugin/plugin.json`, which point to hosted App `asdk_app_6af7a4e14dd88191a62e40dbf207c1db`; no MCP tool schema or app source is packaged there. Its connected wrapper still omits newer `operationId`/paging arguments even though the repository MCP definitions expose them. Plugin Creator cannot update the hosted app schema from this package, so locate its owning app source before claiming client parity.
 
 Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The authenticated host console still needs a dedicated browser audit. Respondent E2E coverage now includes offline recovery, validation, stale-tab fencing, guided navigation, repeat-row persistence, answer review, and submission locking.
 
 ## Next review order
 
-1. Extend operation replay to other non-idempotent writes and add Mongo replica-set fault injection; resolve the connected KQA tool wrapper's missing `operationId` parameter for `reopen_person` if its schema source is available.
+1. Extend operation replay to other non-idempotent writes and add Mongo replica-set fault injection; locate the hosted KQA app's schema source and bring its wrapper into parity with server `tools/list`.
 2. Consider immutable export artifacts for durable point-in-time snapshots, and streaming XLSX generation for larger workbooks.
 3. Decide whether workspace image capacity needs tenant-specific plan settings.
 4. Decide and implement consent, retention, withdrawal, and complete participant-erasure workflows.
