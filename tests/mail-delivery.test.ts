@@ -63,4 +63,17 @@ describe("invite delivery check throttling", () => {
       ...pendingContext.rows[0], id: "mail-1", sentAt: "2026-01-01T00:00:00.000Z", delivery: "delivered",
     }])).toMatchObject({ state: "sent", delivery: "delivered" });
   });
+
+  it("reports the stored confirmation when a later provider check is inconclusive", async () => {
+    const confirmedContext = {
+      ...context,
+      rows: [{ ...context.rows[0], delivery: "delivered" as const }],
+    };
+    const { deps } = harness({
+      load: async () => confirmedContext,
+      save: async () => "delivered",
+    });
+
+    expect(await checkInviteDelivery("person-1", deps)).toMatchObject({ ok: true, delivery: "delivered" });
+  });
 });

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: { transaction: true },
   matchedCount: 1,
+  currentDelivery: undefined as { delivery?: "delivered" | "bounced" | "unknown" } | undefined,
   calls: [] as { collection: string; args: unknown[] }[],
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work(mocks.session)),
 }));
@@ -16,19 +17,46 @@ vi.mock("../src/lib/db", () => ({
     }),
     mail: async () => ({
       insertOne: async (...args: unknown[]) => { mocks.calls.push({ collection: "mail", args }); return { insertedId: (args[0] as { _id: ObjectId })._id }; },
+      updateOne: async (...args: unknown[]) => { mocks.calls.push({ collection: "mail.update", args }); return { matchedCount: mocks.matchedCount }; },
+      findOne: async (...args: unknown[]) => { mocks.calls.push({ collection: "mail.find", args }); return mocks.currentDelivery; },
     }),
   },
 }));
 
-import { insertMail } from "../src/lib/repo/mail";
+import { insertMail, updateMailDelivery } from "../src/lib/repo/mail";
 import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 const tenant = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, work);
 
 beforeEach(() => {
   mocks.matchedCount = 1;
+  mocks.currentDelivery = undefined;
   mocks.calls.length = 0;
   mocks.withMongoTransaction.mockClear();
+});
+
+describe("updateMailDelivery", () => {
+  it.each(["delivered", "bounced"] as const)("does not downgrade a confirmed %s result to unknown", async (delivery) => {
+    mocks.matchedCount = 0;
+    mocks.currentDelivery = { delivery };
+    const id = new ObjectId();
+
+    const result = await tenant(() => updateMailDelivery(id, { delivery: "unknown", deliveryCheckedAt: new Date(), deliveryDetail: "Not confirmed yet." }));
+
+    expect(result).toBe(delivery);
+    expect(mocks.calls[0].args[0]).toMatchObject({ $and: [{ $or: [{ tenantId: "axion" }, { tenantId: { $exists: false } }] }, { _id: id, delivery: { $nin: ["delivered", "bounced"] } }] });
+    expect(mocks.calls[1].collection).toBe("mail.find");
+  });
+
+  it("allows definitive evidence to replace an unknown result", async () => {
+    const id = new ObjectId();
+
+    const result = await tenant(() => updateMailDelivery(id, { delivery: "delivered", deliveryCheckedAt: new Date() }));
+
+    expect(result).toBe("delivered");
+    expect(mocks.calls).toHaveLength(1);
+    expect(mocks.calls[0].args[0]).toMatchObject({ $and: [{ $or: [{ tenantId: "axion" }, { tenantId: { $exists: false } }] }, { _id: id }] });
+  });
 });
 
 describe("insertMail", () => {

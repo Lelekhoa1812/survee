@@ -80,10 +80,20 @@ export async function listMailByPerson(participantId: ObjectId): Promise<MailMes
   return (await col.mail()).find(tenantFilter(tenantId, { participantId })).sort({ sentAt: -1 }).limit(50).toArray();
 }
 
-export async function updateMailDelivery(id: ObjectId, patch: Pick<MailMessageDoc, "delivery" | "deliveryCheckedAt" | "deliveryDetail">): Promise<void> {
+export async function updateMailDelivery(id: ObjectId, patch: Pick<MailMessageDoc, "delivery" | "deliveryCheckedAt" | "deliveryDetail">): Promise<MailRecord["delivery"] | undefined> {
   const tenantId = await currentTenantId();
-  if (!tenantId) return;
-  await (await col.mail()).updateOne(tenantFilter(tenantId, { _id: id }), { $set: patch });
+  if (!tenantId) return undefined;
+  const mail = await col.mail();
+  const result = await mail.updateOne(
+    tenantFilter(tenantId, {
+      _id: id,
+      ...(patch.delivery === "unknown" ? { delivery: { $nin: ["delivered", "bounced"] } } : {}),
+    }),
+    { $set: patch },
+  );
+  if (result.matchedCount === 1) return patch.delivery;
+  const current = await mail.findOne(tenantFilter(tenantId, { _id: id }));
+  return current?.delivery;
 }
 
 export async function deleteMailForInterview(interviewId: ObjectId, session?: ClientSession): Promise<void> {

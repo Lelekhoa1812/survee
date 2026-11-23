@@ -15,7 +15,7 @@ export type DeliveryResult =
 export interface DeliveryDeps {
   load?: (personId: string) => Promise<{ person: { id: string; interviewId: string; email?: string; token: string }; rows: MailRecord[] } | null>;
   check?: (messageIds: string[]) => Promise<Map<string, DeliveryCheck>>;
-  save?: (id: string, patch: { delivery: MailDelivery; deliveryCheckedAt: Date; deliveryDetail?: string }) => Promise<void>;
+  save?: (id: string, patch: { delivery: MailDelivery; deliveryCheckedAt: Date; deliveryDetail?: string }) => Promise<MailDelivery | undefined>;
   rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
 }
 
@@ -52,11 +52,12 @@ export async function checkInviteDelivery(personId: string, deps: DeliveryDeps =
   const checked = await (deps.check ?? checkMessageIds)([current.messageId]);
   const result = checked.get(current.messageId) ?? { status: "unknown" as const, detail: "Not confirmed yet." };
   const checkedAt = new Date();
+  let effectiveDelivery = result.status;
   if (row) {
     const save = deps.save ?? (async (id: string, patch: { delivery: MailDelivery; deliveryCheckedAt: Date; deliveryDetail?: string }) => {
-      await updateMailDelivery(new ObjectId(id), patch);
+      return updateMailDelivery(new ObjectId(id), patch);
     });
-    await save(row.id, { delivery: result.status, deliveryCheckedAt: checkedAt, deliveryDetail: result.detail });
+    effectiveDelivery = await save(row.id, { delivery: result.status, deliveryCheckedAt: checkedAt, deliveryDetail: result.detail }) ?? result.status;
   }
-  return { ok: true, delivery: result.status, checkedAt: checkedAt.toISOString(), detail: result.detail, personId: ctx.person.id, interviewId: ctx.person.interviewId };
+  return { ok: true, delivery: effectiveDelivery, checkedAt: checkedAt.toISOString(), detail: effectiveDelivery === result.status ? result.detail : undefined, personId: ctx.person.id, interviewId: ctx.person.interviewId };
 }
