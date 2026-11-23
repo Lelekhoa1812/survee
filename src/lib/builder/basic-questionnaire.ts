@@ -1,7 +1,7 @@
-import { LIMITS, manifestSchema, type Condition, type QuestionType, type RepeatFieldType } from "@/lib/format/schema";
+import { isCalendarDate, LIMITS, manifestSchema, type Condition, type QuestionType, type RepeatFieldType } from "@/lib/format/schema";
 
 export type BasicQuestionType = Extract<QuestionType, "single" | "multi" | "select" | "rank" | "text" | "longtext" | "number" | "scale" | "date" | "repeat">;
-export type BasicRepeatField = { id: string; type: RepeatFieldType; label: string; required?: boolean; options?: Array<{ value: string; label: string }>; min?: number; max?: number; step?: number; maxLength?: number };
+export type BasicRepeatField = { id: string; type: RepeatFieldType; label: string; help?: string; required?: boolean; options?: Array<{ value: string; label: string }>; min?: number; max?: number; step?: number; maxLength?: number };
 
 export type BasicQuestion = {
   id: string;
@@ -12,7 +12,7 @@ export type BasicQuestion = {
   note?: boolean;
   section?: string;
   when?: { all?: Condition[] };
-  options: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string }>;
   minSelections?: number;
   maxSelections?: number;
   min?: number;
@@ -55,7 +55,7 @@ function control(question: BasicQuestion, index: number): string {
   const describedBy = question.help ? ` aria-describedby="help-${id}"` : "";
   const required = question.required ? "<span class=\"required\">Required</span>" : "";
   const header = `<div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><h2 id="heading-${id}">${label}</h2>${required}</div>${help}`;
-  const options = question.options.map((option, optionIndex) => ({ ...option, value: escapeHtml(option.value), label: escapeHtml(option.label), inputId: `${id}-${optionIndex + 1}` }));
+  const options = (question.options ?? []).map((option, optionIndex) => ({ ...option, value: escapeHtml(option.value), label: escapeHtml(option.label), inputId: `${id}-${optionIndex + 1}` }));
 
   if (question.type === "single" || question.type === "multi") {
     const type = question.type === "single" ? "radio" : "checkbox";
@@ -75,24 +75,25 @@ function control(question: BasicQuestion, index: number): string {
       const fieldId = escapeHtml(field.id);
       const fieldLabel = escapeHtml(field.label);
       const common = `data-kqa-repeat-field="${fieldId}"`;
-      const bounds = [field.min !== undefined ? ` min="${field.min}"` : "", field.max !== undefined ? ` max="${field.max}"` : "", field.step !== undefined ? ` step="${field.step}"` : "", field.maxLength !== undefined ? ` maxlength="${field.maxLength}"` : field.type === "text" ? " maxlength=\"500\"" : field.type === "longtext" ? " maxlength=\"20000\"" : ""].join("");
+      const bounds = [field.min !== undefined ? ` min="${field.min}"` : "", field.max !== undefined ? ` max="${field.max}"` : "", field.type === "number" && field.step !== undefined ? ` step="${field.step}"` : "", field.maxLength !== undefined ? ` maxlength="${field.maxLength}"` : field.type === "text" ? " maxlength=\"500\"" : field.type === "longtext" ? " maxlength=\"20000\"" : ""].join("");
+      const fieldHelp = field.help ? `<span class="field-help">${escapeHtml(field.help)}</span>` : "";
       const legend = `${fieldLabel}${field.required ? " <span class=\"required\">Required</span>" : ""}`;
       if (field.type === "single") {
         const options = (field.options ?? []).map((option) => `<label class="choice"><input type="radio" ${common} value="${escapeHtml(option.value)}"><span>${escapeHtml(option.label)}</span></label>`).join("");
-        return `<fieldset class="repeat-field"><legend>${legend}</legend>${options}</fieldset>`;
+        return `<fieldset class="repeat-field"><legend>${legend}</legend>${fieldHelp}${options}</fieldset>`;
       }
       if (field.type === "select") {
         const options = (field.options ?? []).map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
-        return `<label class="repeat-field">${legend}<select ${common}><option value="">Choose one…</option>${options}</select></label>`;
+        return `<label class="repeat-field">${legend}${fieldHelp}<select ${common}><option value="">Choose one…</option>${options}</select></label>`;
       }
       if (field.type === "scale") {
         const min = field.min ?? 1;
         const max = field.max ?? 5;
         const options = Array.from({ length: max - min + 1 }, (_, item) => min + item).map((value) => `<label class="scale-choice"><input type="radio" ${common} value="${value}"><span>${value}</span></label>`).join("");
-        return `<fieldset class="repeat-field"><legend>${legend}</legend><div class="scale" style="--scale-count:${max - min + 1}">${options}</div></fieldset>`;
+        return `<fieldset class="repeat-field"><legend>${legend}</legend>${fieldHelp}<div class="scale" style="--scale-count:${max - min + 1}">${options}</div></fieldset>`;
       }
-      if (field.type === "longtext") return `<label class="repeat-field">${legend}<textarea ${common} rows="3"${bounds}></textarea></label>`;
-      return `<label class="repeat-field">${legend}<input type="${field.type === "text" ? "text" : field.type}" ${common}${bounds}></label>`;
+      if (field.type === "longtext") return `<label class="repeat-field">${legend}${fieldHelp}<textarea ${common} rows="3"${bounds}></textarea></label>`;
+      return `<label class="repeat-field">${legend}${fieldHelp}<input type="${field.type === "text" ? "text" : field.type}" ${common}${bounds}></label>`;
     }).join("\n");
     return withOptionalNote(question, `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><h2 id="heading-${id}">${label}</h2>${required}</div>${help}<template data-kqa-repeat-template="${id}"><fieldset><legend>${escapeHtml(question.itemLabel || "Item")}</legend>${fields}</fieldset></template></section>`);
   }
@@ -141,6 +142,11 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
   if (input.presentation === "guided" && (!input.sections?.length || input.questions.some((question) => !question.section))) {
     throw new Error("Section-by-section presentation needs at least one section and every question assigned to a section.");
   }
+  const sourceQuestions = new Map(input.questions.map((question) => [question.id, question]));
+  for (const question of input.questions) for (const condition of question.when?.all ?? []) {
+    const source = sourceQuestions.get(condition.question);
+    if (source?.type === "date" && "value" in condition && (typeof condition.value !== "string" || !isCalendarDate(condition.value))) throw new Error(`Choose a valid date for the routing rule that uses "${source.label}".`);
+  }
   const parsed = manifestSchema.safeParse(manifest);
   if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
   const safeJson = JSON.stringify(parsed.data, null, 2).replace(/</g, "\\u003c");
@@ -167,7 +173,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     header { padding:12px 2px 18px; } h1 { font-size:clamp(1.7rem,5vw,2.4rem); line-height:1.2; margin:0 0 8px; }
     .description { color:var(--muted); margin:0; white-space:pre-wrap; } .question-section { margin:24px 0; } .section-head { margin:0 0 10px; } .section-head h2 { font-size:1.25rem; } .section-head p { color:var(--muted); white-space:pre-wrap; }
     .question { display:block; min-width:0; margin:14px 0; padding:18px; border:1px solid var(--line); border-radius:16px; background:var(--card); }
-    .repeat-field { display:grid; gap:6px; margin:12px 0; } .repeat-field label { margin:0; } .repeat-field .required { font-size:.8rem; }
+    .repeat-field { display:grid; gap:6px; margin:12px 0; } .repeat-field label { margin:0; } .repeat-field .required { font-size:.8rem; } .field-help { color:var(--muted); font-size:.9rem; }
     fieldset.question { border:1px solid var(--line); } .question-head { display:flex; align-items:flex-start; gap:10px; margin:0 0 8px; font-weight:650; font-size:1.08rem; }
     .question-head h2,.question-head label { font:inherit; margin:0; } .number { color:var(--accent); font-variant-numeric:tabular-nums; }
     .required { margin-left:auto; color:var(--muted); font-size:.8rem; font-weight:500; white-space:nowrap; }

@@ -23,6 +23,15 @@ describe("repeat question HTML contract", () => {
     expect(report.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
   });
 
+  it("treats scale radio values as option values rather than preselected answers", () => {
+    const scaleHtml = `<!doctype html><html lang="en-AU"><head><title>Scale repeat</title>
+<script type="application/json" id="kqa-manifest">{"format":"kqa/1","title":"Scale repeat","questions":[{"id":"ratings","type":"repeat","label":"Ratings","maxRows":2,"fields":[{"id":"rating","type":"scale","label":"Rating","min":1,"max":3}]}]}</script></head>
+<body><main><h1>Scale repeat</h1><section data-kqa-question-id="ratings"><h2>Ratings</h2><template data-kqa-repeat-template="ratings"><fieldset><legend>Rating</legend>
+<label><input type="radio" data-kqa-repeat-field="rating" value="1">1</label><label><input type="radio" data-kqa-repeat-field="rating" value="2">2</label><label><input type="radio" data-kqa-repeat-field="rating" value="3">3</label>
+</fieldset></template></section></main></body></html>`;
+    expect(codes(scaleHtml)).not.toContain("KQA320");
+  });
+
   it("requires exactly one template for each repeat question", () => {
     expect(codes(html().replace("</section>", "<template data-kqa-repeat-template=\"assets\"></template></section>"))).toContain("KQA300");
     expect(codes(html().replace('data-kqa-repeat-template="assets"', 'data-kqa-repeat-template="other"'))).toContain("KQA300");

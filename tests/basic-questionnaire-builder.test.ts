@@ -90,8 +90,13 @@ describe("basic questionnaire HTML generator", () => {
   it("generates a native repeat-group template with bounded rows and typed fields", () => {
     const html = generateBasicQuestionnaireHtml({
       title: "Asset check", description: "", questions: [{ id: "assets", type: "repeat", label: "Which assets did you inspect?", help: "One row per asset.", required: true, options: [], itemLabel: "asset", maxRows: 5, minRows: 1, fields: [
-        { id: "name", type: "text", label: "Asset identifier", required: true, maxLength: 80 },
+        { id: "name", type: "text", label: "Asset identifier", help: "Use the printed identifier.", required: true, maxLength: 80 },
         { id: "condition", type: "select", label: "Condition", options: [{ value: "ok", label: "OK" }, { value: "follow-up", label: "Follow up" }] },
+        { id: "priority", type: "single", label: "Priority", options: [{ value: "low", label: "Low" }, { value: "high", label: "High" }] },
+        { id: "details", type: "longtext", label: "Details" },
+        { id: "age", type: "number", label: "Age", step: 0.5 },
+        { id: "rating", type: "scale", label: "Rating" },
+        { id: "checked-on", type: "date", label: "Inspection date" },
       ] }],
     });
     const report = checkHtml(html, { fileName: "repeat.html" });
@@ -102,6 +107,14 @@ describe("basic questionnaire HTML generator", () => {
     expect(html).toContain('data-kqa-repeat-template="assets"');
     expect(html).toContain('data-kqa-repeat-field="name"');
     expect(html).toContain('data-kqa-repeat-field="condition"');
+    expect(html).toContain('data-kqa-repeat-field="priority"');
+    expect(html).toContain('data-kqa-repeat-field="details"');
+    expect(html).toContain('data-kqa-repeat-field="age"');
+    expect(html).toContain('data-kqa-repeat-field="rating"');
+    expect(html).toContain('data-kqa-repeat-field="checked-on"');
+    expect(html).toContain('"help": "Use the printed identifier."');
+    expect(html).toContain('maxlength="80"');
+    expect(html).toContain('step="0.5"');
   });
 
   it("rejects invalid identifiers, duplicate ids, and malformed choice sets", () => {

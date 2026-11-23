@@ -1331,7 +1331,8 @@ function checkRepeatBindings(question: Question, b: BCtx) {
       if (hasAttr(el, "data-kqa")) add(ctx, "KQA309", `Repeat field "${field.id}" must use data-kqa-repeat-field, not data-kqa.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
       if (hasAttr(el, "disabled") || hasAttr(el, "readonly")) add(ctx, "KQA310", `${tagSrc(el)} is disabled or read-only.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
       if (hasAttr(el, "checked")) add(ctx, "KQA320", `${tagSrc(el)} preselects a repeat answer.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
-      if (field.type !== "single" && field.type !== "select" && attr(el, "value")) add(ctx, "KQA320", `${tagSrc(el)} has a default value.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
+      const scaleOption = field.type === "scale" && attr(el, "type")?.toLowerCase() === "radio";
+      if (field.type !== "single" && field.type !== "select" && !scaleOption && attr(el, "value")) add(ctx, "KQA320", `${tagSrc(el)} has a default value.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
       if (el.tagName === "textarea" && textOf(el).trim()) add(ctx, "KQA320", `Repeat field "${field.id}" has default text.`, undefined, { offset: startOf(el), snippet: tagSrc(el), questionId: question.id });
       if (el.tagName === "select") for (const option of kids(el)) if (isEl(option) && option.tagName === "option" && hasAttr(option, "selected")) add(ctx, "KQA320", `Repeat field "${field.id}" has a preselected option.`, undefined, { offset: startOf(option), snippet: tagSrc(option), questionId: question.id });
     }

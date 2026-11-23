@@ -143,6 +143,30 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it("requires an explicit valid date before using a date comparison", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "date");
+    await click("Add question");
+    await change("#builder-route-source-1", "question-1");
+    const rule = Array.from(host.querySelectorAll("select")).find((select) => Array.from(select.options).some((option) => option.textContent === "is less than"));
+    expect(rule).toBeTruthy();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(rule!), "value")?.set?.call(rule!, "lt");
+      rule!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Use questionnaire")?.disabled).toBe(true);
+    await change('input[type="date"]', "2024-03-01");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"value": "2024-03-01"');
+    expect(html).not.toContain("2020-01-01");
+    expect(checkHtml(html, { fileName: "generated-date-route.html" }).ok).toBe(true);
+  });
+
   it("generates optional comment fields and bounded checkbox selections", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");
@@ -200,8 +224,15 @@ describe("basic questionnaire builder UI", () => {
     document.body.append(host);
     root = createRoot(host);
     await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    const note = host.querySelector<HTMLInputElement>("#builder-note-0");
+    expect(note).not.toBeNull();
+    await act(async () => note!.click());
     await change("#builder-type-0", "repeat");
     await change("#builder-label-0", "Which locations did you visit?");
+    expect(host.querySelector("#builder-note-0")).toBeNull();
+    await click("Add record field");
+    await click("Remove field");
+    await click("Add record field");
     expect(host.textContent).toContain("Stable field ID");
     await change('input[value="Field 1"]', "Location name");
     const fieldType = Array.from(host.querySelectorAll("select")).find((select) => select.closest("label")?.textContent?.includes("Type"));
@@ -214,9 +245,11 @@ describe("basic questionnaire builder UI", () => {
     const html = useHtml.mock.calls[0][0] as string;
     expect(html).toContain('"type": "repeat"');
     expect(html).toContain('"maxRows": 5');
+    expect(html).not.toContain('"note": true');
+    expect(html.match(/"id": "field-1"/g)).toHaveLength(1);
     expect(html).toContain('"label": "Location name"');
     expect(html).toContain('data-kqa-repeat-template="question-1"');
-    expect(html).toContain('data-kqa-repeat-field="field-1" value="option-1"');
+    expect(html).toContain('data-kqa-repeat-field="field-2" value="option-1"');
     expect(checkHtml(html, { fileName: "generated-repeat.html" }).ok).toBe(true);
   });
 
