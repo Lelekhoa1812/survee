@@ -935,7 +935,7 @@ const TOOLS: ToolDef[] = [
   {
     name: "list_events",
     description: "Recent audit events for an interview.",
-    inputSchema: obj({ interviewId: str, limit: { type: "integer", minimum: 1 } }, ["interviewId"]),
+    inputSchema: obj({ interviewId: str, limit: { type: "integer", minimum: 1, maximum: 50 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
@@ -1676,7 +1676,7 @@ const TOOLS: ToolDef[] = [
   {
     name: "add_people",
     description: `Add up to ${MAX_PEOPLE_PER_BATCH} people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user.`,
-    inputSchema: obj({ interviewId: str, people: { type: "array", maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
+    inputSchema: obj({ interviewId: str, people: { type: "array", minItems: 1, maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
@@ -1846,7 +1846,7 @@ export function listToolDefs(capabilities?: readonly McpCapability[]) {
   return TOOLS.filter(({ name }) => canCallMcpTool(name, capabilities)).map(({ name, description, inputSchema }) => {
     const readOnly = readOnlyTools.has(name);
     const destructive = ["create_interview", "delete_interview", "remove_person", "regenerate_link", "apply_questionnaire_version_patch", "apply_questionnaire_block_patch", "apply_questionnaire_required_patch", "upload_survey_version", "delete_image_asset"].includes(name);
-    const external = name === "send_invite" || name === "check_invite_delivery";
+    const external = name === "send_invite" || name === "send_invites" || name === "check_invite_delivery";
     return {
       name,
       title: name.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" "),

@@ -545,8 +545,13 @@ describe("MCP tools", () => {
     expect(tools.find((tool) => tool.name === "get_interview_packages")?.inputSchema.properties).toMatchObject({ packageId: { type: "string", enum: expect.arrayContaining(["product-discovery", "personal-wellbeing-reflection", "industrial-operations"]) } });
     expect(tools.find((tool) => tool.name === "delete_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
+    expect(tools.find((tool) => tool.name === "send_invites")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
     const sendInvitesProperties = tools.find((tool) => tool.name === "send_invites")!.inputSchema.properties as Record<string, unknown>;
     expect(sendInvitesProperties.personIds).toMatchObject({ maxItems: 1, minItems: 1 });
+    const addPeopleProperties = tools.find((tool) => tool.name === "add_people")!.inputSchema.properties as Record<string, unknown>;
+    expect(addPeopleProperties.people).toMatchObject({ minItems: 1, maxItems: 100 });
+    const listEventsProperties = tools.find((tool) => tool.name === "list_events")!.inputSchema.properties as Record<string, unknown>;
+    expect(listEventsProperties.limit).toMatchObject({ minimum: 1, maximum: 50 });
   });
 
   it("publishes the preview token as required for questionnaire patch application", async () => {
