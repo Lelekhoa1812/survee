@@ -29,6 +29,30 @@ type Fetchable = {
   fetch(range: number[], query: { source: true; envelope: true }, options: { uid: true }): AsyncIterable<{ source?: Uint8Array | Buffer }>;
 };
 
+const OPERATION_TIMEOUT_MS = 8_000;
+const CLEANUP_TIMEOUT_MS = 1_000;
+
+function closeClient(client: ImapFlow): void {
+  try { client.close(); } catch { /* already closed */ }
+}
+
+async function disconnect(client: ImapFlow, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      client.logout(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+  } catch {
+    // A closed or unhealthy connection may reject during logout.
+  } finally {
+    if (timer) clearTimeout(timer);
+    closeClient(client);
+  }
+}
+
 async function classifyInbox(client: Fetchable, messageId: string): Promise<DeliveryStatus> {
   const found = await client.search(deliverySearchQuery(messageId), { uid: true });
   const uids = Array.isArray(found) ? found.slice(0, 5) : [];
@@ -78,10 +102,18 @@ export async function checkMessageIds(messageIds: string[]): Promise<Map<string,
       }
     }
   };
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
   try {
     await Promise.race([
       work(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
+      new Promise<void>((_, reject) => {
+        timeout = setTimeout(() => {
+          timedOut = true;
+          closeClient(client);
+          reject(new Error("timeout"));
+        }, OPERATION_TIMEOUT_MS);
+      }),
     ]);
   } catch (err) {
     const detail = publicImapFailure(err, cfg.password);
@@ -89,8 +121,11 @@ export async function checkMessageIds(messageIds: string[]): Promise<Map<string,
       if (!out.get(id)?.detail) out.set(id, { status: "unknown", detail });
     }
   } finally {
+    if (timeout) clearTimeout(timeout);
     try { lock?.release(); } catch { /* already released */ }
-    try { await client.logout(); } catch { client.close(); }
+    // close() is called by the deadline handler. Otherwise allow logout a short,
+    // bounded window; disconnect closes the socket whether logout succeeds or hangs.
+    if (!timedOut) await disconnect(client, CLEANUP_TIMEOUT_MS);
   }
   return out;
 }
