@@ -5,8 +5,9 @@ import { csvLong, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
 import { exportFilename, longParticipantRows, longTable, recordTable, slugify, wideParticipantRow, wideTable } from "../src/lib/export/rows";
 import { jsonExport } from "../src/lib/export/json";
 import { escapeInline, markdownExport } from "../src/lib/export/markdown";
-import { exportInterview, ExportOutputSizeLimitError, MAX_EXPORT_OUTPUT_BYTES, type ExportInput } from "../src/lib/export/index";
+import { exportInterview, ExportOutputSizeLimitError, MAX_EXPORT_OUTPUT_BYTES, XlsxComplexityLimitError, type ExportInput } from "../src/lib/export/index";
 import { xlsxExport } from "../src/lib/export/xlsx";
+import { MAX_XLSX_EXPORT_CELLS } from "../src/lib/participant-limits";
 
 const T = "2026-11-05T02:00:00.000Z";
 
@@ -733,5 +734,26 @@ describe("filenames and dispatch", () => {
     };
 
     await expect(exportInterview(oversized, "json")).rejects.toBeInstanceOf(ExportOutputSizeLimitError);
+  });
+
+  it("rejects complex XLSX output before building its workbook", async () => {
+    const questions = Array.from({ length: 250 }, (_, index) => ({ id: `q${index}`, type: "text" as const, label: `Question ${index}` }));
+    const largeInput: ExportInput = {
+      ...input,
+      manifest: { format: "kqa/1", title: "Large workbook", questions },
+      participants: Array.from({ length: 100 }, (_, personIndex) => ({
+        id: `person-${personIndex}`,
+        name: `Person ${personIndex}`,
+        status: "submitted" as const,
+        createdAt: T,
+        answers: Object.fromEntries(questions.map((question) => [question.id, { value: "response", updatedAt: T }])),
+      })),
+    };
+
+    await expect(exportInterview(largeInput, "xlsx")).rejects.toMatchObject({
+      name: "XlsxComplexityLimitError",
+      limitCells: MAX_XLSX_EXPORT_CELLS,
+      estimatedCells: expect.any(Number),
+    } satisfies Partial<XlsxComplexityLimitError>);
   });
 });

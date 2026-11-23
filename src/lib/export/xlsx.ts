@@ -1,8 +1,10 @@
 import { Workbook, type Worksheet } from "exceljs";
 import { evaluateEligibility, isAnswered, progress } from "../format/answers";
 import { neutraliseCell } from "./csv";
-import { exportFilename, longTable, recordTable, sortedParticipants, wideColumns, wideTable } from "./rows";
+import { exportFilename, LONG_HEADER, longTable, recordTable, sortedParticipants, wideColumns, wideTable } from "./rows";
 import type { ExportFile, ExportInput, ExportParticipant } from "./types";
+import { MAX_XLSX_EXPORT_CELLS } from "../participant-limits";
+import { XlsxComplexityLimitError } from "./errors";
 
 const FONT_NAME = "Calibri";
 const FONT_SIZE = 11;
@@ -71,6 +73,48 @@ function writeTable(wb: Workbook, spec: SheetSpec): void {
 
 function indexesWhere<T>(items: T[], test: (item: T) => boolean): Set<number> {
   return new Set(items.flatMap((item, i) => (test(item) ? [i] : [])));
+}
+
+/** Estimate styled cell count without materializing export tables or a workbook. */
+export function estimateXlsxCells(input: ExportInput): number {
+  const people = input.participants;
+  const wideCells = (people.length + 1) * wideColumns(input.manifest, input.surveyVersion).length;
+  const summaryCells = (input.manifest.questions.length + 12) * 7;
+  const peopleCells = (people.length + 1) * 10;
+  const repeatQuestions = new Map(input.manifest.questions.filter((question) => question.type === "repeat").map((question) => [question.id, question]));
+  let longRows = 0;
+  let recordRows = 0;
+  let presentationRows = 0;
+
+  for (const person of people) {
+    const eligibility = evaluateEligibility(input.manifest, person.answers, person.recordGroups);
+    for (const question of input.manifest.questions) {
+      const answer = person.answers[question.id];
+      const hasNote = (answer?.note ?? "").trim() !== "";
+      if (eligibility[question.id] !== false && !isAnswered(question, person.answers) && !hasNote) continue;
+      longRows += 1;
+    }
+    for (const assignment of person.questionOrderAssignments ?? []) presentationRows += Object.keys(assignment.groups).length;
+
+    const groups = person.recordGroups ?? {};
+    const declaredIds = input.manifest.questions.filter((question) => question.type === "repeat" && Object.hasOwn(groups, question.id)).map((question) => question.id);
+    const declaredIdSet = new Set(declaredIds);
+    const questionIds = [...declaredIds, ...Object.keys(groups).filter((questionId) => !declaredIdSet.has(questionId))];
+    for (const questionId of questionIds) {
+      const records = groups[questionId] ?? [];
+      const fields = repeatQuestions.get(questionId)?.fields ?? [];
+      const knownIds = new Set(fields.map((field) => field.id));
+      for (const record of records) {
+        const unknownFields = Object.keys(record.values).filter((fieldId) => !knownIds.has(fieldId));
+        recordRows += fields.length + unknownFields.length;
+      }
+    }
+  }
+
+  const longCells = (longRows + 1) * LONG_HEADER.length;
+  const recordCells = recordRows ? (recordRows + 1) * 12 : 0;
+  const presentationCells = presentationRows ? (presentationRows + 1) * 7 : 0;
+  return summaryCells + wideCells + longCells + peopleCells + recordCells + presentationCells;
 }
 
 function writeSummary(wb: Workbook, input: ExportInput, people: ExportParticipant[]): void {
@@ -152,6 +196,8 @@ function writePeople(wb: Workbook, input: ExportInput, people: ExportParticipant
 
 /** Styled workbook: Summary, Wide, Long and People sheets, plus Records when repeat data exists. */
 export async function xlsxExport(input: ExportInput): Promise<ExportFile> {
+  const estimatedCells = estimateXlsxCells(input);
+  if (estimatedCells > MAX_XLSX_EXPORT_CELLS) throw new XlsxComplexityLimitError(estimatedCells);
   const wb = new Workbook();
   const people = sortedParticipants(input);
 

@@ -1,4 +1,4 @@
-import { EXPORT_FORMATS, exportFilename, exportInterview, ExportOutputSizeLimitError, type ExportFormat, type ExportParticipant } from "@/lib/export";
+import { EXPORT_FORMATS, exportFilename, exportInterview, ExportOutputSizeLimitError, XlsxComplexityLimitError, type ExportFormat, type ExportParticipant } from "@/lib/export";
 import { encodeCsvRow } from "@/lib/export/csv";
 import { LONG_HEADER, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
@@ -169,6 +169,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
   } catch (error) {
     if (error instanceof StaleExportError) return fail(409, error.message, { code: "export_stale" });
     if (error instanceof ExportOutputSizeLimitError) return fail(413, error.message, { code: "export_output_limit", limitBytes: error.limitBytes });
+    if (error instanceof XlsxComplexityLimitError) return fail(413, error.message, { code: "export_complexity_limit", limitCells: error.limitCells });
     throw error;
   }
   const body = typeof file.body === "string" ? file.body : new Uint8Array(file.body);

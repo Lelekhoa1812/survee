@@ -8,7 +8,7 @@ import { readDoc } from "../docs";
 import { getInterviewPackage, INTERVIEW_PACKAGES } from "../interview-packages";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
-import { EXPORT_FORMATS, exportInterview, ExportOutputSizeLimitError, type ExportFormat } from "../export";
+import { EXPORT_FORMATS, exportInterview, ExportOutputSizeLimitError, XlsxComplexityLimitError, type ExportFormat } from "../export";
 import { MAX_EXPORT_OUTPUT_BYTES, MAX_MCP_INVITES_PER_BATCH, MAX_PEOPLE_PER_BATCH } from "../participant-limits";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
@@ -1965,6 +1965,9 @@ export async function dispatchTool(name: string, args: unknown, capabilities?: r
     }
     if (error instanceof ExportOutputSizeLimitError) {
       return finish(tool.name, err(error.message, "export_output_limit", { limitBytes: error.limitBytes }), interviewId);
+    }
+    if (error instanceof XlsxComplexityLimitError) {
+      return finish(tool.name, err(error.message, "export_complexity_limit", { limitCells: error.limitCells }), interviewId);
     }
     const correlationId = requestId ?? randomUUID();
     console.error(`[mcp:${tool.name}] unexpected error`, { requestId: correlationId, errorType: error instanceof Error ? error.name : "unknown" });

@@ -4,6 +4,8 @@ export const MAX_PARTICIPANTS_PER_READ = 100;
 export const MAX_EXPORT_SOURCE_BYTES = 8 * 1024 * 1024;
 /** Maximum materialized bytes returned by buffered host and MCP exports. */
 export const MAX_EXPORT_OUTPUT_BYTES = 16 * 1024 * 1024;
+/** Estimated formatted cells allowed in a buffered XLSX workbook before ExcelJS materializes it. */
+export const MAX_XLSX_EXPORT_CELLS = 250_000;
 /** Maximum bytes emitted by one streamed host CSV response. */
 export const MAX_STREAMED_CSV_OUTPUT_BYTES = 64 * 1024 * 1024;
 /** Maximum people accepted in one atomic add-people request. */
