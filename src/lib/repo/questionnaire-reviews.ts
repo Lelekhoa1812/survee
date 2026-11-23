@@ -2,8 +2,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { ObjectId } from "mongodb";
 import type { Question } from "../format/schema";
 import { LIMITS } from "../format/schema";
-import { col } from "../db";
+import { col, withMongoTransaction } from "../db";
 import type { QuestionnaireReviewDraftDoc } from "./types";
+import { imageAssetPublicIds } from "../image-assets";
 
 export const QUESTIONNAIRE_REVIEW_DRAFT_SLOTS = 5;
 
@@ -31,7 +32,7 @@ export interface QuestionnaireReviewDraftView {
 /** Store one candidate in an available, bounded tenant/interview slot until its preview expires. */
 export async function saveQuestionnaireReviewDraft(input: SaveQuestionnaireReviewDraftInput): Promise<
   | { available: true; reviewId: string; expiresAt: string }
-  | { available: false; reason: "review_quota_reached" }
+  | { available: false; reason: "review_quota_reached" | "asset_unavailable" }
 > {
   const interviewId = /^[0-9a-f]{24}$/i.test(input.interviewId) ? new ObjectId(input.interviewId) : null;
   const now = new Date();
@@ -61,25 +62,41 @@ export async function saveQuestionnaireReviewDraft(input: SaveQuestionnaireRevie
     expiresAt: input.expiresAt,
   };
   const drafts = await col.questionnaireReviewDrafts();
+  const publicIds = imageAssetPublicIds(input.html);
   for (let slot = 0; slot < QUESTIONNAIRE_REVIEW_DRAFT_SLOTS; slot += 1) {
     const row = { ...draft, slot };
-    const reclaimed = await drafts.updateOne(
-      { tenantId: input.tenantId, interviewId, slot, expiresAt: { $lte: now } },
-      { $set: row },
-    );
-    if (reclaimed.matchedCount > 0) {
-      return { available: true, reviewId, expiresAt: input.expiresAt.toISOString() };
-    }
     try {
-      await drafts.insertOne({ _id: new ObjectId(), ...row });
-      return { available: true, reviewId, expiresAt: input.expiresAt.toISOString() };
+      const saved = await withMongoTransaction(async (session) => {
+        const active = await drafts.findOne({ tenantId: input.tenantId, interviewId, slot, expiresAt: { $gt: now } }, { session, projection: { _id: 1 } });
+        if (active) return "occupied" as const;
+        // Deletion scans review drafts and deletes each referenced asset in a
+        // transaction. Touch the same asset rows so a concurrent save/delete
+        // conflicts instead of committing a preview with a broken image.
+        const assets = await col.imageAssets();
+        for (const publicId of publicIds) {
+          const touched = await assets.updateOne({ tenantId: input.tenantId, publicId }, { $inc: { referenceRevision: 1 } }, { session });
+          if (!touched.matchedCount) throw new MissingReviewAssetReferenceError();
+        }
+        const reclaimed = await drafts.updateOne(
+          { tenantId: input.tenantId, interviewId, slot, expiresAt: { $lte: now } },
+          { $set: row },
+          { session },
+        );
+        if (reclaimed.matchedCount > 0) return "saved" as const;
+        await drafts.insertOne({ _id: new ObjectId(), ...row }, { session });
+        return "saved" as const;
+      });
+      if (saved === "saved") return { available: true, reviewId, expiresAt: input.expiresAt.toISOString() };
     } catch (error) {
+      if (error instanceof MissingReviewAssetReferenceError) return { available: false, reason: "asset_unavailable" };
       // A concurrent save may have claimed this slot after the expired-row check.
       if ((error as { code?: number }).code !== 11000) throw error;
     }
   }
   return { available: false, reason: "review_quota_reached" };
 }
+
+class MissingReviewAssetReferenceError extends Error {}
 
 /** Read only an unexpired draft belonging to the caller's signed-in tenant. */
 export async function getQuestionnaireReviewDraft(reviewId: string, tenantId: string): Promise<QuestionnaireReviewDraftView | null> {

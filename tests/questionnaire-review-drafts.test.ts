@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   updateOne: vi.fn(),
   insertOne: vi.fn(),
   findOne: vi.fn(),
+  touchAsset: vi.fn(),
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -16,7 +17,9 @@ vi.mock("../src/lib/db", () => ({
       insertOne: mocks.insertOne,
       findOne: mocks.findOne,
     }),
+    imageAssets: async () => ({ updateOne: mocks.touchAsset }),
   },
+  withMongoTransaction: async (work: (session: object) => Promise<unknown>) => work({}),
 }));
 
 import { getQuestionnaireReviewDraft, saveQuestionnaireReviewDraft } from "../src/lib/repo";
@@ -50,6 +53,7 @@ beforeEach(() => {
     if (!draft) return null;
     return draft;
   });
+  mocks.touchAsset.mockReset().mockResolvedValue({ matchedCount: 0 });
 });
 
 describe("short-lived questionnaire review drafts", () => {
@@ -73,7 +77,7 @@ describe("short-lived questionnaire review drafts", () => {
     expect(saved.expiresAt).toBe(expiresAt.toISOString());
     expect(mocks.insertOne).toHaveBeenCalledWith(expect.objectContaining({
       tenantId: "tenant-a", interviewId: new ObjectId(input.interviewId), slot: 0, candidateHash, html, expiresAt,
-    }));
+    }), { session: {} });
     expect(mocks.drafts[0].reviewIdHash).toBe(createHash("sha256").update(saved.reviewId).digest("hex"));
     expect(mocks.drafts[0].reviewIdHash).not.toBe(saved.reviewId);
 
@@ -151,5 +155,29 @@ describe("short-lived questionnaire review drafts", () => {
       questions: [question],
       expiresAt: new Date(Date.now() + 60_000),
     })).rejects.toThrow("supported size limits");
+  });
+
+  it("coordinates a review draft with asset deletion and refuses missing asset references", async () => {
+    const publicId = "a".repeat(43);
+    const htmlWithAsset = `${html}<img src="/api/assets/${publicId}">`;
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    mocks.touchAsset.mockResolvedValueOnce({ matchedCount: 1 });
+    const saved = await saveQuestionnaireReviewDraft({
+      tenantId: "tenant-a", interviewId: "0123456789abcdef01234567", expectedVersion: 1,
+      candidateHash: createHash("sha256").update(htmlWithAsset).digest("hex"), html: htmlWithAsset,
+      questions: [question], expiresAt,
+    });
+    expect(saved.available).toBe(true);
+    expect(mocks.touchAsset).toHaveBeenCalledWith(
+      { tenantId: "tenant-a", publicId }, { $inc: { referenceRevision: 1 } }, { session: {} },
+    );
+
+    mocks.touchAsset.mockReset().mockResolvedValue({ matchedCount: 0 });
+    const missing = await saveQuestionnaireReviewDraft({
+      tenantId: "tenant-a", interviewId: "0123456789abcdef01234567", expectedVersion: 1,
+      candidateHash: createHash("sha256").update(htmlWithAsset).digest("hex"), html: htmlWithAsset,
+      questions: [question], expiresAt,
+    });
+    expect(missing).toEqual({ available: false, reason: "asset_unavailable" });
   });
 });
