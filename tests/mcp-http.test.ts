@@ -3,9 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { authorizeMcp } = vi.hoisted(() => ({
   authorizeMcp: vi.fn(async () => ({
     ok: true as const,
-    principal: { tenantId: "axion", role: "service" as const, source: "service_token" as const },
+    principal: {
+      tenantId: "axion",
+      role: "service" as const,
+      source: "service_token" as const,
+      auditActor: { kind: "service_token" as const, id: "axion-service-token", name: "Axion MCP service token" },
+    },
   })),
 }));
+const limiter = vi.hoisted(() => {
+  const counts = new Map<string, number>();
+  const state = { fail: false };
+  return {
+    counts,
+    state,
+    consumeRateLimit: vi.fn(async (key: string, maxAttempts: number) => {
+      if (state.fail) throw new Error("rate-limit store unavailable");
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      return count <= maxAttempts;
+    }),
+  };
+});
 const { dispatchTool, listToolDefs } = vi.hoisted(() => ({
   dispatchTool: vi.fn(async () => ({ content: [{ type: "text", text: "tool called" }], structuredContent: {} })),
   listToolDefs: vi.fn(() => []),
@@ -13,6 +32,7 @@ const { dispatchTool, listToolDefs } = vi.hoisted(() => ({
 
 vi.mock("../src/lib/mcp/auth", () => ({ authorizeMcp }));
 vi.mock("../src/lib/mcp/tools", () => ({ dispatchTool, listToolDefs }));
+vi.mock("../src/lib/repo", () => ({ consumeRateLimit: limiter.consumeRateLimit }));
 
 import { handleMcp } from "../src/lib/mcp/http";
 import { DELETE, GET, OPTIONS } from "../src/app/api/mcp/route";
@@ -21,6 +41,10 @@ beforeEach(() => {
   vi.stubEnv("KQA_PUBLIC_URL", "https://kqa.example");
   vi.stubEnv("KQA_MCP_ALLOWED_ORIGINS", "");
   authorizeMcp.mockClear();
+  limiter.counts.clear();
+  limiter.state.fail = false;
+  limiter.consumeRateLimit.mockClear();
+  dispatchTool.mockClear();
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -39,10 +63,10 @@ async function initialize(protocolVersion: unknown) {
   return { status: response.status, body: await response.json() as { result?: { protocolVersion?: string; serverInfo?: { name: string; version: string } } } };
 }
 
-async function rpc(method: string, params: unknown = {}) {
+async function rpc(method: string, params: unknown = {}, extraHeaders: Record<string, string> = {}) {
   const response = await handleMcp(new Request("https://kqa.example/api/mcp", {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: { "content-type": "application/json", accept: "application/json", ...extraHeaders },
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method, params }),
   }));
   return { status: response.status, body: await response.json() as { result?: Record<string, unknown>; error?: { code: number; message: string } } };
@@ -171,6 +195,58 @@ describe("MCP protocol version negotiation", () => {
 
     const tooLong = await rpc("prompts/get", { name: "draft_questionnaire", arguments: { brief: "x".repeat(20_001) } });
     expect(tooLong.body.error?.message).toContain("at most 20000 characters");
+  });
+
+  it("throttles tool calls by authorized credential identity and optionally by trusted Vercel IP", async () => {
+    const response = await rpc("tools/call", { name: "update_interview" }, {
+      "x-vercel-forwarded-for": "198.51.100.4, 10.0.0.1",
+      "x-forwarded-for": "203.0.113.9",
+    });
+
+    expect(response.status).toBe(200);
+    expect(limiter.consumeRateLimit.mock.calls).toEqual([
+      ["mcp-tool-key:axion:service_token:axion-service-token", 600, 15],
+      ["mcp-tool-ip:198.51.100.4", 6_000, 15],
+    ]);
+  });
+
+  it("does not throttle initialize, tools/list, ping, or caller supplied forwarding headers", async () => {
+    await initialize("2025-06-18");
+    await rpc("tools/list");
+    await rpc("ping");
+    await rpc("tools/call", { name: "update_interview" }, { "x-forwarded-for": "203.0.113.9" });
+
+    expect(limiter.consumeRateLimit.mock.calls).toEqual([
+      ["mcp-tool-key:axion:service_token:axion-service-token", 600, 15],
+    ]);
+  });
+
+  it("rejects concurrent tool calls after the atomic credential limit is exhausted", async () => {
+    const responses = await Promise.all(Array.from({ length: 601 }, () => rpc("tools/call", { name: "update_interview" })));
+    const limited = responses.filter(({ status }) => status === 429);
+
+    expect(limited).toHaveLength(1);
+    expect(limited[0].body.error).toMatchObject({ code: -32029, message: "Too many MCP tool calls. Wait before trying again." });
+    expect(dispatchTool).toHaveBeenCalledTimes(600);
+  });
+
+  it("applies a stricter separate limit to analysis and export reads", async () => {
+    const responses = await Promise.all(Array.from({ length: 61 }, () => rpc("tools/call", { name: "analyze_answers" })));
+    const limited = responses.filter(({ status }) => status === 429);
+
+    expect(limited).toHaveLength(1);
+    expect(dispatchTool).toHaveBeenCalledTimes(60);
+    expect(limiter.counts.get("mcp-tool-expensive-key:axion:service_token:axion-service-token")).toBe(61);
+  });
+
+  it("fails closed with a distinct 503 when the shared limiter is unavailable", async () => {
+    limiter.state.fail = true;
+
+    const response = await rpc("tools/call", { name: "list_interviews" });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toMatchObject({ code: -32000, message: "MCP request throttling is temporarily unavailable. Try again shortly." });
+    expect(dispatchTool).not.toHaveBeenCalled();
   });
 
   it("rejects browser origins before authorization on every MCP method", async () => {

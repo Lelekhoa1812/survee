@@ -5,9 +5,17 @@ import { withTenantPrincipal } from "../tenant-context";
 import type { McpCapability } from "./capabilities";
 import { mcpOriginError, withMcpCors } from "./origin";
 import { getPrompt, listPrompts } from "./prompts";
+import { consumeRateLimit } from "../repo";
+import type { TenantPrincipal } from "../tenant-context";
 
 const PROTOCOL = "2025-06-18";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+const MCP_TOOL_WINDOW_MINUTES = 15;
+const MCP_TOOL_CALL_LIMIT = 600;
+const MCP_EXPENSIVE_TOOL_CALL_LIMIT = 60;
+const MCP_IP_TOOL_CALL_LIMIT = 6_000;
+const MCP_IP_EXPENSIVE_TOOL_CALL_LIMIT = 240;
+const EXPENSIVE_MCP_TOOLS = new Set(["analyze_answers", "export_interview", "get_answers", "list_people"]);
 
 export function unauthorized(req: Request): Response {
   return new Response(JSON.stringify({ error: "Unauthorized." }), {
@@ -50,6 +58,27 @@ function protocolVersion(requested: unknown): string {
   // with a version the server supports, as required by MCP version negotiation.
   if (requested === PROTOCOL) return requested;
   return PROTOCOL;
+}
+
+function credentialRateLimitId(principal: TenantPrincipal): string {
+  const actor = principal.auditActor;
+  return actor ? `${principal.tenantId}:${actor.kind}:${actor.id}` : `${principal.tenantId}:${principal.source}`;
+}
+
+async function mcpToolRateLimit(req: Request, credentialId: string, expensive: boolean): Promise<"allowed" | "limited" | "unavailable"> {
+  try {
+    const checks = [consumeRateLimit(`mcp-tool-key:${credentialId}`, MCP_TOOL_CALL_LIMIT, MCP_TOOL_WINDOW_MINUTES)];
+    const platformIp = req.headers.get("x-vercel-forwarded-for")?.split(",", 1)[0]?.trim();
+    if (platformIp) checks.push(consumeRateLimit(`mcp-tool-ip:${platformIp}`, MCP_IP_TOOL_CALL_LIMIT, MCP_TOOL_WINDOW_MINUTES));
+    if (expensive) {
+      checks.push(consumeRateLimit(`mcp-tool-expensive-key:${credentialId}`, MCP_EXPENSIVE_TOOL_CALL_LIMIT, MCP_TOOL_WINDOW_MINUTES));
+      if (platformIp) checks.push(consumeRateLimit(`mcp-tool-expensive-ip:${platformIp}`, MCP_IP_EXPENSIVE_TOOL_CALL_LIMIT, MCP_TOOL_WINDOW_MINUTES));
+    }
+    const allowed = await Promise.all(checks);
+    return allowed.every(Boolean) ? "allowed" : "limited";
+  } catch {
+    return "unavailable";
+  }
 }
 
 async function readBody(req: Request): Promise<{ ok: true; data: unknown } | { ok: false; status: number; message: string }> {
@@ -133,6 +162,24 @@ export async function handleMcp(req: Request): Promise<Response> {
     // arrays before dispatch so a small-message batch cannot fan out work.
     if (Array.isArray(body.data)) {
       return new Response(JSON.stringify(rpcError(null, -32600, "JSON-RPC batch requests are not supported.")), { status: 400, headers: JSON_HEADERS });
+    }
+    const rpc = body.data as RpcRequest;
+    if (rpc?.method === "tools/call") {
+      const params = rpc.params && typeof rpc.params === "object" ? rpc.params as { name?: unknown } : null;
+      if (typeof params?.name === "string") {
+        const limited = await mcpToolRateLimit(req, credentialRateLimitId(auth.principal), EXPENSIVE_MCP_TOOLS.has(params.name));
+        if (limited !== "allowed") {
+          const unavailable = limited === "unavailable";
+          const headers = new Headers(JSON_HEADERS);
+          if (!unavailable) headers.set("Retry-After", String(MCP_TOOL_WINDOW_MINUTES * 60));
+          return new Response(JSON.stringify(rpcError(rpc.id ?? null, unavailable ? -32000 : -32029, unavailable
+            ? "MCP request throttling is temporarily unavailable. Try again shortly."
+            : "Too many MCP tool calls. Wait before trying again.")), {
+            status: unavailable ? 503 : 429,
+            headers,
+          });
+        }
+      }
     }
     const reply = await handleOne(body.data as RpcRequest, auth.capabilities);
     if (!reply) return new Response(null, { status: 202, headers: JSON_HEADERS });
