@@ -18,6 +18,7 @@ export const POST = withServerErrors("admin/people/[pid]/[action]", async functi
   }
   if (action === "token") {
     const token = await regenerateToken(pid);
+    if (token === "invite_pending") return fail(409, "Resolve the pending invitation before replacing this private link.", { code: "invite_pending" });
     return token ? json({ ok: true, token }) : fail(404, "Person not found.");
   }
   if (action === "invite") {

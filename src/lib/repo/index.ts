@@ -849,14 +849,28 @@ export async function deleteParticipant(id: string): Promise<boolean | "invite_p
   return deleted;
 }
 
-export async function regenerateToken(id: string): Promise<string | null> {
+export async function regenerateToken(id: string): Promise<string | null | "invite_pending"> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
   const token = newToken();
-  const res = await (await col.participants()).updateOne(tenantFilter(tenantId, { _id: oid }), { $set: { token, updatedAt: new Date() } });
-  return res.matchedCount ? token : null;
+  return withMongoTransaction(async (session) => {
+    const participants = await col.participants();
+    const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
+    if (!current) return null;
+    const pendingInvite = await (await col.mail()).findOne(
+      { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } },
+      { session, projection: { _id: 1 } },
+    );
+    if (pendingInvite) return "invite_pending";
+    const res = await participants.updateOne(
+      tenantFilter(tenantId, { _id: oid }),
+      { $set: { token, updatedAt: new Date() }, $inc: { inviteAttemptRevision: 1 } },
+      { session },
+    );
+    return res.matchedCount ? token : null;
+  });
 }
 
 export async function reopenParticipant(id: string): Promise<ParticipantView | null> {
@@ -1362,6 +1376,20 @@ export async function listEventPage(interviewId: string, cursor: string | null, 
     events: page.map((event) => ({ id: event._id.toHexString(), type: event.type, at: event.at.toISOString(), participantId: event.participantId?.toHexString(), meta: event.meta })),
     nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ at: last.at.toISOString(), id: last._id.toHexString() })).toString("base64url") : null,
   };
+}
+
+/** Record an interview export without storing participant data or the export payload. */
+export async function recordExportEvent(interviewId: string, format: string): Promise<boolean> {
+  const oid = toOid(interviewId);
+  if (!oid) return false;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return false;
+  return withMongoTransaction(async (session) => {
+    const interview = await (await col.interviews()).findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
+    if (!interview) return false;
+    await insertEvent(tenantId, oid, "export", undefined, session, { format });
+    return true;
+  });
 }
 
 export { getQuestionnaireReviewDraft, saveQuestionnaireReviewDraft } from "./questionnaire-reviews";
