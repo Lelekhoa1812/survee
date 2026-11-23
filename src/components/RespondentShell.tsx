@@ -517,6 +517,17 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       toast(t("lockedError"), "err", localeMeta);
       return;
     }
+    if (res.status === 413 || res.data.code === "payload_too_large") {
+      // A size rejection is definitive: the server did not apply any part of this batch.
+      // Keep the respondent's visible edits and queued operations in memory instead of
+      // reconciling them away against the last confirmed server snapshot.
+      inflight.current = false;
+      pending.current = mergePatches(batch, pending.current);
+      pendingRecordOperations.current = [...recordBatch, ...pendingRecordOperations.current];
+      setSave("failed");
+      toast(t("notSavedYet"), "err", localeMeta);
+      return;
+    }
     // 400/404: the server refused a value. Show why, then put the page back to what is actually saved.
     setSave("error");
     const refusal = res.status === 400 ? res.data.details?.[0] : undefined;

@@ -40,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 describe("scalar browser-invalid number drafts in the respondent shell", () => {
@@ -63,6 +64,28 @@ describe("scalar browser-invalid number drafts in the respondent shell", () => {
     const safe = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(safe);
     expect(safe.defaultPrevented).toBe(false);
+  });
+
+  it("keeps answer edits and marks them unsaved when autosave is rejected for request size", async () => {
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    const send = (data: object) => window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, ...data }, origin: "null", source: frame.contentWindow }));
+    const outbound = vi.spyOn(frame.contentWindow!, "postMessage");
+    vi.useFakeTimers();
+    state.api.mockResolvedValueOnce({ ok: false, status: 413, data: { code: "payload_too_large" } });
+    await act(async () => send({ type: "hello" }));
+    outbound.mockClear();
+
+    await act(async () => send({ type: "set", id: "note", value: "This edit must remain available" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(650); });
+
+    expect(state.api).toHaveBeenCalledTimes(2); // initial load and rejected PUT; no reconciliation GET
+    expect(host.querySelector(".rs-save-label")?.textContent).toBe("Not saved");
+    expect(outbound.mock.calls.some(([message]) => (message as { type?: string }).type === "answers")).toBe(false);
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+    outbound.mockRestore();
   });
 
   it("ignores number-draft messages for questions that are not number questions", async () => {
