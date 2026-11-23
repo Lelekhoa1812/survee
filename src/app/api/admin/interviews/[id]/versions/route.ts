@@ -35,7 +35,7 @@ function tokenError(code: "preview_required" | "preview_expired" | "invalid_prev
   return fail(400, "This preview does not match the current workspace, interview, or candidate. Preview again.", { code });
 }
 
-/** Return a stored questionnaire as a local candidate; it does not change the live version. */
+/** Read a stored source file for download or candidate restore; neither action changes the live version. */
 export const GET = withServerErrors("admin/interviews/[id]/versions", async function GET(req: Request, { params }: Ctx) {
   const denied = await guardAdmin();
   if (denied) return denied;
