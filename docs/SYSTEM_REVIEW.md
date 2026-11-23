@@ -8,7 +8,7 @@
 
 The core interview lifecycle is in good shape for bounded, host-run questionnaire collection. The app validates questionnaires, isolates respondent links, retains recoverable drafts, supports routing and repeat records, separates respondent-level analytics from repeat rows, offers multiple export formats, and protects MCP operations with credential-scoped capabilities. The automated suite and production build are healthy.
 
-The largest remaining risks are operational durability and scale: outbound mail can have an ambiguous result after a provider accepts it, respondent loads and exports grow with the whole interview, and uploaded assets have no workspace quota. Governance features are also host-dependent: consent notices, retention, withdrawal, and deletion schedules are not first-class workflows. A schema-backed questionnaire builder and scheduled campaign tools would materially improve adoption, but they need product design beyond a small repair.
+The largest remaining risks are operational durability and scale: outbound mail can have an ambiguous result after a provider accepts it, individual respondent payloads can grow with questionnaire size, full exports remain in-memory and capped, and uploaded assets have no workspace quota. Governance features are also host-dependent: consent notices, retention, withdrawal, and deletion schedules are not first-class workflows. A schema-backed questionnaire builder and scheduled campaign tools would materially improve adoption, but they need product design beyond a small repair.
 
 ## Shipped during this review
 
@@ -27,7 +27,7 @@ The following changes are pushed to `main` and deployed:
 - Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries, an on-demand IMAP check can resolve a matching delivery-status notice, and explicit resend warns of possible duplicates.
 - Active workspace invitation links no longer rotate on repeated requests or concurrent sends; SMTP ambiguity leaves the invitation active, with revoke-before-replacement behavior shown in settings.
 - Workspace invitation attempts persist their exact Message-ID before SMTP; hosts can check that id for delivery-status evidence with per-invitation and workspace throttles.
-- The host People list and MCP people/status/mail-status reads paginate in bounded cursor pages. MCP interview-wide answer reads now page through bounded 50-row results (maximum 100) and apply `submittedOnly` in the database query; the host answer matrix still shows only the newest page and full exports remain capped at 100. Targeted MCP answer reads load one tenant-scoped person.
+- The host People list, host Answers matrix, and MCP people/status/mail-status reads paginate in bounded cursor pages. MCP interview-wide answer reads page through bounded 50-row results (maximum 100) and apply `submittedOnly` in the database query; full exports remain capped at 100. Targeted MCP answer reads load one tenant-scoped person.
 - A rejected cold-start Mongo connection now clears only its own cached promise so a warm worker can retry when the database recovers.
 - Published questionnaire assets and asset deletion now share a transactional coordination point; a concurrent deletion cannot leave a newly published version pointing at a missing image.
 - Preview-draft saves now touch referenced assets in a transaction, coordinating draft creation and reclamation with asset deletion.
@@ -56,11 +56,10 @@ The following changes are pushed to `main` and deployed:
 ## Validation evidence
 
 - Full automated suite: **960 tests passed across 139 files**; TypeScript check and optimized Next.js production build passed.
-- TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production release `1bc002f` reached **READY**. Runtime error review found no errors in the 15 minutes after deployment. The homepage returns HTTP 200, an unknown frame token returns 404, and unauthenticated MCP POST returns 401. A live rate-limit probe against a fabricated nonexistent respondent token returned 180 expected 404s followed by 429 on request 181. Public accessibility audit covered five public routes at four viewport widths (20 samples): zero automated violations, six axe contrast needs-review results, and no authenticated host or respondent fixture coverage. An authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools; disposable interviews were created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
 
-Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The public-route accessibility audit has been run previously; authenticated host and respondent flows still need a dedicated browser audit with a disposable account and interview fixture.
+Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The public-route accessibility audit covered five routes and four viewport widths; authenticated host and respondent flows still need a dedicated browser audit with a disposable account and interview fixture.
 
 ## Next review order
 
@@ -68,6 +67,6 @@ Some repository evaluation scripts require provider-generated result JSON and we
 2. Add workspace asset quotas and usage visibility.
 3. Decide and implement consent, retention, withdrawal, and complete participant-erasure workflows.
 4. Settle delivery attempts with no delivery-status notice through provider reconciliation or a host resolution workflow.
-5. Add token-bucket limits for public respondent APIs.
+5. Move cold-start pending-signup cleanup into a bounded, resumable migration and review the serverless Mongo connection budget.
 6. Scope the in-app questionnaire builder and campaign automation.
 
