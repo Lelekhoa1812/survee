@@ -4,6 +4,7 @@ import type { InterviewData } from "@/components/interview-types";
 import { publicBaseUrl } from "@/lib/env";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
 import { summarizeQuestionCohorts, withCurrentEligibility } from "@/lib/analytics/summary";
+import { getCachedHostSummary } from "@/lib/analytics/host-summary-cache";
 import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listParticipantPage, listVersions, recentEvents } from "@/lib/repo";
 import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
 import { participantRows } from "@/lib/host/participant-rows";
@@ -40,7 +41,12 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   let analysis: InterviewData["analysis"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
-    analysis = await summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds))));
+    analysis = await getCachedHostSummary({
+      tenantId: session.tenantId,
+      interviewId: id,
+      surveyVersion: current.version,
+      respondentRevision: interview.respondentWriteRevision ?? 0,
+    }, () => summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds)))));
   }
   const base = publicBaseUrl();
 

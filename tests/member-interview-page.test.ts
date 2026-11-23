@@ -5,12 +5,14 @@ const state = vi.hoisted(() => ({
   listParticipantPage: vi.fn(async () => ({ people: [{ id: "person-1", interviewId: "interview-1", token: "private-link", name: "Respondent", email: "private@example.test", answers: { answer: { value: "private response" } }, status: "submitted" as const, createdAt: "2026-11-16T00:00:00.000Z", updatedAt: "2026-11-16T00:00:00.000Z", revision: 1 }], nextCursor: null as string | null })),
   listCurrentMailByParticipants: vi.fn(async () => [{ participantId: { toHexString: () => "person-1" } }]),
   recentEvents: vi.fn(async () => [{ id: "event-1", participantId: "person-1", type: "submit", at: "2026-11-16T00:00:00.000Z" }]),
+  hostSummaryCache: vi.fn(async (_key: unknown, compute: () => Promise<unknown>) => compute()),
 }));
 
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not found"); } }));
 vi.mock("@/lib/http", () => ({ adminSession: async () => ({ role: state.role, tenantId: "tenant-1" }) }));
 vi.mock("@/lib/env", () => ({ publicBaseUrl: () => ({ ok: true, origin: "https://kqa.test" }) }));
 vi.mock("@/lib/analytics/summary", () => ({ summarizeQuestionCohorts: async () => ({ asOf: "2026-11-16T00:00:00.000Z", statusCounts: { invited: 0, in_progress: 0, submitted: 1 }, summaries: {} }), withCurrentEligibility: (_manifest: unknown, respondents: unknown) => respondents }));
+vi.mock("@/lib/analytics/host-summary-cache", () => ({ getCachedHostSummary: state.hostSummaryCache }));
 vi.mock("@/lib/format/answers", () => ({ progress: () => ({ answered: 1, total: 1, missingRequired: [] }), eligibilityQuestionIds: (_manifest: unknown, ids: string[]) => ids }));
 vi.mock("@/lib/mail/state", () => ({ currentMail: () => ({ state: "sent", sentAt: "2026-11-16T00:00:00.000Z", delivery: "unknown" }) }));
 vi.mock("@/lib/repo/mail", () => ({ listCurrentMailByParticipants: state.listCurrentMailByParticipants, mailRecord: (row: unknown) => row }));
@@ -52,6 +54,7 @@ describe("member interview server page", () => {
     expect(element.props.data.analysis).toMatchObject({ statusCounts: { submitted: 1 } });
     expect(element.props.data.people).toEqual([]);
     expect(state.listParticipantPage).not.toHaveBeenCalled();
+    expect(state.hostSummaryCache).toHaveBeenCalledWith({ tenantId: "tenant-1", interviewId: "0123456789abcdef01234567", surveyVersion: 1, respondentRevision: 0 }, expect.any(Function));
   });
 
   it("loads respondent details for admins", async () => {
