@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { displayValue, evaluateEligibility, isAnswered } from "@/lib/format/answers";
 import type { Question, RepeatField, RepeatRecordRow } from "@/lib/format/schema";
 import type { InterviewData, PersonRow } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
-import { Badge, Icon, Modal } from "./ui";
+import { api, Badge, Icon, Modal, Spinner } from "./ui";
 import { fullTime } from "@/lib/time";
 import { summarizeQuestion, type QuestionSummary } from "@/lib/analytics/summary";
 import { describeNumericQuantiles, formatPercentage } from "@/lib/analytics/format";
@@ -85,11 +85,46 @@ export function AnswersTab({ data }: { data: InterviewData }) {
   const [view, setView] = useState<"question" | "person">(data.interview.mode === "multi" && data.people.length > 1 ? "question" : "person");
   const [only, setOnly] = useState<"all" | "submitted">("all");
   const [viewing, setViewing] = useState<PersonRow | null>(null);
-  const people = useMemo(() => data.people.filter((p) => (only === "submitted" ? p.status === "submitted" : true)), [data.people, only]);
+  const [pageRows, setPageRows] = useState(data.people);
+  const [nextCursor, setNextCursor] = useState(data.peopleNextCursor ?? null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageError, setPageError] = useState("");
+  useEffect(() => {
+    setPageRows(data.people);
+    setNextCursor(data.peopleNextCursor ?? null);
+    setPageError("");
+  }, [data.people, data.peopleNextCursor]);
+  const people = useMemo(() => pageRows.filter((p) => (only === "submitted" ? p.status === "submitted" : true)), [pageRows, only]);
   const peopleWithEligibility = useMemo(() => people.map((person) => ({ ...person, eligibility: evaluateEligibility(data.manifest, person.answers, person.recordGroups) })), [data.manifest, people]);
   const { questions, sections } = data.manifest;
-  const anyAnswers = data.people.some((p) => p.answered > 0 || Object.values(p.answers).some((answer) => !!answer.note?.trim()) || Object.values(p.recordGroups ?? {}).some((records) => records.length > 0));
+  const anyAnswers = pageRows.some((p) => p.answered > 0 || Object.values(p.answers).some((answer) => !!answer.note?.trim()) || Object.values(p.recordGroups ?? {}).some((records) => records.length > 0));
   const summaries = useMemo(() => new Map(questions.filter((q) => q.type !== "repeat").map((q) => [q.id, summarizeQuestion(q, peopleWithEligibility)])), [questions, peopleWithEligibility]);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setPageError("");
+    const response = await api<{ people?: PersonRow[]; nextCursor?: string | null }>(
+      `/api/admin/interviews/${data.interview.id}/participants?cursor=${encodeURIComponent(nextCursor)}&includeAnswers=1`,
+    );
+    setLoadingMore(false);
+    if (!response.ok) {
+      setPageError(response.data.error ?? "More answers could not be loaded.");
+      return;
+    }
+    const fresh = response.data.people ?? [];
+    setPageRows((current) => [...current, ...fresh.filter((person) => !current.some((item) => item.id === person.id))]);
+    setNextCursor(response.data.nextCursor ?? null);
+  }
+
+  const loadMoreControl = nextCursor ? (
+    <div className="row wrap" role="group" aria-label="More answer pages">
+      <button className="btn sm" type="button" onClick={loadMore} disabled={loadingMore}>
+        {loadingMore ? <Spinner /> : <Icon name="refresh" size={14} />} Load more answers
+      </button>
+      <span className="muted" role={pageError ? "alert" : "status"}>{pageError || `${pageRows.length} of ${data.counts.people} people loaded`}</span>
+    </div>
+  ) : null;
 
   const groups = useMemo(() => {
     const out: { id: string; title: string; description?: string; qs: Question[] }[] = [];
@@ -104,7 +139,7 @@ export function AnswersTab({ data }: { data: InterviewData }) {
     .filter(([questionId, records]) => records.length > 0 && !currentRepeatIds.has(questionId))
     .map(([questionId]) => questionId)))].sort(), [people, currentRepeatIds]);
 
-  if (!anyAnswers) {
+  if (!anyAnswers && !nextCursor) {
     return (
       <div className="card empty">
         <div className="ico"><Icon name="inbox" size={24} /></div>
@@ -113,6 +148,8 @@ export function AnswersTab({ data }: { data: InterviewData }) {
       </div>
     );
   }
+
+  if (!anyAnswers) return <div className="stack"><div className="card empty"><h3>No answers on this page</h3><p>Older people may have answers. Load the next page to continue reviewing.</p></div>{loadMoreControl}</div>;
 
   return (
     <div className="stack">
@@ -283,6 +320,8 @@ export function AnswersTab({ data }: { data: InterviewData }) {
           })}
         </div>
       )}
+
+      {loadMoreControl}
 
       {viewing && (
         <Modal title={`${viewing.name}'s answers`} onClose={() => setViewing(null)} className="answers-modal" style={{ width: "min(1000px, 100%)", padding: 0, gap: 0 }}>

@@ -194,7 +194,7 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
 
       {tab === "people" && <PeopleTab data={data} origin={origin} refresh={refresh} />}
       {tab === "answers" && <>
-        {data.counts.people > data.people.length && <div className="callout warn" role="status"><Icon name="info" /><div>This answer matrix shows the newest {data.people.length} of {data.counts.people} people. Additional pages are available in the People tab; the full matrix does not paginate yet.</div></div>}
+        {data.counts.people > data.people.length && <div className="callout" role="status"><Icon name="info" /><div>The answer matrix starts with the newest {data.people.length} of {data.counts.people} people. Load more answers below to review older pages.</div></div>}
         <AnswersTab data={data} />
       </>}
       {tab === "analysis" && <AnalyticsTab data={data} />}

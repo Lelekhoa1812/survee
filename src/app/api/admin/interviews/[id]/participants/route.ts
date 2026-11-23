@@ -19,14 +19,18 @@ export const GET = withServerErrors("admin/interviews/[id]/participants", async 
   const cursor = rawCursor === "" ? null : rawCursor;
   const rawLimit = url.searchParams.get("limit");
   const limit = rawLimit === null ? undefined : Number(rawLimit);
-  if ((cursor !== null && cursor.length > 256) || (rawLimit !== null && (!/^\d{1,3}$/.test(rawLimit) || !Number.isInteger(limit) || Number(limit) < 1 || Number(limit) > 100))) {
+  const includeAnswersParam = url.searchParams.get("includeAnswers");
+  if ((cursor !== null && cursor.length > 256)
+    || (rawLimit !== null && (!/^\d{1,3}$/.test(rawLimit) || !Number.isInteger(limit) || Number(limit) < 1 || Number(limit) > 100))
+    || (includeAnswersParam !== null && includeAnswersParam !== "1")) {
     return fail(400, "The participant page request is invalid.");
   }
+  const includeAnswers = includeAnswersParam === "1";
 
   try {
-    const page = await listParticipantPage(id, cursor, limit, false, false);
-    const mail = await listCurrentMailByParticipants(interview._id, page.people);
-    return json({ ok: true, people: participantRows(version.manifest, page.people, mail.map(mailRecord), false), nextCursor: page.nextCursor });
+    const page = await listParticipantPage(id, cursor, limit, false, includeAnswers);
+    const mail = includeAnswers ? [] : await listCurrentMailByParticipants(interview._id, page.people);
+    return json({ ok: true, people: participantRows(version.manifest, page.people, mail.map(mailRecord), includeAnswers), nextCursor: page.nextCursor });
   } catch (error) {
     if (error instanceof ParticipantCursorError) return fail(400, error.message, { code: "participant_cursor_invalid" });
     throw error;

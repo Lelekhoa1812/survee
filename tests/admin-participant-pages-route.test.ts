@@ -48,6 +48,21 @@ describe("admin participant cursor pages", () => {
     expect(state.listParticipantPage).toHaveBeenCalledWith("interview-id", "opaque+cursor", 40, false, false);
   });
 
+  it("loads answer details only for an explicit answer-page request", async () => {
+    const response = await GET(request("?cursor=older-page&includeAnswers=1"), { params: Promise.resolve({ id: "interview-id" }) });
+
+    expect(response.status).toBe(200);
+    expect(state.listParticipantPage).toHaveBeenCalledWith("interview-id", "older-page", undefined, false, true);
+    expect(state.listCurrentMailByParticipants).not.toHaveBeenCalled();
+  });
+
+  it("rejects unrecognized answer-page flags", async () => {
+    const response = await GET(request("?includeAnswers=true"), { params: Promise.resolve({ id: "interview-id" }) });
+
+    expect(response.status).toBe(400);
+    expect(state.listParticipantPage).not.toHaveBeenCalled();
+  });
+
   it("rejects an oversized page before loading respondent data", async () => {
     const response = await GET(request("?limit=101"), { params: Promise.resolve({ id: "interview-id" }) });
 
