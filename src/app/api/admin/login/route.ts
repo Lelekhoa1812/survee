@@ -1,6 +1,8 @@
+import { createHmac } from "node:crypto";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
+import { sessionSecret } from "@/lib/env";
 import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
-import { clearRateLimit, consumeRateLimit } from "@/lib/repo";
+import { consumeRateLimit } from "@/lib/repo";
 import { authenticateAccount, bootstrapLegacyAxionOwner } from "@/lib/repo/accounts";
 import { headers } from "next/headers";
 
@@ -21,10 +23,15 @@ export const POST = withServerErrors("admin/login", async function POST(req: Req
   const email = str(body.data.email, 200) ?? "";
   const password = typeof body.data.password === "string" ? body.data.password.slice(0, 200) : "";
 
+  const secret = sessionSecret();
+  if (!secret) return fail(503, GENERIC_UNAVAILABLE);
   const ipKey = `ip:${clientIp(await headers())}`;
+  const accountKey = `account:${createHmac("sha256", secret).update(email.toLowerCase()).digest("hex")}`;
   try {
-    // Reserve atomically before password verification so concurrent guesses cannot all pass a count-then-insert check.
+    // Reserve both buckets atomically before password verification so concurrent or distributed guesses cannot
+    // pass a count-then-insert check. The account budget is short-lived and never cleared on success.
     if (!await consumeRateLimit(`admin-login:${ipKey}`, 8, 15)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
+    if (!await consumeRateLimit(`admin-login:${accountKey}`, 20, 15)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
   } catch (e) {
     console.error("login throttle unavailable", (e as Error).message);
     return fail(503, GENERIC_UNAVAILABLE); // fail closed: with no way to count attempts, do not accept guesses
@@ -37,7 +44,6 @@ export const POST = withServerErrors("admin/login", async function POST(req: Req
   }
   const session = createSession(principal);
   if (!session) return fail(503, GENERIC_UNAVAILABLE);
-  await clearRateLimit(`admin-login:${ipKey}`).catch(() => {});
   const res = json({ ok: true });
   res.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
   return res;
