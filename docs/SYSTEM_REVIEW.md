@@ -46,7 +46,7 @@ The following changes are pushed to `main` and deployed:
 - Full automated suite: **907 tests passed across 131 files** after the current code changes.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
-- Production deployment for the reviewed code release `e0589cf` and the report snapshot `4513d33` both reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST returned 401. A fresh authenticated MCP `initialize` and `tools/list` both returned 200 with 40 tools.
+- Production deployment for the reviewed code and report release `0721355` reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST returned 401. A fresh authenticated MCP `initialize` and `tools/list` both returned 200 with 40 tools during the earlier MCP audit; this mail-focused release was not exercised with a live authenticated send to avoid contacting real recipients.
 - Vercel reported no runtime error clusters in the last hour at review time.
 
 Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The public-route accessibility audit has been run previously; authenticated host and respondent flows still need a dedicated browser audit with a disposable account and interview fixture.
