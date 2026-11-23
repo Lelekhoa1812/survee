@@ -109,7 +109,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `delete_image_asset` | Delete an unused image after exact-name confirmation; deletion is blocked while a saved questionnaire or active preview uses it |
 | `create_interview` | Persistent mutation: after a static check, immediately creates an **open** version-1 interview. `single` also creates a default “Respondent”; `multi` creates no people. Its tool annotation marks it destructive. |
 | `update_interview` | Rename, notes, open, or close |
-| `delete_interview` | Atomically delete the interview, versions, people, answers, events, analytics runs, and invite history. `confirmName` must match |
+| `delete_interview` | Atomically delete the interview, versions, people, answers, events, analytics runs, and invite history. `confirmName` must match; refuses while an invite outcome is unconfirmed |
 | `upload_survey_version` | Legacy one-call upload retained for existing clients; answer-impact changes require a signed preview and acknowledgement. Prefer the explicit preview/apply pair for new agent workflows |
 | `preview_questionnaire_version_patch` | Check a complete candidate HTML file against the current version and saved answers; returns a short-lived token and browser review link |
 | `apply_questionnaire_version_patch` | Publish a previewed complete HTML file with a signed preview token, version/hash checks, and compatibility acknowledgement |
@@ -121,7 +121,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `get_person` | One person |
 | `add_people` | Add up to 100 people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user; split larger lists into batches |
 | `update_person` | Name, optional email, private note. An empty email clears it |
-| `remove_person` | Remove the person, their answers, and their invite history |
+| `remove_person` | Remove the person, their answers, and their invite history; refuses while an invite outcome is unconfirmed |
 | `reopen_person` | Unlock a submitted person |
 | `regenerate_link` | New private link. The old one stops working. Nothing is emailed automatically |
 | `get_answers` | Answers for review, with the label a host would read. A supplied `personId` reads only that tenant-scoped person; interview-wide reads are paginated (default 50, maximum 100) with `cursor`/`nextCursor`. Includes repeat-group records separately when present. No score |

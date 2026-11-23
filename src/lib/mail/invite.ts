@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { smtpSettings } from "../env";
-import { col } from "../db";
-import { currentTenantId } from "../tenant-context";
+import { col, withMongoTransaction } from "../db";
+import { currentTenantId, tenantFilter } from "../tenant-context";
 import { consumeRateLimit, getInterview, getParticipant } from "../repo";
 import { insertMail, listMailByPerson, mailRecord, updateMailAttempt } from "../repo/mail";
 import { domainOf, parseEmail } from "./address";
@@ -27,7 +27,7 @@ export interface InviteContext {
 export interface SendInviteDeps {
   load?: (personId: string) => Promise<InviteContext | null>;
   send?: (message: OutboundMail) => Promise<{ messageId: string }>;
-  begin?: (row: Parameters<typeof insertMail>[0]) => Promise<string>;
+  begin?: (row: Parameters<typeof insertMail>[0]) => Promise<string | null>;
   finish?: (id: string, patch: { status: "sent"; messageId: string }) => Promise<boolean>;
   log?: (interviewId: string, participantId: string, result: "sent" | "failed", domain: string) => Promise<void>;
   linkFor?: (token: string) => { ok: true; link: string } | { ok: false; error: string };
@@ -57,7 +57,19 @@ async function logInvite(interviewId: string, participantId: string, result: "se
   const tenantId = await currentTenantId();
   if (!tenantId) return;
   try {
-    await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } });
+    if (!personOid) return;
+    // Serialize the audit event with deletion too, so a late SMTP completion
+    // cannot recreate participant-linked history after the erase transaction.
+    await withMongoTransaction(async (session) => {
+      const current = await (await col.participants()).updateOne(
+        tenantFilter(tenantId, { _id: personOid, interviewId: interviewOid }),
+        { $inc: { inviteAttemptRevision: 1 } },
+        { session },
+      );
+      if (current.matchedCount !== 1) return false;
+      await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid, type: "invite", at: new Date(), meta: { result, domain } }, { session });
+      return true;
+    });
   } catch {
     console.error("[audit] invite event persistence failed");
   }
@@ -126,7 +138,7 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   const message = inviteMessage(ctx.person.name, ctx.interview.name, link.link);
   const messageId = newMessageId(ready.from);
   const send = deps.send ?? sendSmtp;
-  const begin = deps.begin ?? (async (row: Parameters<typeof insertMail>[0]) => (await insertMail(row))._id.toHexString());
+  const begin = deps.begin ?? (async (row: Parameters<typeof insertMail>[0]) => (await insertMail(row))?._id.toHexString() ?? null);
   const finish = deps.finish ?? (async (id: string, patch: { status: "sent"; messageId: string }) =>
     updateMailAttempt(new ObjectId(id), patch));
   const base = {
@@ -138,12 +150,13 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     triggeredBy: input.triggeredBy,
     sentAt: new Date(),
   };
-  let attemptId: string;
+  let attemptId: string | null;
   try {
     attemptId = await begin({ ...base, status: "pending", messageId });
   } catch {
     return { ok: false, code: "attempt_unavailable", error: "The invite attempt could not be recorded, so no email was sent. Try again later.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
+  if (!attemptId) return { ok: false, code: "not_found", error: "Person not found." };
   let sent: { messageId: string };
   try {
     sent = await send({ to: parsed.email, subject: message.subject, text: message.text, html: message.html, messageId });

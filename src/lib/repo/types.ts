@@ -193,6 +193,8 @@ export interface ParticipantDoc {
   revision: number;
   /** Incremented on submit and reopen to invalidate respondent tabs from an earlier state. */
   writeEpoch?: number;
+  /** Incremented when reserving an invite attempt so deletion serializes with SMTP preflight. */
+  inviteAttemptRevision?: number;
   createdAt: Date;
   updatedAt: Date;
   lastSeenAt?: Date;

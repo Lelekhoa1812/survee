@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: { transaction: true },
   deletedCount: 1,
+  interviewExists: true,
+  pendingInvite: null as Record<string, unknown> | null,
   aggregateRows: [] as { _id: "invited" | "in_progress" | "submitted"; count: number }[],
   aggregatePipelines: [] as unknown[][],
   calls: [] as { collection: string; filter: Record<string, unknown>; options: Record<string, unknown> }[],
@@ -21,6 +23,7 @@ vi.mock("../src/lib/db", () => ({
   withMongoTransaction: mocks.withMongoTransaction,
   col: {
     interviews: async () => ({
+      findOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "interviewLookup", filter, options }); return mocks.interviewExists ? { _id: new ObjectId(interviewId) } : null; },
       deleteOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => {
         mocks.calls.push({ collection: "interviews", filter, options });
         return { deletedCount: mocks.deletedCount };
@@ -57,7 +60,14 @@ vi.mock("../src/lib/db", () => ({
       deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events", filter, options }); },
     }),
     analyticsRuns: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "analyticsRuns", filter, options }); } }),
-    mail: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mail", filter, options }); } }),
+    mail: async () => ({
+      findOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => {
+        mocks.calls.push({ collection: JSON.stringify(filter).includes("interviewId") ? "interviewPendingLookup" : "mailPendingLookup", filter, options });
+        const resolved = mocks.pendingInvite?.delivery === "delivered" || mocks.pendingInvite?.delivery === "bounced";
+        return resolved ? null : mocks.pendingInvite;
+      },
+      deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mail", filter, options }); },
+    }),
     questionnaireReviewDrafts: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "questionnaireReviewDrafts", filter, options }); } }),
   },
 }));
@@ -71,6 +81,8 @@ const asAxion = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: "
 
 beforeEach(() => {
   mocks.deletedCount = 1;
+  mocks.interviewExists = true;
+  mocks.pendingInvite = null;
   mocks.calls.length = 0;
   mocks.aggregateRows = [];
   mocks.aggregatePipelines.length = 0;
@@ -91,18 +103,28 @@ describe("deleteInterview", () => {
     expect(deleted).toBe(true);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.calls.map(({ collection }) => collection)).toEqual([
-      "interviews", "versions", "participants", "questionOrderAssignments", "events", "analyticsRuns", "mail", "questionnaireReviewDrafts",
+      "interviewLookup", "interviewPendingLookup", "interviews", "versions", "participants", "questionOrderAssignments", "events", "analyticsRuns", "mail", "questionnaireReviewDrafts",
     ]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
     expect(mocks.calls[0].filter).toEqual(tenantFilter("axion", { _id: new ObjectId(interviewId) }));
+    expect(mocks.calls[1].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId), status: "pending", delivery: { $nin: ["delivered", "bounced"] } }));
+  });
+
+  it("retains the interview while one of its invite outcomes is unconfirmed", async () => {
+    mocks.pendingInvite = { _id: new ObjectId() };
+
+    const deleted = await asAxion(() => deleteInterview(interviewId));
+
+    expect(deleted).toBe("invite_pending");
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviewLookup", "interviewPendingLookup"]);
   });
 
   it("does not remove dependent records when the tenant-scoped interview no longer exists", async () => {
-    mocks.deletedCount = 0;
+    mocks.interviewExists = false;
     const deleted = await asAxion(() => deleteInterview(interviewId));
 
     expect(deleted).toBe(false);
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviews"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviewLookup"]);
   });
 });
 
@@ -168,11 +190,32 @@ describe("deleteParticipant", () => {
 
     expect(deleted).toBe(true);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "participants", "interviews", "questionOrderAssignments", "events", "mail", "analyticsRuns"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "mailPendingLookup", "participants", "interviews", "questionOrderAssignments", "events", "mail", "analyticsRuns"]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
-    expect(mocks.calls[4].filter).toEqual({ participantId: new ObjectId(interviewId) });
+    expect(mocks.calls[1].filter).toEqual({ participantId: new ObjectId(interviewId), status: "pending", delivery: { $nin: ["delivered", "bounced"] } });
+    expect(mocks.calls[1].options).toMatchObject({ session, projection: { _id: 1 } });
     expect(mocks.calls[5].filter).toEqual({ participantId: new ObjectId(interviewId) });
-    expect(mocks.calls[6].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId) }));
+    expect(mocks.calls[6].filter).toEqual({ participantId: new ObjectId(interviewId) });
+    expect(mocks.calls[7].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId) }));
+  });
+
+  it("retains respondent data while an invite outcome is unconfirmed", async () => {
+    mocks.pendingInvite = { _id: new ObjectId() };
+
+    const deleted = await asAxion(() => deleteParticipant(interviewId));
+
+    expect(deleted).toBe("invite_pending");
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "mailPendingLookup"]);
+    expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
+  });
+
+  it.each(["delivered", "bounced"]) ("allows deletion after a pending attempt is resolved as %s", async (delivery) => {
+    mocks.pendingInvite = { _id: new ObjectId(), delivery };
+
+    const deleted = await asAxion(() => deleteParticipant(interviewId));
+
+    expect(deleted).toBe(true);
+    expect(mocks.calls.map(({ collection }) => collection)).toContain("analyticsRuns");
   });
 
   it("leaves dependent records untouched when the participant no longer exists", async () => {
@@ -181,6 +224,6 @@ describe("deleteParticipant", () => {
     const deleted = await asAxion(() => deleteParticipant(interviewId));
 
     expect(deleted).toBe(false);
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "participants"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "mailPendingLookup", "participants"]);
   });
 });

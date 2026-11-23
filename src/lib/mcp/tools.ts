@@ -1073,7 +1073,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "delete_interview",
-    description: "Delete an interview, its versions, people, answers, and invite history. confirmName must match exactly.",
+    description: "Delete an interview, its versions, people, answers, and invite history. confirmName must match exactly. Refuses while any invite outcome is unconfirmed so a pending send cannot outlive deletion.",
     inputSchema: obj({ interviewId: str, confirmName: str }, ["interviewId", "confirmName"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
@@ -1082,6 +1082,7 @@ const TOOLS: ToolDef[] = [
       if (!interview) return err("Interview not found.", "not_found");
       if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.", "confirmation_mismatch");
       const deleted = await deleteInterview(id);
+      if (deleted === "invite_pending") return err("This interview has an invite outcome that is still unconfirmed. Resolve the invite status before deleting its data.", "invite_outcome_pending");
       return deleted ? ok({ ok: true }) : err("Interview not found.", "not_found");
     },
   },
@@ -1736,12 +1737,14 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "remove_person",
-    description: "Remove a person, their answers, and their invite history.",
+    description: "Remove a person, their answers, and their invite history. Refuses while an invite outcome is unconfirmed so a pending send cannot recreate erased mail or event records.",
     inputSchema: obj({ personId: str }, ["personId"]),
     async run(args) {
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
-      return (await deleteParticipant(id)) ? ok({ ok: true }) : err("Person not found.", "not_found");
+      const result = await deleteParticipant(id);
+      if (result === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before deleting their data.", "invite_outcome_pending");
+      return result ? ok({ ok: true }) : err("Person not found.", "not_found");
     },
   },
   {

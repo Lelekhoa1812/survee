@@ -1,5 +1,5 @@
 import { ObjectId, type ClientSession } from "mongodb";
-import { col } from "../db";
+import { col, withMongoTransaction } from "../db";
 import type { MailRecord } from "../mail/state";
 import type { MailMessageDoc, ParticipantView } from "./types";
 import { currentTenantId, tenantFilter } from "../tenant-context";
@@ -19,12 +19,24 @@ export function mailRecord(doc: MailMessageDoc): MailRecord {
   };
 }
 
-export async function insertMail(doc: Omit<MailMessageDoc, "_id" | "tenantId">): Promise<MailMessageDoc> {
+export async function insertMail(doc: Omit<MailMessageDoc, "_id" | "tenantId">): Promise<MailMessageDoc | null> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const row: MailMessageDoc = { ...doc, tenantId, _id: new ObjectId() };
-  await (await col.mail()).insertOne(row);
-  return row;
+  // Touch the participant in the same transaction as the pending attempt.
+  // deleteParticipant also writes that participant and checks for pending mail,
+  // so the two operations serialize instead of recreating erased mail after a delete.
+  const started = await withMongoTransaction(async (session) => {
+    const participant = await (await col.participants()).updateOne(
+      tenantFilter(tenantId, { _id: doc.participantId, interviewId: doc.interviewId }),
+      { $inc: { inviteAttemptRevision: 1 } },
+      { session },
+    );
+    if (participant.matchedCount !== 1) return false;
+    await (await col.mail()).insertOne(row, { session });
+    return true;
+  });
+  return started ? row : null;
 }
 
 /** Persist the attempt before contacting SMTP, so an interrupted/ambiguous send stays visible. */

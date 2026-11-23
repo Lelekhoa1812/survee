@@ -13,7 +13,8 @@ const state = vi.hoisted(() => ({
   listVersions: vi.fn(async () => [{ version: 1, html: "<html></html>" }]),
   recentEvents: vi.fn(async () => [{ id: "event-1", type: "submit", participantId: "person-1", meta: { email: "private@example.test" } }]),
   updateInterview: vi.fn(async () => ({ _id: "interview-1" })),
-  deleteInterview: vi.fn(async () => true),
+  deleteParticipant: vi.fn(async () => true as boolean | "invite_pending"),
+  deleteInterview: vi.fn(async () => true as boolean | "invite_pending"),
   createInterview: vi.fn(async () => ({ _id: "interview-1" })),
   publishVersionIfCurrent: vi.fn(async () => ({ version: 2 })),
   listImageAssets: vi.fn(async () => ({ assets: [], nextCursor: null })),
@@ -44,6 +45,7 @@ vi.mock("../src/lib/repo", () => ({
   recentEvents: state.recentEvents,
   updateInterview: state.updateInterview,
   deleteInterview: state.deleteInterview,
+  deleteParticipant: state.deleteParticipant,
   createInterview: state.createInterview,
   publishVersionIfCurrent: state.publishVersionIfCurrent,
 }));
@@ -86,6 +88,26 @@ beforeEach(() => {
 });
 
 describe("workspace member access boundary", () => {
+  it("returns a conflict instead of deleting an interview with an unresolved invite", async () => {
+    state.role = "owner";
+    state.deleteInterview.mockResolvedValueOnce("invite_pending");
+
+    const response = await deleteInterview(jsonRequest("/api/admin/interviews/0123456789abcdef01234567", "DELETE", { confirmName: "Study" }), interviewCtx);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "invite_outcome_pending" });
+  });
+
+  it("returns a conflict when an invite outcome is still pending during respondent deletion", async () => {
+    state.role = "owner";
+    state.deleteParticipant.mockResolvedValueOnce("invite_pending");
+
+    const response = await deletePerson(new Request("https://kqa.test/api/admin/people/0123456789abcdef01234567", { method: "DELETE" }), personCtx);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "invite_outcome_pending" });
+  });
+
   it("rejects an oversized add-people batch without creating a partial list", async () => {
     state.role = "owner";
     const response = await addPeople(jsonRequest("/api/admin/interviews/0123456789abcdef01234567/people", "POST", { people: Array.from({ length: 101 }, (_, i) => ({ name: `Person ${i + 1}` })) }), interviewCtx);

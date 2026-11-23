@@ -34,5 +34,7 @@ export const DELETE = withServerErrors("admin/people/[pid]", async function DELE
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
   const { pid } = await params;
-  return (await deleteParticipant(pid)) ? json({ ok: true }) : fail(404, "Person not found.");
+  const result = await deleteParticipant(pid);
+  if (result === "invite_pending") return fail(409, "This person's invite outcome is still unconfirmed. Resolve the invite status before deleting their data.", { code: "invite_outcome_pending" });
+  return result ? json({ ok: true }) : fail(404, "Person not found.");
 });

@@ -55,11 +55,15 @@ vi.mock("imapflow", () => ({
 
 vi.mock("../src/lib/db", () => ({
   db: async () => { throw new Error("db() should not run in this test"); },
+  withMongoTransaction: async (work: (session: Record<string, never>) => Promise<unknown>) => work({}),
   col: {
     tenants: async () => ({ findOne: async (query: { _id: string; status: string }) => query._id === "axion" && query.status === "active" ? { _id: "axion" } : null }),
     interviews: async () => ({ findOne: async () => ({ currentVersion: 1 }) }),
     versions: async () => ({ findOne: async () => ({ manifest: patchTestManifest }) }),
-    participants: async () => ({ find: () => ({ toArray: async () => [] }) }),
+    participants: async () => ({
+      find: () => ({ toArray: async () => [] }),
+      updateOne: async () => ({ matchedCount: 1 }),
+    }),
     mail: async () => ({
       insertOne: async (row: Record<string, unknown>) => { mailRows.push(row); return { insertedId: row._id }; },
       find: () => ({ sort: () => ({ limit: () => ({ toArray: async () => mailRows }) }) }),

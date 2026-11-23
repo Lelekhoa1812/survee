@@ -55,6 +55,13 @@ describe("sendInvite", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("does not send if the participant is removed before the durable attempt can be reserved", async () => {
+    const { send, deps } = harness(ctx({ email: "ada@example.com" }), { begin: async () => null });
+
+    expect(await sendInvite({ personId, triggeredBy: "admin" }, deps)).toMatchObject({ ok: false, code: "not_found" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("does not send when the tenant rate-limit scope cannot be verified", async () => {
     const { send, deps } = harness(ctx({ email: "ada@example.com" }), {
       tenantId: async () => { throw new Error("database unavailable"); },

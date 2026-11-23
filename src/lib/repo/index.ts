@@ -233,13 +233,21 @@ export async function publishVersionIfCurrent(
 
 class MissingImageAssetReferenceError extends Error {}
 
-export async function deleteInterview(id: string): Promise<boolean> {
+export async function deleteInterview(id: string): Promise<boolean | "invite_pending"> {
   const oid = toOid(id);
   if (!oid) return false;
   const tenantId = await currentTenantId();
   if (!tenantId) return false;
   return withMongoTransaction(async (session) => {
-    const res = await (await col.interviews()).deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
+    const interviews = await col.interviews();
+    const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
+    if (!interview) return false;
+    const pendingInvite = await (await col.mail()).findOne(
+      tenantFilter(tenantId, { interviewId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } }),
+      { session, projection: { _id: 1 } },
+    );
+    if (pendingInvite) return "invite_pending";
+    const res = await interviews.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
 
     // MongoDB does not support parallel operations in one transaction. Keep the cascade
@@ -676,7 +684,7 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   });
 }
 
-export async function deleteParticipant(id: string): Promise<boolean> {
+export async function deleteParticipant(id: string): Promise<boolean | "invite_pending"> {
   const oid = toOid(id);
   if (!oid) return false;
   const tenantId = await currentTenantId();
@@ -685,6 +693,11 @@ export async function deleteParticipant(id: string): Promise<boolean> {
     const participants = await col.participants();
     const participant = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { interviewId: 1 } });
     if (!participant) return false;
+    const pendingInvite = await (await col.mail()).findOne(
+      { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } },
+      { session, projection: { _id: 1 } },
+    );
+    if (pendingInvite) return "invite_pending";
     const res = await participants.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
     // Cache creation writes this same interview row and checks its pre-scan
@@ -703,8 +716,7 @@ export async function deleteParticipant(id: string): Promise<boolean> {
     await (await col.analyticsRuns()).deleteMany(tenantFilter(tenantId, { interviewId: participant.interviewId }), { session });
     return true;
   });
-  if (!deleted) return false;
-  return true;
+  return deleted;
 }
 
 export async function regenerateToken(id: string): Promise<string | null> {
