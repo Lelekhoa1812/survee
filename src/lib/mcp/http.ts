@@ -155,10 +155,11 @@ export async function handleMcp(req: Request): Promise<Response> {
     return await handleMcpRequest(req, requestId);
   } catch (error) {
     console.error("[mcp:http] unexpected error", { requestId, errorType: error instanceof Error ? error.name : "unknown" });
-    return new Response(JSON.stringify({ error: "MCP request could not be completed. Try again in a moment.", code: "server_error", requestId }), {
+    const response = new Response(JSON.stringify({ error: "MCP request could not be completed. Try again in a moment.", code: "server_error", requestId }), {
       status: 500,
       headers: { ...JSON_HEADERS, "x-request-id": requestId },
     });
+    return withMcpCors(req, response);
   }
 }
 

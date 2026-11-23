@@ -83,6 +83,23 @@ async function rawRpc(body: unknown, contentType: string | null = "application/j
   return { status: response.status, body: response.status === 415 ? await response.json() as { error: string } : await response.json() as { id?: unknown; error?: { code: number; message: string } } };
 }
 
+it("correlates unexpected MCP boundary failures and keeps approved browser CORS readable", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  authorizeMcp.mockRejectedValueOnce(new Error("database secret"));
+  const response = await handleMcp(new Request("https://kqa.example/api/mcp", {
+    method: "POST",
+    headers: { origin: "https://kqa.example", "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+  }));
+  const body = await response.json() as { code: string; requestId: string; error: string };
+  expect(response.status).toBe(500);
+  expect(body).toMatchObject({ code: "server_error", requestId: response.headers.get("x-request-id") });
+  expect(body.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(body.error).not.toContain("database secret");
+  expect(response.headers.get("access-control-allow-origin")).toBe("https://kqa.example");
+  expect(response.headers.get("access-control-expose-headers")).toContain("x-request-id");
+});
+
 describe("MCP protocol version negotiation", () => {
   it("requires application/json for POST requests", async () => {
     for (const contentType of [null, "text/plain", "application/json-rpc"]) {
