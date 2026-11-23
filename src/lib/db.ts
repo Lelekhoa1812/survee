@@ -102,7 +102,11 @@ async function ensurePendingSignupEmailIndex(d: Db): Promise<void> {
   throw new Error("Could not migrate pending signup email claims to a unique index.");
 }
 
-async function ensureIndexes(d: Db) {
+async function ensureReviewDraftSlotMigration(d: Db): Promise<void> {
+  const migrationId = "questionnaire_review_slots_v1";
+  const migrations = d.collection<{ _id: string; completedAt: Date }>("schema_migrations");
+  if (await migrations.findOne({ _id: migrationId }, { projection: { _id: 1 } })) return;
+
   const reviewDrafts = d.collection("questionnaire_review_drafts");
   try {
     await reviewDrafts.dropIndex("questionnaire_review_by_interview");
@@ -111,9 +115,21 @@ async function ensureIndexes(d: Db) {
     if (code !== 26 && code !== 27) throw error;
   }
   // Existing releases stored at most one active candidate per interview. Assign it
-  // to the first slot before enforcing the expanded slot index.
+  // to the first slot before enforcing the expanded slot index. This idempotent
+  // backfill is shared across cold isolates using the durable completion marker.
   await reviewDrafts.updateMany({ slot: { $exists: false } }, { $set: { slot: 0 } });
+  try {
+    await migrations.insertOne({ _id: migrationId, completedAt: new Date() });
+  } catch (error) {
+    // Another isolate may have completed the same idempotent backfill first.
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+  }
+}
+
+async function ensureIndexes(d: Db) {
+  await ensureReviewDraftSlotMigration(d);
   await ensurePendingSignupEmailIndex(d);
+  const reviewDrafts = d.collection("questionnaire_review_drafts");
   await Promise.all([
     d.collection("tenants").createIndex({ slug: 1 }, { unique: true, name: "tenant_slug_unique" }),
     d.collection("users").createIndex({ email: 1 }, { unique: true, name: "user_email_unique" }),
