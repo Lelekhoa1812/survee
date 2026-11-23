@@ -1,4 +1,5 @@
 import { authorizeMcp } from "./auth";
+import { randomUUID } from "node:crypto";
 import { requestOrigin, wwwAuthenticate } from "./oauth";
 import { dispatchTool, listToolDefs } from "./tools";
 import { withTenantPrincipal } from "../tenant-context";
@@ -106,7 +107,7 @@ async function readBody(req: Request): Promise<{ ok: true; data: unknown } | { o
   }
 }
 
-async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promise<unknown | null> {
+async function handleOne(msg: RpcRequest, capabilities?: McpCapability[], requestId?: string): Promise<unknown | null> {
   if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
     return rpcError(msg?.id ?? null, -32600, "Invalid request.");
   }
@@ -141,7 +142,7 @@ async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promi
   if (msg.method === "tools/call") {
     const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown };
     if (typeof params.name !== "string") return rpcError(msg.id ?? null, -32602, "Tool name is required.");
-    const result = await dispatchTool(params.name, params.arguments ?? {}, capabilities);
+    const result = await dispatchTool(params.name, params.arguments ?? {}, capabilities, requestId);
     return rpcResult(msg.id ?? null, result);
   }
   return rpcError(msg.id ?? null, -32601, `Unknown method: ${msg.method}`);
@@ -149,10 +150,30 @@ async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promi
 
 /** Stateless Streamable HTTP: one JSON-RPC response, no session, no open stream. Auth runs before any tool. */
 export async function handleMcp(req: Request): Promise<Response> {
+  const requestId = randomUUID();
+  try {
+    return await handleMcpRequest(req, requestId);
+  } catch (error) {
+    console.error("[mcp:http] unexpected error", { requestId, errorType: error instanceof Error ? error.name : "unknown" });
+    return new Response(JSON.stringify({ error: "MCP request could not be completed. Try again in a moment.", code: "server_error", requestId }), {
+      status: 500,
+      headers: { ...JSON_HEADERS, "x-request-id": requestId },
+    });
+  }
+}
+
+async function handleMcpRequest(req: Request, requestId: string): Promise<Response> {
   const originError = mcpOriginError(req);
-  if (originError) return originError;
+  if (originError) {
+    originError.headers.set("x-request-id", requestId);
+    return originError;
+  }
   const auth = await authorizeMcp(req);
-  if (!auth.ok) return withMcpCors(req, unauthorized(req));
+  if (!auth.ok) {
+    const response = withMcpCors(req, unauthorized(req));
+    response.headers.set("x-request-id", requestId);
+    return response;
+  }
   const response = await withTenantPrincipal(auth.principal, async () => {
     if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
     if (!hasJsonContentType(req)) return new Response(JSON.stringify({ error: "Content-Type must be application/json." }), { status: 415, headers: JSON_HEADERS });
@@ -181,9 +202,11 @@ export async function handleMcp(req: Request): Promise<Response> {
         }
       }
     }
-    const reply = await handleOne(body.data as RpcRequest, auth.capabilities);
+    const reply = await handleOne(body.data as RpcRequest, auth.capabilities, requestId);
     if (!reply) return new Response(null, { status: 202, headers: JSON_HEADERS });
     return new Response(JSON.stringify(reply), { status: 200, headers: JSON_HEADERS });
   });
-  return withMcpCors(req, response);
+  const corsResponse = withMcpCors(req, response);
+  corsResponse.headers.set("x-request-id", requestId);
+  return corsResponse;
 }

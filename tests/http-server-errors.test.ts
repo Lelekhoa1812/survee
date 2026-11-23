@@ -14,6 +14,7 @@ describe("withServerErrors", () => {
     const route = withServerErrors("test", async () => new NextResponse("ok", { status: 201 }));
     const res = await route();
     expect(res.status).toBe(201);
+    expect(res.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
   it("turns an unexpected exception into a JSON 500 with a server_error code", async () => {
@@ -22,9 +23,11 @@ describe("withServerErrors", () => {
     const res = await route();
     expect(res.status).toBe(500);
     expect(res.headers.get("content-type")).toMatch(/application\/json/);
-    const body = await res.json() as { ok: boolean; code: string; error: string };
+    const body = await res.json() as { ok: boolean; code: string; error: string; requestId: string };
     expect(body).toMatchObject({ ok: false, code: "server_error" });
     expect(body.error).toMatch(/try again/i);
+    expect(body.requestId).toBe(res.headers.get("x-request-id"));
+    expect(body.requestId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
   it("rethrows Next control-flow errors so redirects and not-found still work", async () => {

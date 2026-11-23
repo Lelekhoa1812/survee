@@ -33,7 +33,7 @@ describe("MCP Origin validation", () => {
   it("adds exact-origin CORS headers only for configured origins", () => {
     const trusted = withMcpCors(request("https://kqa.example"), new Response("ok", { headers: { Vary: "Accept-Encoding" } }));
     expect(trusted.headers.get("access-control-allow-origin")).toBe("https://kqa.example");
-    expect(trusted.headers.get("access-control-expose-headers")).toBe("WWW-Authenticate");
+    expect(trusted.headers.get("access-control-expose-headers")).toBe("WWW-Authenticate, x-request-id");
     expect(trusted.headers.get("vary")).toContain("Origin");
 
     const untrusted = withMcpCors(request("https://evil.example"), new Response("ok"));

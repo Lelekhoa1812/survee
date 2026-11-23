@@ -25,7 +25,7 @@ export function withMcpCors(req: Request, response: Response): Response {
 
   const headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", origin);
-  headers.set("Access-Control-Expose-Headers", "WWW-Authenticate");
+  headers.set("Access-Control-Expose-Headers", "WWW-Authenticate, x-request-id");
   addVary(headers, "Origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

@@ -513,9 +513,11 @@ describe("MCP tools", () => {
   it("returns server_error without the raw message when a tool throws", async () => {
     vi.mocked(getInterview).mockRejectedValueOnce(new Error("connection string leaked"));
     const res = await call("delete_interview", { interviewId, confirmName: "Investor interview" });
-    const body = await res.json() as { result: { isError: boolean; structuredContent: { code?: string; error?: string } } };
+    const body = await res.json() as { result: { isError: boolean; structuredContent: { code?: string; error?: string; requestId?: string } } };
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent).toMatchObject({ code: "server_error" });
+    expect(body.result.structuredContent.requestId).toBe(res.headers.get("x-request-id"));
+    expect(body.result.structuredContent.requestId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(JSON.stringify(body)).not.toContain("connection string leaked");
     expect(deleteInterview).not.toHaveBeenCalled();
   });

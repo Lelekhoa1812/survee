@@ -51,6 +51,7 @@ import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
 import { ObjectId } from "mongodb";
+import { randomUUID } from "node:crypto";
 import {
   createQuestionnairePreviewToken,
   fileNameHash,
@@ -1937,7 +1938,7 @@ async function finish(tool: string, result: ToolResult, interviewId?: string): P
   return result;
 }
 
-export async function dispatchTool(name: string, args: unknown, capabilities?: readonly McpCapability[]): Promise<ToolResult> {
+export async function dispatchTool(name: string, args: unknown, capabilities?: readonly McpCapability[], requestId?: string): Promise<ToolResult> {
   const tool = TOOLS.find((item) => item.name === name);
   if (!tool) return finish("unknown_tool", err("Unknown tool.", "unknown_tool"));
   const record = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
@@ -1960,7 +1961,8 @@ export async function dispatchTool(name: string, args: unknown, capabilities?: r
     if (error instanceof ExportOutputSizeLimitError) {
       return finish(tool.name, err(error.message, "export_output_limit", { limitBytes: error.limitBytes }), interviewId);
     }
-    console.error(`[mcp:${tool.name}] unexpected error`, error instanceof Error ? error.name : "unknown");
-    return finish(tool.name, err("That could not be done. Try again in a moment.", "server_error"), interviewId);
+    const correlationId = requestId ?? randomUUID();
+    console.error(`[mcp:${tool.name}] unexpected error`, { requestId: correlationId, errorType: error instanceof Error ? error.name : "unknown" });
+    return finish(tool.name, err("That could not be done. Try again in a moment.", "server_error", { requestId: correlationId }), interviewId);
   }
 }

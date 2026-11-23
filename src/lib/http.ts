@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { SESSION_COOKIE, verifySession } from "./auth";
 import { LIMITS } from "./format/schema";
 import { isSessionRevoked } from "./repo";
@@ -27,16 +28,23 @@ export class AdminSessionUnavailableError extends Error {
  */
 export function withServerErrors<A extends unknown[]>(route: string, handler: (...args: A) => Promise<NextResponse>): (...args: A) => Promise<NextResponse> {
   return async (...args: A) => {
+    const requestId = randomUUID();
     try {
-      return await handler(...args);
+      const response = await handler(...args);
+      response.headers.set("x-request-id", requestId);
+      return response;
     } catch (err) {
       // Next uses thrown control-flow errors (redirect, notFound) that must reach the framework unchanged.
       if (typeof err === "object" && err !== null && "digest" in err && String((err as { digest: unknown }).digest).startsWith("NEXT_")) throw err;
       if (err instanceof AdminSessionUnavailableError) {
-        return fail(503, "Sign-in is temporarily unavailable. Try again in a moment.", { code: "auth_unavailable" });
+        const response = fail(503, "Sign-in is temporarily unavailable. Try again in a moment.", { code: "auth_unavailable", requestId });
+        response.headers.set("x-request-id", requestId);
+        return response;
       }
-      console.error(`[${route}] unexpected error`, err instanceof Error ? err.name : "unknown");
-      return fail(500, "We could not complete this just now. Try again in a moment.", { code: "server_error" });
+      console.error(`[${route}] unexpected error`, { requestId, errorType: err instanceof Error ? err.name : "unknown" });
+      const response = fail(500, "We could not complete this just now. Try again in a moment.", { code: "server_error", requestId });
+      response.headers.set("x-request-id", requestId);
+      return response;
     }
   };
 }
