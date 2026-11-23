@@ -188,6 +188,15 @@ describe("host questionnaire version preview and apply", () => {
     expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "host_patch");
   });
 
+  it("returns a specific conflict when a referenced workspace image is unavailable", async () => {
+    const { data: preview } = await getPreview();
+    state.body = applyBody(preview);
+    state.publish.mockResolvedValueOnce({ assetUnavailable: true } as any);
+    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "asset_unavailable" });
+  });
+
   it("rejects an altered candidate without publishing", async () => {
     const { data: preview } = await getPreview();
     state.body = applyBody(preview, `${candidate} changed`);

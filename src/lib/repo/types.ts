@@ -90,6 +90,8 @@ export interface ImageAssetDoc {
   data: Buffer | Binary;
   createdAt: Date;
   updatedAt: Date;
+  /** Transactional coordination point for publication and deletion. */
+  referenceRevision?: number;
 }
 
 /** collection: pending_email_changes. A verification link is one use and expires after 30 minutes. */

@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   inserted: [] as Record<string, unknown>[],
   insertOptions: [] as Record<string, unknown>[],
   deleted: [] as Record<string, unknown>[],
+  assetUpdates: [] as Record<string, unknown>[],
+  assetMatchedCount: 1,
   updateOne: vi.fn(async () => ({ modifiedCount: 1 })),
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true })),
 }));
@@ -15,6 +17,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/lib/db", () => ({
   withMongoTransaction: mocks.withMongoTransaction,
   col: {
+    imageAssets: async () => ({
+      updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>, options: Record<string, unknown>) => {
+        mocks.assetUpdates.push({ filter, update, options });
+        return { matchedCount: mocks.assetMatchedCount };
+      },
+    }),
     interviews: async () => ({
       findOne: async (filter: Record<string, unknown>) => {
         const clauses = Array.isArray(filter.$and) ? filter.$and as Record<string, unknown>[] : [filter];
@@ -49,6 +57,8 @@ beforeEach(() => {
   mocks.inserted.length = 0;
   mocks.insertOptions.length = 0;
   mocks.deleted.length = 0;
+  mocks.assetUpdates.length = 0;
+  mocks.assetMatchedCount = 1;
   mocks.updateOne.mockReset().mockImplementation(async () => ({ modifiedCount: mocks.modifiedCount }));
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => work({ transaction: true }));
 });
@@ -81,5 +91,26 @@ describe("publishVersionIfCurrent", () => {
     expect(result).toEqual({ conflict: true });
     expect(mocks.inserted).toHaveLength(0);
     expect(mocks.updateOne).not.toHaveBeenCalled();
+  });
+
+  it("touches each referenced tenant asset inside the publish transaction", async () => {
+    const publicId = "a".repeat(43);
+    const referenced = { ...survey, html: `<img src="/api/assets/${publicId}"><img src="/api/assets/${publicId}">` };
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, referenced));
+    expect(result).toEqual({ version: 5 });
+    expect(mocks.assetUpdates).toEqual([{
+      filter: tenantFilter("axion", { publicId }),
+      update: { $inc: { referenceRevision: 1 } },
+      options: { session: { transaction: true } },
+    }]);
+  });
+
+  it("aborts publication when a referenced asset is missing or belongs to another tenant", async () => {
+    mocks.assetMatchedCount = 0;
+    const referenced = { ...survey, html: `<img src="/api/assets/${"b".repeat(43)}">` };
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, referenced));
+    expect(result).toEqual({ assetUnavailable: true });
+    expect(mocks.assetUpdates[0].filter).toEqual(tenantFilter("axion", { publicId: "b".repeat(43) }));
+    expect(mocks.inserted).toHaveLength(0);
   });
 });

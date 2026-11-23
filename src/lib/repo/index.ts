@@ -7,6 +7,7 @@ import { orderOptions } from "../format/option-order";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question, type RepeatRecordMap, type RepeatRecordOperation } from "../format/schema";
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
+import { imageAssetPublicIds } from "../image-assets";
 import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
 import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
@@ -172,7 +173,7 @@ export async function addVersion(id: string, survey: NewSurvey): Promise<number 
   const current = await getVersion(oid, interview.currentVersion, tenantId);
   if (!current) return null;
   const published = await publishVersionIfCurrent(oid.toHexString(), interview.currentVersion, current.htmlSha256, survey);
-  return published && !("conflict" in published) ? published.version : null;
+  return published && !("conflict" in published) && !("assetUnavailable" in published) ? published.version : null;
 }
 
 /** Publish only if the interview still points at the version that was reviewed. */
@@ -182,7 +183,7 @@ export async function publishVersionIfCurrent(
   expectedBaseHash: string,
   survey: NewSurvey,
   source: "mcp_patch" | "mcp_upload" | "host_patch" = "mcp_patch",
-): Promise<{ version: number } | { conflict: true } | null> {
+): Promise<{ version: number } | { conflict: true } | { assetUnavailable: true } | null> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
@@ -203,6 +204,20 @@ export async function publishVersionIfCurrent(
         { session },
       );
       if (!changed.modifiedCount) return { conflict: true as const };
+
+      // Touch each referenced asset in the same transaction as the version
+      // insert. Deletion checks references and deletes that same row in its
+      // transaction, so MongoDB makes concurrent publish/delete operations
+      // conflict instead of allowing a dangling published URL.
+      const assets = await col.imageAssets();
+      for (const publicId of imageAssetPublicIds(survey.html)) {
+        const touched = await assets.updateOne(
+          tenantFilter(tenantId, { publicId }),
+          { $inc: { referenceRevision: 1 } },
+          { session },
+        );
+        if (!touched.matchedCount) throw new MissingImageAssetReferenceError();
+      }
       await versions.insertOne(versionDoc(tenantId, oid, version, survey), { session });
       return { version };
     });
@@ -210,11 +225,14 @@ export async function publishVersionIfCurrent(
     logEvent(tenantId, oid, "version", undefined, { version, source });
     return result;
   } catch (error) {
+    if (error instanceof MissingImageAssetReferenceError) return { assetUnavailable: true };
     // A concurrent publisher may already have claimed this version number.
     if (error && typeof error === "object" && "code" in error && error.code === 11000) return { conflict: true };
     throw error;
   }
 }
+
+class MissingImageAssetReferenceError extends Error {}
 
 export async function deleteInterview(id: string): Promise<boolean> {
   const oid = toOid(id);

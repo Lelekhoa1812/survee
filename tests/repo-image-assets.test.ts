@@ -10,6 +10,7 @@ const store = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/lib/db", () => ({
+  withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true }),
   col: {
     imageAssets: async () => ({
       insertOne: async (doc: any) => { store.assets.push(doc); return { insertedId: doc._id }; },

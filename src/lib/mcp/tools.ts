@@ -1233,6 +1233,7 @@ const TOOLS: ToolDef[] = [
       if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
       const published = await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey);
       if (!published) return err("Interview not found.", "not_found");
+      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
       if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
       return ok({ ok: true, interviewId: id, version: published.version, previousVersion: expectedVersion, candidateHash, diagnostics: prepared.report.diagnostics });
     },
@@ -1290,6 +1291,7 @@ const TOOLS: ToolDef[] = [
       if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
       const published = await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey);
       if (!published) return err("Interview not found.", "not_found");
+      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
       if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
       return ok({
         ok: true,
@@ -1441,6 +1443,7 @@ const TOOLS: ToolDef[] = [
       if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
       const published = await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey);
       if (!published) return err("Interview not found.", "not_found");
+      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
       if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
       return ok({
         ok: true,
@@ -1573,6 +1576,7 @@ const TOOLS: ToolDef[] = [
       const expectedBaseHash = hasPreview ? args.baseHash as string : current.htmlSha256;
       const published = await publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, prepared.survey, "mcp_upload");
       if (!published) return err("Interview not found.", "not_found");
+      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
       if ("conflict" in published) return err("The questionnaire changed while uploading. Preview again before uploading.", "stale_preview");
       return ok({
         ok: true,

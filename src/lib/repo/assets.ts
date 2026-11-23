@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Binary, ObjectId } from "mongodb";
-import { col } from "../db";
+import { col, withMongoTransaction } from "../db";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { MAX_IMAGE_BYTES, type ImageAssetSummary } from "../image-assets";
 import type { ImageAssetDoc } from "./types";
@@ -102,22 +102,34 @@ export async function deleteImageAsset(id: string, expectedName: string): Promis
   const oid = toOid(id);
   const tenantId = await currentTenantId();
   if (!oid || !tenantId) return { ok: false, reason: "not_found" };
-  const assets = await col.imageAssets();
-  const asset = await assets.findOne(tenantFilter(tenantId, { _id: oid }), { projection: { name: 1, publicId: 1 } });
-  if (!asset) return { ok: false, reason: "not_found" };
-  if (asset.name !== expectedName) return { ok: false, reason: "confirmation_mismatch" };
-  // Public IDs use only base64url characters, so they are safe as literal regex text.
-  const pattern = asset.publicId;
-  const [version, draft] = await Promise.all([
-    (await col.versions()).findOne(tenantFilter(tenantId, { html: { $regex: pattern } }), { projection: { _id: 1 } }),
-    (await col.questionnaireReviewDrafts()).findOne(tenantFilter(tenantId, { html: { $regex: pattern }, expiresAt: { $gt: new Date() } }), { projection: { _id: 1 } }),
-  ]);
-  if (version || draft) return { ok: false, reason: "in_use" };
-  // Include the confirmed name in the delete predicate. A concurrent rename
-  // between the read above and this write must not make a stale confirmation
-  // delete the newly named asset.
-  const deleted = await assets.deleteOne(tenantFilter(tenantId, { _id: oid, name: expectedName, publicId: asset.publicId }));
-  if (deleted.deletedCount) return { ok: true };
-  const current = await assets.findOne(tenantFilter(tenantId, { _id: oid }), { projection: { _id: 1 } });
+  const result = await withMongoTransaction(async (session) => {
+    const assets = await col.imageAssets();
+    const asset = await assets.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { name: 1, publicId: 1 } });
+    if (!asset) return "not_found" as const;
+    if (asset.name !== expectedName) return "confirmation_mismatch" as const;
+
+    // Publication conditionally updates this same asset row in its transaction.
+    // The delete write therefore conflicts with a concurrent publish, forcing
+    // one transaction to retry against the other's committed state.
+    const pattern = asset.publicId;
+    const version = await (await col.versions()).findOne(
+      tenantFilter(tenantId, { html: { $regex: pattern } }),
+      { session, projection: { _id: 1 } },
+    );
+    const draft = await (await col.questionnaireReviewDrafts()).findOne(
+      tenantFilter(tenantId, { html: { $regex: pattern }, expiresAt: { $gt: new Date() } }),
+      { session, projection: { _id: 1 } },
+    );
+    if (version || draft) return "in_use" as const;
+
+    // Keep the exact confirmation and public ID in the conditional delete.
+    const deleted = await assets.deleteOne(tenantFilter(tenantId, { _id: oid, name: expectedName, publicId: asset.publicId }), { session });
+    return deleted.deletedCount ? "deleted" as const : "changed" as const;
+  });
+  if (result === "deleted") return { ok: true };
+  if (result === "in_use") return { ok: false, reason: "in_use" };
+  if (result === "not_found") return { ok: false, reason: "not_found" };
+  if (result === "confirmation_mismatch") return { ok: false, reason: "confirmation_mismatch" };
+  const current = await (await col.imageAssets()).findOne(tenantFilter(tenantId, { _id: oid }), { projection: { _id: 1 } });
   return current ? { ok: false, reason: "confirmation_mismatch" } : { ok: false, reason: "not_found" };
 }
