@@ -50,7 +50,7 @@ vi.mock("@/lib/survey", () => ({
   },
   withCompat: async (prepared: any) => {
     if (state.compatibilityImpact) {
-      prepared.report.diagnostics.push({ code: "KQA700", severity: "warning", category: "compat", title: "Answer may be unmapped", message: "Existing answers no longer fit.", fix: "Review the impact" });
+      prepared.report.diagnostics.push({ code: "KQA709", severity: "warning", category: "compat", title: "Saved repeated records may not fit", message: "Existing records may not match the changed field definition.", fix: "Review the impact" });
     }
     return prepared;
   },

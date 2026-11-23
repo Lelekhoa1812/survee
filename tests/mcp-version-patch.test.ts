@@ -36,7 +36,7 @@ vi.mock("../src/lib/survey", () => ({
     return { report, markdown: "checker report", survey: state.invalid ? undefined : { html: html.replace(/^\uFEFF/, ""), manifest, check: { errors: 0, warnings: 0, info: 0, checkedAt: "now", checkerVersion: "test" } } };
   },
   withCompat: async (prepared: { report: { diagnostics: { code: string }[] } }) => {
-    if (state.compatibilityImpact) prepared.report.diagnostics.push({ code: "KQA700" });
+    if (state.compatibilityImpact) prepared.report.diagnostics.push({ code: "KQA710" });
     return prepared;
   },
 }));
