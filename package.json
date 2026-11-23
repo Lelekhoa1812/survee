@@ -9,6 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration:mongo": "vitest run tests/repo-add-people-operation.mongo.test.ts",
     "test:watch": "vitest",
     "eval:questionnaire-author": "node scripts/eval-questionnaire-author.mjs",
     "eval:authoring-trust-boundary": "tsx scripts/eval-authoring-trust-boundary.ts",

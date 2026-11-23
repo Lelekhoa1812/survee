@@ -25,6 +25,38 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Start MongoDB replica-set service
+        run: docker run -d --rm --name kqa-mongo-test -p 127.0.0.1:27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+      - name: Initialize MongoDB replica set
+        run: |
+          node --input-type=module <<'NODE'
+          import { MongoClient } from "mongodb";
+          const client = new MongoClient("mongodb://127.0.0.1:27017/admin?directConnection=true", { serverSelectionTimeoutMS: 30000 });
+          await client.connect();
+          try {
+            try {
+              await client.db("admin").command({ replSetInitiate: { _id: "rs0", members: [{ _id: 0, host: "127.0.0.1:27017" }] } });
+            } catch (error) {
+              if (error.code !== 23) throw error;
+            }
+            let isPrimary = false;
+            for (let attempt = 0; attempt < 30; attempt += 1) {
+              const hello = await client.db("admin").command({ hello: 1 });
+              if (hello.isWritablePrimary) { isPrimary = true; break; }
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+            if (!isPrimary) throw new Error("MongoDB replica set did not become primary");
+          } finally {
+            await client.close();
+          }
+          NODE
+      - name: Test MCP operation retries against MongoDB
+        run: npm run test:integration:mongo
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0
+      - name: Stop MongoDB replica-set service
+        if: always()
+        run: docker stop kqa-mongo-test || true
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1

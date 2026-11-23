@@ -1052,12 +1052,16 @@ async function addParticipantsCore(
     if (promoted.modifiedCount) await insertEvent(tenantId, oid, "update", undefined, session, { fields: ["mode"] });
     const views = docs.map(participantView);
     if (operation) {
+      // Store the same JSON shape a successful MCP response exposes. BSON turns
+      // undefined object properties into null on readback; omitting them here
+      // keeps a retry byte-for-byte equivalent at the response object level.
+      const operationViews = JSON.parse(JSON.stringify(views)) as ParticipantView[];
       const createdAt = new Date();
       await (await col.mcpOperations()).insertOne({
         _id: new ObjectId(), ...operation.scope, interviewId: oid, participantIds: docs.map((doc) => doc._id), argumentDigest: operation.argumentDigest,
-        result: { people: views }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+        result: { people: operationViews }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
       }, { session });
-      return { kind: "created" as const, people: views };
+      return { kind: "created" as const, people: operationViews };
     }
     return true;
   });
