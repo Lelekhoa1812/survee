@@ -81,6 +81,6 @@ describe("settings section navigation", () => {
 
     expect(html).toContain("Signed-in sessions");
     expect(html).toContain("Sign out other sessions");
-    expect(html).toContain("invalidates sessions issued before this list was introduced");
+    expect(html).toContain("sessions issued before this list was introduced");
   });
 });

@@ -182,7 +182,7 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
         <div className="row between wrap">
           <div>
             <h3 style={{ fontSize: 15 }}>Signed-in sessions</h3>
-            <p className="hint">Sign out other browsers and devices. This action also invalidates sessions issued before this list was introduced.</p>
+            <p className="hint">This list shows at most 50 active sessions and may omit a sign-in if session tracking was temporarily unavailable. Signing out other sessions invalidates every other session for this account, including sessions not shown here and sessions issued before this list was introduced.</p>
           </div>
           <button className="btn" type="button" onClick={() => void signOutOtherSessions()} disabled={sessionsBusy}>
             {sessionsBusy ? <Spinner /> : null} Sign out other sessions
