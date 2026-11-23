@@ -9,9 +9,18 @@ interface Page {
   nextCursor?: string | null;
 }
 
+interface Usage { assetCount: number; totalBytes: number }
+
+function formatStorage(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) {
   const toast = useToast();
   const [assets, setAssets] = useState<ImageAssetSummary[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +47,13 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
     setNextCursor(result.data.nextCursor ?? null);
   }
 
+  async function loadUsage() {
+    const result = await api<{ usage?: Usage }>("/api/admin/assets/usage");
+    if (result.ok && result.data.usage) setUsage(result.data.usage);
+  }
+
   useEffect(() => { void load(); }, [cursor]);
+  useEffect(() => { void loadUsage(); }, []);
 
   async function upload() {
     if (!files.length || busy) return;
@@ -78,6 +93,7 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
     setCursors([null]);
     if (saved > 0) toast(`${saved} image${saved === 1 ? "" : "s"} saved to the workspace library.`);
     if (errors.length > 0) toast(`${errors.slice(0, 2).join(" ")}${errors.length > 2 ? ` And ${errors.length - 2} more failed.` : ""} Failed files remain selected for retry.`, "err");
+    if (saved > 0) await loadUsage();
     if (wasFirstPage && saved > 0) await load();
   }
 
@@ -103,6 +119,7 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
     setDeleting(null);
     setConfirmName("");
     toast("Image deleted.");
+    await loadUsage();
     await load();
   }
 
@@ -137,7 +154,10 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
           {files.length > 0 && <div className="hint" role="status">Selected {files.length === 1 ? `${files[0].name} · ${(files[0].size / 1024).toFixed(0)} KB` : `${files.length} images. They will save one at a time; each image is limited to ${MAX_IMAGE_BYTES / 1024 / 1024} MB.`}</div>}
           <div className="row wrap" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>Saved images</h3>
-            <button className="btn sm" type="button" disabled={loading} onClick={() => void load()}>Refresh</button>
+            <div className="row wrap">
+              {usage && <span className="muted" role="status">{usage.assetCount} images · {formatStorage(usage.totalBytes)} stored</span>}
+              <button className="btn sm" type="button" disabled={loading} onClick={() => { void load(); void loadUsage(); }}>Refresh</button>
+            </div>
           </div>
           {loading ? <div className="muted" role="status"><Spinner /> Loading images…</div> : assets.length === 0 ? (
             <div className="card empty" style={{ border: 0, boxShadow: "none" }}>

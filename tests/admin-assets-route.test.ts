@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   listImageAssets: vi.fn(),
   renameImageAsset: vi.fn(),
   getPublicImageAsset: vi.fn(),
+  getImageAssetUsage: vi.fn(),
 }));
 
 vi.mock("@/lib/http", () => ({
@@ -27,10 +28,12 @@ vi.mock("@/lib/repo/assets", () => ({
   listImageAssets: state.listImageAssets,
   renameImageAsset: state.renameImageAsset,
   getPublicImageAsset: state.getPublicImageAsset,
+  getImageAssetUsage: state.getImageAssetUsage,
   MAX_IMAGE_BYTES: 2 * 1024 * 1024,
 }));
 
 import { GET as listAssets, POST as uploadAsset } from "../src/app/api/admin/assets/route";
+import { GET as getAssetUsage } from "../src/app/api/admin/assets/usage/route";
 import { DELETE as deleteAsset, PATCH as renameAsset } from "../src/app/api/admin/assets/[id]/route";
 import { GET as getPublicAsset } from "../src/app/api/assets/[publicId]/route";
 
@@ -48,6 +51,7 @@ beforeEach(() => {
   state.renameImageAsset.mockResolvedValue(asset);
   state.deleteImageAsset.mockResolvedValue({ ok: true });
   state.getPublicImageAsset.mockResolvedValue({ mimeType: "image/png", data: png, fileName: "logo.png", sha256: asset.sha256 });
+  state.getImageAssetUsage.mockResolvedValue({ assetCount: 3, totalBytes: 1536 });
 });
 
 function routeRequest(path: string, init?: RequestInit) {
@@ -70,6 +74,16 @@ describe("image asset routes", () => {
     expect(state.listImageAssets).toHaveBeenCalledWith({ cursor: undefined, limit: 1 });
     expect((await listAssets(routeRequest("/api/admin/assets?limit=101"))).status).toBe(400);
     expect((await listAssets(routeRequest("/api/admin/assets?cursor=bad"))).status).toBe(400);
+  });
+
+  it("requires a signed-in workspace member for aggregate asset usage", async () => {
+    const response = await getAssetUsage(routeRequest("/api/admin/assets/usage"));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ usage: { assetCount: 3, totalBytes: 1536 } });
+
+    state.denied = Response.json({ ok: false }, { status: 401 });
+    expect((await getAssetUsage(routeRequest("/api/admin/assets/usage"))).status).toBe(401);
+    expect(state.getImageAssetUsage).toHaveBeenCalledOnce();
   });
 
   it("stores valid multipart uploads and enforces the per-image request bound", async () => {

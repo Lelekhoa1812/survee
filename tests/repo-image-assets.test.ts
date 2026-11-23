@@ -29,6 +29,10 @@ vi.mock("../src/lib/db", () => ({
         };
         return cursor;
       },
+      aggregate: (pipeline: any[]) => {
+        const rows = store.assets.filter((doc) => matches(doc, pipeline[0].$match));
+        return { toArray: async () => rows.length ? [{ assetCount: rows.length, totalBytes: rows.reduce((sum, doc) => sum + doc.bytes, 0) }] : [] };
+      },
       findOneAndUpdate: async (filter: any, update: any) => {
         const doc = store.assets.find((item) => matches(item, filter));
         if (!doc) return null;
@@ -68,7 +72,7 @@ function matches(doc: any, filter: any): boolean {
   return true;
 }
 
-import { addImageAsset, deleteImageAsset, getPublicImageAsset, inspectImage, listImageAssets, MAX_IMAGE_BYTES, renameImageAsset } from "../src/lib/repo/assets";
+import { addImageAsset, deleteImageAsset, getImageAssetUsage, getPublicImageAsset, inspectImage, listImageAssets, MAX_IMAGE_BYTES, renameImageAsset } from "../src/lib/repo/assets";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
 
@@ -121,6 +125,15 @@ describe("workspace image assets", () => {
 
     store.tenantId = "tenant-b";
     expect(await listImageAssets()).toEqual({ assets: [], nextCursor: null });
+  });
+
+  it("reports aggregate storage usage for only the active workspace", async () => {
+    await addImageAsset({ name: "one", fileName: "one.png", data: png });
+    await addImageAsset({ name: "two", fileName: "two.png", data: Buffer.concat([png, png]) });
+
+    await expect(getImageAssetUsage()).resolves.toEqual({ assetCount: 2, totalBytes: png.length * 3 });
+    store.tenantId = "tenant-b";
+    await expect(getImageAssetUsage()).resolves.toEqual({ assetCount: 0, totalBytes: 0 });
   });
 
   it("renames images, blocks deleting referenced assets, and requires the exact name to delete", async () => {

@@ -45,7 +45,9 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  state.api.mockReset().mockResolvedValue({ ok: true, data: { assets: [], nextCursor: null } });
+  state.api.mockReset().mockImplementation(async (url: string) => url.includes("/usage")
+    ? { ok: true, data: { usage: { assetCount: 4, totalBytes: 2048 } } }
+    : { ok: true, data: { assets: [], nextCursor: null } });
   state.toast.mockReset();
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
     const file = (init?.body as FormData).get("file") as File;
@@ -60,6 +62,13 @@ afterEach(() => {
 });
 
 describe("workspace image library uploader", () => {
+  it("shows workspace-wide image storage usage", async () => {
+    await act(async () => root.render(createElement(ImageAssetsPanel)));
+
+    expect(host.textContent).toContain("4 images · 2.0 KB stored");
+    expect(state.api).toHaveBeenCalledWith("/api/admin/assets/usage");
+  });
+
   it("accepts multiple files and saves each image in a separate request", async () => {
     await act(async () => root.render(createElement(ImageAssetsPanel)));
     const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;

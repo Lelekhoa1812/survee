@@ -77,6 +77,16 @@ export async function listImageAssets(input: { cursor?: string; limit?: number }
   return { assets: page.map(summary), nextCursor: hasMore && page.length ? page[page.length - 1]._id.toHexString() : null };
 }
 
+export async function getImageAssetUsage(): Promise<{ assetCount: number; totalBytes: number }> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { assetCount: 0, totalBytes: 0 };
+  const rows = await (await col.imageAssets()).aggregate([
+    { $match: tenantFilter(tenantId) },
+    { $group: { _id: null, assetCount: { $sum: 1 }, totalBytes: { $sum: "$bytes" } } },
+  ]).toArray();
+  return rows[0] ? { assetCount: rows[0].assetCount ?? 0, totalBytes: rows[0].totalBytes ?? 0 } : { assetCount: 0, totalBytes: 0 };
+}
+
 export async function getPublicImageAsset(publicId: string): Promise<{ mimeType: string; data: Buffer; fileName: string; sha256: string } | null> {
   if (!/^[A-Za-z0-9_-]{43}$/.test(publicId)) return null;
   const asset = await (await col.imageAssets()).findOne({ publicId }, { projection: { mimeType: 1, data: 1, fileName: 1, sha256: 1 } });
