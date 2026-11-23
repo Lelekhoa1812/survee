@@ -4,7 +4,8 @@ const state = vi.hoisted(() => ({
   role: "member" as "owner" | "admin" | "member",
   listInterviews: vi.fn(async () => [{ id: "interview-1", counts: { people: 2, invited: 1, inProgress: 0, submitted: 1 } }]),
   getInterview: vi.fn(async () => ({ _id: "interview-1", name: "Study", currentVersion: 1, mode: "multi", status: "open" })),
-  listParticipants: vi.fn(async () => [{ id: "person-1", name: "Respondent", answers: { secret: "answer" } }]),
+  getVersion: vi.fn(async () => ({ version: 1, manifest: { title: "Study", questions: [{ id: "assets", type: "repeat", label: "Assets", fields: [{ id: "name", type: "text", label: "Name" }] }] } })),
+  listParticipants: vi.fn(async () => [{ id: "person-1", name: "Respondent", status: "submitted" as const, createdAt: "2026-01-01T00:00:00.000Z", answers: {}, recordGroups: { assets: [{ id: "row-1", values: { name: "Pump" } }] } }]),
   listVersions: vi.fn(async () => [{ version: 1, html: "<html></html>" }]),
   recentEvents: vi.fn(async () => [{ id: "event-1", type: "submit", participantId: "person-1", meta: { email: "private@example.test" } }]),
   updateInterview: vi.fn(async () => ({ _id: "interview-1" })),
@@ -29,6 +30,7 @@ vi.mock("../src/lib/repo", () => ({
   isSessionRevoked: async () => false,
   listInterviews: state.listInterviews,
   getInterview: state.getInterview,
+  getVersion: state.getVersion,
   listParticipants: state.listParticipants,
   listVersions: state.listVersions,
   recentEvents: state.recentEvents,
@@ -75,6 +77,15 @@ beforeEach(() => {
 });
 
 describe("workspace member access boundary", () => {
+  it("includes repeat-group records in person-level exports", async () => {
+    state.role = "owner";
+    state.getInterview.mockResolvedValueOnce({ _id: "0123456789abcdef01234567", name: "Study", currentVersion: 1, mode: "multi", status: "open", createdAt: new Date("2026-01-01T00:00:00.000Z") } as never);
+    const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=json"), interviewCtx);
+    expect(response.status).toBe(200);
+    const document = await response.json();
+    expect(document.participants[0].recordGroups).toEqual({ assets: [{ id: "row-1", values: { name: "Pump" } }] });
+  });
+
   it("allows interview summaries and strips respondent records from detail reads", async () => {
     const listResponse = await listInterviews();
     expect(listResponse.status).toBe(200);

@@ -21,7 +21,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
       interview: { id, name: interview.name, description: interview.description, mode: interview.mode, status: interview.status, createdAt: interview.createdAt.toISOString() },
       manifest: version.manifest,
       surveyVersion: version.version,
-      participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, questionOrderAssignments: p.questionOrderAssignments })),
+      participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups, questionOrderAssignments: p.questionOrderAssignments })),
       generatedAt: new Date().toISOString(),
     },
     format,
