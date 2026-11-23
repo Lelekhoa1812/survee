@@ -21,12 +21,15 @@ import {
   deleteInterview,
   deleteParticipant,
   getInterview,
+  getInterviewParticipantCounts,
   getAnalyticsRun,
   getParticipant,
   getVersion,
   iterateAnalyticsParticipants,
   listInterviews,
+  listParticipantPage,
   listParticipants,
+  ParticipantCursorError,
   ParticipantReadLimitError,
   listVersions,
   noteMcp,
@@ -39,7 +42,7 @@ import {
   updateInterview,
   updateParticipant,
 } from "../repo";
-import { listMailByInterview, listMailByPerson, mailRecord } from "../repo/mail";
+import { listCurrentMailByParticipants, listMailByPerson, mailRecord } from "../repo/mail";
 import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
@@ -271,18 +274,18 @@ function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: R
   };
 }
 
-async function loadPeople(interviewId: string) {
+async function loadPeoplePage(interviewId: string, cursor: string | null = null, limit = 50) {
   const interview = await getInterview(interviewId);
   if (!interview) return null;
   const version = await getVersion(interview._id, interview.currentVersion);
-  const people = await listParticipants(interviewId);
-  const mail = await listMailByInterview(interview._id);
+  const page = await listParticipantPage(interviewId, cursor, limit);
+  const mail = await listCurrentMailByParticipants(interview._id, page.people);
   const grouped = new Map<string, ReturnType<typeof mailRecord>[]>();
   for (const row of mail) {
-    const id = row.participantId.toHexString();
+    const id = row.token;
     grouped.set(id, [...(grouped.get(id) ?? []), mailRecord(row)]);
   }
-  return { interview, version, people: people.map((p) => shapePerson(p, version?.manifest ?? null, grouped.get(p.id) ?? [])) };
+  return { interview, version, people: page.people.map((person) => shapePerson(person, version?.manifest ?? null, grouped.get(person.token) ?? [])), nextCursor: page.nextCursor };
 }
 
 async function onePerson(personId: string) {
@@ -510,14 +513,25 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "list_people",
-    description: "List people on an interview, including email, status, progress, mail state, and private link.",
-    inputSchema: obj({ interviewId: str }, ["interviewId"]),
+    description: "List one bounded page of people on an interview, including email, status, progress, mail state, and private link. Pass nextCursor back as cursor to continue; without a cursor this returns the newest page.",
+    inputSchema: obj({ interviewId: str, cursor: str, limit: { type: "integer", minimum: 1, maximum: 100 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
-      const loaded = await loadPeople(id);
+      if (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 256)) return err("cursor must be a valid nextCursor value returned by list_people.", "invalid_args");
+      const cursor = args.cursor === undefined ? null : args.cursor.trim() || null;
+      if (args.cursor !== undefined && !cursor) return err("cursor must be the nextCursor value returned by list_people.", "invalid_args");
+      if (args.limit !== undefined && (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1 || args.limit > 100)) return err("limit must be an integer from 1 to 100.", "invalid_args");
+      let loaded;
+      try {
+        loaded = await loadPeoplePage(id, cursor, typeof args.limit === "number" ? args.limit : 50);
+      } catch (error) {
+        if (error instanceof ParticipantCursorError) return err(error.message, "participant_cursor_invalid");
+        throw error;
+      }
       if (!loaded) return err("Interview not found.", "not_found");
-      return ok({ people: loaded.people });
+      const counts = await getInterviewParticipantCounts(id);
+      return ok({ people: loaded.people, nextCursor: loaded.nextCursor, counts });
     },
   },
   {
@@ -856,23 +870,32 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_status",
-    description: "Interview open/closed, version, and per-person progress.",
-    inputSchema: obj({ interviewId: str }, ["interviewId"]),
+    description: "Interview open/closed, aggregate counts, and one bounded page of per-person progress. Pass nextCursor back as cursor to continue.",
+    inputSchema: obj({ interviewId: str, cursor: str, limit: { type: "integer", minimum: 1, maximum: 100 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
-      const loaded = await loadPeople(id);
+      if (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 256)) return err("cursor must be a valid nextCursor value returned by get_status.", "invalid_args");
+      const cursor = args.cursor === undefined ? null : args.cursor.trim() || null;
+      if (args.cursor !== undefined && !cursor) return err("cursor must be the nextCursor value returned by get_status.", "invalid_args");
+      if (args.limit !== undefined && (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1 || args.limit > 100)) return err("limit must be an integer from 1 to 100.", "invalid_args");
+      let loaded;
+      try {
+        loaded = await loadPeoplePage(id, cursor, typeof args.limit === "number" ? args.limit : 50);
+      } catch (error) {
+        if (error instanceof ParticipantCursorError) return err(error.message, "participant_cursor_invalid");
+        throw error;
+      }
       if (!loaded) return err("Interview not found.", "not_found");
-      const counts = { invited: 0, in_progress: 0, submitted: 0 };
-      for (const p of loaded.people) counts[p.status] += 1;
+      const counts = await getInterviewParticipantCounts(id);
       return ok({
         interviewId: id,
         name: loaded.interview.name,
         status: loaded.interview.status,
         currentVersion: loaded.interview.currentVersion,
-        // inProgress matches list_interviews; in_progress is kept for existing clients.
-        counts: { ...counts, inProgress: counts.in_progress },
+        counts,
         people: loaded.people.map((p) => ({ id: p.id, name: p.name, status: p.status, answered: p.answered, total: p.total, requiredMissing: p.requiredMissing, mail: p.mail.state })),
+        nextCursor: loaded.nextCursor,
       });
     },
   },
@@ -932,19 +955,30 @@ const TOOLS: ToolDef[] = [
   {
     name: "get_mail_status",
     description: "Read stored invite results, including unconfirmed pending attempts. Does not open the mailbox.",
-    inputSchema: obj({ personId: str, interviewId: str }),
+    inputSchema: obj({ personId: str, interviewId: str, cursor: str, limit: { type: "integer", minimum: 1, maximum: 100 } }),
     async run(args) {
       const personId = asString(args.personId, 40);
       const interviewId = asString(args.interviewId, 40);
       if (!personId && !interviewId) return err("personId or interviewId is required.");
       if (personId) {
+        if (args.cursor !== undefined || args.limit !== undefined) return err("cursor and limit apply only to interview-wide mail status reads.", "invalid_args");
         const loaded = await onePerson(personId);
         if (!loaded) return err("Person not found.", "not_found");
         return ok({ people: [{ id: loaded.view.id, email: loaded.view.email, mail: loaded.view.mail }] });
       }
-      const loaded = await loadPeople(interviewId!);
+      if (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 256)) return err("cursor must be a valid nextCursor value returned by get_mail_status.", "invalid_args");
+      const cursor = args.cursor === undefined ? null : args.cursor.trim() || null;
+      if (args.cursor !== undefined && !cursor) return err("cursor must be the nextCursor value returned by get_mail_status.", "invalid_args");
+      if (args.limit !== undefined && (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1 || args.limit > 100)) return err("limit must be an integer from 1 to 100.", "invalid_args");
+      let loaded;
+      try {
+        loaded = await loadPeoplePage(interviewId!, cursor, typeof args.limit === "number" ? args.limit : 50);
+      } catch (error) {
+        if (error instanceof ParticipantCursorError) return err(error.message, "participant_cursor_invalid");
+        throw error;
+      }
       if (!loaded) return err("Interview not found.", "not_found");
-      return ok({ people: loaded.people.map((p) => ({ id: p.id, name: p.name, email: p.email, mail: p.mail })) });
+      return ok({ people: loaded.people.map((p) => ({ id: p.id, name: p.name, email: p.email, mail: p.mail })), nextCursor: loaded.nextCursor });
     },
   },
   {
@@ -1617,8 +1651,7 @@ const TOOLS: ToolDef[] = [
       if (!people.length) return err("Add at least one person with a name.", "invalid_args");
       if (interview.mode !== "multi") await promoteToMultiUser(id);
       const created = await addParticipants(id, people);
-      const loaded = await loadPeople(id);
-      const views = loaded ? created.map((p) => loaded.people.find((row) => row.id === p.id) ?? shapePerson(p, null, [])) : created.map((p) => shapePerson(p, null, []));
+      const views = created.map((person) => shapePerson(person, null, []));
       return ok({ people: views });
     },
   },

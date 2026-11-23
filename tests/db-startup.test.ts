@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ connectCalls: 0 }));
+const state = vi.hoisted(() => ({ connectCalls: 0, indexes: [] as string[] }));
 
 vi.mock("mongodb", async (importOriginal) => {
   const actual = await importOriginal<typeof import("mongodb")>();
   const database = {
     collection() {
       return {
-        async createIndex() { return "index"; },
+        async createIndex(_spec: unknown, options?: { name?: string }) { if (options?.name) state.indexes.push(options.name); return "index"; },
         async dropIndex() { const error = new Error("index not found") as Error & { code: number }; error.code = 27; throw error; },
         async updateMany() { return { modifiedCount: 0 }; },
         async deleteMany() { return { deletedCount: 0 }; },
@@ -32,6 +32,7 @@ vi.mock("mongodb", async (importOriginal) => {
 describe("MongoDB cold-start connection recovery", () => {
   beforeEach(() => {
     state.connectCalls = 0;
+    state.indexes = [];
     (globalThis as typeof globalThis & { __kqaMongo?: unknown }).__kqaMongo = undefined;
     process.env.MONGODB_URI = "mongodb://127.0.0.1:27017/kqa-test";
     process.env.MONGODB_DB = "kqa-test";
@@ -45,6 +46,7 @@ describe("MongoDB cold-start connection recovery", () => {
     await expect(db()).resolves.toBeDefined();
 
     expect(state.connectCalls).toBe(2);
+    expect(state.indexes).toContain("tenant_people_cursor");
   });
 
   it("shares one in-flight cold-start attempt among concurrent callers", async () => {

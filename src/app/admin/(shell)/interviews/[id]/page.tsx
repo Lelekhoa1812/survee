@@ -2,12 +2,11 @@ import { notFound } from "next/navigation";
 import { InterviewView } from "@/components/InterviewView";
 import type { InterviewData } from "@/components/interview-types";
 import { publicBaseUrl } from "@/lib/env";
-import { progress } from "@/lib/format/answers";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
 import { summarizeQuestionCohorts, withCurrentEligibility } from "@/lib/analytics/summary";
-import { currentMail } from "@/lib/mail/state";
-import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listParticipants, listVersions, MAX_PARTICIPANTS_PER_READ, ParticipantReadLimitError, recentEvents } from "@/lib/repo";
-import { listMailByInterview, mailRecord } from "@/lib/repo/mail";
+import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listParticipantPage, listVersions, recentEvents } from "@/lib/repo";
+import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
+import { participantRows } from "@/lib/host/participant-rows";
 import { adminSession } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -27,32 +26,20 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   const interview = await getInterview(id);
   if (!interview) notFound();
   const analysisOnly = tab === "analysis";
-  const peopleResult = !canManage || analysisOnly
-    ? Promise.resolve({ people: [], participantReadLimit: undefined })
-    : listParticipants(id).then((people) => ({ people, participantReadLimit: undefined })).catch((error) => {
-      if (error instanceof ParticipantReadLimitError) return { people: [], participantReadLimit: MAX_PARTICIPANTS_PER_READ };
-      throw error;
-    });
-  const [current, counts, peopleResultValue, versions, events, mailRows] = await Promise.all([
+  const [current, counts, peoplePage, versions, events] = await Promise.all([
     getVersion(interview._id, interview.currentVersion),
     getInterviewParticipantCounts(id),
-    peopleResult,
+    !canManage || analysisOnly ? Promise.resolve({ people: [], nextCursor: null }) : listParticipantPage(id),
     analysisOnly ? Promise.resolve([]) : listVersions(interview._id),
     !canManage || analysisOnly ? Promise.resolve([]) : recentEvents(id, 25),
-    !canManage || analysisOnly ? Promise.resolve([]) : listMailByInterview(interview._id),
   ]);
-  const { people } = peopleResultValue;
   if (!current) notFound();
+  const mailRows = !canManage || analysisOnly ? [] : await listCurrentMailByParticipants(interview._id, peoplePage.people);
+  const people = participantRows(current.manifest, peoplePage.people, mailRows.map(mailRecord));
   let analysis: InterviewData["analysis"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
     analysis = await summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds))));
-  }
-  const names = new Map(people.map((p) => [p.id, p.name]));
-  const mailByPerson = new Map<string, ReturnType<typeof mailRecord>[]>();
-  for (const row of mailRows) {
-    const key = row.participantId.toHexString();
-    mailByPerson.set(key, [...(mailByPerson.get(key) ?? []), mailRecord(row)]);
   }
   const base = publicBaseUrl();
 
@@ -62,19 +49,10 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     manifest: current.manifest,
     publicOrigin: base.ok ? base.origin : null,
     ...(analysis ? { analysis } : {}),
-    people: people.map((p) => {
-      const pr = progress(current.manifest, p.answers, p.recordGroups);
-      const mail = currentMail(p, mailByPerson.get(p.id) ?? []);
-      return {
-        id: p.id, token: p.token, name: p.name, email: p.email, note: p.note, status: p.status,
-        answered: pr.answered, total: pr.total, requiredMissing: pr.missingRequired.length,
-        createdAt: p.createdAt, updatedAt: p.updatedAt, lastSeenAt: p.lastSeenAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups,
-        mail: { state: mail.state, sentAt: mail.sentAt, error: mail.error, delivery: mail.state === "sent" ? mail.delivery : "unknown", deliveryCheckedAt: mail.deliveryCheckedAt, deliveryDetail: mail.deliveryDetail },
-      };
-    }),
-    ...(peopleResultValue.participantReadLimit ? { participantReadLimit: peopleResultValue.participantReadLimit } : {}),
+    people,
+    peopleNextCursor: peoplePage.nextCursor,
     versions: versions.map((v) => ({ version: v.version, fileName: v.fileName, bytes: v.bytes, createdAt: v.createdAt.toISOString(), check: { errors: v.check.errors, warnings: v.check.warnings, info: v.check.info }, questions: v.manifest.questions.length })),
-    events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? names.get(e.participantId) : undefined, meta: e.meta })),
+    events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? people.find((person) => person.id === e.participantId)?.name : undefined, meta: e.meta })),
   };
   const allowedTabs = canManage ? ["overview", "people", "answers", "analysis", "survey", "export"] : ["overview", "analysis", "survey"];
   const initial = allowedTabs.includes(tab ?? "") ? (tab as string) : "overview";

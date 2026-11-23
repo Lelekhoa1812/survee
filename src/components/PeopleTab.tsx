@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseEmail, parsePersonLine } from "@/lib/mail/address";
 import type { InterviewData, PersonRow } from "./interview-types";
 import { InviteActions } from "./InviteActions";
@@ -16,6 +16,31 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [removing, setRemoving] = useState<PersonRow | null>(null);
   const [working, setWorking] = useState<string>("");
+  const [participants, setParticipants] = useState(data.people);
+  const [nextCursor, setNextCursor] = useState(data.peopleNextCursor ?? null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageError, setPageError] = useState("");
+
+  useEffect(() => {
+    setParticipants(data.people);
+    setNextCursor(data.peopleNextCursor ?? null);
+    setPageError("");
+  }, [data.people, data.peopleNextCursor]);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setPageError("");
+    const res = await api<{ people?: PersonRow[]; nextCursor?: string | null }>(`/api/admin/interviews/${data.interview.id}/participants?cursor=${encodeURIComponent(nextCursor)}`);
+    setLoadingMore(false);
+    if (!res.ok) {
+      setPageError(res.data.error ?? "More people could not be loaded.");
+      return;
+    }
+    const fresh = res.data.people ?? [];
+    setParticipants((current) => [...current, ...fresh.filter((person) => !current.some((item) => item.id === person.id))]);
+    setNextCursor(res.data.nextCursor ?? null);
+  }
 
   async function act(p: PersonRow, action: "reopen" | "token") {
     setWorking(p.id + action);
@@ -34,7 +59,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>
       </div>
 
-      {data.people.length === 0 ? (
+      {participants.length === 0 ? (
         <div className="card empty">
           <div className="ico"><Icon name="users" size={24} /></div>
           <h3>No people yet</h3>
@@ -47,7 +72,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
             <caption className="sr">Respondent status, invitation delivery, and actions</caption>
             <thead><tr><th>Person</th><th>Status and progress</th><th>Invitation and delivery</th><th><span className="sr">Actions</span></th></tr></thead>
             <tbody>
-              {data.people.map((p) => {
+              {participants.map((p) => {
                 const s = STATUS[p.status];
                 const pct = p.total ? Math.round((p.answered / p.total) * 100) : 0;
                 const respondentLink = origin ? `${origin}/${p.token}` : "";
@@ -99,6 +124,9 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
           </table>
         </div>
       )}
+
+      {pageError && <p className="field-error" role="alert">{pageError}</p>}
+      {nextCursor && <div className="row" style={{ justifyContent: "center" }}><button className="btn" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? <><Spinner /> Loading…</> : `Load more people (${Math.max(0, data.counts.people - participants.length)} remaining)`}</button></div>}
 
       {adding && <AddPeople interviewId={data.interview.id} switchesToMulti={!multi} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
       {editing && <EditPerson person={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); refresh(); }} />}

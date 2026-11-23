@@ -141,6 +141,10 @@ vi.mock("../src/lib/repo", async () => {
       { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } } },
       { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "low", updatedAt: "2026-11-13T00:00:00.000Z" } } },
     ]),
+    listParticipantPage: vi.fn(async () => ({ people: [
+      { id: personId, interviewId, token: "person-token", name: "Ada Lovelace", status: "submitted" as const, answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } }, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z", revision: 0 },
+    ], nextCursor: "next" as string | null })),
+    getInterviewParticipantCounts: vi.fn(async () => ({ people: 2, invited: 1, inProgress: 0, submitted: 1 })),
     iterateAnalyticsParticipants: vi.fn(async function* (_id: string, _questionIds: string[], scope: { statuses?: ("invited" | "in_progress" | "submitted")[] } = {}) {
       const people = [
         { status: "submitted" as const, answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } } },
@@ -151,10 +155,15 @@ vi.mock("../src/lib/repo", async () => {
   };
 });
 
+vi.mock("../src/lib/repo/mail", async () => {
+  const actual = await vi.importActual<typeof import("../src/lib/repo/mail")>("../src/lib/repo/mail");
+  return { ...actual, listCurrentMailByParticipants: vi.fn(async () => []) };
+});
+
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, deleteInterview, getInterview, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipants, noteMcp, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -184,13 +193,14 @@ describe("MCP tools", () => {
       { id: "details", type: "text", label: "Details", required: true, when: { all: [{ question: "assets", operator: "answered" }] } },
     ] };
     vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest } as never);
-    vi.mocked(listParticipants).mockResolvedValueOnce([{
-      id: personId, interviewId, token: "person-token", name: "Ada", status: "in_progress", answers: {},
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [{
+      id: personId, interviewId, token: "person-token", name: "Ada", status: "in_progress", answers: {}, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z", revision: 0,
       recordGroups: { assets: [{ id: "r1", values: {}, revision: 0, fieldRevisions: {} }] },
-    }] as never);
+    }] as never, nextCursor: "more" });
     const response = await call("list_people", { interviewId });
-    const body = await response.json() as { result: { structuredContent: { people: { answered: number; total: number; requiredMissing: number }[] } } };
+    const body = await response.json() as { result: { structuredContent: { people: { answered: number; total: number; requiredMissing: number }[]; nextCursor: string } } };
     expect(body.result.structuredContent.people[0]).toMatchObject({ answered: 1, total: 2, requiredMissing: 1 });
+    expect(body.result.structuredContent.nextCursor).toBe("more");
   });
 
   it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {
@@ -662,13 +672,14 @@ describe("MCP tools", () => {
   });
 
   it("reports in-progress people under the same camelCase key list_interviews uses", async () => {
-    vi.mocked(listParticipants).mockResolvedValueOnce([
-      { id: personId, interviewId, token: "t1", name: "Ada", status: "in_progress", answers: {}, recordGroups: {} },
-      { id: "6affb00000000000000000aa", interviewId, token: "t2", name: "Grace", status: "submitted", answers: {}, recordGroups: {} },
-    ] as never);
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [
+      { id: personId, interviewId, token: "t1", name: "Ada", status: "in_progress", answers: {}, recordGroups: {}, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z", revision: 0 },
+      { id: "6affb00000000000000000aa", interviewId, token: "t2", name: "Grace", status: "submitted", answers: {}, recordGroups: {}, createdAt: "2026-11-12T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z", revision: 0 },
+    ] as never, nextCursor: null });
+    vi.mocked(getInterviewParticipantCounts).mockResolvedValueOnce({ people: 2, invited: 0, inProgress: 1, submitted: 1 });
     const response = await call("get_status", { interviewId });
     const body = await response.json() as { result: { structuredContent: { counts: Record<string, number> } } };
-    expect(body.result.structuredContent.counts).toMatchObject({ invited: 0, in_progress: 1, inProgress: 1, submitted: 1 });
+    expect(body.result.structuredContent.counts).toMatchObject({ people: 2, invited: 0, inProgress: 1, submitted: 1 });
   });
 
   it("rejects oversized design source at MCP schema validation", async () => {

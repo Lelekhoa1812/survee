@@ -24,7 +24,9 @@ const person: PersonRow = {
 
 const data = {
   interview: { id: "interview-1", name: "Research", mode: "multi", status: "open", currentVersion: 1, createdAt: "2026-11-14T00:00:00.000Z" },
+  counts: { people: 1, invited: 0, inProgress: 0, submitted: 1 },
   people: [person],
+  peopleNextCursor: null,
   versions: [],
   events: [],
   manifest: { format: "kqa/1", title: "Research", questions: [] },
@@ -58,5 +60,13 @@ describe("respondent list", () => {
 
     expect(html).toContain("Add people");
     expect(html).not.toContain("Remove person");
+  });
+
+  it("shows a bounded continuation action when more host records are available", () => {
+    const paged = { ...data, counts: { ...data.counts, people: 76 }, peopleNextCursor: "cursor-next" } as InterviewData;
+    const html = renderToStaticMarkup(createElement(PeopleTab, { data: paged, origin: "https://kqa.example", refresh: () => {} }));
+
+    expect(html).toContain('Load more people (75 remaining)');
+    expect(html).not.toContain("answers above 100");
   });
 });

@@ -1,7 +1,7 @@
 import { ObjectId, type ClientSession } from "mongodb";
 import { col } from "../db";
 import type { MailRecord } from "../mail/state";
-import type { MailMessageDoc } from "./types";
+import type { MailMessageDoc, ParticipantView } from "./types";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 
 export function mailRecord(doc: MailMessageDoc): MailRecord {
@@ -42,6 +42,24 @@ export async function listMailByInterview(interviewId: ObjectId): Promise<MailMe
   const tenantId = await currentTenantId();
   if (!tenantId) return [];
   return (await col.mail()).find(tenantFilter(tenantId, { interviewId })).sort({ sentAt: -1 }).limit(500).toArray();
+}
+
+/** Load only the latest mail attempt for each exact participant link in a bounded page. */
+export async function listCurrentMailByParticipants(interviewId: ObjectId, people: readonly Pick<ParticipantView, "id" | "token" | "email">[]): Promise<MailMessageDoc[]> {
+  const tenantId = await currentTenantId();
+  if (!tenantId || !people.length) return [];
+  const filters = people.flatMap((person) => {
+    if (!person.email) return [];
+    const participantId = /^[0-9a-f]{24}$/i.test(person.id) ? new ObjectId(person.id) : null;
+    return participantId ? [{ participantId, to: person.email.trim().toLowerCase(), token: person.token }] : [];
+  });
+  if (!filters.length) return [];
+  return (await col.mail()).aggregate<MailMessageDoc>([
+    { $match: tenantFilter(tenantId, { interviewId, $or: filters }) },
+    { $sort: { sentAt: -1, _id: -1 } },
+    { $group: { _id: { participantId: "$participantId", to: "$to", token: "$token" }, latest: { $first: "$$ROOT" } } },
+    { $replaceRoot: { newRoot: "$latest" } },
+  ]).toArray();
 }
 
 export async function listMailByPerson(participantId: ObjectId): Promise<MailMessageDoc[]> {

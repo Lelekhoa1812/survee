@@ -115,7 +115,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `apply_questionnaire_block_patch` | Publish the reviewed question block operations with a signed preview token and compatibility acknowledgement |
 | `preview_questionnaire_required_patch` | Preview 1–500 required/optional changes by question ID; edits only manifest booleans and returns a browser review link |
 | `apply_questionnaire_required_patch` | Publish the reviewed required/optional changes with a signed preview token and compatibility acknowledgement |
-| `list_people` | People, optional email, status, progress, mail state, private link; reads above 100 people fail with `participant_read_limit` rather than truncating |
+| `list_people` | Newest-first bounded page of people, optional email, status, progress, mail state, and private link; pass `nextCursor` as `cursor` to continue |
 | `get_person` | One person |
 | `add_people` | Add people to an interview. Email is optional. Adding people to a One-person interview switches it to Multi-user |
 | `update_person` | Name, optional email, private note. An empty email clears it |
@@ -124,10 +124,10 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `regenerate_link` | New private link. The old one stops working. Nothing is emailed automatically |
 | `get_answers` | Answers for review, with the label a host would read. A supplied `personId` reads only that tenant-scoped person; interview-wide reads above 100 people fail with `participant_read_limit`. Includes repeat-group records separately when present. No score |
 | `analyze_answers` | Current-version descriptive summaries with participant scope, denominators, missingness, repeatable aggregate pagination, optional side-by-side status groups, and optional answer segmentation for up to 20 outcomes from one scan; repeat rows are excluded and never count as participants; no raw text or score |
-| `get_status` | Open or closed, and not started / in progress / submitted |
+| `get_status` | Open or closed, aggregate counts for the full interview, and one bounded newest-first progress page; pass `nextCursor` as `cursor` to continue |
 | `list_events` | Recent audit rows |
 | `export_interview` | `json`, `csv-wide`, `csv-long`, `md`, or `xlsx` (base64); a full export is limited to 100 people and fails with `participant_read_limit` above that |
-| `get_mail_status` | Stored send and delivery state for a person or interview. Does not open the mailbox |
+| `get_mail_status` | Stored send and delivery state for a person or one bounded newest-first interview page. Interview-wide calls accept `cursor` and `limit`; this tool does not open the mailbox |
 | `send_invite` | Ask SMTP to send one person's private link. One message per call; per-person, per-recipient, and workspace limits prevent repeated sends |
 | `check_invite_delivery` | IMAP check of a stored message id. Returns `delivered`, `bounced`, or `unknown`; per-person and workspace limits constrain mailbox checks |
 
@@ -203,7 +203,8 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `asset_unavailable` | A questionnaire candidate references an image missing from this workspace. Upload it again or remove the asset URL, then preview the candidate again. |
 | `invalid_image` | The upload is not an accepted image type. |
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
-| `participant_read_limit` | The interview has more than 100 people for a full-record read. The result is not truncated; use aggregate tools or a narrower workflow. |
+| `participant_read_limit` | A full export or interview-wide answer read has more than 100 people. The result is not truncated; use `list_people` pages, a single-person answer read, or aggregate tools. |
+| `participant_cursor_invalid` | The participant page cursor is malformed. Restart the read without a cursor. |
 | `docs_unavailable` | Bundled documentation could not be read. Try again later. |
 | `server_error` | An unexpected failure inside the tool. The server logs the error type only. A write may have partly completed, so read the current state (for example `get_interview`, `list_people` or `list_versions`) before retrying. |
 | `invalid_css` / `invalid_json` / `invalid_input` / `too_large` / `no_tokens` | `extract_design_profile` could not read the source: unsupported CSS, malformed token JSON, a missing or wrong input, a source over 32 KiB, or no supported tokens found. Fix the source and call again. |

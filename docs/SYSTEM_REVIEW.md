@@ -26,7 +26,7 @@ The following changes are pushed to `main` and deployed:
 - Audit event write failures produce sanitized operational logs, and unknown MCP tool attempts enter the audit path.
 - Participant invite attempts are durably recorded as pending before SMTP; ambiguous outcomes block ordinary retries, an on-demand IMAP check can resolve a matching delivery-status notice, and explicit resend warns of possible duplicates.
 - Active workspace invitation links no longer rotate on repeated requests or concurrent sends; SMTP ambiguity leaves the invitation active, with revoke-before-replacement behavior shown in settings.
-- Full participant-list and export reads now stop explicitly above 100 people; the host page keeps other controls available, and targeted MCP answer reads load only one tenant-scoped person.
+- The host People list and MCP people/status/mail-status reads now paginate in bounded 50-row cursor pages. The host answer matrix shows only the newest page when an interview is larger; interview-wide MCP answer reads and full exports remain capped at 100. Targeted MCP answer reads load one tenant-scoped person.
 - A rejected cold-start Mongo connection now clears only its own cached promise so a warm worker can retry when the database recovers.
 - Published questionnaire assets and asset deletion now share a transactional coordination point; a concurrent deletion cannot leave a newly published version pointing at a missing image.
 
@@ -35,7 +35,7 @@ The following changes are pushed to `main` and deployed:
 | Priority | Gap | Impact | Recommended next step |
 | --- | --- | --- | --- |
 | P1 | **Outbound mail still needs reconciliation for ambiguous attempts.** Participant sends are persisted before SMTP; normal retries are suppressed, and rate-limited IMAP checks can resolve matching delivery-status notices. Workspace invite links now stay active through SMTP ambiguity and cannot be silently rotated; however, workspace sends do not persist a Message-ID or expose delivery reconciliation. Participant attempts without a DSN can remain unknown indefinitely. | Hosts may need a duplicate-risk decision for participant invites, while workspace invite delivery status remains unknown until a host or recipient confirms it. | Add a durable workspace mail attempt with stored Message-ID and a scoped, rate-limited delivery check; retain explicit revoke-before-replacement semantics. Add provider reconciliation or a host resolution workflow for pending participant attempts. |
-| P1 | **Participant reads and exports need pagination for larger interviews.** Full-record reads and exports now stop after 100 people and fail explicitly instead of hydrating or exporting an unbounded cohort. Exports under that limit are still assembled in memory. | Interviews above 100 people cannot use the current full-list or export flows; large answer payloads can still make a 100-person response expensive. | Add cursor pagination to host/MCP listing and stream or background larger exports; show continuation/export status. |
+| P1 | **Bulk answer reads and exports still need pagination or streaming.** The host People list and MCP `list_people`, `get_status`, and interview-wide `get_mail_status` now use bounded cursor pages. The host answer matrix currently shows only the newest 50; interview-wide `get_answers` and full exports stop at 100, and exports below the cap are assembled in memory. | Large interviews can be browsed, but bulk answer review and export are unavailable above 100 people; large answer payloads can still make a 100-person export expensive. | Add cursor paging to interview-wide answers; stream text exports and use a background job or bounded download workflow for XLSX and other large formats. Keep page sizes and output limits explicit. |
 | P1 | **Asset storage has no workspace quota, and active preview drafts can race deletion.** Publication now touches each referenced tenant asset in its transaction, while deletion scans references and deletes in a transaction that writes the same asset. This prevents a concurrent publish from committing a dangling image URL. Draft creation does not use that coordination point, but publication rejects a missing asset. | Aggregate storage costs can grow without a tenant bound; a preview draft created during deletion can become stale and fail when published. | Add configurable workspace quotas and coordinate draft creation with deletion or use a staged tombstone/garbage-collection flow. |
 | P1 | **Consent, retention, and withdrawal rely on host procedures.** The app stores person-linked answers and supports manual deletion, but it does not manage notice versions, consent records, retention windows, or respondent withdrawal. | Hosts can collect data without a consistent in-product record of the notice or planned deletion. | Design a versioned notice and optional consent gate, plus workspace-configured retention, dry-run review, audited deletion, and a respondent withdrawal route. Avoid legal defaults; make policy owner-configurable. |
 | P2 | **Questionnaires require HTML authoring.** There is no in-app builder for the supported question types and routing. | Non-technical hosts must source or edit files to create and revise a questionnaire. | Build a schema-backed editor with HTML import/export, checker diagnostics, live preview, accessibility states, and version diff/publish review. |
@@ -47,7 +47,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **924 tests passed across 134 files** after the current code changes.
+- Full automated suite: **932 tests passed across 136 files** after the current code changes.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production code release `d92f2fb` reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST and workspace-invitation GET returned 401; Vercel reported no runtime errors in the hour after deployment. The earlier authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools, and a disposable interview was created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
@@ -57,7 +57,7 @@ Some repository evaluation scripts require provider-generated result JSON and we
 ## Next review order
 
 1. Extend durable mail attempt handling to workspace invitations and add an operator reconciliation workflow for attempts with no delivery-status notice.
-2. Bound respondent listing and export memory.
+2. Add pagination for interview-wide answer reads and stream or background large exports.
 3. Add workspace asset quotas and race-safe reference lifecycle.
 4. Decide and implement consent, retention, and withdrawal workflows.
 5. Scope the in-app questionnaire builder and campaign automation.

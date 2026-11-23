@@ -11,8 +11,10 @@ import { imageAssetPublicIds } from "../image-assets";
 import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
 import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
+import { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
 
 export type { InterviewSummary, ParticipantView } from "./types";
+export { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
 
 const iso = (d?: Date) => (d ? d.toISOString() : undefined);
 
@@ -256,16 +258,78 @@ export async function deleteInterview(id: string): Promise<boolean> {
 }
 
 // ------------------------------------------------------------------------------------------ participants
-/** Maximum number of full respondent documents any single host/MCP read may hydrate. */
-export const MAX_PARTICIPANTS_PER_READ = 100;
-
 export class ParticipantReadLimitError extends Error {
   readonly limit = MAX_PARTICIPANTS_PER_READ;
 
   constructor() {
-    super(`This interview has more than ${MAX_PARTICIPANTS_PER_READ} people. Full-list and export reads currently support at most ${MAX_PARTICIPANTS_PER_READ}; use a single-person read or aggregate analysis where possible.`);
+    super(`This interview has more than ${MAX_PARTICIPANTS_PER_READ} people. Full export and interview-wide answer reads currently support at most ${MAX_PARTICIPANTS_PER_READ}; use a single-person read, bounded participant pages, or aggregate analysis where possible.`);
     this.name = "ParticipantReadLimitError";
   }
+}
+
+export class ParticipantCursorError extends Error {
+  constructor() {
+    super("That participant page cursor is invalid or expired. Reload the participant list and try again.");
+    this.name = "ParticipantCursorError";
+  }
+}
+
+function encodeParticipantCursor(participant: ParticipantView): string {
+  return Buffer.from(JSON.stringify({ createdAt: participant.createdAt, id: participant.id })).toString("base64url");
+}
+
+function decodeParticipantCursor(cursor: string): { createdAt: Date; id: ObjectId } {
+  try {
+    if (cursor.length > 256) throw new Error("oversized");
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { createdAt?: unknown; id?: unknown };
+    const id = typeof value.id === "string" ? toOid(value.id) : null;
+    const createdAt = typeof value.createdAt === "string" ? new Date(value.createdAt) : new Date(NaN);
+    if (!id || !Number.isFinite(createdAt.getTime()) || createdAt.toISOString() !== value.createdAt) throw new Error("invalid");
+    return { createdAt, id };
+  } catch {
+    throw new ParticipantCursorError();
+  }
+}
+
+/** Read one bounded participant page in stable tenant-scoped order. */
+export async function listParticipantPage(
+  interviewId: string,
+  cursor: string | null = null,
+  requestedLimit = DEFAULT_PARTICIPANT_PAGE_SIZE,
+): Promise<{ people: ParticipantView[]; nextCursor: string | null }> {
+  const oid = toOid(interviewId);
+  if (!oid) return { people: [], nextCursor: null };
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { people: [], nextCursor: null };
+  const limit = Math.max(1, Math.min(MAX_PARTICIPANT_PAGE_SIZE, Math.floor(requestedLimit) || DEFAULT_PARTICIPANT_PAGE_SIZE));
+  const participants = await col.participants();
+  const filter: Record<string, unknown> = { interviewId: oid };
+  if (cursor !== null) {
+    const anchor = decodeParticipantCursor(cursor);
+    filter.$or = [
+      { createdAt: { $lt: anchor.createdAt } },
+      { createdAt: anchor.createdAt, _id: { $lt: anchor.id } },
+    ];
+  }
+  const docs = await participants.find(tenantFilter(tenantId, filter)).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
+  const hasMore = docs.length > limit;
+  const pageDocs = hasMore ? docs.slice(0, limit) : docs;
+  if (!pageDocs.length) return { people: [], nextCursor: null };
+  const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, {
+    interviewId: oid, participantId: { $in: pageDocs.map((doc) => doc._id) },
+  })).sort({ surveyVersion: 1 }).toArray();
+  const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
+  for (const assignment of assignments) {
+    const id = assignment.participantId.toHexString();
+    const rows = byParticipant.get(id) ?? [];
+    rows.push({ surveyVersion: assignment.surveyVersion, algorithmVersion: assignment.algorithmVersion, groups: assignment.groups, assignedAt: assignment.assignedAt.toISOString() });
+    byParticipant.set(id, rows);
+  }
+  const people = pageDocs.map((doc) => ({
+    ...participantView(doc),
+    ...(byParticipant.has(doc._id.toHexString()) ? { questionOrderAssignments: byParticipant.get(doc._id.toHexString()) } : {}),
+  }));
+  return { people, nextCursor: hasMore ? encodeParticipantCursor(people[people.length - 1]) : null };
 }
 
 export async function listParticipants(interviewId: string): Promise<ParticipantView[]> {

@@ -42,9 +42,6 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
-  const submitted = people.filter((p) => p.status === "submitted").length;
-  const inProgress = people.filter((p) => p.status === "in_progress").length;
-  const invited = people.filter((p) => p.status === "invited").length;
   const refresh = () => router.refresh();
   const tabFocusStorageKey = `kqa:interview:${interview.id}:tab-focus`;
 
@@ -76,7 +73,7 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
   }
 
   const tabs: [Tab, string, number?][] = canManage
-    ? [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? people.length : undefined], ["answers", "Answers", submitted + inProgress || undefined], ["analysis", "Analysis"], ["survey", "Survey"], ["export", "Export"]]
+    ? [["overview", "Overview"], ["people", interview.mode === "multi" ? "People" : "Respondent", interview.mode === "multi" ? data.counts.people : undefined], ["answers", "Answers", data.counts.submitted + data.counts.inProgress || undefined], ["analysis", "Analysis"], ["survey", "Survey"], ["export", "Export"]]
     : [["overview", "Overview"], ["analysis", "Analysis"], ["survey", "Survey"]];
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: Tab) {
@@ -117,13 +114,6 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
           </button>
         </div>}
       </div>
-
-      {canManage && data.participantReadLimit ? (
-        <div className="callout warn" role="status" aria-live="polite">
-          <Icon name="info" />
-          <div><b>Respondent records are over the {data.participantReadLimit}-person read limit.</b> Interview settings, counts, activity, and analysis remain available. People, individual answers, and full exports need a paginated workflow that is not available yet.</div>
-        </div>
-      ) : null}
 
       <div className="tabs" role="tablist" aria-label="Interview sections">
         {tabs.map(([k, label, n]) => (
@@ -203,7 +193,10 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
       )}
 
       {tab === "people" && <PeopleTab data={data} origin={origin} refresh={refresh} />}
-      {tab === "answers" && <AnswersTab data={data} />}
+      {tab === "answers" && <>
+        {data.counts.people > data.people.length && <div className="callout warn" role="status"><Icon name="info" /><div>This answer matrix shows the newest {data.people.length} of {data.counts.people} people. Additional pages are available in the People tab; the full matrix does not paginate yet.</div></div>}
+        <AnswersTab data={data} />
+      </>}
       {tab === "analysis" && <AnalyticsTab data={data} />}
       {tab === "survey" && <SurveyTab data={data} refresh={refresh} canManage={canManage} />}
       {canManage && tab === "export" && <ExportTab data={data} />}
