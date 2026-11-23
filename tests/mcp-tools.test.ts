@@ -163,7 +163,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, createAnalyticsRun, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, createAnalyticsRun, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -234,6 +234,12 @@ describe("MCP tools", () => {
     const limitedBody = await limited.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
     expect(limitedBody.result.isError).toBe(true);
     expect(limitedBody.result.structuredContent).toMatchObject({ code: "participant_read_limit" });
+
+    vi.mocked(listParticipants).mockRejectedValueOnce(new ParticipantExportSizeLimitError());
+    const oversized = await call("export_interview", { interviewId, format: "json" });
+    const oversizedBody = await oversized.json() as { result: { isError?: boolean; structuredContent: { code?: string; limitBytes?: number } } };
+    expect(oversizedBody.result.isError).toBe(true);
+    expect(oversizedBody.result.structuredContent).toMatchObject({ code: "export_payload_limit", limitBytes: 8 * 1024 * 1024 });
   });
 
   it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {

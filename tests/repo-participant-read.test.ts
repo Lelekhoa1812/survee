@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   docs: [] as Record<string, any>[],
+  participantBytes: 0,
   requestedLimit: 0,
   sortedBy: {} as Record<string, number>,
+  findCalls: 0,
+  aggregateCalls: 0,
   filters: [] as Record<string, any>[],
   pageDocs: [] as Record<string, any>[][],
   assignmentQueries: 0,
@@ -13,7 +16,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/lib/db", () => ({
   col: {
     participants: async () => ({
+      aggregate: () => {
+        mocks.aggregateCalls += 1;
+        const count = mocks.docs.length;
+        const fits = count <= 100 && mocks.participantBytes <= 8 * 1024 * 1024;
+        return { toArray: async () => [{
+          summary: [{ count, bytes: mocks.participantBytes, cohortCount: count, cohortBytes: mocks.participantBytes }],
+          docs: fits ? mocks.docs : [],
+        }] };
+      },
       find: (filter: Record<string, any>) => {
+        mocks.findCalls += 1;
         mocks.filters.push(filter);
         return {
         sort: (sort: Record<string, number>) => {
@@ -32,24 +45,37 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
-import { listParticipantPage, listParticipants, MAX_PARTICIPANTS_PER_READ, ParticipantReadLimitError } from "../src/lib/repo";
+import { listParticipantPage, listParticipants, MAX_EXPORT_SOURCE_BYTES, MAX_PARTICIPANTS_PER_READ, ParticipantExportSizeLimitError, ParticipantReadLimitError } from "../src/lib/repo";
 import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 beforeEach(() => {
   mocks.docs = Array.from({ length: MAX_PARTICIPANTS_PER_READ + 1 }, () => ({ _id: new ObjectId() }));
+  mocks.participantBytes = 0;
   mocks.requestedLimit = 0;
   mocks.sortedBy = {};
+  mocks.findCalls = 0;
+  mocks.aggregateCalls = 0;
   mocks.filters = [];
   mocks.pageDocs = [];
   mocks.assignmentQueries = 0;
 });
 
 describe("bounded participant hydration", () => {
-  it("reads only one over the cap and fails before loading assignments", async () => {
+  it("checks cohort size before hydrating answer documents or assignments", async () => {
     await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipants(new ObjectId().toHexString())))
       .rejects.toBeInstanceOf(ParticipantReadLimitError);
-    expect(mocks.requestedLimit).toBe(MAX_PARTICIPANTS_PER_READ + 1);
-    expect(mocks.sortedBy).toEqual({ createdAt: 1, _id: 1 });
+    expect(mocks.aggregateCalls).toBe(1);
+    expect(mocks.findCalls).toBe(0);
+    expect(mocks.assignmentQueries).toBe(0);
+  });
+
+  it("checks the aggregate BSON budget before returning buffered export data", async () => {
+    mocks.docs = [{ _id: new ObjectId() }];
+    mocks.participantBytes = MAX_EXPORT_SOURCE_BYTES + 1;
+
+    await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipants(new ObjectId().toHexString())))
+      .rejects.toBeInstanceOf(ParticipantExportSizeLimitError);
+    expect(mocks.findCalls).toBe(0);
     expect(mocks.assignmentQueries).toBe(0);
   });
 
@@ -60,7 +86,7 @@ describe("bounded participant hydration", () => {
     }));
     const people = await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipants(new ObjectId().toHexString()));
     expect(people).toHaveLength(MAX_PARTICIPANTS_PER_READ);
-    expect(mocks.requestedLimit).toBe(MAX_PARTICIPANTS_PER_READ + 1);
+    expect(mocks.findCalls).toBe(0);
   });
 });
 

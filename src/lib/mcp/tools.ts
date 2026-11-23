@@ -31,6 +31,7 @@ import {
   listParticipantPage,
   listParticipants,
   ParticipantCursorError,
+  ParticipantExportSizeLimitError,
   ParticipantReadLimitError,
   listVersions,
   noteMcp,
@@ -129,8 +130,8 @@ const questionnaireBlockOperations = {
 function ok(data: Record<string, unknown>, text?: string): ToolResult {
   return { content: [{ type: "text", text: text ?? JSON.stringify(data) }], structuredContent: data, isError: false };
 }
-function err(error: string, code?: string): ToolResult {
-  return { content: [{ type: "text", text: error }], structuredContent: { ok: false, error, ...(code ? { code } : {}) }, isError: true };
+function err(error: string, code?: string, details?: Record<string, unknown>): ToolResult {
+  return { content: [{ type: "text", text: error }], structuredContent: { ok: false, error, ...(code ? { code } : {}), ...(details ?? {}) }, isError: true };
 }
 function asString(value: unknown, max = 500): string | undefined {
   return typeof value === "string" ? value.trim().slice(0, max) : undefined;
@@ -1847,6 +1848,9 @@ export async function dispatchTool(name: string, args: unknown, capabilities?: r
   } catch (error) {
     if (error instanceof ParticipantReadLimitError) {
       return finish(tool.name, err(error.message, "participant_read_limit"), interviewId);
+    }
+    if (error instanceof ParticipantExportSizeLimitError) {
+      return finish(tool.name, err(error.message, "export_payload_limit", { limitBytes: error.limitBytes }), interviewId);
     }
     console.error(`[mcp:${tool.name}] unexpected error`, error instanceof Error ? error.name : "unknown");
     return finish(tool.name, err("That could not be done. Try again in a moment.", "server_error"), interviewId);

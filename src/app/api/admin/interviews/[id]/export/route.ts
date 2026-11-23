@@ -2,7 +2,7 @@ import { EXPORT_FORMATS, exportFilename, exportInterview, type ExportFormat, typ
 import { encodeCsvRow } from "@/lib/export/csv";
 import { LONG_HEADER, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
-import { getInterview, getInterviewParticipantCounts, getVersion, listParticipantPage, listParticipants, ParticipantReadLimitError } from "@/lib/repo";
+import { getInterview, getInterviewParticipantCounts, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError } from "@/lib/repo";
 import { NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -92,6 +92,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     people = await listParticipants(id);
   } catch (error) {
     if (error instanceof ParticipantReadLimitError) return fail(413, `This interview is too large for a single export request. Export supports up to ${error.limit} people per request.`, { code: "export_participant_limit", limit: error.limit });
+    if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_payload_limit", limitBytes: error.limitBytes });
     throw error;
   }
   const file = await exportInterview(

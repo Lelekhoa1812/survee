@@ -11,10 +11,10 @@ import { imageAssetPublicIds } from "../image-assets";
 import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
 import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
-import { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
+import { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_EXPORT_SOURCE_BYTES, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
 
 export type { InterviewSummary, ParticipantView } from "./types";
-export { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
+export { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_EXPORT_SOURCE_BYTES, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
 
 const iso = (d?: Date) => (d ? d.toISOString() : undefined);
 
@@ -267,6 +267,14 @@ export class ParticipantReadLimitError extends Error {
   }
 }
 
+export class ParticipantExportSizeLimitError extends Error {
+  readonly limitBytes = MAX_EXPORT_SOURCE_BYTES;
+  constructor() {
+    super(`This interview's answer data is too large for a buffered export. Buffered exports support up to ${Math.floor(MAX_EXPORT_SOURCE_BYTES / (1024 * 1024))} MiB of participant data; use streamed CSV where available.`);
+    this.name = "ParticipantExportSizeLimitError";
+  }
+}
+
 export class ParticipantCursorError extends Error {
   constructor() {
     super("That participant page cursor is invalid or expired. Reload the participant list and try again.");
@@ -341,11 +349,35 @@ export async function listParticipants(interviewId: string): Promise<Participant
   if (!oid) return [];
   const tenantId = await currentTenantId();
   if (!tenantId) return [];
-  // Read one extra row to distinguish a complete legacy result from a truncated one.
-  // Never hydrate answer payloads or question-order assignments for an unbounded cohort.
-  const docs = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }))
-    .sort({ createdAt: 1, _id: 1 }).limit(MAX_PARTICIPANTS_PER_READ + 1).toArray();
-  if (docs.length > MAX_PARTICIPANTS_PER_READ) throw new ParticipantReadLimitError();
+  const participants = await col.participants();
+  const exportData = await participants.aggregate<{ summary: { count: number; bytes: number; cohortCount: number; cohortBytes: number }[]; docs: ParticipantDoc[] }>([
+    { $match: tenantFilter(tenantId, { interviewId: oid }) },
+    { $set: { __exportDocBytes: { $bsonSize: "$$ROOT" } } },
+    {
+      $setWindowFields: {
+        sortBy: { createdAt: 1, _id: 1 },
+        output: {
+          __exportCohortCount: { $sum: 1, window: { documents: ["unbounded", "unbounded"] } },
+          __exportCohortBytes: { $sum: "$__exportDocBytes", window: { documents: ["unbounded", "unbounded"] } },
+        },
+      },
+    },
+    {
+      $facet: {
+        summary: [{ $group: { _id: null, count: { $sum: 1 }, bytes: { $sum: "$__exportDocBytes" }, cohortCount: { $max: "$__exportCohortCount" }, cohortBytes: { $max: "$__exportCohortBytes" } } }],
+        docs: [
+          { $match: { $expr: { $and: [{ $lte: ["$__exportCohortCount", MAX_PARTICIPANTS_PER_READ] }, { $lte: ["$__exportCohortBytes", MAX_EXPORT_SOURCE_BYTES] }] } } },
+          { $sort: { createdAt: 1, _id: 1 } },
+          { $project: { __exportDocBytes: 0, __exportCohortCount: 0, __exportCohortBytes: 0 } },
+        ],
+      },
+    },
+  ]).toArray();
+  const summary = exportData[0]?.summary[0];
+  if ((summary?.cohortCount ?? summary?.count ?? 0) > MAX_PARTICIPANTS_PER_READ) throw new ParticipantReadLimitError();
+  if ((summary?.cohortBytes ?? summary?.bytes ?? 0) > MAX_EXPORT_SOURCE_BYTES) throw new ParticipantExportSizeLimitError();
+  // The aggregation returns payload documents only when the whole cohort fits both limits.
+  const docs = exportData[0]?.docs ?? [];
   if (!docs.length) return [];
   const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, { interviewId: oid, participantId: { $in: docs.map((doc) => doc._id) } })).sort({ surveyVersion: 1 }).toArray();
   const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
