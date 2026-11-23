@@ -19,12 +19,14 @@ describe("export availability", () => {
     expect(html).toContain("/api/admin/interviews/interview-1/export?format=xlsx");
   });
 
-  it("disables full downloads above the supported limit instead of offering a broken link", () => {
+  it("offers streamed CSV downloads above the bounded workbook limit", () => {
     const data = { ...base, counts: { ...base.counts, people: 120, submitted: 70 } } as InterviewData;
     const html = renderToStaticMarkup(createElement(ExportTab, { data }));
 
     expect(html).toContain("include all 120 people");
-    expect(html).toContain("Full exports currently support up to 100 people");
+    expect(html).toContain("CSV exports stream all 120 people in creation order");
+    expect(html).toContain("/api/admin/interviews/interview-1/export?format=csv-wide");
+    expect(html).toContain("/api/admin/interviews/interview-1/export?format=csv-long");
     expect(html).toContain("Export limit reached");
     expect(html).not.toContain("/api/admin/interviews/interview-1/export?format=xlsx");
   });

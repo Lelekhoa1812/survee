@@ -23,7 +23,7 @@ export function ExportTab({ data }: { data: InterviewData }) {
         <Icon name="info" />
         <div>Exports use survey version {data.interview.currentVersion} and include all {total} {total === 1 ? "person" : "people"}: {done} submitted, {total - done} still in progress or not started. Each file records its status.</div>
       </div>
-      {tooLarge && <div className="callout warn" role="status"><Icon name="info" /><div>Full exports currently support up to {MAX_PARTICIPANTS_PER_READ} people. This interview has {total}; no partial file will be generated.</div></div>}
+      {tooLarge && <div className="callout warn" role="status"><Icon name="info" /><div>CSV exports stream all {total} people in creation order. Excel, Markdown and JSON exports support up to {MAX_PARTICIPANTS_PER_READ} people per file.</div></div>}
       <div className="callout warn">
         <Icon name="info" />
         <div>Exports contain person-level information such as names, statuses, notes, answers, and free text. Share only with authorized people. Review the contents before uploading a file to an AI tool or another service.</div>
@@ -36,7 +36,7 @@ export function ExportTab({ data }: { data: InterviewData }) {
               <div className="row" style={{ justifyContent: "space-between" }}><b>{f.name}</b><span className="code-chip">{f.ext}</span></div>
               <p className="muted" style={{ fontSize: 13.5, marginTop: 6 }}>{f.note}</p>
             </div>
-            {tooLarge
+            {tooLarge && f.id !== "csv-wide" && f.id !== "csv-long"
               ? <button className="btn" type="button" disabled><Icon name="download" size={15} /> Export limit reached</button>
               : <a className="btn" href={`/api/admin/interviews/${data.interview.id}/export?format=${f.id}`} download><Icon name="download" size={15} /> Download</a>}
           </div>

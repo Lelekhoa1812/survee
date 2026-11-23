@@ -17,6 +17,11 @@ function quoteCsv(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+/** Encode one RFC 4180 row using the same formula and quoting rules as buffered CSV exports. */
+export function encodeCsvRow(row: string[]): string {
+  return `${row.map((cell) => quoteCsv(neutraliseCell(cell))).join(",")}\r\n`;
+}
+
 /** RFC 4180 CSV with CRLF line ends and a UTF-8 BOM so Excel opens it as UTF-8. */
 export function toCsv(table: Table): string {
   const lines = [table.header, ...table.rows].map((row) => row.map((cell) => quoteCsv(neutraliseCell(cell))).join(","));

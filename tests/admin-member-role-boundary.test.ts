@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   getInterview: vi.fn(async () => ({ _id: "interview-1", name: "Study", currentVersion: 1, mode: "multi", status: "open" })),
   getVersion: vi.fn(async () => ({ version: 1, manifest: { title: "Study", questions: [{ id: "assets", type: "repeat", label: "Assets", fields: [{ id: "name", type: "text", label: "Name" }] }] } })),
   listParticipants: vi.fn(async () => [{ id: "person-1", name: "Respondent", status: "submitted" as const, createdAt: "2026-01-01T00:00:00.000Z", answers: {}, recordGroups: { assets: [{ id: "row-1", values: { name: "Pump" } }] } }]),
+  getInterviewParticipantCounts: vi.fn(async () => ({ people: 1, invited: 0, inProgress: 0, submitted: 1 })),
+  listParticipantPage: vi.fn(async () => ({ people: [], nextCursor: null as string | null })),
   listVersions: vi.fn(async () => [{ version: 1, html: "<html></html>" }]),
   recentEvents: vi.fn(async () => [{ id: "event-1", type: "submit", participantId: "person-1", meta: { email: "private@example.test" } }]),
   updateInterview: vi.fn(async () => ({ _id: "interview-1" })),
@@ -33,6 +35,8 @@ vi.mock("../src/lib/repo", () => ({
   getInterview: state.getInterview,
   getVersion: state.getVersion,
   listParticipants: state.listParticipants,
+  getInterviewParticipantCounts: state.getInterviewParticipantCounts,
+  listParticipantPage: state.listParticipantPage,
   ParticipantReadLimitError: state.ParticipantReadLimitError,
   listVersions: state.listVersions,
   recentEvents: state.recentEvents,
@@ -102,6 +106,25 @@ describe("workspace member access boundary", () => {
     const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=json"), interviewCtx);
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toMatchObject({ code: "export_participant_limit", limit: 100 });
+  });
+
+  it("streams large CSV exports page by page without calling the bounded full-read API", async () => {
+    state.role = "owner";
+    state.getInterview.mockResolvedValueOnce({ _id: "0123456789abcdef01234567", name: "Study", currentVersion: 1, mode: "multi", status: "open", createdAt: new Date("2026-01-01T00:00:00.000Z") } as never);
+    state.getInterviewParticipantCounts.mockResolvedValueOnce({ people: 101, invited: 101, inProgress: 0, submitted: 0 });
+    state.listParticipantPage
+      .mockResolvedValueOnce({ people: [{ id: "newer", name: "Newer", status: "invited", createdAt: "2026-01-02T00:00:00.000Z", answers: {}, recordGroups: {} } as never], nextCursor: "page-2" })
+      .mockResolvedValueOnce({ people: [{ id: "older", name: "Older", status: "invited", createdAt: "2026-01-01T00:00:00.000Z", answers: {}, recordGroups: {} } as never], nextCursor: null });
+    const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=csv-wide"), interviewCtx);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/csv");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const body = new TextDecoder().decode(bytes);
+    expect(bytes.slice(0, 3)).toEqual(new Uint8Array([0xef, 0xbb, 0xbf]));
+    expect(body).toContain("Person,Person note,Status");
+    expect(body.indexOf("Newer")).toBeLessThan(body.indexOf("Older"));
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", "page-2", 10, false, true);
+    expect(state.listParticipants).not.toHaveBeenCalled();
   });
 
   it("allows interview summaries and strips respondent records from detail reads", async () => {

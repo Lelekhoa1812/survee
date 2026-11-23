@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Workbook } from "exceljs";
 import type { Manifest } from "../src/lib/format/schema";
 import { csvLong, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
-import { exportFilename, longTable, recordTable, slugify, wideTable } from "../src/lib/export/rows";
+import { exportFilename, longParticipantRows, longTable, recordTable, slugify, wideParticipantRow, wideTable } from "../src/lib/export/rows";
 import { jsonExport } from "../src/lib/export/json";
 import { escapeInline, markdownExport } from "../src/lib/export/markdown";
 import { exportInterview, type ExportInput } from "../src/lib/export/index";
@@ -175,9 +175,27 @@ describe("wide table", () => {
     expect(ben[header.indexOf("satisfaction | Satisfaction")]).toBe("");
     expect(ben[header.indexOf("Person note")]).toBe("Joined late");
   });
+
+  it("builds streamed wide rows with the same columns and values as the buffered table", () => {
+    const columns = wideTable(input).header;
+    for (const participant of input.participants) {
+      expect(wideParticipantRow(input.manifest, input.surveyVersion, participant)).toEqual(
+        wideTable({ ...input, participants: [participant] }).rows[0],
+      );
+    }
+    expect(columns).toEqual(wideTable(input).header);
+  });
 });
 
 describe("long table", () => {
+  it("builds streamed answer rows with the same values as the buffered table", () => {
+    for (const participant of input.participants) {
+      expect(longParticipantRows(input.manifest, participant)).toEqual(
+        longTable({ ...input, participants: [participant] }).rows,
+      );
+    }
+  });
+
   it("has one row per participant and answered or noted question, skipping empty ones", () => {
     const long = longTable(input);
     expect(long.header).toEqual([

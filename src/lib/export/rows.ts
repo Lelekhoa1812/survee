@@ -30,6 +30,11 @@ function answerDisplay(q: Question, p: ExportParticipant): string {
   return a ? displayValue(q, a.value) : "";
 }
 
+/** Build a wide CSV row without retaining rows for the rest of the cohort. */
+export function wideParticipantRow(manifest: Manifest, surveyVersion: number, participant: ExportParticipant): string[] {
+  return wideColumns(manifest, surveyVersion).map((column) => column.cell(participant));
+}
+
 /** The columns of the wide table, in order. Shared with the XLSX writer so both agree on layout. */
 export function wideColumns(manifest: Manifest, surveyVersion: number): WideColumn[] {
   const eligibilityByParticipant = new WeakMap<ExportParticipant, Record<string, boolean>>();
@@ -149,6 +154,44 @@ export function longTable(input: ExportInput): Table {
     }
   }
   return { header: [...LONG_HEADER], rows };
+}
+
+/** Build the answer and presentation rows for one person in a long CSV. */
+export function longParticipantRows(manifest: Manifest, participant: ExportParticipant): string[][] {
+  const sectionTitles = new Map((manifest.sections ?? []).map((section) => [section.id, section.title]));
+  const eligibility = evaluateEligibility(manifest, participant.answers, participant.recordGroups);
+  const rows: string[][] = [];
+  for (const question of manifest.questions) {
+    const answer = participant.answers[question.id];
+    const note = answer?.note ?? "";
+    const hasNote = note.trim() !== "";
+    const answered = isAnswered(question, participant.answers);
+    const eligible = eligibility[question.id] !== false;
+    if (eligible && !answered && !hasNote) continue;
+    rows.push([
+      participant.name,
+      participant.status,
+      question.section ? (sectionTitles.get(question.section) ?? "") : "",
+      question.id,
+      question.label,
+      question.type,
+      eligible ? "eligible" : "inactive",
+      answered ? displayValue(question, answer?.value) : "",
+      answered ? rawValue(answer?.value) : "",
+      answer?.presentedOptionOrder?.join(";") ?? "",
+      answer?.optionOrderVersion === undefined ? "" : String(answer.optionOrderVersion),
+      "answer", "", "", "", "", "", note, answer?.updatedAt ?? "",
+    ]);
+  }
+  for (const assignment of participant.questionOrderAssignments ?? []) {
+    for (const [groupId, ids] of Object.entries(assignment.groups)) {
+      rows.push([
+        participant.name, participant.status, "", "", "", "presentation-order", "", "", "", "", "",
+        "presentation", String(assignment.surveyVersion), assignment.algorithmVersion, groupId, ids.join(";"), assignment.assignedAt, "", "",
+      ]);
+    }
+  }
+  return rows;
 }
 
 /** Normalized, lossless row/field view for repeat-group answers. Existing question tables remain unchanged. */
