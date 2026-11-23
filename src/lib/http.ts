@@ -14,6 +14,13 @@ export function fail(status: number, error: string, extra: Record<string, unknow
   return json({ ok: false, error, ...extra }, status);
 }
 
+export class AdminSessionUnavailableError extends Error {
+  constructor() {
+    super("The signed-in account could not be checked.");
+    this.name = "AdminSessionUnavailableError";
+  }
+}
+
 /**
  * Wraps a route so an unexpected exception returns a JSON 500 instead of an empty body.
  * The log line names the route and the error type only; request bodies and tokens are never logged.
@@ -25,13 +32,16 @@ export function withServerErrors<A extends unknown[]>(route: string, handler: (.
     } catch (err) {
       // Next uses thrown control-flow errors (redirect, notFound) that must reach the framework unchanged.
       if (typeof err === "object" && err !== null && "digest" in err && String((err as { digest: unknown }).digest).startsWith("NEXT_")) throw err;
+      if (err instanceof AdminSessionUnavailableError) {
+        return fail(503, "Sign-in is temporarily unavailable. Try again in a moment.", { code: "auth_unavailable" });
+      }
       console.error(`[${route}] unexpected error`, err instanceof Error ? err.name : "unknown");
       return fail(500, "We could not complete this just now. Try again in a moment.", { code: "server_error" });
     }
   };
 }
 
-/** A valid, unexpired, not signed-out host session, or null. If the revocation list cannot be read the answer is null. */
+/** A valid host session, null when absent/invalid/revoked, or a typed failure when account storage is unavailable. */
 export async function adminSession(): Promise<{ userId: string; tenantId: string; role: "owner" | "admin" | "member"; email: string; tenantName: string; emailVerified: boolean; legacyBootstrap: boolean; authVersion: number; sid: string; exp: number } | null> {
   const jar = await cookies();
   const session = verifySession(jar.get(SESSION_COOKIE)?.value);
@@ -51,7 +61,7 @@ export async function adminSession(): Promise<{ userId: string; tenantId: string
       legacyBootstrap: principal.legacyBootstrap,
     };
   } catch {
-    return null;
+    throw new AdminSessionUnavailableError();
   }
 }
 

@@ -1,11 +1,16 @@
 import { frameResponse, framePlaceholder } from "@/lib/frame";
-import { adminSession } from "@/lib/http";
+import { AdminSessionUnavailableError, adminSession } from "@/lib/http";
 import { LIMITS } from "@/lib/format/schema";
 import { getInterview, getVersion } from "@/lib/repo";
 
 /** Preview a stored survey version: /api/admin/frame?interview=ID&version=N (version defaults to the current one). */
 export async function GET(req: Request) {
-  if (!(await adminSession())) return framePlaceholder("Sign in to preview.", 401);
+  try {
+    if (!(await adminSession())) return framePlaceholder("Sign in to preview.", 401);
+  } catch (error) {
+    if (error instanceof AdminSessionUnavailableError) return framePlaceholder("Sign-in is temporarily unavailable. Try again in a moment.", 503);
+    throw error;
+  }
   const u = new URL(req.url);
   const interview = await getInterview(u.searchParams.get("interview") ?? "");
   if (!interview) return framePlaceholder("Interview not found.");
@@ -17,7 +22,12 @@ export async function GET(req: Request) {
 
 /** Preview or probe a file that has not been stored yet. The page posts it from a hidden form into the frame. */
 export async function POST(req: Request) {
-  if (!(await adminSession())) return framePlaceholder("Sign in to preview.", 401);
+  try {
+    if (!(await adminSession())) return framePlaceholder("Sign in to preview.", 401);
+  } catch (error) {
+    if (error instanceof AdminSessionUnavailableError) return framePlaceholder("Sign-in is temporarily unavailable. Try again in a moment.", 503);
+    throw error;
+  }
   // No origin check here on purpose. A form posted by the page into a sandboxed frame carries `Origin: null`, and this
   // route changes nothing: it only echoes the file back under a CSP that forces a sandbox, so a forged post gains nothing.
   const form = await req.formData().catch(() => null);
