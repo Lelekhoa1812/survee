@@ -70,15 +70,15 @@ export function NewInterview() {
         <div className="card-head">
           <h2>2. Questionnaire file</h2>
           <span className="right" />
-          <button className="btn sm" type="button" onClick={() => setBuilding((open) => !open)}>{building ? "Hide builder" : "Build from scratch"}</button>
+          <button className="btn sm" type="button" onClick={() => setBuilding((open) => !open)}>{building ? "Hide builder" : generatedFile ? "Edit questionnaire" : "Build from scratch"}</button>
           <a className="btn ghost sm" href="/api/docs/template/starter.kqa.html" download><Icon name="download" size={15} /> Starter template</a>
           <Link className="btn ghost sm" href="/admin/docs">Format guide</Link>
         </div>
-        {building && <div className="card-pad"><BasicQuestionnaireBuilder onUse={(html) => {
+        <div className="card-pad" hidden={!building}><BasicQuestionnaireBuilder onUse={(html) => {
           const safeName = (name.trim() || "questionnaire").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "questionnaire";
           setGeneratedFile(new File([html], `${safeName}.html`, { type: "text/html" }));
           setBuilding(false);
-        }} /></div>}
+        }} /></div>
         <div className="card-pad"><Uploader generatedFile={generatedFile} onChange={setUpload} /></div>
       </section>
 
