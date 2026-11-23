@@ -356,4 +356,66 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
       name: { $in: ["Winner A", "Winner B"] },
     })).toBe(0);
   });
+
+  it("keeps invite refusal and exact confirmation ahead of interview erasure", async () => {
+    const database = client.db(dbName);
+    const id = new mongo.ObjectId();
+    const attemptId = new mongo.ObjectId();
+    const operation = { operationId: `delete-confirm-${randomUUID()}`, credentialId: "api_key:integration-key", argumentDigest: "delete-confirm-digest" };
+    await database.collection("interviews").insertOne({
+      _id: id, tenantId: "integration-workspace", name: "Confirm erase fixture", mode: "multi", status: "open", currentVersion: 1,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await database.collection("mail_messages").insertOne({
+      _id: attemptId, tenantId: "integration-workspace", interviewId: id, status: "pending", delivery: "unknown",
+    });
+    const remove = (name: string) => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.deleteInterviewWithOperation(id.toHexString(), name, operation),
+    );
+
+    expect(await remove("wrong name")).toEqual({ kind: "confirmation_mismatch" });
+    expect(await database.collection("interviews").findOne({ _id: id })).not.toBeNull();
+    expect(await remove("Confirm erase fixture")).toEqual({ kind: "invite_pending" });
+    expect(await database.collection("interviews").findOne({ _id: id })).not.toBeNull();
+    expect(await database.collection("mcp_operations").countDocuments({ tool: "delete_interview", interviewId: id })).toBe(0);
+    await database.collection("mail_messages").deleteOne({ _id: attemptId });
+
+    const results = await Promise.all([remove("Confirm erase fixture"), remove("Confirm erase fixture")]);
+    expect(results.map(({ kind }) => kind).sort()).toEqual(["deleted", "replayed"]);
+    expect(await database.collection("interviews").findOne({ _id: id })).toBeNull();
+    const operationIdHash = createHash("sha256").update(operation.operationId).digest("hex");
+    const receipt = await database.collection("mcp_operations").findOne({
+      tenantId: "integration-workspace", tool: "delete_interview", operationIdHash,
+    });
+    expect(receipt).toMatchObject({ result: { ok: true }, argumentDigest: operation.argumentDigest, deletedAt: expect.any(Date) });
+    expect(receipt).not.toHaveProperty("interviewId");
+    expect(receipt).not.toHaveProperty("participantIds");
+    expect(await remove("Confirm erase fixture")).toEqual({ kind: "replayed" });
+    expect(await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.deleteInterviewWithOperation(id.toHexString(), "Confirm erase fixture", { ...operation, argumentDigest: "different-delete-args" }),
+    )).toEqual({ kind: "conflict" });
+  });
+
+  it("replays a deleted-interview receipt after the first response is lost", async () => {
+    const database = client.db(dbName);
+    const id = new mongo.ObjectId();
+    const operation = { operationId: `delete-lost-response-${randomUUID()}`, credentialId: "api_key:integration-key", argumentDigest: "delete-lost-response-digest" };
+    await database.collection("interviews").insertOne({
+      _id: id, tenantId: "integration-workspace", name: "Lost response delete fixture", mode: "multi", status: "open", currentVersion: 1,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const remove = () => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.deleteInterviewWithOperation(id.toHexString(), "Lost response delete fixture", operation),
+    );
+
+    await expect(remove().then(() => { throw new Error("simulated lost response after commit"); })).rejects.toThrow("simulated lost response after commit");
+    expect(await remove()).toEqual({ kind: "replayed" });
+    expect(await database.collection("interviews").findOne({ _id: id })).toBeNull();
+    expect(await database.collection("mcp_operations").countDocuments({
+      tenantId: "integration-workspace", tool: "delete_interview", operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
+    })).toBe(1);
+  });
 });

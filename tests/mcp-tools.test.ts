@@ -143,6 +143,8 @@ vi.mock("../src/lib/repo", async () => {
       updatedAt: new Date(),
     })),
     deleteInterview: vi.fn(async () => true),
+    deleteInterviewWithOperation: vi.fn(async () => ({ kind: "deleted" as const })),
+    getDeleteInterviewOperation: vi.fn(async () => null),
     getVersion: vi.fn(async () => ({ version: 1, manifest: analyticsManifest })),
     createAnalyticsRun: vi.fn(async (_interviewId: string, _surveyVersion: number, result: Record<string, unknown>) => {
       const id = "111111111111111111111111";
@@ -187,7 +189,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -215,6 +217,8 @@ beforeEach(() => {
   vi.mocked(regenerateTokenWithOperation).mockClear().mockResolvedValue({ kind: "rotated", token: "rotated-token", interviewId });
   vi.mocked(getRegenerateLinkOperation).mockClear().mockResolvedValue(null);
   vi.mocked(deleteInterview).mockReset().mockResolvedValue(true);
+  vi.mocked(deleteInterviewWithOperation).mockReset().mockResolvedValue({ kind: "deleted" });
+  vi.mocked(getDeleteInterviewOperation).mockReset().mockResolvedValue(null);
   vi.mocked(createAnalyticsRun).mockClear();
 });
 
@@ -572,6 +576,28 @@ describe("MCP tools", () => {
     const body = await res.json() as { result: { isError: boolean; structuredContent: { error?: string; code?: string } } };
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent).toMatchObject({ error: "Interview not found.", code: "not_found" });
+  });
+
+  it("replays a keyed interview deletion before looking up the erased interview", async () => {
+    vi.mocked(getInterview).mockClear();
+    vi.mocked(getDeleteInterviewOperation).mockResolvedValueOnce({ kind: "replayed" });
+    const res = await call("delete_interview", { interviewId, confirmName: "Investor interview", operationId: "delete-retry-1" });
+    const body = await res.json() as { result: { isError: boolean; structuredContent: Record<string, unknown> } };
+    expect(body.result).toMatchObject({ isError: false, structuredContent: { ok: true } });
+    expect(getInterview).not.toHaveBeenCalled();
+    expect(deleteInterviewWithOperation).not.toHaveBeenCalled();
+  });
+
+  it("binds keyed interview deletion to its exact interview and confirmation name", async () => {
+    vi.mocked(getDeleteInterviewOperation).mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "conflict" });
+    const res = await call("delete_interview", { interviewId, confirmName: "Investor interview", operationId: "delete-new-1" });
+    const body = await res.json() as { result: { isError: boolean } };
+    expect(body.result.isError).toBe(false);
+    expect(getDeleteInterviewOperation).toHaveBeenCalledWith(expect.objectContaining({ operationId: "delete-new-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
+    expect(deleteInterviewWithOperation).toHaveBeenCalledWith(interviewId, "Investor interview", expect.objectContaining({ operationId: "delete-new-1", credentialId: "service_token:axion-service-token" }));
+    const mismatch = await call("delete_interview", { interviewId, confirmName: "Different name", operationId: "delete-new-1" });
+    const mismatchBody = await mismatch.json() as { result: { isError: boolean; structuredContent: { code?: string } } };
+    expect(mismatchBody.result).toMatchObject({ isError: true, structuredContent: { code: "operation_id_conflict" } });
   });
 
   it("returns confirmation_mismatch when the confirm name is wrong", async () => {

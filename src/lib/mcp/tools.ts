@@ -25,6 +25,8 @@ import {
   getCreateInterviewOperation,
   getAddPeopleOperation,
   deleteInterview,
+  deleteInterviewWithOperation,
+  getDeleteInterviewOperation,
   deleteParticipant,
   deleteParticipantWithOperation,
   getRemovePersonOperation,
@@ -1262,11 +1264,31 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "delete_interview",
-    description: "Delete an interview, its versions, people, answers, and invite history. confirmName must match exactly. Refuses while any invite outcome is unconfirmed so a pending send cannot outlive deletion.",
-    inputSchema: obj({ interviewId: str, confirmName: str }, ["interviewId", "confirmName"]),
+    description: "Delete an interview, its versions, people, answers, and invite history. confirmName must match exactly. Refuses while any invite outcome is unconfirmed so a pending send cannot outlive deletion. Optional operationId replays an uncertain successful deletion for seven days.",
+    inputSchema: obj({ interviewId: str, confirmName: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["interviewId", "confirmName"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        if (typeof args.confirmName !== "string") return err("confirmName must match the interview name exactly.", "confirmation_mismatch");
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = {
+          operationId: args.operationId,
+          credentialId,
+          argumentDigest: createHash("sha256").update(canonicalJson({ interviewId: id, confirmName: args.confirmName })).digest("hex"),
+        };
+        const existing = await getDeleteInterviewOperation(operation);
+        if (existing?.kind === "conflict") return err("operationId was already used with different delete_interview arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ ok: true });
+        const deleted = await deleteInterviewWithOperation(id, args.confirmName, operation);
+        if (deleted.kind === "conflict") return err("operationId was already used with different delete_interview arguments.", "operation_id_conflict");
+        if (deleted.kind === "confirmation_mismatch") return err("Type the interview name exactly to confirm deleting it.", "confirmation_mismatch");
+        if (deleted.kind === "invite_pending") return err("This interview has an invite outcome that is still unconfirmed. Resolve the invite status before deleting its data.", "invite_outcome_pending");
+        if (deleted.kind === "not_found") return err("Interview not found.", "not_found");
+        return ok({ ok: true });
+      }
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.", "confirmation_mismatch");

@@ -576,26 +576,52 @@ export async function publishVersionIfCurrent(
 
 class MissingImageAssetReferenceError extends Error {}
 
-export async function deleteInterview(id: string): Promise<boolean | "invite_pending"> {
-  const oid = toOid(id);
-  if (!oid) return false;
+export type DeleteInterviewOperationResult =
+  | { kind: "deleted" | "replayed" }
+  | { kind: "conflict" | "not_found" | "invite_pending" | "confirmation_mismatch" };
+
+export async function getDeleteInterviewOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<DeleteInterviewOperationResult | null> {
   const tenantId = await currentTenantId();
-  if (!tenantId) return false;
-  return withMongoTransaction(async (session) => {
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "delete_interview", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  return existing.argumentDigest === operation.argumentDigest ? { kind: "replayed" } : { kind: "conflict" };
+}
+
+async function deleteInterviewInternal(
+  id: string,
+  confirmName?: string,
+  operation?: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<boolean | "invite_pending" | DeleteInterviewOperationResult> {
+  const oid = toOid(id);
+  if (!oid) return operation ? { kind: "not_found" } : false;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return operation ? { kind: "not_found" } : false;
+  const scope = operation ? mcpOperationScope(tenantId, "delete_interview", operation) : null;
+  const run = async () => withMongoTransaction(async (session) => {
+    const operations = operation ? await col.mcpOperations() : null;
+    if (scope && operations && operation) {
+      const existing = await operations.findOne(scope, { session });
+      if (existing && existing.expiresAt > new Date()) {
+        return existing.argumentDigest === operation.argumentDigest ? { kind: "replayed" as const } : { kind: "conflict" as const };
+      }
+      if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    }
     const interviews = await col.interviews();
-    const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
-    if (!interview) return false;
+    const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1, name: 1 } });
+    if (!interview) return operation ? { kind: "not_found" as const } : false;
+    if (operation && confirmName !== interview.name) return { kind: "confirmation_mismatch" as const };
     const pendingInvite = await (await col.mail()).findOne(
       tenantFilter(tenantId, { interviewId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } }),
       { session, projection: { _id: 1 } },
     );
-    if (pendingInvite) return "invite_pending";
+    if (pendingInvite) return operation ? { kind: "invite_pending" as const } : "invite_pending";
     const res = await interviews.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
-    if (!res.deletedCount) return false;
+    if (!res.deletedCount) return operation ? { kind: "not_found" as const } : false;
 
     // MongoDB does not support parallel operations in one transaction. Keep the cascade
     // sequential so a failed dependent delete rolls the parent removal back as well.
-    await (await col.mcpOperations()).updateMany(
+    await (operations ?? await col.mcpOperations()).updateMany(
       tenantFilter(tenantId, { interviewId: oid }),
       { $set: { result: { deleted: true }, deletedAt: new Date() }, $unset: { participantIds: "", interviewId: "", argumentDigest: "" } },
       { session },
@@ -607,8 +633,38 @@ export async function deleteInterview(id: string): Promise<boolean | "invite_pen
     await (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }, { session });
     await deleteMailForInterview(oid, session);
     await (await col.questionnaireReviewDrafts()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
+    if (scope && operation && operations) {
+      const now = new Date();
+      // Keep only a short-lived, hashed-scope receipt after the respondent-linked
+      // cascade has scrubbed all prior operation results for this interview.
+      await operations.insertOne({
+        _id: new ObjectId(), ...scope, argumentDigest: operation.argumentDigest, result: { ok: true },
+        deletedAt: now, createdAt: now, expiresAt: new Date(now.getTime() + MCP_OPERATION_TTL_MS),
+      }, { session });
+      return { kind: "deleted" as const };
+    }
     return true;
   });
+  try {
+    return await run();
+  } catch (error) {
+    if (!operation || !scope || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await (await col.mcpOperations()).findOne(scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    return committed.argumentDigest === operation.argumentDigest ? { kind: "replayed" } : { kind: "conflict" };
+  }
+}
+
+export async function deleteInterview(id: string): Promise<boolean | "invite_pending"> {
+  return await deleteInterviewInternal(id) as boolean | "invite_pending";
+}
+
+export async function deleteInterviewWithOperation(
+  id: string,
+  confirmName: string,
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<DeleteInterviewOperationResult> {
+  return await deleteInterviewInternal(id, confirmName, operation) as DeleteInterviewOperationResult;
 }
 
 // ------------------------------------------------------------------------------------------ participants
