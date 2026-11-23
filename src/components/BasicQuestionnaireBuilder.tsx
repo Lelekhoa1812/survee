@@ -41,7 +41,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     setError("");
     setData((current) => {
       const previousId = current.questions[index]?.id;
-      const nextId = patch.id;
+      const nextId = patch.id ?? previousId;
       return {
         ...current,
         questionOrderGroups: current.questionOrderGroups?.map((group) => ({ ...group, questionIds: group.questionIds.map((id) => id === previousId ? nextId ?? id : id) })),
@@ -50,23 +50,40 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
             const updated = { ...question, ...patch };
             if (patch.options && question.options) {
               const nextValues = new Set(patch.options.map((option) => option.value));
+              const remapChoiceValue = (value: string) => {
+                if (nextValues.has(value)) return value;
+                const oldOption = question.options!.find((option) => option.value === value);
+                if (!oldOption) return value;
+                const matching = patch.options!.filter((option) => option.label === oldOption.label);
+                // A unique unchanged label is a safe identity for a stored-value rename.
+                // Otherwise retain the old value so the dependent rule is visible and can
+                // be repaired explicitly instead of guessing from option order.
+                return matching.length === 1 ? matching[0].value : value;
+              };
               const remap = (values: string[] | undefined) => {
                 if (!values) return undefined;
-                const sameCount = question.options!.length === patch.options!.length;
                 return values.map((value) => {
-                  if (nextValues.has(value)) return value;
-                  if (!sameCount) return null;
-                  const oldIndex = question.options!.findIndex((option) => option.value === value);
-                  return oldIndex >= 0 ? patch.options![oldIndex]?.value ?? null : null;
-                }).filter((value): value is string => value !== null && nextValues.has(value));
+                  const updatedValue = remapChoiceValue(value);
+                  return nextValues.has(updatedValue) ? updatedValue : null;
+                }).filter((value): value is string => value !== null);
               };
               updated.fixedOptionValues = remap(question.fixedOptionValues);
               updated.exclusiveOptions = remap(question.exclusiveOptions);
             }
             return updated;
           }
-          if (!previousId || !nextId || previousId === nextId || !question.when) return question;
-          const replace = (condition: Condition): Condition => condition.question === previousId ? { ...condition, question: nextId } : condition;
+          if (!previousId || !nextId || !question.when) return question;
+          const replace = (condition: Condition): Condition => {
+            if (condition.question !== previousId) return condition;
+            let updated: Condition = previousId === nextId ? condition : { ...condition, question: nextId };
+            const sourceOptions = current.questions[index]?.options;
+            if (patch.options && sourceOptions && "value" in condition && typeof condition.value === "string") {
+              const oldOption = sourceOptions.find((option) => option.value === condition.value);
+              const matches = oldOption ? patch.options.filter((option) => option.label === oldOption.label) : [];
+              if (matches.length === 1) updated = { ...updated, value: matches[0].value } as Condition;
+            }
+            return updated;
+          };
           return { ...question, when: { ...question.when, ...(question.when.all ? { all: question.when.all.map(replace) } : {}), ...(question.when.any ? { any: question.when.any.map(replace) } : {}) } };
         }),
       };
@@ -144,8 +161,9 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     const value = "value" in condition ? condition.value : "";
     const choiceRule = ["equals", "notEquals", "contains", "notContains"].includes(condition.operator);
     const typedRule = ["lt", "lte", "gt", "gte", "eq", "ne"].includes(condition.operator);
+    const missingChoice = hasChoices && choiceRule && typeof value === "string" && !(source.options ?? []).some((option) => option.value === value);
     return <div className="row wrap"><label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Rule</span><select className="select" value={condition.operator} onChange={(event) => selectRouteOperator(index, group, source.id, event.target.value, conditionIndex)}>{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select></label>
-      {hasChoices && choiceRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Choice</span><select className="select" value={typeof value === "string" ? value : ""} onChange={(event) => setRouteCondition(index, group, conditionIndex, { question: source.id, operator: condition.operator as "equals" | "notEquals" | "contains" | "notContains", value: event.target.value })}>{(source.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+      {hasChoices && choiceRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Choice</span><select className="select" value={typeof value === "string" ? value : ""} onChange={(event) => setRouteCondition(index, group, conditionIndex, { question: source.id, operator: condition.operator as "equals" | "notEquals" | "contains" | "notContains", value: event.target.value })}>{missingChoice && <option value={value} disabled>Missing choice: {value}</option>}{(source.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{missingChoice && <span className="hint">This choice was removed or changed. Choose a current value or remove this rule before using the questionnaire.</span>}</label>}
       {hasTypedComparison && typedRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>{source.type === "date" ? "Date" : "Value"}</span><input className="input" type={source.type === "date" ? "date" : "number"} step={source.type === "number" ? source.step ?? "any" : undefined} value={typeof value === "number" || typeof value === "string" ? value : ""} onChange={(event) => { if (source.type !== "date" && event.target.value === "") return; setRouteCondition(index, group, conditionIndex, { question: source.id, operator: condition.operator as "lt" | "lte" | "gt" | "gte" | "eq" | "ne", value: source.type === "date" ? event.target.value : Number(event.target.value) }); }} /></label>}
     </div>;
   }
@@ -435,8 +453,8 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         <label className="choice"><input type="checkbox" checked={question.required} onChange={(event) => updateQuestion(index, { required: event.target.checked })} /><span>Required to submit</span></label>
         {question.type !== "repeat" && <label className="choice"><input id={`builder-note-${index}`} type="checkbox" checked={question.note ?? false} onChange={(event) => updateQuestion(index, { note: event.target.checked })} /><span>Allow an optional comment</span></label>}
         {["single", "multi", "select", "rank"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}><strong>{question.type === "rank" ? "Ranked options" : "Answer choices"}</strong>{(question.options ?? []).map((option, optionIndex) => <div className="row wrap" key={optionIndex}>
-          <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Stored value</span><input className="input mono" maxLength={64} value={option.value} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, value: event.target.value } : item) })} /></label>
-          <label className="field" style={{ flex: "2 1 180px", margin: 0 }}><span>Displayed label</span><input className="input" maxLength={300} value={option.label} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, label: event.target.value } : item) })} /></label>
+          <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Stored value</span><input aria-label={`Choice ${optionIndex + 1} stored value for question ${index + 1}`} className="input mono" maxLength={64} value={option.value} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, value: event.target.value } : item) })} /></label>
+          <label className="field" style={{ flex: "2 1 180px", margin: 0 }}><span>Displayed label</span><input aria-label={`Choice ${optionIndex + 1} displayed label for question ${index + 1}`} className="input" maxLength={300} value={option.label} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, label: event.target.value } : item) })} /></label>
           <button className="btn sm" type="button" aria-label={`Move choice ${optionIndex + 1} up in question ${index + 1}`} disabled={optionIndex === 0} onClick={() => moveOption(index, optionIndex, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move choice ${optionIndex + 1} down in question ${index + 1}`} disabled={optionIndex === (question.options?.length ?? 0) - 1} onClick={() => moveOption(index, optionIndex, 1)}>Move down</button>
           <button className="btn danger sm" type="button" disabled={(question.options?.length ?? 0) <= 2} aria-label={`Remove choice ${optionIndex + 1} from question ${index + 1}`} onClick={() => updateQuestion(index, { options: (question.options ?? []).filter((_, i) => i !== optionIndex) })}>Remove choice</button>
         </div>)}<button className="btn sm" type="button" disabled={(question.options?.length ?? 0) >= (question.type === "rank" ? 8 : 50)} onClick={() => addOption(index)}>Add choice</button>{question.type === "rank" && <span className="hint">Respondents order all 2–8 options; KQA stores the full permutation without scoring responses.</span>}</div>}

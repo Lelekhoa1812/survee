@@ -187,6 +187,40 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it("keeps routing attached to a uniquely matching choice label when its stored value changes", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add question");
+    await click("Add all-match rule group to question 2");
+    await change("#builder-route-source-1-all-0", "question-1");
+    await change('[aria-label="Choice 1 stored value for question 1"]', "new-option-key");
+    await click("Use questionnaire");
+
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"value": "new-option-key"');
+    const report = checkHtml(html, { fileName: "renamed-choice-route.html" });
+    expect(report.ok, JSON.stringify(report.diagnostics)).toBe(true);
+  });
+
+  it("shows an explicit repair hint when a choice value changes without a unique label match", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add question");
+    await click("Add all-match rule group to question 2");
+    await change("#builder-route-source-1-all-0", "question-1");
+    await change('[aria-label="Choice 2 displayed label for question 1"]', "Option 1");
+    await change('[aria-label="Choice 1 stored value for question 1"]', "new-option-key");
+
+    expect(host.textContent).toContain("This choice was removed or changed. Choose a current value or remove this rule before using the questionnaire.");
+    expect(host.textContent).toContain("Missing choice: option-1");
+  });
+
   it("supports multiple earlier-answer rules that must all match", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");
