@@ -281,6 +281,41 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "randomized-choices.html" }).ok).toBe(true);
   });
 
+  it("allocates an unused choice value after removing a middle option", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add choice");
+    await click("Remove choice 2 from question 1");
+    await click("Add choice");
+    await click("Use questionnaire");
+
+    const html = useHtml.mock.calls[0][0] as string;
+    const match = html.match(/<script type="application\/json" id="kqa-manifest">([\s\S]*?)<\/script>/);
+    expect(match).not.toBeNull();
+    const manifest = JSON.parse(match![1]);
+    expect(manifest.questions[0].options.map((option: { value: string }) => option.value)).toEqual(["option-1", "option-3", "option-2"]);
+    expect(checkHtml(html, { fileName: "choice-values.html" }).ok).toBe(true);
+  });
+
+  it("prevents exclusive choices from conflicting with a multi-selection minimum", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "multi");
+    await change("#builder-min-selections-0", "2");
+    expect(host.querySelector<HTMLInputElement>("#builder-exclusive-option-0-0")?.disabled).toBe(true);
+    await change("#builder-min-selections-0", "");
+    await toggle("#builder-exclusive-option-0-0");
+    await change("#builder-min-selections-0", "2");
+    expect(host.querySelector<HTMLInputElement>("#builder-min-selections-0")?.value).toBe("");
+    expect(host.querySelector('[role="alert"]')?.textContent).toMatch(/minimum selections cannot be above 1/i);
+  });
+
   it("sets a text answer length limit", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");

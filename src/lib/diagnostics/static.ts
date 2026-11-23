@@ -752,6 +752,9 @@ function validateManifest(raw: unknown, m: MCtx): Manifest | undefined {
       if (t !== "multi" || !Array.isArray(q.exclusiveOptions) || exclusive.length === 0 || exclusive.some((value) => typeof value !== "string" || !OPTION_VALUE_RE.test(value)) || new Set(exclusive).size !== exclusive.length || exclusive.some((value) => !values.has(value))) {
         add(ctx, "KQA221", `${p}.exclusiveOptions must be a non-empty list of unique values declared in this multi question's options.`, 'Use "exclusiveOptions" only on a multi question and list declared option values.', { offset: m.at(`${p}.exclusiveOptions`), path: `${p}.exclusiveOptions`, questionId: qid });
       }
+      if (Number.isInteger(q.minSelections) && (q.minSelections as number) > 1) {
+        add(ctx, "KQA221", `${p}.exclusiveOptions cannot be combined with minSelections above 1 because an exclusive option must be valid alone.`, "Omit minSelections or set it to 1 when this question has an exclusive option.", { offset: m.at(`${p}.minSelections`), path: `${p}.minSelections`, questionId: qid });
+      }
     }
     if (q.randomizeOptions !== undefined && typeof q.randomizeOptions !== "boolean") {
       add(ctx, "KQA223", `${p}.randomizeOptions must be true or false.`, "Set it to true only for an unordered nominal choice list, or remove it.", { offset: m.at(`${p}.randomizeOptions`), path: `${p}.randomizeOptions`, questionId: qid });

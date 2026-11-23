@@ -123,6 +123,23 @@ describe("respondent questionnaire version routes", () => {
     expect(body.questionOrderAssignment.assignedAt).toBeUndefined();
   });
 
+  it("returns a stable participant-specific option order and preserves fixed authored slots", async () => {
+    const options = ["a", "other", "b", "c", "d"].map((value) => ({ value, label: value.toUpperCase() }));
+    const question = { id: "choice", type: "single", label: "Choice", randomizeOptions: true, fixedOptionValues: ["other"], options };
+    mocks.context.version.manifest = { ...mocks.context.version.manifest, questions: [question] };
+
+    const first = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
+    const firstOrder = (await first.json()).questions[0].options.map((option: { value: string }) => option.value);
+    const second = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
+    const secondOrder = (await second.json()).questions[0].options.map((option: { value: string }) => option.value);
+
+    expect(firstOrder).toEqual(secondOrder);
+    expect(firstOrder).toHaveLength(options.length);
+    expect(new Set(firstOrder)).toEqual(new Set(options.map((option) => option.value)));
+    expect(firstOrder[1]).toBe("other");
+    expect(mocks.context.version.manifest.questions).toEqual([question]);
+  });
+
   it("requires and forwards the loaded version on answer saves", async () => {
     const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, answers: { q1: { value: "answer" } } }), params);
 

@@ -37,6 +37,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
   }, [data]);
 
   function updateQuestion(index: number, patch: Partial<BasicQuestion>) {
+    setError("");
     setData((current) => {
       const previousId = current.questions[index]?.id;
       const nextId = patch.id;
@@ -268,6 +269,13 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     });
   }
 
+  function addOption(index: number) {
+    const options = data.questions[index]?.options ?? [];
+    let valueIndex = 1;
+    while (options.some((option) => option.value === `option-${valueIndex}`)) valueIndex += 1;
+    updateQuestion(index, { options: [...options, { value: `option-${valueIndex}`, label: `Option ${valueIndex}` }] });
+  }
+
   function download() {
     if (!built.html) return;
     const url = URL.createObjectURL(new Blob([built.html], { type: "text/html;charset=utf-8" }));
@@ -315,7 +323,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
           <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Stored value</span><input className="input mono" maxLength={64} value={option.value} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, value: event.target.value } : item) })} /></label>
           <label className="field" style={{ flex: "2 1 180px", margin: 0 }}><span>Displayed label</span><input className="input" maxLength={300} value={option.label} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, label: event.target.value } : item) })} /></label>
           <button className="btn danger sm" type="button" disabled={(question.options?.length ?? 0) <= 2} aria-label={`Remove choice ${optionIndex + 1} from question ${index + 1}`} onClick={() => updateQuestion(index, { options: (question.options ?? []).filter((_, i) => i !== optionIndex) })}>Remove choice</button>
-        </div>)}<button className="btn sm" type="button" disabled={(question.options?.length ?? 0) >= (question.type === "rank" ? 8 : 50)} onClick={() => updateQuestion(index, { options: [...(question.options ?? []), { value: `option-${(question.options?.length ?? 0) + 1}`, label: `Option ${(question.options?.length ?? 0) + 1}` }] })}>Add choice</button>{question.type === "rank" && <span className="hint">Respondents order all 2–8 options; KQA stores the full permutation without scoring responses.</span>}</div>}
+        </div>)}<button className="btn sm" type="button" disabled={(question.options?.length ?? 0) >= (question.type === "rank" ? 8 : 50)} onClick={() => addOption(index)}>Add choice</button>{question.type === "rank" && <span className="hint">Respondents order all 2–8 options; KQA stores the full permutation without scoring responses.</span>}</div>}
         {["single", "multi", "select"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}>
           <label className="choice"><input id={`builder-randomize-options-${index}`} type="checkbox" checked={question.randomizeOptions ?? false} onChange={(event) => updateQuestion(index, { randomizeOptions: event.target.checked })} /><span>Randomize choice order for each respondent</span></label>
           <span className="hint">Use for choices without a natural order. Keep ordered categories in their authored order.</span>
@@ -324,10 +332,10 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
             const fixedLimit = Math.max(0, (question.options?.length ?? 0) - 2);
             return <label className="choice" key={option.value}><input id={`builder-fixed-option-${index}-${optionIndex}`} type="checkbox" checked={fixed} disabled={!fixed && (question.fixedOptionValues?.length ?? 0) >= fixedLimit} onChange={(event) => updateQuestion(index, { fixedOptionValues: event.target.checked ? [...(question.fixedOptionValues ?? []), option.value] : (question.fixedOptionValues ?? []).filter((value) => value !== option.value) })} /><span>{option.label || option.value}</span></label>;
           })}<span className="hint">At least two choices must remain available to rotate.</span></div>}
-          {question.type === "multi" && <div className="stack" style={{ paddingLeft: 18 }}><strong>Choices respondents must select alone <span className="muted">(optional)</span></strong>{(question.options ?? []).map((option, optionIndex) => <label className="choice" key={option.value}><input id={`builder-exclusive-option-${index}-${optionIndex}`} type="checkbox" checked={(question.exclusiveOptions ?? []).includes(option.value)} onChange={(event) => updateQuestion(index, { exclusiveOptions: event.target.checked ? [...(question.exclusiveOptions ?? []), option.value] : (question.exclusiveOptions ?? []).filter((value) => value !== option.value) })} /><span>{option.label || option.value}</span></label>)}<span className="hint">Use for choices such as “None of these” or “Prefer not to say.”</span></div>}
+          {question.type === "multi" && <div className="stack" style={{ paddingLeft: 18 }}><strong>Choices respondents must select alone <span className="muted">(optional)</span></strong>{(question.options ?? []).map((option, optionIndex) => <label className="choice" key={option.value}><input id={`builder-exclusive-option-${index}-${optionIndex}`} type="checkbox" checked={(question.exclusiveOptions ?? []).includes(option.value)} disabled={(question.minSelections ?? 0) > 1} onChange={(event) => updateQuestion(index, { exclusiveOptions: event.target.checked ? [...(question.exclusiveOptions ?? []), option.value] : (question.exclusiveOptions ?? []).filter((value) => value !== option.value) })} /><span>{option.label || option.value}</span></label>)}<span className="hint">Use for choices such as “None of these” or “Prefer not to say.” Exclusive choices need to be valid on their own, so a minimum above 1 is not allowed.</span></div>}
         </div>}
         {question.type === "multi" && <div className="row wrap" style={{ marginTop: 14 }}>
-          <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Minimum selections <span className="muted">(optional)</span></span><input id={`builder-min-selections-${index}`} className="input" type="number" min={1} max={question.options?.length} value={question.minSelections ?? ""} onChange={(event) => updateQuestion(index, { minSelections: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
+          <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Minimum selections <span className="muted">(optional)</span></span><input id={`builder-min-selections-${index}`} className="input" type="number" min={1} max={(question.exclusiveOptions?.length ?? 0) > 0 ? 1 : question.options?.length} value={question.minSelections ?? ""} onChange={(event) => { const value = event.target.value === "" ? undefined : Number(event.target.value); if ((question.exclusiveOptions?.length ?? 0) > 0 && (value ?? 0) > 1) { setError("Exclusive choices must be valid on their own, so minimum selections cannot be above 1. Remove the exclusive choice first to set a higher minimum."); return; } updateQuestion(index, { minSelections: value }); }} /></label>
           <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Maximum selections <span className="muted">(optional)</span></span><input id={`builder-max-selections-${index}`} className="input" type="number" min={1} max={question.options?.length} value={question.maxSelections ?? ""} onChange={(event) => updateQuestion(index, { maxSelections: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
           <span className="hint">A minimum applies to a non-empty answer. An optional blank answer remains a skip.</span>
         </div>}

@@ -293,9 +293,9 @@ maxSelections only applies to multi questions and must be a whole number no grea
 
 Severity: **error**
 
-exclusiveOptions applies only to multi questions and must name unique values declared in that question.
+exclusiveOptions applies only to multi questions, must name unique declared values, and cannot be combined with a minimum above 1 because an exclusive choice must be valid alone.
 
-**How to fix:** Use a non-empty list of declared option values, such as ["none"], on a multi question.
+**How to fix:** Use a non-empty list of declared option values, such as ["none"], on a multi question; omit minSelections or set it to 1.
 
 ### KQA222: Invalid minimum checkbox selections
 

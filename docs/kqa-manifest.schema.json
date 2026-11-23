@@ -556,6 +556,21 @@
           {
             "if": {
               "required": [
+                "exclusiveOptions",
+                "minSelections"
+              ]
+            },
+            "then": {
+              "properties": {
+                "minSelections": {
+                  "maximum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
                 "minSelections"
               ]
             },

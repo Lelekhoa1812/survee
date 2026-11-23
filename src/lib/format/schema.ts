@@ -205,6 +205,7 @@ export const questionSchema = z.object({
     if (question.type !== "multi") ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections only applies to multi questions" });
     if (question.options && question.minSelections > question.options.length) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed the number of options" });
     if (question.maxSelections !== undefined && question.minSelections > question.maxSelections) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed maxSelections" });
+    if (question.minSelections > 1 && question.exclusiveOptions?.length) ctx.addIssue({ code: "custom", path: ["minSelections"], message: "minSelections cannot exceed 1 when exclusiveOptions are declared, because an exclusive choice must be valid alone" });
   }
   if (question.randomizeOptions && !["single", "multi", "select"].includes(question.type)) {
     ctx.addIssue({ code: "custom", path: ["randomizeOptions"], message: "randomizeOptions only applies to nominal single, multi, or select questions" });
@@ -323,6 +324,10 @@ export function manifestJsonSchema(): unknown {
       {
         if: { required: ["exclusiveOptions"] },
         then: { properties: { type: { const: "multi" } } },
+      },
+      {
+        if: { required: ["exclusiveOptions", "minSelections"] },
+        then: { properties: { minSelections: { maximum: 1 } } },
       },
       {
         if: { required: ["minSelections"] },
