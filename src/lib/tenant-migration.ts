@@ -165,9 +165,6 @@ export async function auditTenantMigration(db: Db) {
 }
 
 export async function backfillLegacyTenant(db: Db): Promise<Record<string, number>> {
-  const report = await auditTenantMigration(db);
-  if (!report.preflight.readyForReviewedBackfill) throw new Error("Tenant preflight is not ready; no records were changed.");
-
   const now = new Date();
   await db.collection<TenantDoc>("tenants").updateOne(
     { _id: AXION_TENANT_ID },
@@ -218,6 +215,11 @@ export async function backfillLegacyTenant(db: Db): Promise<Record<string, numbe
     renewing = renewLease().catch(() => { leaseLost = true; }).finally(() => { renewing = null; });
   }, Math.floor(MIGRATION_LEASE_MS / 3));
   try {
+    const report = await auditTenantMigration(db);
+    if (!report.preflight.readyForReviewedBackfill) {
+      finalState = "needs_review";
+      throw new Error("Tenant preflight is not ready; no records were changed.");
+    }
     if (!resumable) {
       const reset = await tenants.updateOne(
         { _id: AXION_TENANT_ID, "legacyTenantMigration.owner": owner },

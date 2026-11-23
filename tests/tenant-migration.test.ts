@@ -219,10 +219,11 @@ describe("tenant migration preflight", () => {
     expect(mismatchedReference.preflight.readyForReviewedBackfill).toBe(false);
   });
 
-  it("does not write anything while another tenant owns legacy records", async () => {
+  it("keeps records untouched and marks review needed when other tenants own legacy records", async () => {
     const writes = vi.fn();
     await expect(backfillLegacyTenant(emptyAuditDb(0, 0, 1, writes))).rejects.toThrow("Tenant preflight is not ready");
-    expect(writes).not.toHaveBeenCalled();
+    // The migration marker and its release are written, but no owned-collection updateMany runs.
+    expect(writes).toHaveBeenCalledTimes(2);
   });
 
   it("checks the final audit and refuses to report a backfill that left unscoped records", async () => {
@@ -250,7 +251,17 @@ describe("tenant migration preflight", () => {
   });
 
   it("refuses a concurrent backfill when another owner holds the lease", async () => {
-    const db = backfillDb(true, false);
+    let auditReads = 0;
+    const db = {
+      collection() {
+        return {
+          updateOne: async () => ({ matchedCount: 1 }),
+          findOneAndUpdate: async () => null,
+          findOne: async () => { auditReads++; return null; },
+        };
+      },
+    } as unknown as Db;
     await expect(backfillLegacyTenant(db)).rejects.toBeInstanceOf(TenantMigrationInProgressError);
+    expect(auditReads).toBe(0);
   });
 });
