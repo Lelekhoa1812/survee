@@ -249,12 +249,27 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     }));
   }
 
-  function move(index: number, by: -1 | 1) {
+  function questionOrderKeepsRoutes(questions: BasicQuestion[]) {
+    const positions = new Map(questions.map((question, index) => [question.id, index]));
+    return questions.every((question, index) => [...(question.when?.all ?? []), ...(question.when?.any ?? [])]
+      .every((condition) => (positions.get(condition.question) ?? Number.MAX_SAFE_INTEGER) < index));
+  }
+
+  function canMoveQuestion(index: number, by: -1 | 1) {
     const next = index + by;
-    if (next < 0 || next >= data.questions.length) return;
+    if (next < 0 || next >= data.questions.length) return false;
+    const questions = [...data.questions];
+    [questions[index], questions[next]] = [questions[next], questions[index]];
+    return questionOrderKeepsRoutes(questions);
+  }
+
+  function move(index: number, by: -1 | 1) {
     setData((current) => {
+      const next = index + by;
+      if (next < 0 || next >= current.questions.length) return current;
       const questions = [...current.questions];
       [questions[index], questions[next]] = [questions[next], questions[index]];
+      if (!questionOrderKeepsRoutes(questions)) return current;
       return { ...current, questions };
     });
   }
@@ -325,9 +340,10 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
           <div className="field"><label htmlFor={`builder-section-description-${index}`}>Section description <span className="muted">(optional)</span></label><textarea id={`builder-section-description-${index}`} className="textarea" rows={2} maxLength={1000} value={section.description} onChange={(event) => updateSection(index, { description: event.target.value })} /></div>
         </fieldset>)}
       </div>
+      {data.questions.some((question) => question.when) && <span className="hint">Keep routed questions after the questions they depend on. Move controls disable positions that would break a route.</span>}
       {data.questions.map((question, index) => <fieldset className="card" key={`${index}-${question.id}`} style={{ padding: 16, margin: 0 }}>
         <legend className="sr-only">Question {index + 1}</legend>
-        <div className="row wrap" style={{ justifyContent: "space-between", marginBottom: 12 }}><strong>Question {index + 1}</strong><div className="row"><button className="btn sm" type="button" aria-label={`Move question ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move question ${index + 1} down`} disabled={index === data.questions.length - 1} onClick={() => move(index, 1)}>Move down</button><button className="btn danger sm" type="button" disabled={data.questions.length === 1} onClick={() => setData((current) => ({ ...current, questions: current.questions.filter((_, item) => item !== index) }))}>Remove</button></div></div>
+        <div className="row wrap" style={{ justifyContent: "space-between", marginBottom: 12 }}><strong>Question {index + 1}</strong><div className="row"><button className="btn sm" type="button" aria-label={`Move question ${index + 1} up`} disabled={!canMoveQuestion(index, -1)} onClick={() => move(index, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move question ${index + 1} down`} disabled={!canMoveQuestion(index, 1)} onClick={() => move(index, 1)}>Move down</button><button className="btn danger sm" type="button" disabled={data.questions.length === 1} onClick={() => setData((current) => ({ ...current, questions: current.questions.filter((_, item) => item !== index) }))}>Remove</button></div></div>
         <div className="field"><label htmlFor={`builder-id-${index}`}>Stable question ID</label><input id={`builder-id-${index}`} className="input mono" maxLength={64} pattern="[a-z0-9][a-z0-9_-]{0,63}" value={question.id} onChange={(event) => updateQuestion(index, { id: event.target.value })} /><span className="hint">Lowercase letters, numbers, hyphens and underscores. Keep this ID if you revise the file after collecting answers.</span></div>
         <div className="field"><label htmlFor={`builder-type-${index}`}>Answer type</label><select id={`builder-type-${index}`} className="select" value={question.type} onChange={(event) => changeType(index, event.target.value as BasicQuestionType)}>{questionTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
         {(data.sections?.length ?? 0) > 0 && <div className="field"><label htmlFor={`builder-section-${index}`}>Section</label><select id={`builder-section-${index}`} className="select" value={question.section ?? ""} onChange={(event) => updateQuestion(index, { section: event.target.value || undefined })}><option value="">No section</option>{data.sections?.map((section) => <option key={section.id} value={section.id}>{section.title || section.id}</option>)}</select></div>}

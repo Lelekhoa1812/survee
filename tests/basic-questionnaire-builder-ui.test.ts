@@ -129,6 +129,30 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "repeat-order.html" }).ok).toBe(true);
   });
 
+  it("prevents question moves that invert an earlier-answer routing dependency", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add question");
+    await click("Add question");
+    await change("#builder-type-2", "number");
+    await click("Add all-match rule group to question 3");
+    await change("#builder-route-source-2-all-0", "question-1");
+
+    const safeMove = host.querySelector<HTMLButtonElement>('button[aria-label="Move question 1 down"]');
+    expect(safeMove?.disabled).toBe(false);
+    await click("Move question 1 down");
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Move question 2 down"]')?.disabled).toBe(true);
+    await click("Move question 2 up");
+    await click("Use questionnaire");
+
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(checkHtml(html, { fileName: "routed-order.html" }).ok).toBe(true);
+    expect(html).toContain('"question": "question-1"');
+  });
+
   it("adds a section, assigns the current question, and emits a checked manifest", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");
