@@ -5,6 +5,7 @@ import { fail, json, withServerErrors } from "@/lib/http";
 import { ensureQuestionOrderAssignment, loadByToken } from "@/lib/repo";
 import { looksLikeToken } from "@/lib/tokens";
 import { shouldRecordVisit } from "@/lib/visit";
+import { respondentRateLimit } from "@/lib/respondent-rate-limit";
 
 type Ctx = { params: Promise<{ token: string }> };
 
@@ -12,6 +13,8 @@ type Ctx = { params: Promise<{ token: string }> };
 export const GET = withServerErrors("p/questionnaire", async function GET(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.", { code: "not_found" });
+  const rateLimitFailure = await respondentRateLimit(req, token, "load");
+  if (rateLimitFailure) return rateLimitFailure;
   // Prefetch of the invite link must not count as the person opening it. Status changes only on save.
   const respondentVisit = shouldRecordVisit(req);
   const ctx = await loadByToken(token, { touch: respondentVisit });

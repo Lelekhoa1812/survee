@@ -30,6 +30,7 @@ vi.mock("@/lib/repo", () => ({
 }));
 vi.mock("@/lib/tokens", () => ({ looksLikeToken: () => true }));
 vi.mock("@/lib/visit", () => ({ shouldRecordVisit: mocks.shouldRecordVisit }));
+vi.mock("@/lib/respondent-rate-limit", () => ({ respondentRateLimit: vi.fn(async () => null) }));
 
 import { GET as getRespondent } from "../src/app/api/p/[token]/route";
 import { PUT as saveRespondentAnswers } from "../src/app/api/p/[token]/answers/route";

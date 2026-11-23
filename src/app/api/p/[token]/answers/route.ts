@@ -2,6 +2,7 @@ import { fail, json, readJson, withServerErrors } from "@/lib/http";
 import { saveAnswers, type AnswerPatch } from "@/lib/repo";
 import { ID_RE, type RepeatRecordOperation } from "@/lib/format/schema";
 import { looksLikeToken } from "@/lib/tokens";
+import { respondentRateLimit } from "@/lib/respondent-rate-limit";
 
 type Ctx = { params: Promise<{ token: string }> };
 
@@ -9,6 +10,8 @@ type Ctx = { params: Promise<{ token: string }> };
 export const PUT = withServerErrors("p/answers", async function PUT(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.", { code: "not_found" });
+  const rateLimitFailure = await respondentRateLimit(req, token, "save");
+  if (rateLimitFailure) return rateLimitFailure;
   const body = await readJson<{ version?: unknown; answers?: unknown; recordOperations?: unknown }>(req, 512 * 1024);
   if (!body.ok) return body.res;
   if (typeof body.data.version !== "number" || !Number.isSafeInteger(body.data.version) || body.data.version < 1) {
