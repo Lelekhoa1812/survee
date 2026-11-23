@@ -117,7 +117,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `apply_questionnaire_required_patch` | Publish the reviewed required/optional changes with a signed preview token and compatibility acknowledgement |
 | `list_people` | Newest-first bounded page of people, optional email, status, progress, mail state, and private link; pass `nextCursor` as `cursor` to continue |
 | `get_person` | One person |
-| `add_people` | Add up to 100 people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user; larger lists must be split into batches |
+| `add_people` | Add up to 100 people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user; split larger lists into batches |
 | `update_person` | Name, optional email, private note. An empty email clears it |
 | `remove_person` | Remove the person, their answers, and their invite history |
 | `reopen_person` | Unlock a submitted person |

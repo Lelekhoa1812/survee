@@ -1645,7 +1645,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "add_people",
-    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people to a multi-user interview per request. Email is optional. Adding people to a One-person interview switches it to Multi-user.`,
+    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user.`,
     inputSchema: obj({ interviewId: str, people: { type: "array", maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
