@@ -573,10 +573,15 @@ export async function deleteParticipant(id: string): Promise<boolean> {
   const tenantId = await currentTenantId();
   if (!tenantId) return false;
   const deleted = await withMongoTransaction(async (session) => {
-    const res = await (await col.participants()).deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
+    const participants = await col.participants();
+    const participant = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { interviewId: 1 } });
+    if (!participant) return false;
+    const res = await participants.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
     await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
+    await (await col.events()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
     await deleteMailForPerson(oid, session);
+    await (await col.analyticsRuns()).deleteMany(tenantFilter(tenantId, { interviewId: participant.interviewId }), { session });
     return true;
   });
   if (!deleted) return false;

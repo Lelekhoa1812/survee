@@ -21,6 +21,10 @@ vi.mock("../src/lib/db", () => ({
     }),
     versions: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "versions", filter, options }); } }),
     participants: async () => ({
+      findOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => {
+        mocks.calls.push({ collection: "participantLookup", filter, options });
+        return { interviewId: new ObjectId(interviewId) };
+      },
       deleteOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); return { deletedCount: mocks.deletedCount }; },
       deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); },
       aggregate: (pipeline: unknown[]) => {
@@ -89,13 +93,15 @@ describe("aggregate interview participant counts", () => {
 });
 
 describe("deleteParticipant", () => {
-  it("removes participant mail in the same tenant-scoped transaction", async () => {
+  it("removes person-linked data and invalidates interview analytics in one tenant-scoped transaction", async () => {
     const deleted = await asAxion(() => deleteParticipant(interviewId));
 
     expect(deleted).toBe(true);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants", "questionOrderAssignments", "mail"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "participants", "questionOrderAssignments", "events", "mail", "analyticsRuns"]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
+    expect(mocks.calls[3].filter).toEqual(tenantFilter("axion", { participantId: new ObjectId(interviewId) }));
+    expect(mocks.calls[5].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId) }));
   });
 
   it("leaves dependent records untouched when the participant no longer exists", async () => {
@@ -104,6 +110,6 @@ describe("deleteParticipant", () => {
     const deleted = await asAxion(() => deleteParticipant(interviewId));
 
     expect(deleted).toBe(false);
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "participants"]);
   });
 });

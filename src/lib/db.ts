@@ -141,6 +141,7 @@ async function ensureIndexes(d: Db) {
     d.collection("participants").createIndex({ tenantId: 1, interviewId: 1, createdAt: -1, _id: -1 }, { name: "tenant_people_cursor" }),
     d.collection("survey_versions").createIndex({ tenantId: 1, interviewId: 1, version: -1 }, { name: "tenant_versions" }),
     d.collection("events").createIndex({ tenantId: 1, interviewId: 1, at: -1 }, { name: "tenant_events" }),
+    d.collection("events").createIndex({ tenantId: 1, participantId: 1, at: -1 }, { name: "tenant_participant_events" }),
     d.collection("analytics_runs").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "analytics_runs_ttl" }),
     d.collection("analytics_runs").createIndex({ tenantId: 1, slot: 1 }, { unique: true, name: "analytics_runs_tenant_slot" }),
     d.collection("analytics_runs").createIndex({ tenantId: 1, interviewId: 1, createdAt: -1 }, { name: "analytics_runs_interview" }),
