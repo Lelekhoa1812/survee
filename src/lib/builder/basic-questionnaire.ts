@@ -29,6 +29,7 @@ export type BasicQuestion = {
 };
 
 export type BasicQuestionSection = { id: string; title: string; description: string };
+export type BasicQuestionOrderGroup = { id: string; questionIds: string[] };
 
 export type BasicQuestionnaire = {
   title: string;
@@ -37,6 +38,7 @@ export type BasicQuestionnaire = {
   direction?: "ltr" | "rtl" | "auto";
   presentation?: "all" | "guided" | "guided-question";
   sections?: BasicQuestionSection[];
+  questionOrderGroups?: BasicQuestionOrderGroup[];
   questions: BasicQuestion[];
 };
 
@@ -135,6 +137,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     ...(input.description ? { description: input.description } : {}),
     ...(input.presentation && input.presentation !== "all" ? { presentation: input.presentation } : {}),
     ...(input.sections?.length ? { sections: input.sections } : {}),
+    ...(input.questionOrderGroups?.length ? { questionOrderGroups: input.questionOrderGroups } : {}),
     questions: input.questions.map((question) => ({
       id: question.id,
       type: question.type,

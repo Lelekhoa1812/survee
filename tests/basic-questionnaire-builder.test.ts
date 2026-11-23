@@ -108,6 +108,18 @@ describe("basic questionnaire HTML generator", () => {
     expect(question).toContain('"presentation": "guided-question"');
   });
 
+  it("emits an explicit question-order group only when opted in", () => {
+    const questions = [
+      { id: "one", type: "text" as const, label: "One", help: "", required: false },
+      { id: "two", type: "single" as const, label: "Two", help: "", required: false, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+    ];
+    const ordinary = generateBasicQuestionnaireHtml({ title: "Order", description: "", questions });
+    expect(ordinary).not.toContain("questionOrderGroups");
+    const grouped = generateBasicQuestionnaireHtml({ title: "Order", description: "", questions, questionOrderGroups: [{ id: "context", questionIds: ["one", "two"] }] });
+    expect(grouped).toContain('"questionOrderGroups": [');
+    expect(checkHtml(grouped, { fileName: "order.html" })).toMatchObject({ ok: true, diagnostics: [] });
+  });
+
   it("generates a native repeat-group template with bounded rows and typed fields", () => {
     const html = generateBasicQuestionnaireHtml({
       title: "Asset check", description: "", questions: [{ id: "assets", type: "repeat", label: "Which assets did you inspect?", help: "One row per asset.", required: true, options: [], itemLabel: "asset", maxRows: 5, minRows: 1, fields: [

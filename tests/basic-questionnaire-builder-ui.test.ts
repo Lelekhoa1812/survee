@@ -460,4 +460,48 @@ describe("basic questionnaire builder UI", () => {
     expect(html).toContain('"section": "section-1"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
+
+  it("creates an opt-in group, keeps membership through question ID edits, and clears it for guided flow", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add question");
+    await toggle('input[aria-label="Include question 1 in an order group"]');
+    await toggle('input[aria-label="Include question 2 in an order group"]');
+    await click("Add selected questions as a group");
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Move question 1 down"]')?.disabled).toBe(true);
+    await change("#builder-id-0", "intro-question");
+    await click("Use questionnaire");
+    let html = useHtml.mock.calls[0][0] as string;
+    let manifest = JSON.parse(html.match(/<script type="application\/json" id="kqa-manifest">([\s\S]*?)<\/script>/)?.[1] ?? "{}");
+    expect(manifest.questionOrderGroups).toEqual([{ id: "question-order-1", questionIds: ["intro-question", "question-2"] }]);
+    expect(checkHtml(html, { fileName: "grouped.html" })).toMatchObject({ ok: true, diagnostics: [] });
+
+    await change("#builder-presentation", "guided-question");
+    await click("Use questionnaire");
+    html = useHtml.mock.calls[1][0] as string;
+    manifest = JSON.parse(html.match(/<script type="application\/json" id="kqa-manifest">([\s\S]*?)<\/script>/)?.[1] ?? "{}");
+    expect(manifest.questionOrderGroups).toBeUndefined();
+    expect(checkHtml(html, { fileName: "guided.html" })).toMatchObject({ ok: true, diagnostics: [] });
+  });
+
+  it("repairs group membership when a member question is deleted", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add question");
+    await click("Add question");
+    for (const index of [1, 2, 3]) await toggle(`input[aria-label="Include question ${index} in an order group"]`);
+    await click("Add selected questions as a group");
+    await click("Remove question 2");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    const manifest = JSON.parse(html.match(/<script type="application\/json" id="kqa-manifest">([\s\S]*?)<\/script>/)?.[1] ?? "{}");
+    expect(manifest.questionOrderGroups).toEqual([{ id: "question-order-1", questionIds: ["question-1", "question-3"] }]);
+    expect(checkHtml(html, { fileName: "grouped-after-delete.html" })).toMatchObject({ ok: true, diagnostics: [] });
+  });
 });

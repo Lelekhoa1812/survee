@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { generateBasicQuestionnaireHtml, type BasicQuestion, type BasicQuestionSection, type BasicQuestionType, type BasicQuestionnaire, type BasicRepeatField } from "@/lib/builder/basic-questionnaire";
+import { generateBasicQuestionnaireHtml, type BasicQuestion, type BasicQuestionSection, type BasicQuestionType, type BasicQuestionnaire, type BasicQuestionOrderGroup, type BasicRepeatField } from "@/lib/builder/basic-questionnaire";
 import type { Condition } from "@/lib/format/schema";
 
 const questionTypes: Array<{ value: BasicQuestionType; label: string }> = [
@@ -31,6 +31,7 @@ function routeCondition(question: BasicQuestion, conditionIndex: number, group: 
 export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => void }) {
   const [data, setData] = useState<BasicQuestionnaire>({ title: "New questionnaire", description: "", presentation: "all", questions: [freshQuestion(0)] });
   const [error, setError] = useState("");
+  const [selectedOrderQuestionIds, setSelectedOrderQuestionIds] = useState<string[]>([]);
   const built = useMemo(() => {
     try { return { html: generateBasicQuestionnaireHtml(data), error: "" }; }
     catch (caught) { return { html: "", error: caught instanceof Error ? caught.message : "Fix the questionnaire fields before continuing." }; }
@@ -43,6 +44,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
       const nextId = patch.id;
       return {
         ...current,
+        questionOrderGroups: current.questionOrderGroups?.map((group) => ({ ...group, questionIds: group.questionIds.map((id) => id === previousId ? nextId ?? id : id) })),
         questions: current.questions.map((question, item) => {
           if (item === index) {
             const updated = { ...question, ...patch };
@@ -87,6 +89,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
   }
 
   function selectRouteSource(index: number, group: RouteGroup, sourceId: string, conditionIndex = 0) {
+    if ((data.questionOrderGroups ?? []).some((orderGroup) => orderGroup.questionIds.includes(sourceId))) return;
     const source = data.questions.slice(0, index).find((question) => question.id === sourceId);
     if (!source) return setRouteCondition(index, group, conditionIndex);
     const choice = ["single", "multi", "select"].includes(source.type);
@@ -119,7 +122,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
   }
 
   function addRouteCondition(index: number, group: RouteGroup) {
-    const source = data.questions[index - 1];
+    const source = data.questions.slice(0, index).reverse().find((question) => !(data.questionOrderGroups ?? []).some((orderGroup) => orderGroup.questionIds.includes(question.id)));
     const conditions = routeConditions(data.questions[index], group);
     if (!source || conditions.length >= 20) return;
     selectRouteSource(index, group, source.id, conditions.length);
@@ -194,11 +197,11 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
 
   function changePresentation(presentation: NonNullable<BasicQuestionnaire["presentation"]>) {
     setData((current) => {
-      if (presentation !== "guided") return { ...current, presentation };
+      if (presentation !== "guided") return { ...current, presentation, ...(presentation === "all" ? {} : { questionOrderGroups: undefined }) };
       let sections = current.sections ?? [];
       if (!sections.length) sections = [{ id: "section-1", title: "Section 1", description: "" }];
       const questions = current.questions.map((question) => question.section ? question : { ...question, section: sections[0].id });
-      return { ...current, presentation, sections, questions };
+      return { ...current, presentation, sections, questions, questionOrderGroups: undefined };
     });
   }
 
@@ -255,12 +258,73 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
       .every((condition) => (positions.get(condition.question) ?? Number.MAX_SAFE_INTEGER) < index));
   }
 
+  function questionOrderGroupsValid(questions: BasicQuestion[], groups = data.questionOrderGroups ?? []) {
+    const positions = new Map(questions.map((question, index) => [question.id, index]));
+    return groups.every((group) => {
+      const indexes = group.questionIds.map((id) => positions.get(id));
+      if (indexes.some((index) => index === undefined)) return false;
+      const members = group.questionIds.map((id) => questions.find((question) => question.id === id)!);
+      const first = indexes[0]!;
+      return indexes.every((index, offset) => index === first + offset)
+        && members.every((question) => question.section === members[0].section && !question.when)
+        && !questions.some((question) => [...(question.when?.all ?? []), ...(question.when?.any ?? [])].some((condition) => group.questionIds.includes(condition.question)));
+    });
+  }
+
+  function questionOrderGroupEligibility(question: BasicQuestion): string | undefined {
+    if (data.presentation !== "all") return "Question-order groups require all questions on one page.";
+    if (question.when) return "Questions with routing conditions cannot be grouped.";
+    if ((data.questionOrderGroups ?? []).some((group) => group.questionIds.includes(question.id))) return "This question is already in an order group.";
+    if (data.questions.some((candidate) => [...(candidate.when?.all ?? []), ...(candidate.when?.any ?? [])].some((condition) => condition.question === question.id))) return "A question used by routing cannot be grouped.";
+    return undefined;
+  }
+
+  function selectedOrderGroupProblem(): string {
+    if (selectedOrderQuestionIds.length < 2) return "Select at least two adjacent questions.";
+    const selected = data.questions.filter((question) => selectedOrderQuestionIds.includes(question.id));
+    if (selected.length !== selectedOrderQuestionIds.length) return "Selection changed; choose the questions again.";
+    const indexes = selected.map((question) => data.questions.indexOf(question));
+    if (Math.max(...indexes) - Math.min(...indexes) + 1 !== indexes.length) return "Selected questions must be adjacent in manifest order.";
+    const blocked = selected.map(questionOrderGroupEligibility).find(Boolean);
+    if (blocked) return blocked;
+    if (selected.some((question) => question.section !== selected[0].section)) return "Selected questions must all be in the same section, or all have no section.";
+    return "";
+  }
+
+  function addQuestionOrderGroup() {
+    if (selectedOrderGroupProblem()) return;
+    setData((current) => {
+      const selected = current.questions.filter((question) => selectedOrderQuestionIds.includes(question.id));
+      let suffix = 1;
+      const used = new Set((current.questionOrderGroups ?? []).map((group) => group.id));
+      while (used.has(`question-order-${suffix}`)) suffix += 1;
+      const group: BasicQuestionOrderGroup = { id: `question-order-${suffix}`, questionIds: selected.map((question) => question.id) };
+      return { ...current, questionOrderGroups: [...(current.questionOrderGroups ?? []), group] };
+    });
+    setSelectedOrderQuestionIds([]);
+  }
+
+  function removeQuestionOrderGroup(id: string) {
+    setData((current) => ({ ...current, questionOrderGroups: current.questionOrderGroups?.filter((group) => group.id !== id) }));
+  }
+
+  function removeQuestion(index: number) {
+    setData((current) => {
+      const removedId = current.questions[index]?.id;
+      const questions = current.questions.filter((_, item) => item !== index);
+      const questionOrderGroups = current.questionOrderGroups?.map((group) => ({ ...group, questionIds: group.questionIds.filter((id) => id !== removedId) })).filter((group) => group.questionIds.length >= 2);
+      return { ...current, questions, questionOrderGroups };
+    });
+    setSelectedOrderQuestionIds((current) => current.filter((id) => id !== data.questions[index]?.id));
+  }
+
   function canMoveQuestion(index: number, by: -1 | 1) {
+    if ((data.questionOrderGroups ?? []).some((group) => group.questionIds.includes(data.questions[index]?.id))) return false;
     const next = index + by;
     if (next < 0 || next >= data.questions.length) return false;
     const questions = [...data.questions];
     [questions[index], questions[next]] = [questions[next], questions[index]];
-    return questionOrderKeepsRoutes(questions);
+    return questionOrderKeepsRoutes(questions) && questionOrderGroupsValid(questions);
   }
 
   function move(index: number, by: -1 | 1) {
@@ -269,7 +333,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
       if (next < 0 || next >= current.questions.length) return current;
       const questions = [...current.questions];
       [questions[index], questions[next]] = [questions[next], questions[index]];
-      if (!questionOrderKeepsRoutes(questions)) return current;
+      if (!questionOrderKeepsRoutes(questions) || !questionOrderGroupsValid(questions, current.questionOrderGroups)) return current;
       return { ...current, questions };
     });
   }
@@ -340,17 +404,27 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
           <div className="field"><label htmlFor={`builder-section-description-${index}`}>Section description <span className="muted">(optional)</span></label><textarea id={`builder-section-description-${index}`} className="textarea" rows={2} maxLength={1000} value={section.description} onChange={(event) => updateSection(index, { description: event.target.value })} /></div>
         </fieldset>)}
       </div>
+      {data.presentation === "all" && <fieldset className="card" style={{ padding: 16, margin: 0 }}>
+        <legend>Question order groups <span className="muted">(optional)</span></legend>
+        <p className="hint">Opt in to a respondent-specific order for a contiguous run of independent questions. Choose at least two adjacent standard questions in the same section. Routed questions and questions used by routing cannot be grouped. Group membership stays attached when you rename question IDs; grouped questions cannot be moved individually.</p>
+        {(data.questionOrderGroups ?? []).map((group) => <div className="row wrap" key={group.id} style={{ justifyContent: "space-between" }}><span><strong>{group.id}</strong>: {group.questionIds.map((id) => data.questions.find((question) => question.id === id)?.label || id).join(" → ")}</span><button className="btn danger sm" type="button" aria-label={`Remove question order group ${group.id}`} onClick={() => removeQuestionOrderGroup(group.id)}>Remove group</button></div>)}
+        <div className="stack" style={{ marginTop: 12 }}><strong>Add an order group</strong>{data.questions.map((question, index) => {
+          const reason = questionOrderGroupEligibility(question);
+          const selected = selectedOrderQuestionIds.includes(question.id);
+          return <label className="choice" key={question.id}><input type="checkbox" aria-label={`Include question ${index + 1} in an order group`} disabled={Boolean(reason)} checked={selected} onChange={(event) => setSelectedOrderQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} /><span>Question {index + 1}: {question.label || question.id}{reason ? <span className="muted"> — {reason}</span> : ""}</span></label>;
+        })}<button className="btn sm" type="button" disabled={Boolean(selectedOrderGroupProblem())} onClick={addQuestionOrderGroup}>Add selected questions as a group</button><span className="hint" role="status">{selectedOrderGroupProblem() || "The selected questions are ready to group."}</span></div>
+      </fieldset>}
       {data.questions.some((question) => question.when) && <span className="hint">Keep routed questions after the questions they depend on. Move controls disable positions that would break a route.</span>}
       {data.questions.map((question, index) => <fieldset className="card" key={`${index}-${question.id}`} style={{ padding: 16, margin: 0 }}>
         <legend className="sr-only">Question {index + 1}</legend>
-        <div className="row wrap" style={{ justifyContent: "space-between", marginBottom: 12 }}><strong>Question {index + 1}</strong><div className="row"><button className="btn sm" type="button" aria-label={`Move question ${index + 1} up`} disabled={!canMoveQuestion(index, -1)} onClick={() => move(index, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move question ${index + 1} down`} disabled={!canMoveQuestion(index, 1)} onClick={() => move(index, 1)}>Move down</button><button className="btn danger sm" type="button" disabled={data.questions.length === 1} onClick={() => setData((current) => ({ ...current, questions: current.questions.filter((_, item) => item !== index) }))}>Remove</button></div></div>
+        <div className="row wrap" style={{ justifyContent: "space-between", marginBottom: 12 }}><strong>Question {index + 1}</strong><div className="row"><button className="btn sm" type="button" aria-label={`Move question ${index + 1} up`} disabled={!canMoveQuestion(index, -1)} onClick={() => move(index, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move question ${index + 1} down`} disabled={!canMoveQuestion(index, 1)} onClick={() => move(index, 1)}>Move down</button><button className="btn danger sm" type="button" aria-label={`Remove question ${index + 1}`} disabled={data.questions.length === 1} onClick={() => removeQuestion(index)}>Remove</button></div></div>
         <div className="field"><label htmlFor={`builder-id-${index}`}>Stable question ID</label><input id={`builder-id-${index}`} className="input mono" maxLength={64} pattern="[a-z0-9][a-z0-9_-]{0,63}" value={question.id} onChange={(event) => updateQuestion(index, { id: event.target.value })} /><span className="hint">Lowercase letters, numbers, hyphens and underscores. Keep this ID if you revise the file after collecting answers.</span></div>
         <div className="field"><label htmlFor={`builder-type-${index}`}>Answer type</label><select id={`builder-type-${index}`} className="select" value={question.type} onChange={(event) => changeType(index, event.target.value as BasicQuestionType)}>{questionTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
-        {(data.sections?.length ?? 0) > 0 && <div className="field"><label htmlFor={`builder-section-${index}`}>Section</label><select id={`builder-section-${index}`} className="select" value={question.section ?? ""} onChange={(event) => updateQuestion(index, { section: event.target.value || undefined })}><option value="">No section</option>{data.sections?.map((section) => <option key={section.id} value={section.id}>{section.title || section.id}</option>)}</select></div>}
-        {index > 0 && <div className="stack" style={{ marginTop: 12 }}><strong>Show this question when</strong>
+        {(data.sections?.length ?? 0) > 0 && <div className="field"><label htmlFor={`builder-section-${index}`}>Section</label><select id={`builder-section-${index}`} className="select" disabled={(data.questionOrderGroups ?? []).some((group) => group.questionIds.includes(question.id))} value={question.section ?? ""} onChange={(event) => updateQuestion(index, { section: event.target.value || undefined })}><option value="">No section</option>{data.sections?.map((section) => <option key={section.id} value={section.id}>{section.title || section.id}</option>)}</select>{(data.questionOrderGroups ?? []).some((group) => group.questionIds.includes(question.id)) && <span className="hint">Remove this question from its order group before changing its section.</span>}</div>}
+        {index > 0 && !(data.questionOrderGroups ?? []).some((group) => group.questionIds.includes(question.id)) && <div className="stack" style={{ marginTop: 12 }}><strong>Show this question when</strong>
           {(["all", "any"] as const).filter((group) => (question.when?.[group]?.length ?? 0) > 0).map((group) => <fieldset className="card" key={group} style={{ padding: 14, margin: 0 }}>
             <legend>{group === "all" ? "All of these rules" : "At least one of these rules"}</legend>
-            {routeConditions(question, group).map((condition, conditionIndex) => <div className="stack" key={`${conditionIndex}-${condition.question}`}><div className="row wrap" style={{ alignItems: "flex-end" }}><label className="field" style={{ flex: "1 1 220px", margin: 0 }}><span>Earlier question</span><select id={`builder-route-source-${index}-${group}-${conditionIndex}`} className="select" value={condition.question} onChange={(event) => selectRouteSource(index, group, event.target.value, conditionIndex)}>{data.questions.slice(0, index).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select></label>{renderRouteCondition(index, group, conditionIndex)}<button className="btn danger sm" type="button" aria-label={`Remove ${group === "all" ? "all-match" : "any-match"} routing rule ${conditionIndex + 1} from question ${index + 1}`} onClick={() => setRouteCondition(index, group, conditionIndex)}>Remove rule</button></div></div>)}
+            {routeConditions(question, group).map((condition, conditionIndex) => <div className="stack" key={`${conditionIndex}-${condition.question}`}><div className="row wrap" style={{ alignItems: "flex-end" }}><label className="field" style={{ flex: "1 1 220px", margin: 0 }}><span>Earlier question</span><select id={`builder-route-source-${index}-${group}-${conditionIndex}`} className="select" value={condition.question} onChange={(event) => selectRouteSource(index, group, event.target.value, conditionIndex)}>{data.questions.slice(0, index).filter((source) => !(data.questionOrderGroups ?? []).some((orderGroup) => orderGroup.questionIds.includes(source.id))).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select></label>{renderRouteCondition(index, group, conditionIndex)}<button className="btn danger sm" type="button" aria-label={`Remove ${group === "all" ? "all-match" : "any-match"} routing rule ${conditionIndex + 1} from question ${index + 1}`} onClick={() => setRouteCondition(index, group, conditionIndex)}>Remove rule</button></div></div>)}
             <button className="btn sm" type="button" aria-label={`Add ${group === "all" ? "all-match" : "any-match"} routing rule to question ${index + 1}`} disabled={routeConditions(question, group).length >= 20} onClick={() => addRouteCondition(index, group)}>Add routing rule</button>
           </fieldset>)}
           {(["all", "any"] as const).filter((group) => (question.when?.[group]?.length ?? 0) === 0).map((group) => <button className="btn sm" key={group} type="button" aria-label={`Add ${group === "all" ? "all-match" : "any-match"} rule group to question ${index + 1}`} onClick={() => addRouteCondition(index, group)}>Add {group === "all" ? "all-match" : "any-match"} rule group</button>)}
