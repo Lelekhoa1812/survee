@@ -56,7 +56,39 @@ function groupQuestions(input: ExportInput): Group[] {
 
 /** Bullets for one question: one per participant who answered, plus notes, then one "No answer" line. */
 function questionBody(q: Question, people: ExportParticipant[], manifest: ExportInput["manifest"]): string[] {
-  if (q.type === "repeat") return ["Repeated records are not included in this report. Use the JSON or Excel export to review them.", ""];
+  if (q.type === "repeat") {
+    const lines: string[] = [];
+    for (const person of people) {
+      const records = person.recordGroups?.[q.id] ?? [];
+      const isEligible = evaluateEligibility(manifest, person.answers, person.recordGroups)[q.id] !== false;
+      const state = `${cell(person.status)}${isEligible ? "" : "; inactive under current rules"}`;
+      const head = `- **${cell(person.name)}** (${state}): `;
+      if (!records.length) {
+        lines.push(`${head}no records`, "");
+        continue;
+      }
+      lines.push(`${head}${records.length} ${records.length === 1 ? "record" : "records"}`);
+      for (const [index, record] of records.entries()) {
+        lines.push(`  - Record ${index + 1}`);
+        const knownFieldIds = new Set((q.fields ?? []).map((field) => field.id));
+        const fields = [
+          ...(q.fields ?? []),
+          ...Object.keys(record.values).filter((fieldId) => !knownFieldIds.has(fieldId)).sort().map((id) => ({ id, label: id, type: "text" as const })),
+        ];
+        for (const field of fields) {
+          const present = Object.prototype.hasOwnProperty.call(record.values, field.id);
+          const raw = present ? record.values[field.id] : undefined;
+          const fieldOptions = "options" in field ? field.options : undefined;
+          const option = typeof raw === "string" ? fieldOptions?.find((candidate) => candidate.value === raw) : undefined;
+          const value = raw === undefined ? "not recorded" : option ? `${option.label} (${raw})` : oneLine(String(raw)) || "(blank)";
+          lines.push(`    - **${cell(field.label || field.id)}:** ${cell(value)}`);
+        }
+      }
+      lines.push("");
+    }
+    if (!people.length) return ["No people.", ""];
+    return lines;
+  }
   const bullets: string[] = [];
   const unanswered: string[] = [];
   const inactive: string[] = [];

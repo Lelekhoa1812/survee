@@ -7,7 +7,7 @@ const FORMATS = [
   { id: "xlsx", name: "Excel workbook", ext: ".xlsx", note: "Summary, Wide, Long and People sheets; a Records sheet is added when repeat-group data exists." },
   { id: "csv-wide", name: "CSV, one row per person", ext: ".csv", note: "Each question is a column. Opens in Excel, Numbers and Google Sheets." },
   { id: "csv-long", name: "CSV, one row per answer", ext: ".csv", note: "Person, question, answer and note on separate rows. Best for pivot tables and analysis." },
-  { id: "md", name: "Markdown report", ext: ".md", note: "A readable write-up of question answers by section for careful review; repeat rows are not included." },
+  { id: "md", name: "Markdown report", ext: ".md", note: "A readable write-up of question answers by section, including repeat-group records." },
   { id: "json", name: "JSON", ext: ".json", note: "The full structured record including question definitions, for developers and automation." },
 ] as const;
 

@@ -439,7 +439,9 @@ describe("repeat record exports", () => {
     expect(long.rows.find((row) => row[3] === "followup")?.[6]).toBe("eligible");
     expect(long.rows.find((row) => row[3] === "empty")?.[6]).toBe("inactive");
     expect(markdownExport(routed).body).toContain("| Ben Okafor | in\\_progress | 2/2 |");
-    expect(markdownExport(routed).body).toContain("Repeated records are not included in this report.");
+    expect(markdownExport(routed).body).toContain("### Assets `assets`");
+    expect(markdownExport(routed).body).toContain("=SUM(A1)");
+    expect(markdownExport(routed).body).toContain("- **Ben Okafor** (in\\_progress): 2 records");
     const workbook = new Workbook();
     await workbook.xlsx.load((await xlsxExport(routed)).body as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
     const summary = workbook.getWorksheet("Summary")!;
@@ -631,6 +633,37 @@ describe("Markdown", () => {
 
   it("escapes markdown-significant characters", () => {
     expect(escapeInline("a|b `c` *d* _e_ #")).toBe("a\\|b \\`c\\` \\*d\\* \\_e\\_ #");
+  });
+
+  it("includes repeat-group records as escaped, readable per-person lists", () => {
+    const repeatInput: ExportInput = {
+      ...input,
+      manifest: {
+        ...manifest,
+        questions: [...manifest.questions, {
+          id: "assets",
+          type: "repeat",
+          label: "Asset inventory",
+          section: "views",
+          maxRows: 3,
+          fields: [
+            { id: "name", label: "Asset name", type: "text" },
+            { id: "condition", label: "Condition", type: "single", options: [{ value: "ready", label: "Ready" }, { value: "repair", label: "Needs repair" }] },
+          ],
+        }],
+      },
+      participants: [
+        { ...input.participants[1], recordGroups: { assets: [{ id: "row-1", values: { name: "Old chair | `blue`\nNeeds repair", condition: "repair" }, revision: 1, fieldRevisions: {} }] } },
+        { ...input.participants[0], recordGroups: { assets: [] } },
+      ],
+    };
+    const md = markdownExport(repeatInput).body as string;
+    expect(md).toContain("### Asset inventory `assets`");
+    expect(md).toContain("- **Ana Lopez** (submitted): 1 record");
+    expect(md).toContain("  - Record 1");
+    expect(md).toContain("**Asset name:** Old chair \\| \\`blue\\` Needs repair");
+    expect(md).toContain("**Condition:** Needs repair (repair)");
+    expect(md).toContain("- **Ben Okafor** (in\\_progress): no records");
   });
 });
 
