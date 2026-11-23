@@ -51,6 +51,7 @@ vi.mock("../src/lib/db", () => ({
     }),
     analyticsRuns: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "analyticsRuns", filter, options }); } }),
     mail: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mail", filter, options }); } }),
+    questionnaireReviewDrafts: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "questionnaireReviewDrafts", filter, options }); } }),
   },
 }));
 
@@ -77,7 +78,7 @@ describe("deleteInterview", () => {
     expect(deleted).toBe(true);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.calls.map(({ collection }) => collection)).toEqual([
-      "interviews", "versions", "participants", "questionOrderAssignments", "events", "analyticsRuns", "mail",
+      "interviews", "versions", "participants", "questionOrderAssignments", "events", "analyticsRuns", "mail", "questionnaireReviewDrafts",
     ]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
     expect(mocks.calls[0].filter).toEqual(tenantFilter("axion", { _id: new ObjectId(interviewId) }));

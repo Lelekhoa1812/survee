@@ -257,6 +257,7 @@ export async function deleteInterview(id: string): Promise<boolean> {
     await (await col.events()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.analyticsRuns()).deleteMany({ tenantId, interviewId: oid }, { session });
     await deleteMailForInterview(oid, session);
+    await (await col.questionnaireReviewDrafts()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     return true;
   });
 }
@@ -272,9 +273,12 @@ export class ParticipantReadLimitError extends Error {
 }
 
 export class ParticipantExportSizeLimitError extends Error {
-  readonly limitBytes = MAX_EXPORT_SOURCE_BYTES;
-  constructor() {
-    super(`This interview's answer data is too large for a buffered export. Buffered exports support up to ${Math.floor(MAX_EXPORT_SOURCE_BYTES / (1024 * 1024))} MiB of participant data; use streamed CSV where available.`);
+  readonly limitBytes: number;
+  constructor(limitBytes = MAX_EXPORT_SOURCE_BYTES, streamPage = false) {
+    super(streamPage
+      ? `A streamed CSV page exceeds the ${Math.floor(limitBytes / (1024 * 1024))} MiB participant-data page limit.`
+      : `This interview's answer data is too large for a buffered export. Buffered exports support up to ${Math.floor(limitBytes / (1024 * 1024))} MiB of participant data; use streamed CSV where available.`);
+    this.limitBytes = limitBytes;
     this.name = "ParticipantExportSizeLimitError";
   }
 }
@@ -310,6 +314,7 @@ export async function listParticipantPage(
   requestedLimit = DEFAULT_PARTICIPANT_PAGE_SIZE,
   submittedOnly = false,
   includeOrderAssignments = true,
+  maxSourceBytes?: number,
 ): Promise<{ people: ParticipantView[]; nextCursor: string | null }> {
   const oid = toOid(interviewId);
   if (!oid) return { people: [], nextCursor: null };
@@ -325,7 +330,28 @@ export async function listParticipantPage(
       { createdAt: anchor.createdAt, _id: { $lt: anchor.id } },
     ];
   }
-  const docs = await participants.find(tenantFilter(tenantId, filter)).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
+  let docs: ParticipantDoc[];
+  if (maxSourceBytes !== undefined) {
+    const rows = await participants.aggregate<{ docs: ParticipantDoc[]; summary: { sourceBytes: number }[] }>([
+      { $match: tenantFilter(tenantId, filter) },
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $limit: limit + 1 },
+      { $set: { _pageDocBytes: { $bsonSize: "$$ROOT" } } },
+      { $setWindowFields: { output: { _pageSourceBytes: { $sum: "$_pageDocBytes", window: { documents: ["unbounded", "unbounded"] } } } } },
+      { $facet: {
+        docs: [
+          { $match: { $expr: { $lte: ["$_pageSourceBytes", maxSourceBytes] } } },
+          { $unset: ["_pageSourceBytes", "_pageDocBytes"] },
+        ],
+        summary: [{ $group: { _id: null, sourceBytes: { $max: "$_pageSourceBytes" } } }],
+      } },
+    ]).toArray();
+    const page = rows[0];
+    if ((page?.summary[0]?.sourceBytes ?? 0) > maxSourceBytes) throw new ParticipantExportSizeLimitError(maxSourceBytes, true);
+    docs = page?.docs ?? [];
+  } else {
+    docs = await participants.find(tenantFilter(tenantId, filter)).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
+  }
   const hasMore = docs.length > limit;
   const pageDocs = hasMore ? docs.slice(0, limit) : docs;
   if (!pageDocs.length) return { people: [], nextCursor: null };
