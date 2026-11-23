@@ -72,6 +72,21 @@ describe("basic questionnaire HTML generator", () => {
     expect(html).toContain('"value": "team"');
   });
 
+  it("generates guided section and question presentations with the required markup", () => {
+    const section = generateBasicQuestionnaireHtml({
+      title: "Guided section", description: "", presentation: "guided", sections: [{ id: "intro", title: "Introduction", description: "" }],
+      questions: [{ id: "name", type: "text", label: "What is your name?", help: "", required: false, section: "intro", options: [] }],
+    });
+    const question = generateBasicQuestionnaireHtml({
+      title: "Guided question", description: "", presentation: "guided-question",
+      questions: [{ id: "name", type: "text", label: "What is your name?", help: "", required: false, options: [] }],
+    });
+    expect(checkHtml(section, { fileName: "guided.html" })).toMatchObject({ ok: true, diagnostics: [] });
+    expect(checkHtml(question, { fileName: "guided-question.html" })).toMatchObject({ ok: true, diagnostics: [] });
+    expect(section).toContain('"presentation": "guided"');
+    expect(question).toContain('"presentation": "guided-question"');
+  });
+
   it("rejects invalid identifiers, duplicate ids, and malformed choice sets", () => {
     const base = { title: "Questionnaire", description: "", questions: [{ id: "invalid ID", type: "text" as const, label: "Question", help: "", required: false, options: [] }] };
     expect(() => generateBasicQuestionnaireHtml(base)).toThrow(/questions\.0\.id/);

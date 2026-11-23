@@ -25,6 +25,7 @@ export type BasicQuestionSection = { id: string; title: string; description: str
 export type BasicQuestionnaire = {
   title: string;
   description: string;
+  presentation?: "all" | "guided" | "guided-question";
   sections?: BasicQuestionSection[];
   questions: BasicQuestion[];
 };
@@ -85,6 +86,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     format: "kqa/1",
     title: input.title,
     ...(input.description ? { description: input.description } : {}),
+    ...(input.presentation && input.presentation !== "all" ? { presentation: input.presentation } : {}),
     ...(input.sections?.length ? { sections: input.sections } : {}),
     questions: input.questions.map((question) => ({
       id: question.id,
@@ -104,6 +106,9 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
       ...(question.maxLength !== undefined ? { maxLength: question.maxLength } : {}),
     })),
   };
+  if (input.presentation === "guided" && (!input.sections?.length || input.questions.some((question) => !question.section))) {
+    throw new Error("Section-by-section presentation needs at least one section and every question assigned to a section.");
+  }
   const parsed = manifestSchema.safeParse(manifest);
   if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
   const safeJson = JSON.stringify(parsed.data, null, 2).replace(/</g, "\\u003c");

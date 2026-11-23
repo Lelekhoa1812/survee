@@ -19,7 +19,7 @@ function routeCondition(question: BasicQuestion): Condition | undefined {
 }
 
 export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => void }) {
-  const [data, setData] = useState<BasicQuestionnaire>({ title: "New questionnaire", description: "", questions: [freshQuestion(0)] });
+  const [data, setData] = useState<BasicQuestionnaire>({ title: "New questionnaire", description: "", presentation: "all", questions: [freshQuestion(0)] });
   const [error, setError] = useState("");
   const built = useMemo(() => {
     try { return { html: generateBasicQuestionnaireHtml(data), error: "" }; }
@@ -109,6 +109,16 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     });
   }
 
+  function changePresentation(presentation: NonNullable<BasicQuestionnaire["presentation"]>) {
+    setData((current) => {
+      if (presentation !== "guided") return { ...current, presentation };
+      let sections = current.sections ?? [];
+      if (!sections.length) sections = [{ id: "section-1", title: "Section 1", description: "" }];
+      const questions = current.questions.map((question) => question.section ? question : { ...question, section: sections[0].id });
+      return { ...current, presentation, sections, questions };
+    });
+  }
+
   function changeType(index: number, type: BasicQuestionType) {
     const current = data.questions[index];
     const needsOptions = ["single", "multi", "select", "rank"].includes(type);
@@ -160,6 +170,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     <div className="card-pad stack">
       <div className="field"><label htmlFor="builder-title">Questionnaire title</label><input id="builder-title" className="input" maxLength={120} value={data.title} onChange={(event) => setData((current) => ({ ...current, title: event.target.value }))} /></div>
       <div className="field"><label htmlFor="builder-description">Description <span className="muted">(optional)</span></label><textarea id="builder-description" className="textarea" rows={2} maxLength={500} value={data.description} onChange={(event) => setData((current) => ({ ...current, description: event.target.value }))} /></div>
+      <div className="field"><label htmlFor="builder-presentation">Respondent flow</label><select id="builder-presentation" className="select" value={data.presentation ?? "all"} onChange={(event) => changePresentation(event.target.value as NonNullable<BasicQuestionnaire["presentation"]>)}><option value="all">All questions on one page</option><option value="guided">One section at a time</option><option value="guided-question">One question at a time</option></select><span className="hint">Respondents can switch back to all questions. Their answers are retained when routing hides a question.</span></div>
       <div className="stack"><div className="row wrap" style={{ justifyContent: "space-between" }}><div><strong>Sections <span className="muted">(optional)</span></strong><div className="hint">Organize questions for the respondent contents list.</div></div><button className="btn sm" type="button" disabled={(data.sections?.length ?? 0) >= 30} onClick={addSection}>Add section</button></div>
         {(data.sections ?? []).map((section, index) => <fieldset className="card" key={section.id} style={{ padding: 16, margin: 0 }}><legend className="sr-only">Section {index + 1}</legend>
           <div className="row wrap" style={{ justifyContent: "space-between" }}><strong>Section {index + 1}</strong><div className="row"><button className="btn sm" type="button" aria-label={`Move section ${index + 1} up`} disabled={index === 0} onClick={() => moveSection(index, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move section ${index + 1} down`} disabled={index === (data.sections?.length ?? 0) - 1} onClick={() => moveSection(index, 1)}>Move down</button><button className="btn danger sm" type="button" onClick={() => removeSection(index)}>Remove</button></div></div>

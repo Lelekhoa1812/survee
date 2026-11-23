@@ -164,4 +164,18 @@ describe("basic questionnaire builder UI", () => {
     expect(html).toContain('step="0.5"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
+
+  it("selects guided sections and assigns current questions automatically", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-presentation", "guided");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"presentation": "guided"');
+    expect(html).toContain('"section": "section-1"');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
 });
