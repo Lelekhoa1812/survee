@@ -31,4 +31,18 @@ describe("participant host rows", () => {
     expect(row.recordGroups?.rows).toHaveLength(1);
     expect(row.questionOrderAssignments).toHaveLength(1);
   });
+
+  it("marks a repeat question incomplete when a retained row fails required-field validation", () => {
+    const repeatManifest = {
+      format: "kqa/1", title: "Records", questions: [{
+        id: "jobs", type: "repeat", label: "Jobs", required: true, maxRows: 3,
+        fields: [{ id: "title", type: "text", label: "Title", required: true }],
+      }],
+    } as unknown as Manifest;
+    const respondent = { ...person, answers: {}, recordGroups: { jobs: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } } as ParticipantView;
+
+    const [row] = participantRows(repeatManifest, [respondent], [], false);
+
+    expect(row).toMatchObject({ answered: 0, total: 1, requiredMissing: 1 });
+  });
 });

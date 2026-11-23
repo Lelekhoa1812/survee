@@ -249,7 +249,9 @@ export function progress(manifest: Manifest, answers: AnswerMap, recordGroups: R
   for (const q of manifest.questions) {
     if (!eligible[q.id]) continue;
     total += 1;
-    const done = isAnswered(q, answers, recordGroups);
+    const done = q.type === "repeat"
+      ? isAnswered(q, answers, recordGroups) && !repeatErrors.some((issue) => issue.questionId === q.id)
+      : isAnswered(q, answers, recordGroups);
     if (done) answered += 1;
     if (q.required) {
       requiredTotal += 1;

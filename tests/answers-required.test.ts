@@ -273,7 +273,7 @@ describe("answered, without scores", () => {
       { id: "job-2", values: { title: "Research", start: "2024-02-30" }, revision: 1, fieldRevisions: { title: 1, start: 1 } },
     ] };
     const current = progress(manifest, {}, groups);
-    expect(current).toMatchObject({ total: 2, answered: 1, requiredAnswered: 1, repeatErrors: [
+    expect(current).toMatchObject({ total: 2, answered: 0, requiredTotal: 1, requiredAnswered: 0, missingRequired: ["jobs"], repeatErrors: [
       { questionId: "jobs", rowId: "job-1", fieldId: "title", code: "required_field" },
       { questionId: "jobs", rowId: "job-2", fieldId: "start", code: "invalid_date" },
     ] });
