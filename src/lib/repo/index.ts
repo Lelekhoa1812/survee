@@ -754,7 +754,7 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
   if (opts.touch) {
     const now = new Date();
     if (!p.lastSeenAt || now.getTime() - p.lastSeenAt.getTime() > 10 * 60 * 1000) {
-      void withMongoTransaction(async (session) => {
+      await withMongoTransaction(async (session) => {
         const touched = await participants.updateOne(
           tenantFilter(tenantId, { _id: p._id, ...(p.lastSeenAt ? { lastSeenAt: p.lastSeenAt } : { lastSeenAt: { $exists: false } }) }),
           { $set: { lastSeenAt: now } }, { session },

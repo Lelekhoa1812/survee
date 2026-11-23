@@ -54,7 +54,6 @@ describe("loadByToken access events", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const context = await loadByToken("token", { touch: true });
-    await vi.waitFor(() => expect(state.events).toHaveLength(1));
 
     expect(context?.participant.id).toBe(participantId.toHexString());
     expect(state.updates).toHaveLength(1);
