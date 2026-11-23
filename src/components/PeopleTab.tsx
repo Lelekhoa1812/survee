@@ -6,7 +6,7 @@ import type { InterviewData, PersonRow } from "./interview-types";
 import { InviteActions } from "./InviteActions";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
-import { MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
+import { MAX_INVITES_PER_BATCH, MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
 
 const STATUS: Record<PersonRow["status"], { label: string; kind: "" | "info" | "ok" }> = { invited: { label: "Not started", kind: "" }, in_progress: { label: "In progress", kind: "info" }, submitted: { label: "Submitted", kind: "ok" } };
 
@@ -21,12 +21,62 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
   const [nextCursor, setNextCursor] = useState(data.peopleNextCursor ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([]);
+  const [confirmInviteBatch, setConfirmInviteBatch] = useState(false);
+  const [sendingInviteBatch, setSendingInviteBatch] = useState(false);
+  const [inviteBatchProgress, setInviteBatchProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [inviteBatchResults, setInviteBatchResults] = useState<Array<{ personId: string; name: string; ok: boolean; message: string }>>([]);
 
   useEffect(() => {
     setParticipants(data.people);
     setNextCursor(data.peopleNextCursor ?? null);
     setPageError("");
+    setSelectedInviteIds([]);
   }, [data.people, data.peopleNextCursor]);
+
+  const canSendInviteBatch = multi && data.interview.status === "open" && Boolean(data.publicOrigin);
+  const eligibleInvitees = canSendInviteBatch
+    ? participants.filter((person) => Boolean(person.email?.trim()) && (person.mail?.state === "unsent" || person.mail?.state === "failed"))
+    : [];
+
+  function toggleInviteSelection(personId: string) {
+    setSelectedInviteIds((current) => {
+      if (current.includes(personId)) return current.filter((id) => id !== personId);
+      if (current.length >= MAX_INVITES_PER_BATCH) return current;
+      return [...current, personId];
+    });
+  }
+
+  async function sendInviteBatch() {
+    const selected = selectedInviteIds.slice(0, MAX_INVITES_PER_BATCH)
+      .map((id) => participants.find((person) => person.id === id))
+      .filter((person): person is PersonRow => Boolean(person));
+    if (!selected.length) return;
+    setConfirmInviteBatch(false);
+    setSendingInviteBatch(true);
+    setInviteBatchResults([]);
+    setInviteBatchProgress({ completed: 0, total: selected.length });
+    const results: Array<{ personId: string; name: string; ok: boolean; message: string }> = [];
+    for (const person of selected) {
+      const response = await api<{ result?: string }>(`/api/admin/people/${person.id}/invite`, { method: "POST", body: { resend: false } });
+      const ok = response.ok;
+      const message = ok
+        ? response.data.result === "already_sent" ? "Already sent." : "Invite sent."
+        : response.data.error ?? "The invite outcome could not be confirmed. Check this person's status before retrying.";
+      results.push({ personId: person.id, name: person.name, ok, message });
+      setInviteBatchResults([...results]);
+      setInviteBatchProgress({ completed: results.length, total: selected.length });
+    }
+    setSendingInviteBatch(false);
+    setInviteBatchProgress(null);
+    setSelectedInviteIds([]);
+    const sent = results.filter((result) => result.ok && result.message === "Invite sent.").length;
+    const alreadySent = results.filter((result) => result.ok && result.message === "Already sent.").length;
+    const failed = results.length - results.filter((result) => result.ok).length;
+    const summary = [sent ? `${sent} sent` : "", alreadySent ? `${alreadySent} already sent` : "", failed ? `${failed} need review` : ""].filter(Boolean).join("; ");
+    toast(`${summary || "No invitation changes"}. See individual outcomes below.`, failed ? "err" : "ok");
+    refresh();
+  }
 
   async function loadMore() {
     if (!nextCursor || loadingMore) return;
@@ -60,6 +110,15 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>
       </div>
 
+      {canSendInviteBatch && (eligibleInvitees.length > 0 || inviteBatchResults.length > 0) && <div className="card stack" style={{ padding: 14 }}>
+        <div className="row wrap" style={{ justifyContent: "space-between" }}>
+          <div><strong>Send invitations to a selected group</strong><div className="hint">Select up to {MAX_INVITES_PER_BATCH} loaded people with an email and no sent or unconfirmed attempt. Sending is sequential; prior sends remain on each person's individual controls.</div></div>
+          <div className="row wrap"><button className="btn sm" type="button" disabled={sendingInviteBatch} onClick={() => setSelectedInviteIds(eligibleInvitees.slice(0, MAX_INVITES_PER_BATCH).map((person) => person.id))}>Select up to {MAX_INVITES_PER_BATCH}</button><button className="btn sm" type="button" disabled={sendingInviteBatch || selectedInviteIds.length === 0} onClick={() => setSelectedInviteIds([])}>Clear</button><button className="btn sm primary" type="button" disabled={sendingInviteBatch || selectedInviteIds.length === 0} onClick={() => setConfirmInviteBatch(true)}>Send {selectedInviteIds.length || "selected"} invites</button></div>
+        </div>
+        {inviteBatchProgress && <p role="status" aria-live="polite">Sending invitations ({inviteBatchProgress.completed} of {inviteBatchProgress.total} outcomes complete)…</p>}
+        {inviteBatchResults.length > 0 && <div className="callout" role="status" aria-live="polite"><div><strong>Invitation outcomes</strong><ul>{inviteBatchResults.map((result) => <li key={result.personId}><strong>{result.name}:</strong> {result.message}</li>)}</ul></div></div>}
+      </div>}
+
       {participants.length === 0 ? (
         <div className="card empty">
           <div className="ico"><Icon name="users" size={24} /></div>
@@ -81,6 +140,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
                   <tr key={p.id}>
                     <td className="c-main person-cell">
                       <div className="person-name">{p.name}</div>
+                      {canSendInviteBatch && Boolean(p.email?.trim()) && (p.mail?.state === "unsent" || p.mail?.state === "failed") && <label className="choice" style={{ marginTop: 6 }}><input type="checkbox" aria-label={`Select ${p.name} for invite batch`} checked={selectedInviteIds.includes(p.id)} disabled={sendingInviteBatch || (!selectedInviteIds.includes(p.id) && selectedInviteIds.length >= MAX_INVITES_PER_BATCH)} onChange={() => toggleInviteSelection(p.id)} /><span>Select for invite batch</span></label>}
                       <div className="person-contact">
                         {p.email ? <span>{p.email}</span> : <span className="muted">No email</span>}
                         {p.note && <span className="muted person-note">{p.note}</span>}
@@ -139,6 +199,9 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
           <p className="muted">Their link stops working and the {removing.answered} {removing.answered === 1 ? "answer" : "answers"} they gave are deleted. Export first if you need a copy.</p>
         </Modal>
       )}
+      {confirmInviteBatch && <Modal title={`Send ${selectedInviteIds.length} invitations?`} onClose={() => setConfirmInviteBatch(false)} actions={<><button className="btn" type="button" onClick={() => setConfirmInviteBatch(false)}>Cancel</button><button className="btn primary" type="button" onClick={() => void sendInviteBatch()}>Send invitations</button></>}>
+        <p className="muted">Each selected invitation will be sent one at a time through the normal throttled send flow. You will see an outcome for every person. Sent and unconfirmed invitations are not selected for this batch.</p>
+      </Modal>}
     </div>
   );
 }

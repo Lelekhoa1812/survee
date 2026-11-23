@@ -8,5 +8,9 @@ export const MAX_EXPORT_OUTPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_STREAMED_CSV_OUTPUT_BYTES = 64 * 1024 * 1024;
 /** Maximum people accepted in one atomic add-people request. */
 export const MAX_PEOPLE_PER_BATCH = 100;
+/** Maximum sequential email invitations a host can request at once. */
+export const MAX_INVITES_PER_BATCH = 10;
+/** MCP calls have a 60-second function budget; one send avoids serial SMTP timeouts exceeding it. */
+export const MAX_MCP_INVITES_PER_BATCH = 1;
 export const DEFAULT_PARTICIPANT_PAGE_SIZE = 50;
 export const MAX_PARTICIPANT_PAGE_SIZE = 100;

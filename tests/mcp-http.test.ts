@@ -230,8 +230,8 @@ describe("MCP protocol version negotiation", () => {
     expect(dispatchTool).toHaveBeenCalledTimes(600);
   });
 
-  it("applies a stricter separate limit to analysis and export reads", async () => {
-    const responses = await Promise.all(Array.from({ length: 61 }, () => rpc("tools/call", { name: "analyze_answers" })));
+  it("applies stricter separate limits to analysis, export, and batch invite calls", async () => {
+    const responses = await Promise.all(Array.from({ length: 61 }, () => rpc("tools/call", { name: "send_invites" })));
     const limited = responses.filter(({ status }) => status === 429);
 
     expect(limited).toHaveLength(1);

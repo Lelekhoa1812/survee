@@ -24,7 +24,7 @@ export const MCP_CAPABILITY_INFO: Record<McpCapability, { label: string; descrip
   "questionnaires:manage": { label: "Publish questionnaires", description: "Upload or publish a new questionnaire version, including question block and requiredness changes." },
   "assets:read": { label: "Read workspace images", description: "List image assets and copy their public URLs for questionnaire HTML." },
   "assets:manage": { label: "Manage images", description: "Upload, rename, and delete workspace images used by questionnaires." },
-  "email:send": { label: "Send invitations", description: "Send a private-link invitation email to one respondent." },
+  "email:send": { label: "Send invitations", description: "Send private-link invitation emails to one respondent or a bounded cohort, with per-person outcomes." },
   "email:check": { label: "Check invitation delivery", description: "Check the stored invitation message ID and update its delivery status." },
   "interviews:delete": { label: "Delete interviews", description: "Permanently delete an interview and its associated records." },
 };
@@ -96,6 +96,7 @@ export const MCP_TOOL_CAPABILITIES = {
   reopen_person: "respondents:manage",
   regenerate_link: "respondents:manage",
   send_invite: "email:send",
+  send_invites: "email:send",
   check_invite_delivery: "email:check",
 } as const satisfies Record<string, McpCapability>;
 

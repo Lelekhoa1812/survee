@@ -25,7 +25,7 @@ export const POST = withServerErrors("admin/people/[pid]/[action]", async functi
     if (!body.ok) return body.res;
     const result = await sendInvite({ personId: pid, triggeredBy: "admin", resend: body.data.resend === true });
     if (!result.ok) {
-      const status = result.code === "not_found" ? 404 : result.code === "closed" || result.code === "outcome_unknown" ? 409 : result.code === "attempt_unavailable" || result.code === "rate_limit_unavailable" ? 503 : result.code === "rate_limited" ? 429 : 400;
+      const status = result.code === "not_found" ? 404 : result.code === "closed" || result.code === "outcome_unknown" ? 409 : result.code === "attempt_unavailable" || result.code === "rate_limit_unavailable" || result.code === "preflight_unavailable" ? 503 : result.code === "rate_limited" ? 429 : 400;
       return fail(status, result.error, { code: result.code });
     }
     return json({ ok: true, result: result.result, sentAt: result.sentAt });

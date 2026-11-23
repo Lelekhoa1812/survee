@@ -47,6 +47,22 @@ describe("sendInvite", () => {
     expect(recorded).toHaveLength(0);
   });
 
+  it("reports a participant preflight read failure without implying an ambiguous send", async () => {
+    const { send, deps } = harness(ctx({ email: "ada@example.com" }), {
+      load: async () => { throw new Error("database unavailable"); },
+    });
+    expect(await sendInvite({ personId, triggeredBy: "mcp" }, deps)).toMatchObject({ ok: false, code: "preflight_unavailable" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("does not send when the tenant rate-limit scope cannot be verified", async () => {
+    const { send, deps } = harness(ctx({ email: "ada@example.com" }), {
+      tenantId: async () => { throw new Error("database unavailable"); },
+    });
+    expect(await sendInvite({ personId, triggeredBy: "mcp" }, deps)).toMatchObject({ ok: false, code: "preflight_unavailable" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("refuses a closed interview without a mail row", async () => {
     const { send, recorded, deps } = harness(ctx({ email: "ada@example.com", status: "closed" }));
     const result = await sendInvite({ personId, triggeredBy: "mcp" }, deps);
@@ -99,6 +115,20 @@ describe("sendInvite", () => {
     resolveLog();
     expect(await result).toMatchObject({ ok: true, result: "sent" });
     expect(logged).toBe(true);
+  });
+
+  it("keeps the confirmed send result when audit persistence fails", async () => {
+    const { send, deps } = harness(ctx({ email: "ada@example.com" }), {
+      log: async () => { throw new Error("audit store unavailable"); },
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await sendInvite({ personId, triggeredBy: "admin" }, deps)).toMatchObject({ ok: true, result: "sent" });
+      expect(send).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledWith("[audit] invite event persistence failed");
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it("does not send again until resend is asked", async () => {

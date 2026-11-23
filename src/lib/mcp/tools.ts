@@ -9,10 +9,11 @@ import { getInterviewPackage, INTERVIEW_PACKAGES } from "../interview-packages";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
 import { EXPORT_FORMATS, exportInterview, ExportOutputSizeLimitError, type ExportFormat } from "../export";
-import { MAX_EXPORT_OUTPUT_BYTES, MAX_PEOPLE_PER_BATCH } from "../participant-limits";
+import { MAX_EXPORT_OUTPUT_BYTES, MAX_MCP_INVITES_PER_BATCH, MAX_PEOPLE_PER_BATCH } from "../participant-limits";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
 import { sendInvite } from "../mail/invite";
+import { sendInviteBatch, validateInviteBatch } from "../mail/invite-batch";
 import { inviteLink } from "../mail/policy";
 import { currentMail } from "../mail/state";
 import {
@@ -1787,6 +1788,24 @@ const TOOLS: ToolDef[] = [
       const result = await sendInvite({ personId: id, triggeredBy: "mcp", resend: args.resend === true });
       if (!result.ok) return err(result.error, result.code);
       return ok({ result: result.result, to: result.to, sentAt: result.sentAt, messageId: result.messageId ?? null, interviewId: result.interviewId, personId: result.personId });
+    },
+  },
+  {
+    name: "send_invites",
+    description: `Verify that one explicitly selected person belongs to the stated interview, then email their private-link invitation. This tool is limited to one send per call to fit the MCP function budget; use separate calls for additional people. Per-person throttles and pending-outcome safeguards still apply; sent links return already_sent and unconfirmed attempts are not retried automatically.`,
+    inputSchema: obj({
+      interviewId: str,
+      personIds: { type: "array", minItems: 1, maxItems: MAX_MCP_INVITES_PER_BATCH, items: str },
+    }, ["interviewId", "personIds"]),
+    guard(args) {
+      const error = validateInviteBatch(args.interviewId, args.personIds, MAX_MCP_INVITES_PER_BATCH);
+      return error ? err(error, "invalid_args") : null;
+    },
+    async run(args) {
+      const error = validateInviteBatch(args.interviewId, args.personIds, MAX_MCP_INVITES_PER_BATCH);
+      if (error) return err(error, "invalid_args");
+      const result = await sendInviteBatch({ interviewId: args.interviewId as string, personIds: args.personIds as string[], triggeredBy: "mcp" });
+      return ok({ interviewId: args.interviewId, requestedCount: result.outcomes.length, outcomes: result.outcomes });
     },
   },
   {

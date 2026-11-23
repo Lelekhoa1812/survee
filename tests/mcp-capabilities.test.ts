@@ -15,6 +15,7 @@ describe("MCP credential capabilities", () => {
     expect(canCallMcpTool("extract_design_profile", DEFAULT_MCP_CAPABILITIES)).toBe(true);
     expect(canCallMcpTool("get_answers", DEFAULT_MCP_CAPABILITIES)).toBe(false);
     expect(canCallMcpTool("send_invite", DEFAULT_MCP_CAPABILITIES)).toBe(false);
+    expect(canCallMcpTool("send_invites", DEFAULT_MCP_CAPABILITIES)).toBe(false);
     expect(canCallMcpTool("delete_interview", DEFAULT_MCP_CAPABILITIES)).toBe(false);
   });
 

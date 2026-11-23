@@ -15,7 +15,7 @@ const MCP_TOOL_CALL_LIMIT = 600;
 const MCP_EXPENSIVE_TOOL_CALL_LIMIT = 60;
 const MCP_IP_TOOL_CALL_LIMIT = 6_000;
 const MCP_IP_EXPENSIVE_TOOL_CALL_LIMIT = 240;
-const EXPENSIVE_MCP_TOOLS = new Set(["analyze_answers", "export_interview", "get_answers", "list_people"]);
+const EXPENSIVE_MCP_TOOLS = new Set(["analyze_answers", "export_interview", "get_answers", "list_people", "send_invites"]);
 
 export function unauthorized(req: Request): Response {
   return new Response(JSON.stringify({ error: "Unauthorized." }), {

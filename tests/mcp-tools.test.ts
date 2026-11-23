@@ -541,6 +541,8 @@ describe("MCP tools", () => {
     expect(tools.find((tool) => tool.name === "get_interview_packages")?.inputSchema.properties).toMatchObject({ packageId: { type: "string", enum: expect.arrayContaining(["product-discovery", "personal-wellbeing-reflection", "industrial-operations"]) } });
     expect(tools.find((tool) => tool.name === "delete_interview")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(tools.find((tool) => tool.name === "send_invite")?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
+    const sendInvitesProperties = tools.find((tool) => tool.name === "send_invites")!.inputSchema.properties as Record<string, unknown>;
+    expect(sendInvitesProperties.personIds).toMatchObject({ maxItems: 1, minItems: 1 });
   });
 
   it("publishes the preview token as required for questionnaire patch application", async () => {
@@ -1169,6 +1171,28 @@ describe("MCP tools", () => {
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.error).toMatch(/one person/i);
     expect(sent).toHaveLength(0);
+  });
+
+  it("sends a bounded selected invite batch and returns one outcome per person", async () => {
+    const res = await call("send_invites", { interviewId, personIds: [personId] });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { requestedCount?: number; outcomes?: { personId: string; ok: boolean; result?: string }[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.requestedCount).toBe(1);
+    expect(body.result.structuredContent.outcomes).toEqual([expect.objectContaining({ personId, ok: true, result: "sent" })]);
+    expect(sent).toHaveLength(1);
+
+    const invalid = await call("send_invites", { interviewId, personIds: [personId, personId] });
+    const invalidBody = await invalid.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(invalidBody.result.isError).toBe(true);
+    expect(invalidBody.result.structuredContent.code).toBe("invalid_args");
+    expect(sent).toHaveLength(1);
+
+    const overLimit = await call("send_invites", { interviewId, personIds: ["aaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbb"] });
+    const overLimitBody = await overLimit.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(overLimitBody.result.isError).toBe(true);
+    expect(overLimitBody.result.structuredContent.code).toBe("invalid_args");
+    expect(sent).toHaveLength(1);
   });
 
   it("checks delivery through the mocked IMAP client and only for the stored id", async () => {

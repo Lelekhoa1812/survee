@@ -10,7 +10,7 @@ import { currentMail, type MailRecord } from "./state";
 import { newMessageId, sendSmtp, type OutboundMail } from "./smtp";
 import { inviteMessage } from "./template";
 
-export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "outcome_unknown" | "attempt_unavailable";
+export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "preflight_unavailable" | "outcome_unknown" | "attempt_unavailable";
 
 export type SendInviteResult =
   | { ok: true; result: "sent" | "already_sent"; to: string; sentAt: string; messageId?: string; interviewId: string; personId: string }
@@ -32,6 +32,7 @@ export interface SendInviteDeps {
   log?: (interviewId: string, participantId: string, result: "sent" | "failed", domain: string) => Promise<void>;
   linkFor?: (token: string) => { ok: true; link: string } | { ok: false; error: string };
   smtpReady?: () => { ok: true; from: string } | { ok: false; error: string };
+  tenantId?: () => Promise<string | null>;
   rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
 }
 
@@ -64,7 +65,12 @@ async function logInvite(interviewId: string, participantId: string, result: "se
 
 /** One durable mail attempt is recorded before SMTP. Refusals never create an attempt. */
 export async function sendInvite(input: { personId: string; triggeredBy: "admin" | "mcp"; resend?: boolean }, deps: SendInviteDeps = {}): Promise<SendInviteResult> {
-  const ctx = await (deps.load ?? loadFromDb)(input.personId);
+  let ctx: InviteContext | null;
+  try {
+    ctx = await (deps.load ?? loadFromDb)(input.personId);
+  } catch {
+    return { ok: false, code: "preflight_unavailable", error: "Could not verify this person's interview and invitation status before sending. No message was sent." };
+  }
   if (!ctx) return { ok: false, code: "not_found", error: "Person not found." };
   const parsed = parseEmail(ctx.person.email ?? "");
   if (!parsed.ok) return { ok: false, code: "no_email", error: parsed.error };
@@ -72,7 +78,12 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   if (ctx.interview.status !== "open") {
     return { ok: false, code: "closed", error: "This interview is closed, so the link would not open. Reopen it before sending." };
   }
-  const link = (deps.linkFor ?? inviteLink)(ctx.person.token);
+  let link: ReturnType<NonNullable<SendInviteDeps["linkFor"]>>;
+  try {
+    link = (deps.linkFor ?? inviteLink)(ctx.person.token);
+  } catch {
+    return { ok: false, code: "preflight_unavailable", error: "Could not prepare this person's invitation link before sending. No message was sent." };
+  }
   if (!link.ok) return { ok: false, code: "no_public_url", error: link.error };
   const current = currentMail({ email: parsed.email, token: ctx.person.token }, ctx.rows);
   if (current.state === "sent" && !input.resend) {
@@ -81,13 +92,23 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   if (current.state === "pending" && !input.resend) {
     return { ok: false, code: "outcome_unknown", error: "The previous invite outcome is unconfirmed. Check mail status; sending again may deliver a duplicate.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
-  const ready = deps.smtpReady ? deps.smtpReady() : (() => {
-    const cfg = smtpSettings();
-    return cfg.ok ? { ok: true as const, from: cfg.user } : { ok: false as const, error: cfg.error };
-  })();
+  let ready: ReturnType<NonNullable<SendInviteDeps["smtpReady"]>>;
+  try {
+    ready = deps.smtpReady ? deps.smtpReady() : (() => {
+      const cfg = smtpSettings();
+      return cfg.ok ? { ok: true as const, from: cfg.user } : { ok: false as const, error: cfg.error };
+    })();
+  } catch {
+    return { ok: false, code: "preflight_unavailable", error: "Could not verify mail settings before sending. No message was sent." };
+  }
   if (!ready.ok) return { ok: false, code: "mail_not_configured", error: ready.error };
 
-  const tenantId = await currentTenantId();
+  let tenantId: string | null;
+  try {
+    tenantId = await (deps.tenantId ?? currentTenantId)();
+  } catch {
+    return { ok: false, code: "preflight_unavailable", error: "Could not verify the invitation rate-limit scope before sending. No message was sent." };
+  }
   if (!tenantId && !deps.rateLimit) return { ok: false, code: "rate_limit_unavailable", error: "Invite sending is temporarily unavailable. Try again." };
   const scope = tenantId ?? "test-scope";
   const consume = deps.rateLimit ?? consumeRateLimit;
@@ -137,6 +158,10 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   } catch {
     return { ok: false, code: "outcome_unknown", error: "The invite outcome is unconfirmed. Check mail status; sending again may deliver a duplicate.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
-  await (deps.log ?? logInvite)(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
+  try {
+    await (deps.log ?? logInvite)(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
+  } catch {
+    console.error("[audit] invite event persistence failed");
+  }
   return { ok: true, result: "sent", to: parsed.email, sentAt: base.sentAt.toISOString(), messageId: sent.messageId, interviewId: ctx.interview.id, personId: ctx.person.id };
 }
