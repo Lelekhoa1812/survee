@@ -122,7 +122,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `remove_person` | Remove the person, their answers, and their invite history |
 | `reopen_person` | Unlock a submitted person |
 | `regenerate_link` | New private link. The old one stops working. Nothing is emailed automatically |
-| `get_answers` | Answers for review, with the label a host would read. A supplied `personId` reads only that tenant-scoped person; interview-wide reads above 100 people fail with `participant_read_limit`. Includes repeat-group records separately when present. No score |
+| `get_answers` | Answers for review, with the label a host would read. A supplied `personId` reads only that tenant-scoped person; interview-wide reads are paginated (default 50, maximum 100) with `cursor`/`nextCursor`. Includes repeat-group records separately when present. No score |
 | `analyze_answers` | Current-version descriptive summaries with participant scope, denominators, missingness, repeatable aggregate pagination, optional side-by-side status groups, and optional answer segmentation for up to 20 outcomes from one scan; repeat rows are excluded and never count as participants; no raw text or score |
 | `get_status` | Open or closed, aggregate counts for the full interview, and one bounded newest-first progress page; pass `nextCursor` as `cursor` to continue |
 | `list_events` | Recent audit rows |
@@ -203,8 +203,8 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `asset_unavailable` | A questionnaire candidate references an image missing from this workspace. Upload it again or remove the asset URL, then preview the candidate again. |
 | `invalid_image` | The upload is not an accepted image type. |
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
-| `participant_read_limit` | A full export or interview-wide answer read has more than 100 people. The result is not truncated; use `list_people` pages, a single-person answer read, or aggregate tools. |
-| `participant_cursor_invalid` | The participant page cursor is malformed. Restart the read without a cursor. |
+| `participant_read_limit` | A full export has more than 100 people. The result is not truncated; use aggregate tools or read answers with `get_answers` cursor pages. |
+| `participant_cursor_invalid` | A participant or answer page cursor is malformed. Restart the read without a cursor. |
 | `docs_unavailable` | Bundled documentation could not be read. Try again later. |
 | `server_error` | An unexpected failure inside the tool. The server logs the error type only. A write may have partly completed, so read the current state (for example `get_interview`, `list_people` or `list_versions`) before retrying. |
 | `invalid_css` / `invalid_json` / `invalid_input` / `too_large` / `no_tokens` | `extract_design_profile` could not read the source: unsupported CSS, malformed token JSON, a missing or wrong input, a source over 32 KiB, or no supported tokens found. Fix the source and call again. |

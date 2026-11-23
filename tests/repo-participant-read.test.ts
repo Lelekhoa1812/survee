@@ -95,4 +95,14 @@ describe("cursor participant pages", () => {
     await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", "x".repeat(300))))
       .rejects.toThrow("cursor is invalid or expired");
   });
+
+  it("applies submittedOnly before paging so pages are not sparse or silently incomplete", async () => {
+    const submitted = { ...person("000000000000000000000004", "2026-01-04T00:00:00.000Z"), status: "submitted" };
+    mocks.pageDocs = [[submitted]];
+
+    const page = await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 10, true));
+
+    expect(page.people.map((row) => row.status)).toEqual(["submitted"]);
+    expect((mocks.filters[0].$and as Record<string, unknown>[])[1].status).toBe("submitted");
+  });
 });

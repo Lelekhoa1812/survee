@@ -548,20 +548,35 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "get_answers",
-    description: "Read answers for review. Each answer's eligible flag is inferred from the current survey rules and saved answers, not historical display; retained inactive values and repeat records are still returned. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present; use the matching question's eligible flag. Assigned question-order groups are returned separately by survey version, including unanswered questions. There is no score.",
-    inputSchema: obj({ interviewId: str, personId: str, submittedOnly: bool }, ["interviewId"]),
+    description: "Read answers for review. Interview-wide reads return a bounded page (default 50, maximum 100); pass nextCursor back as cursor until it is null. Each answer's eligible flag is inferred from the current survey rules and saved answers, not historical display; retained inactive values and repeat records are still returned. display is the label a host sees. Repeat records are returned separately as recordGroups keyed by question ID, with ordered {id, values} rows when present; use the matching question's eligible flag. Assigned question-order groups are returned separately by survey version, including unanswered questions. There is no score.",
+    inputSchema: obj({ interviewId: str, personId: str, submittedOnly: bool, cursor: str, limit: { type: "integer", minimum: 1, maximum: 100 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      if (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 256)) return err("cursor must be a valid nextCursor value returned by get_answers.", "invalid_args");
+      const cursor = args.cursor === undefined ? null : args.cursor.trim() || null;
+      if (args.cursor !== undefined && !cursor) return err("cursor must be the nextCursor value returned by get_answers.", "invalid_args");
+      if (args.limit !== undefined && (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1 || args.limit > 100)) return err("limit must be an integer from 1 to 100.", "invalid_args");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       const version = await getVersion(interview._id, interview.currentVersion);
       if (!version) return err("Survey version not found.", "not_found");
       const only = asString(args.personId, 40);
-      let people = only
-        ? await getParticipant(only).then((person) => person?.interviewId === interview._id.toHexString() ? [person] : [])
-        : await listParticipants(id);
-      if (args.submittedOnly === true) people = people.filter((p) => p.status === "submitted");
+      let people;
+      let nextCursor: string | null = null;
+      if (only) {
+        const person = await getParticipant(only);
+        people = person?.interviewId === interview._id.toHexString() && (args.submittedOnly !== true || person.status === "submitted") ? [person] : [];
+      } else {
+        try {
+          const page = await listParticipantPage(id, cursor, typeof args.limit === "number" ? args.limit : 50, args.submittedOnly === true);
+          people = page.people;
+          nextCursor = page.nextCursor;
+        } catch (error) {
+          if (error instanceof ParticipantCursorError) return err(error.message, "participant_cursor_invalid");
+          throw error;
+        }
+      }
       const rows = people.map((p) => {
         const eligible = evaluateEligibility(version.manifest, p.answers, p.recordGroups);
         const recordGroups = Object.fromEntries(
@@ -582,7 +597,7 @@ const TOOLS: ToolDef[] = [
           ...(p.questionOrderAssignments?.length ? { questionOrderAssignments: p.questionOrderAssignments } : {}),
         };
       });
-      return ok({ interviewStatus: interview.status, people: rows });
+      return ok({ interviewStatus: interview.status, people: rows, nextCursor });
     },
   },
   {

@@ -296,6 +296,7 @@ export async function listParticipantPage(
   interviewId: string,
   cursor: string | null = null,
   requestedLimit = DEFAULT_PARTICIPANT_PAGE_SIZE,
+  submittedOnly = false,
 ): Promise<{ people: ParticipantView[]; nextCursor: string | null }> {
   const oid = toOid(interviewId);
   if (!oid) return { people: [], nextCursor: null };
@@ -303,7 +304,7 @@ export async function listParticipantPage(
   if (!tenantId) return { people: [], nextCursor: null };
   const limit = Math.max(1, Math.min(MAX_PARTICIPANT_PAGE_SIZE, Math.floor(requestedLimit) || DEFAULT_PARTICIPANT_PAGE_SIZE));
   const participants = await col.participants();
-  const filter: Record<string, unknown> = { interviewId: oid };
+  const filter: Record<string, unknown> = { interviewId: oid, ...(submittedOnly ? { status: "submitted" } : {}) };
   if (cursor !== null) {
     const anchor = decodeParticipantCursor(cursor);
     filter.$or = [

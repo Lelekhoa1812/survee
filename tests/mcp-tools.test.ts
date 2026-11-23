@@ -212,10 +212,10 @@ describe("MCP tools", () => {
       }],
     };
     vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest: repeatManifest } as never);
-    vi.mocked(listParticipants).mockResolvedValueOnce([{
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [{
       id: personId, name: "Ada Lovelace", status: "submitted", answers: {},
       recordGroups: { assets: [{ id: "row-stable-1", values: { name: "Pump 4" }, revision: 8, fieldRevisions: { name: 5 } }] },
-    }] as never);
+    }] as never, nextCursor: null });
     const response = await call("get_answers", { interviewId });
     const body = await response.json() as { result: { structuredContent: { people: { answers: unknown[]; recordGroups?: Record<string, { id: string; values: Record<string, string | number> }[]> }[] } } };
     expect(body.result.structuredContent.people[0].recordGroups).toEqual({ assets: [{ id: "row-stable-1", values: { name: "Pump 4" } }] });
@@ -224,17 +224,44 @@ describe("MCP tools", () => {
   });
 
   it("preserves the legacy get_answers person shape when no repeat rows exist", async () => {
-    vi.mocked(listParticipants).mockResolvedValueOnce([{
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [{
       id: personId, name: "Ada Lovelace", status: "submitted", answers: {},
-    }] as never);
+    }] as never, nextCursor: null });
     const response = await call("get_answers", { interviewId });
     const body = await response.json() as { result: { structuredContent: { people: Record<string, unknown>[] } } };
     expect(body.result.structuredContent.people[0]).not.toHaveProperty("recordGroups");
     expect(Object.keys(body.result.structuredContent.people[0])).toEqual(["id", "name", "status", "submittedAt", "answers"]);
   });
 
+  it("pages interview-wide get_answers results with the returned cursor", async () => {
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [{
+      id: personId, name: "Ada Lovelace", status: "submitted", answers: {},
+    }] as never, nextCursor: "next-page" });
+    const response = await call("get_answers", { interviewId, limit: 1 });
+    const body = await response.json() as { result: { structuredContent: { nextCursor: string | null; people: unknown[] } } };
+
+    expect(body.result.structuredContent.nextCursor).toBe("next-page");
+    expect(body.result.structuredContent.people).toHaveLength(1);
+    expect(listParticipantPage).toHaveBeenCalledWith(interviewId, null, 1, false);
+  });
+
+  it("uses submittedOnly as a database filter while paging answers", async () => {
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [], nextCursor: null });
+    await call("get_answers", { interviewId, submittedOnly: true, cursor: "page-2", limit: 25 });
+
+    expect(listParticipantPage).toHaveBeenCalledWith(interviewId, "page-2", 25, true);
+  });
+
+  it("rejects malformed get_answers cursors without reading the repository", async () => {
+    const response = await call("get_answers", { interviewId, cursor: "   " });
+    const body = await response.json() as { result: { structuredContent: { code: string } } };
+
+    expect(body.result.structuredContent.code).toBe("invalid_args");
+    expect(listParticipantPage).not.toHaveBeenCalled();
+  });
+
   it("loads one requested get_answers person directly, even when the interview list exceeds the read limit", async () => {
-    vi.mocked(listParticipants).mockReset().mockImplementation(async () => { throw new ParticipantReadLimitError(); });
+    vi.mocked(listParticipantPage).mockReset().mockResolvedValue({ people: [], nextCursor: null });
     vi.mocked(getParticipant).mockClear().mockResolvedValueOnce({
       id: personId, interviewId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes" } },
     } as never);
@@ -244,11 +271,7 @@ describe("MCP tools", () => {
     expect(body.result.isError).not.toBe(true);
     expect(body.result.structuredContent.people).toMatchObject([{ id: personId, status: "submitted" }]);
     expect(getParticipant).toHaveBeenCalledWith(personId);
-    expect(listParticipants).not.toHaveBeenCalled();
-    vi.mocked(listParticipants).mockReset().mockResolvedValue([
-      { id: personId, name: "Ada Lovelace", status: "submitted", answers: {} },
-      { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: {} },
-    ] as never);
+    expect(listParticipantPage).not.toHaveBeenCalled();
   });
 
   it("honors submittedOnly for a targeted get_answers person", async () => {
@@ -256,7 +279,7 @@ describe("MCP tools", () => {
     const response = await call("get_answers", { interviewId, personId, submittedOnly: true });
     const body = await response.json() as { result: { structuredContent: { people: unknown[] } } };
     expect(body.result.structuredContent.people).toEqual([]);
-    expect(listParticipants).not.toHaveBeenCalled();
+    expect(listParticipantPage).not.toHaveBeenCalled();
   });
 
   it("labels current eligibility without discarding retained answers or repeat rows", async () => {
@@ -267,10 +290,10 @@ describe("MCP tools", () => {
       { id: "missing", type: "text", label: "Unanswered" },
     ] };
     vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest } as never);
-    vi.mocked(listParticipants).mockResolvedValueOnce([
+    vi.mocked(listParticipantPage).mockResolvedValueOnce({ people: [
       { id: personId, name: "Ada", status: "in_progress", answers: { gate: { value: "no" }, details: { value: "Retained" } }, recordGroups: { assets: [{ id: "r1", values: { name: "Pump" }, revision: 0, fieldRevisions: {} }] } },
       { id: anotherPersonId, name: "Grace", status: "in_progress", answers: { gate: { value: "yes" }, details: { value: "Current" } }, recordGroups: { assets: [{ id: "r2", values: { name: "Valve" }, revision: 0, fieldRevisions: {} }] } },
-    ] as never);
+    ] as never, nextCursor: null });
     const response = await call("get_answers", { interviewId });
     const body = await response.json() as { result: { structuredContent: { people: { answers: { questionId: string; eligible: boolean; value: unknown }[]; recordGroups: Record<string, { id: string; values: Record<string, string> }[]> }[] } } };
     const [inactive, active] = body.result.structuredContent.people;
