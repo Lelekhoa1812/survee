@@ -2,7 +2,7 @@ import { EXPORT_FORMATS, exportFilename, exportInterview, ExportOutputSizeLimitE
 import { encodeCsvRow } from "@/lib/export/csv";
 import { LONG_HEADER, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
-import { getInterview, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError } from "@/lib/repo";
+import { getInterview, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError, recordExportEvent } from "@/lib/repo";
 import { MAX_EXPORT_SOURCE_BYTES, MAX_STREAMED_CSV_OUTPUT_BYTES } from "@/lib/participant-limits";
 import { NextResponse } from "next/server";
 
@@ -33,6 +33,14 @@ async function assertExportSnapshot(id: string, version: number, revision: numbe
   const current = await getInterview(id);
   if (!current || current.currentVersion !== version || (current.respondentWriteRevision ?? 0) !== revision) {
     throw new StaleExportError();
+  }
+}
+
+async function auditExport(id: string, format: ExportFormat): Promise<void> {
+  try {
+    await recordExportEvent(id, format);
+  } catch {
+    console.error("[audit] export event persistence failed");
   }
 }
 
@@ -117,6 +125,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
               }
               if (!page.nextCursor) {
                 await assertExportSnapshot(id, snapshot.version, snapshot.revision);
+                await auditExport(id, format);
                 controller.close();
                 return;
               }
@@ -163,6 +172,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     throw error;
   }
   const body = typeof file.body === "string" ? file.body : new Uint8Array(file.body);
+  await auditExport(id, format);
   return new NextResponse(body, {
     headers: { "Content-Type": file.contentType, "Content-Disposition": `attachment; filename="${file.filename.replace(/"/g, "")}"`, "Cache-Control": "no-store" },
   });

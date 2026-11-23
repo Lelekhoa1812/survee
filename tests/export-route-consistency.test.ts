@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   manifest: null as Record<string, any> | null,
   assignment: null as Record<string, any> | null,
   denied: null as Response | null,
+  exportEvents: [] as { id: string; format: string }[],
   participant: {
     id: "participant-1", name: "Alex", status: "invited", createdAt: "2026-01-01T00:00:00.000Z",
     answers: {},
@@ -39,6 +40,7 @@ vi.mock("@/lib/repo", () => ({
       : state.participant;
     return { people: [participant], nextCursor: !state.singlePage && state.pageReads === 1 ? "next" : null };
   },
+  recordExportEvent: async (id: string, format: string) => { state.exportEvents.push({ id, format }); return true; },
   ParticipantExportSizeLimitError: class ParticipantExportSizeLimitError extends Error {},
   ParticipantReadLimitError: class ParticipantReadLimitError extends Error {},
 }));
@@ -61,6 +63,7 @@ beforeEach(() => {
   state.manifest = null;
   state.assignment = null;
   state.denied = null;
+  state.exportEvents.length = 0;
 });
 
 describe("export revision checks", () => {
@@ -71,6 +74,7 @@ describe("export revision checks", () => {
     const body = await response.text();
     expect(body).toContain("Alex");
     expect(state.pageReads).toBe(2);
+    expect(state.exportEvents).toEqual([{ id: "interview-id", format: "csv-wide" }]);
   });
 
   it("errors the CSV stream when respondent data changes between pages", async () => {
@@ -81,6 +85,7 @@ describe("export revision checks", () => {
     expect(response.status).toBe(200);
     await expect(response.text()).rejects.toThrow("Interview data changed while the export was being created");
     expect(state.pageReads).toBe(1);
+    expect(state.exportEvents).toEqual([]);
   });
 
   it("checks the revision immediately before closing a single-page CSV stream", async () => {
@@ -92,6 +97,7 @@ describe("export revision checks", () => {
     expect(response.status).toBe(200);
     await expect(response.text()).rejects.toThrow("Interview data changed while the export was being created");
     expect(state.pageReads).toBe(1);
+    expect(state.exportEvents).toEqual([]);
   });
 
   it.each(["csv-wide", "csv-long"] as const)("keeps question-order assignment metadata in streamed %s exports", async (format) => {
@@ -144,5 +150,13 @@ describe("export revision checks", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ ok: false, code: "export_stale" });
+    expect(state.exportEvents).toEqual([]);
+  });
+
+  it("records a minimal audit event after a successful buffered export", async () => {
+    const response = await GET(request("json"), params);
+
+    expect(response.status).toBe(200);
+    expect(state.exportEvents).toEqual([{ id: "interview-id", format: "json" }]);
   });
 });
