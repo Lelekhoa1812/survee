@@ -26,11 +26,12 @@ vi.mock("../src/lib/db", () => ({
         state.buckets.set(_id, next);
         return next;
       },
+      deleteOne: async ({ _id }: { _id: string }) => ({ deletedCount: Number(state.buckets.delete(_id)) }),
     }),
   },
 }));
 
-import { consumeRateLimit } from "../src/lib/repo";
+import { clearRateLimit, consumeRateLimit } from "../src/lib/repo";
 
 describe("atomic request rate limits", () => {
   beforeEach(() => {
@@ -69,6 +70,12 @@ describe("atomic request rate limits", () => {
     state.duplicateUpserts = 1;
     await expect(consumeRateLimit("signup-ip:192.0.2.3", 1)).resolves.toBe(true);
     expect(state.buckets).toHaveProperty("size", 1);
+  });
+
+  it("clears the hashed attempt bucket after a successful login", async () => {
+    await consumeRateLimit("admin-login:ip:192.0.2.4", 8);
+    await clearRateLimit("admin-login:ip:192.0.2.4");
+    expect(state.buckets).toHaveProperty("size", 0);
   });
 
   it("rejects invalid limits instead of silently accepting attempts", async () => {

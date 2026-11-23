@@ -1,6 +1,6 @@
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
 import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
-import { clearLoginFailures, loginBlocked, recordLoginFailure } from "@/lib/repo";
+import { clearRateLimit, consumeRateLimit } from "@/lib/repo";
 import { authenticateAccount, bootstrapLegacyAxionOwner } from "@/lib/repo/accounts";
 import { headers } from "next/headers";
 
@@ -23,8 +23,8 @@ export const POST = withServerErrors("admin/login", async function POST(req: Req
 
   const ipKey = `ip:${clientIp(await headers())}`;
   try {
-    // A source-specific limit contains repeated guesses without letting failures from unrelated users lock out every account.
-    if (await loginBlocked(ipKey, 8)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
+    // Reserve atomically before password verification so concurrent guesses cannot all pass a count-then-insert check.
+    if (!await consumeRateLimit(`admin-login:${ipKey}`, 8, 15)) return fail(429, "Too many attempts. Wait a few minutes and try again.");
   } catch (e) {
     console.error("login throttle unavailable", (e as Error).message);
     return fail(503, GENERIC_UNAVAILABLE); // fail closed: with no way to count attempts, do not accept guesses
@@ -33,12 +33,11 @@ export const POST = withServerErrors("admin/login", async function POST(req: Req
   let principal = await authenticateAccount(email, password);
   if (!principal) principal = await bootstrapLegacyAxionOwner(email, password);
   if (!principal) {
-    await recordLoginFailure(ipKey).catch(() => {});
     return fail(401, "That email and password do not match.");
   }
   const session = createSession(principal);
   if (!session) return fail(503, GENERIC_UNAVAILABLE);
-  await clearLoginFailures(ipKey).catch(() => {});
+  await clearRateLimit(`admin-login:${ipKey}`).catch(() => {});
   const res = json({ ok: true });
   res.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
   return res;

@@ -4,9 +4,9 @@ const state = vi.hoisted(() => ({
   ip: "203.0.113.10",
   blocked: new Set<string>(),
   throttleFails: false,
+  counts: new Map<string, number>(),
   principal: null as null | { userId: string; tenantId: string; email: string; role: "owner" },
   checked: [] as string[],
-  recorded: [] as string[],
   cleared: [] as string[],
 }));
 
@@ -26,13 +26,14 @@ vi.mock("@/lib/http", () => ({
   str: (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : undefined,
 }));
 vi.mock("@/lib/repo", () => ({
-  loginBlocked: async (key: string) => {
+  consumeRateLimit: async (key: string, maximum: number) => {
     state.checked.push(key);
     if (state.throttleFails) throw new Error("database unavailable");
-    return state.blocked.has(key);
+    const count = (state.counts.get(key) ?? 0) + 1;
+    state.counts.set(key, count);
+    return !state.blocked.has(key) && count <= maximum;
   },
-  recordLoginFailure: async (key: string) => { state.recorded.push(key); },
-  clearLoginFailures: async (key: string) => { state.cleared.push(key); },
+  clearRateLimit: async (key: string) => { state.cleared.push(key); state.counts.delete(key); },
 }));
 vi.mock("@/lib/repo/accounts", () => ({
   authenticateAccount: async () => state.principal,
@@ -52,10 +53,10 @@ function request() {
 beforeEach(() => {
   state.ip = "203.0.113.10";
   state.blocked.clear();
+  state.counts.clear();
   state.throttleFails = false;
   state.principal = null;
   state.checked.length = 0;
-  state.recorded.length = 0;
   state.cleared.length = 0;
 });
 
@@ -63,28 +64,25 @@ describe("host login throttling", () => {
   it("limits repeated failures by source without a shared account lockout bucket", async () => {
     const failed = await POST(request());
     expect(failed.status).toBe(401);
-    expect(state.checked).toEqual(["ip:203.0.113.10"]);
-    expect(state.recorded).toEqual(["ip:203.0.113.10"]);
+    expect(state.checked).toEqual(["admin-login:ip:203.0.113.10"]);
 
     state.ip = "203.0.113.11";
     state.principal = { userId: "user-1", tenantId: "tenant-1", email: "host@example.test", role: "owner" };
     const allowed = await POST(request());
     expect(allowed.status).toBe(200);
-    expect(state.checked).toEqual(["ip:203.0.113.10", "ip:203.0.113.11"]);
-    expect(state.cleared).toEqual(["ip:203.0.113.11"]);
+    expect(state.checked).toEqual(["admin-login:ip:203.0.113.10", "admin-login:ip:203.0.113.11"]);
+    expect(state.cleared).toEqual(["admin-login:ip:203.0.113.11"]);
   });
 
-  it("continues to block a source after its failure limit is reached", async () => {
-    state.blocked.add("ip:203.0.113.10");
+  it("continues to block a source after its attempt limit is reached", async () => {
+    state.blocked.add("admin-login:ip:203.0.113.10");
     const response = await POST(request());
     expect(response.status).toBe(429);
-    expect(state.recorded).toHaveLength(0);
   });
 
   it("fails closed when the throttle store is unavailable", async () => {
     state.throttleFails = true;
     const response = await POST(request());
     expect(response.status).toBe(503);
-    expect(state.recorded).toHaveLength(0);
   });
 });

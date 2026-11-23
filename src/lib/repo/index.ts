@@ -1052,6 +1052,11 @@ export async function consumeRateLimit(key: string, maxAttempts: number, windowM
   return !!bucket && bucket.count <= maxAttempts;
 }
 
+export async function clearRateLimit(key: string): Promise<void> {
+  const _id = createHash("sha256").update(key).digest("hex");
+  await (await col.rateLimits()).deleteOne({ _id });
+}
+
 export async function revokeSession(sid: string, exp: number): Promise<void> {
   await (await col.revoked()).updateOne({ sid }, { $setOnInsert: { _id: new ObjectId(), sid, expireAt: new Date(exp * 1000) } }, { upsert: true });
 }
