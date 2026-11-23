@@ -39,6 +39,21 @@ describe("basic questionnaire HTML generator", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it("groups assigned questions into checker-valid section lists and escapes section content", () => {
+    const html = generateBasicQuestionnaireHtml({
+      title: "Sectioned questionnaire", description: "A description", sections: [{ id: "work", title: "Work <now>", description: "Focus & progress" }],
+      questions: [{ id: "focus", type: "text", label: "What is your focus?", help: "", required: false, section: "work", options: [] }],
+    });
+    const report = checkHtml(html, { fileName: "generated.html" });
+    expect(report.ok).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+    expect(html).toContain('"sections": [');
+    expect(html).toContain('"section": "work"');
+    expect(html).toContain('<div data-kqa-question-list="work">');
+    expect(html).toContain("Work &lt;now&gt;");
+    expect(html).toContain("Focus &amp; progress");
+  });
+
   it("rejects invalid identifiers, duplicate ids, and malformed choice sets", () => {
     const base = { title: "Questionnaire", description: "", questions: [{ id: "invalid ID", type: "text" as const, label: "Question", help: "", required: false, options: [] }] };
     expect(() => generateBasicQuestionnaireHtml(base)).toThrow(/questions\.0\.id/);

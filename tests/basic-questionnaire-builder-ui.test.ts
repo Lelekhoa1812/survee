@@ -80,4 +80,21 @@ describe("basic questionnaire builder UI", () => {
     expect(html).toContain('<ol class="rank" data-kqa="question-1"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
+
+  it("adds a section, assigns the current question, and emits a checked manifest", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add section");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"id": "section-1"');
+    expect(html).toContain('"section": "section-1"');
+    expect(html).toContain('<div data-kqa-question-list="section-1">');
+    const report = checkHtml(html, { fileName: "generated.html" });
+    expect(report.ok).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+  });
 });

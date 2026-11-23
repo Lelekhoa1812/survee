@@ -8,6 +8,7 @@ export type BasicQuestion = {
   label: string;
   help: string;
   required: boolean;
+  section?: string;
   options: Array<{ value: string; label: string }>;
   min?: number;
   max?: number;
@@ -15,9 +16,12 @@ export type BasicQuestion = {
   maxLength?: number;
 };
 
+export type BasicQuestionSection = { id: string; title: string; description: string };
+
 export type BasicQuestionnaire = {
   title: string;
   description: string;
+  sections?: BasicQuestionSection[];
   questions: BasicQuestion[];
 };
 
@@ -68,10 +72,12 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     format: "kqa/1",
     title: input.title,
     ...(input.description ? { description: input.description } : {}),
+    ...(input.sections?.length ? { sections: input.sections } : {}),
     questions: input.questions.map((question) => ({
       id: question.id,
       type: question.type,
       label: question.label,
+      ...(question.section ? { section: question.section } : {}),
       ...(question.help ? { help: question.help } : {}),
       ...(question.required ? { required: true } : {}),
       ...(["single", "multi", "select", "rank"].includes(question.type) ? { options: question.options } : {}),
@@ -84,7 +90,15 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
   const parsed = manifestSchema.safeParse(manifest);
   if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
   const safeJson = JSON.stringify(parsed.data, null, 2).replace(/</g, "\\u003c");
-  const questions = input.questions.map(control).join("\n\n");
+  const questions = input.sections?.length
+    ? [
+        ...input.sections.map((section) => {
+          const controls = input.questions.map((question, index) => ({ question, index })).filter(({ question }) => question.section === section.id).map(({ question, index }) => control(question, index));
+          return `<section class="question-section"><header class="section-head"><h2>${escapeHtml(section.title)}</h2>${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}</header><div data-kqa-question-list="${escapeHtml(section.id)}">${controls.join("\n\n")}</div></section>`;
+        }),
+        ...input.questions.map((question, index) => ({ question, index })).filter(({ question }) => !question.section).map(({ question, index }) => control(question, index)),
+      ].join("\n\n")
+    : input.questions.map(control).join("\n\n");
   const html = `<!doctype html>
 <html lang="en-AU">
 <head>
@@ -97,7 +111,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); }
     main { width:min(100% - 32px, 760px); margin:28px auto 72px; }
     header { padding:12px 2px 18px; } h1 { font-size:clamp(1.7rem,5vw,2.4rem); line-height:1.2; margin:0 0 8px; }
-    .description { color:var(--muted); margin:0; white-space:pre-wrap; }
+    .description { color:var(--muted); margin:0; white-space:pre-wrap; } .question-section { margin:24px 0; } .section-head { margin:0 0 10px; } .section-head h2 { font-size:1.25rem; } .section-head p { color:var(--muted); white-space:pre-wrap; }
     .question { display:block; min-width:0; margin:14px 0; padding:18px; border:1px solid var(--line); border-radius:16px; background:var(--card); }
     fieldset.question { border:1px solid var(--line); } .question-head { display:flex; align-items:flex-start; gap:10px; margin:0 0 8px; font-weight:650; font-size:1.08rem; }
     .question-head h2,.question-head label { font:inherit; margin:0; } .number { color:var(--accent); font-variant-numeric:tabular-nums; }
@@ -118,7 +132,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
 <body>
   <main>
     <header><h1>${escapeHtml(input.title)}</h1>${input.description ? `<p class="description">${escapeHtml(input.description)}</p>` : ""}</header>
-    <div data-kqa-question-list="">
+    <div${input.sections?.length ? "" : ' data-kqa-question-list=""'}>
 ${questions}
     </div>
   </main>
