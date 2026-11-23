@@ -139,6 +139,36 @@ describe("workspace member access boundary", () => {
     expect(state.listParticipants).not.toHaveBeenCalled();
   });
 
+  it("streams CSV for small cohorts whose total participant data exceeds the buffered budget", async () => {
+    state.role = "owner";
+    state.getInterview.mockResolvedValueOnce({ _id: "0123456789abcdef01234567", name: "Study", currentVersion: 1, mode: "multi", status: "open", createdAt: new Date("2026-01-01T00:00:00.000Z") } as never);
+    state.listParticipants.mockRejectedValueOnce(new state.ParticipantExportSizeLimitError());
+    state.listParticipantPage.mockResolvedValueOnce({ people: [{ id: "large-answer-person", name: "Large answer", status: "submitted", createdAt: "2026-01-01T00:00:00.000Z", answers: {}, recordGroups: {} } as never], nextCursor: null });
+
+    const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=csv-wide"), interviewCtx);
+    expect(response.status).toBe(200);
+    expect(new TextDecoder().decode(await response.arrayBuffer())).toContain("Large answer");
+    expect(state.listParticipantPage).toHaveBeenCalledWith("0123456789abcdef01234567", null, 10, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipants).not.toHaveBeenCalled();
+  });
+
+  it("reduces CSV page size until a large-answer page fits its BSON budget", async () => {
+    state.role = "owner";
+    state.getInterview.mockResolvedValueOnce({ _id: "0123456789abcdef01234567", name: "Study", currentVersion: 1, mode: "multi", status: "open", createdAt: new Date("2026-01-01T00:00:00.000Z") } as never);
+    state.listParticipantPage
+      .mockRejectedValueOnce(new state.ParticipantExportSizeLimitError())
+      .mockRejectedValueOnce(new state.ParticipantExportSizeLimitError())
+      .mockResolvedValueOnce({ people: [{ id: "large-answer-person", name: "Large answer", status: "submitted", createdAt: "2026-01-01T00:00:00.000Z", answers: {}, recordGroups: {} } as never], nextCursor: null });
+
+    const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=csv-long"), interviewCtx);
+    expect(response.status).toBe(200);
+    await response.arrayBuffer();
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(1, "0123456789abcdef01234567", null, 10, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", null, 5, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(3, "0123456789abcdef01234567", null, 2, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipants).not.toHaveBeenCalled();
+  });
+
   it("allows interview summaries and strips respondent records from detail reads", async () => {
     const listResponse = await listInterviews();
     expect(listResponse.status).toBe(200);

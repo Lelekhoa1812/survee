@@ -2,11 +2,24 @@ import { EXPORT_FORMATS, exportFilename, exportInterview, ExportOutputSizeLimitE
 import { encodeCsvRow } from "@/lib/export/csv";
 import { LONG_HEADER, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
-import { getInterview, getInterviewParticipantCounts, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError } from "@/lib/repo";
+import { getInterview, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError } from "@/lib/repo";
 import { MAX_EXPORT_SOURCE_BYTES, MAX_STREAMED_CSV_OUTPUT_BYTES } from "@/lib/participant-limits";
 import { NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+async function csvPage(id: string, cursor: string | null) {
+  // Large answers can make ten documents exceed the hydration budget even when
+  // each respondent is valid. Reduce the page until its lookahead also fits.
+  for (let limit = 10; limit >= 1; limit = Math.max(1, Math.floor(limit / 2))) {
+    try {
+      return await listParticipantPage(id, cursor, limit, false, false, MAX_EXPORT_SOURCE_BYTES);
+    } catch (error) {
+      if (!(error instanceof ParticipantExportSizeLimitError) || limit === 1) throw error;
+    }
+  }
+  throw new Error("CSV export page could not be loaded.");
+}
 
 export const GET = withServerErrors("admin/interviews/[id]/export", async function GET(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ roles: ["owner", "admin"] });
@@ -26,11 +39,10 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     generatedAt: new Date().toISOString(),
   };
   if (format === "csv-wide" || format === "csv-long") {
-    const counts = await getInterviewParticipantCounts(id);
-    if (counts.people > 100) {
+    {
       let firstPage;
       try {
-        firstPage = await listParticipantPage(id, null, 10, false, false, MAX_EXPORT_SOURCE_BYTES);
+        firstPage = await csvPage(id, null);
       } catch (error) {
         if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_page_limit", limitBytes: error.limitBytes });
         return fail(503, "The export could not be started. Try again in a moment.", { code: "export_stream_unavailable" });
@@ -83,7 +95,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
                 return;
               }
               cursor = page.nextCursor;
-              page = await listParticipantPage(id, cursor, 10, false, false, MAX_EXPORT_SOURCE_BYTES);
+              page = await csvPage(id, cursor);
               personIndex = 0;
             }
           } catch (error) {
