@@ -1,0 +1,46 @@
+import { describe, expect, it } from "vitest";
+import { checkHtml } from "../src/lib/diagnostics/static";
+import { generateBasicQuestionnaireHtml, type BasicQuestionnaire } from "../src/lib/builder/basic-questionnaire";
+
+describe("basic questionnaire HTML generator", () => {
+  it("generates checker-clean, unselected native controls for every supported type", () => {
+    const input: BasicQuestionnaire = {
+      title: "New questionnaire",
+      description: "Short description",
+      questions: [
+        { id: "single-choice", type: "single", label: "Pick one", help: "One answer", required: true, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
+        { id: "multi-choice", type: "multi", label: "Pick any", help: "Several answers", required: false, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
+        { id: "dropdown", type: "select", label: "Choose a value", help: "", required: false, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
+        { id: "short-answer", type: "text", label: "Short answer", help: "", required: false, options: [] },
+        { id: "long-answer", type: "longtext", label: "Long answer", help: "", required: false, options: [] },
+        { id: "quantity", type: "number", label: "How many?", help: "", required: false, options: [], min: 0, max: 100 },
+        { id: "rating", type: "scale", label: "How much?", help: "One to five", required: false, options: [], min: 1, max: 5 },
+        { id: "start-date", type: "date", label: "When?", help: "", required: false, options: [] },
+      ],
+    };
+    const html = generateBasicQuestionnaireHtml(input);
+    const report = checkHtml(html, { fileName: "generated.html" });
+    expect(report.ok).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+    expect((html.match(/data-kqa-question-id=/g) ?? [])).toHaveLength(input.questions.length);
+    expect((html.match(/data-kqa="/g) ?? [])).toHaveLength(2 + 2 + 1 + 1 + 1 + 1 + 5 + 1);
+    expect(html).not.toMatch(/<(?:input|option)[^>]*\s(?:checked|selected|required|disabled)(?:\s|=|>)/i);
+  });
+
+  it("escapes questionnaire content in both HTML and the manifest script", () => {
+    const html = generateBasicQuestionnaireHtml({
+      title: "Planning </script><img src=x onerror=alert(1)>", description: "A & B",
+      questions: [{ id: "choice", type: "single", label: "Question <script>", help: "", required: false, options: [{ value: "a", label: "</script><script>" }, { value: "b", label: "Second" }] }],
+    });
+    expect(html).toContain("Planning &lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;");
+    expect(html).toContain('\\u003c/script>');
+    expect(html).not.toContain("<script><img");
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
+
+  it("rejects invalid identifiers, duplicate ids, and malformed choice sets", () => {
+    const base = { title: "Questionnaire", description: "", questions: [{ id: "invalid ID", type: "text" as const, label: "Question", help: "", required: false, options: [] }] };
+    expect(() => generateBasicQuestionnaireHtml(base)).toThrow(/questions\.0\.id/);
+    expect(() => generateBasicQuestionnaireHtml({ ...base, questions: [base.questions[0], { ...base.questions[0], id: "invalid ID" }] })).toThrow();
+  });
+});

@@ -19,7 +19,7 @@ export interface UploadState {
   ok: boolean;
 }
 
-export function Uploader({ interviewId, onChange, compact, disabled = false, initialState }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean; initialState?: UploadState }) {
+export function Uploader({ interviewId, onChange, compact, disabled = false, initialState, generatedFile }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean; initialState?: UploadState; generatedFile?: File }) {
   const [state, setState] = useState<UploadState>(initialState ?? { settled: false, ok: false });
   const [phase, setPhase] = useState<"idle" | "static" | "live">("idle");
   const [error, setError] = useState("");
@@ -66,6 +66,8 @@ export function Uploader({ interviewId, onChange, compact, disabled = false, ini
     setState({ fileName: file.name, html, report, markdown, settled: true, ok: report.ok });
     setPhase("idle");
   }, [interviewId]);
+
+  useEffect(() => { if (generatedFile) void handle(generatedFile); }, [generatedFile, handle]);
 
   const reset = () => { run.current++; setState({ settled: false, ok: false }); setPhase("idle"); setError(""); if (input.current) input.current.value = ""; };
 

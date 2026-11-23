@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Uploader, type UploadState } from "./Uploader";
+import { BasicQuestionnaireBuilder } from "./BasicQuestionnaireBuilder";
 import { api, Icon, Spinner, useToast } from "./ui";
 
 export function NewInterview() {
@@ -14,6 +15,8 @@ export function NewInterview() {
   const [mode, setMode] = useState<"single" | "multi">("single");
   const [upload, setUpload] = useState<UploadState>({ settled: false, ok: false });
   const [busy, setBusy] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [generatedFile, setGeneratedFile] = useState<File>();
 
   const ready = name.trim().length > 0 && upload.ok && upload.settled && !busy;
   const why = !name.trim() ? "Add a name" : !upload.html ? "Add the questionnaire file" : !upload.settled ? "Waiting for the checks to finish" : !upload.ok ? "Fix the errors in the file" : "";
@@ -67,10 +70,16 @@ export function NewInterview() {
         <div className="card-head">
           <h2>2. Questionnaire file</h2>
           <span className="right" />
+          <button className="btn sm" type="button" onClick={() => setBuilding((open) => !open)}>{building ? "Hide builder" : "Build from scratch"}</button>
           <a className="btn ghost sm" href="/api/docs/template/starter.kqa.html" download><Icon name="download" size={15} /> Starter template</a>
           <Link className="btn ghost sm" href="/admin/docs">Format guide</Link>
         </div>
-        <div className="card-pad"><Uploader onChange={setUpload} /></div>
+        {building && <div className="card-pad"><BasicQuestionnaireBuilder onUse={(html) => {
+          const safeName = (name.trim() || "questionnaire").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "questionnaire";
+          setGeneratedFile(new File([html], `${safeName}.html`, { type: "text/html" }));
+          setBuilding(false);
+        }} /></div>}
+        <div className="card-pad"><Uploader generatedFile={generatedFile} onChange={setUpload} /></div>
       </section>
 
       <div className="row wrap" style={{ justifyContent: "flex-end" }}>

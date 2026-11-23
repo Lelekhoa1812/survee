@@ -41,4 +41,14 @@ describe("Uploader replacement state", () => {
     expect(changes.at(-1)).toEqual({ settled: false, ok: false });
     expect(host.textContent).toContain("That is not an HTML file");
   });
+
+  it("checks a builder-generated file through the same static and live pipeline", async () => {
+    const file = new File(["<html></html>"], "built.html", { type: "text/html" });
+    Object.defineProperty(file, "text", { value: async () => "<html></html>" });
+    await act(async () => root.render(createElement(Uploader, { generatedFile: file, onChange: (state) => changes.push(state) })));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(mocks.api).toHaveBeenCalledWith("/api/admin/check", { method: "POST", body: { html: "<html></html>", fileName: "built.html", interviewId: undefined } });
+    expect(mocks.probe).toHaveBeenCalledWith("<html></html>", []);
+    expect(changes.at(-1)).toMatchObject({ fileName: "built.html", settled: true, ok: true });
+  });
 });

@@ -5,8 +5,9 @@
  * `docs/kqa-manifest.schema.json` is generated from it (`npm run docs`), and the checker, the answer
  * validator and the exports all read the same types.
  *
- * There is no in-app question builder and no score. A required checkbox is answered when at least
- * one option is stored. Text that is only spaces is empty. The HTML file does not send email.
+ * A basic in-app composer generates common native question types; advanced authoring still uses HTML.
+ * There is no score. A required checkbox is answered when at least one option is stored. Text that is
+ * only spaces is empty. The HTML file does not send email.
  */
 import { z } from "zod";
 

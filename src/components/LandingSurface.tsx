@@ -4,8 +4,8 @@ import { BrandMark } from "./ui";
 const workflow = [
   {
     number: "01",
-    title: "Bring your questionnaire",
-    text: "Use a self-contained HTML file built for survee. There is no in-app question builder to learn.",
+    title: "Build or bring your questionnaire",
+    text: "Create a basic questionnaire in survee or upload a self-contained HTML file for advanced designs.",
   },
   {
     number: "02",
