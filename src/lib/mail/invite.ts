@@ -59,7 +59,9 @@ async function logInvite(interviewId: string, participantId: string, result: "se
   if (!interviewOid) return;
   const tenantId = await currentTenantId();
   if (!tenantId) return;
-  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } })).catch(() => {});
+  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } })).catch(() => {
+    console.error("[audit] invite event persistence failed");
+  });
 }
 
 /** One person, one SMTP conversation. Refusals (no email, closed, unset public URL) do not write a mail row. */

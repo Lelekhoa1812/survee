@@ -1759,13 +1759,15 @@ async function finish(tool: string, result: ToolResult, interviewId?: string): P
   // A successful delete is audited at tenant scope so it does not recreate an event
   // attached to the interview that was just removed.
   const auditInterviewId = tool === "delete_interview" && !result.isError ? undefined : fromResult;
-  await noteMcp(tool, !result.isError, auditInterviewId).catch(() => {});
+  await noteMcp(tool, !result.isError, auditInterviewId).catch(() => {
+    console.error("[audit] MCP tool event persistence failed");
+  });
   return result;
 }
 
 export async function dispatchTool(name: string, args: unknown, capabilities?: readonly McpCapability[]): Promise<ToolResult> {
   const tool = TOOLS.find((item) => item.name === name);
-  if (!tool) return err(`Unknown tool: ${name}`, "unknown_tool");
+  if (!tool) return finish("unknown_tool", err("Unknown tool.", "unknown_tool"));
   const record = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
   const interviewId = record && typeof record.interviewId === "string" ? record.interviewId : undefined;
   if (!canCallMcpTool(name, capabilities)) return finish(tool.name, err("This credential is not permitted to call this tool.", "forbidden"), interviewId);

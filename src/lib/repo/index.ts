@@ -33,7 +33,9 @@ function visibleRecordGroups(groups: RepeatRecordMap): RepeatRecordMap {
 
 function logEvent(tenantId: string, interviewId: ObjectId, type: string, participantId?: ObjectId, meta?: Record<string, unknown>) {
   // Fire and forget: the audit trail must never slow down or break an answer being saved.
-  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {});
+  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {
+    console.error("[audit] interview event persistence failed");
+  });
 }
 
 // ------------------------------------------------------------------------------------------ interviews

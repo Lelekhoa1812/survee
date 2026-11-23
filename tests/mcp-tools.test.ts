@@ -356,6 +356,22 @@ describe("MCP tools", () => {
     expect(noteMcp).toHaveBeenCalledWith("delete_interview", true, undefined);
   });
 
+  it("records unknown tool attempts and logs audit-store failures without leaking details", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      vi.mocked(noteMcp).mockRejectedValueOnce(new Error("private database URL and bearer token"));
+      const unknown = await call("not_a_registered_tool", {});
+      const unknownBody = await unknown.json() as { result: { isError: boolean; structuredContent: { code?: string; error?: string } } };
+      expect(unknownBody.result).toMatchObject({ isError: true, structuredContent: { code: "unknown_tool", error: "Unknown tool." } });
+      expect(noteMcp).toHaveBeenCalledWith("unknown_tool", false, undefined);
+      expect(errorLog).toHaveBeenCalledWith("[audit] MCP tool event persistence failed");
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain("private database URL");
+      expect(JSON.stringify(unknownBody)).not.toContain("not_a_registered_tool");
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
   it("documents every registered tool", () => {
     const md = readFileSync(new URL("../docs/MCP.md", import.meta.url), "utf8");
     const tools = listToolDefs();
@@ -529,7 +545,7 @@ describe("MCP tools", () => {
     const unknown = await call("this_tool_does_not_exist", {});
     const unknownBody = await unknown.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
     expect(unknownBody.result.isError).toBe(true);
-    expect(unknownBody.result.structuredContent).toMatchObject({ code: "unknown_tool", error: "Unknown tool: this_tool_does_not_exist" });
+    expect(unknownBody.result.structuredContent).toMatchObject({ code: "unknown_tool", error: "Unknown tool." });
     const conflict = await call("get_interview_packages", { catalogOnly: true, packageId: "service-improvement" });
     const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
     expect(conflictBody.result.isError).toBe(true);
