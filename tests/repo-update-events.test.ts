@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   events: [] as Record<string, unknown>[],
   eventOptions: [] as Record<string, unknown>[],
   failEvent: false,
+  current: {} as Record<string, unknown>,
   findOneAndUpdate: vi.fn(async (..._args: unknown[]) => ({ _id: new ObjectId(), name: "Renamed", status: "open" })),
 }));
 
@@ -15,7 +16,7 @@ vi.mock("../src/lib/db", () => ({
     return result;
   },
   col: {
-    interviews: async () => ({ findOneAndUpdate: mocks.findOneAndUpdate }),
+    interviews: async () => ({ findOne: async () => ({ _id: new ObjectId(), name: "Existing", description: "Old notes", status: "open", ...mocks.current }), findOneAndUpdate: mocks.findOneAndUpdate }),
     events: async () => ({ insertOne: async (doc: Record<string, unknown>, options: Record<string, unknown>) => { mocks.events.push(doc); mocks.eventOptions.push(options); if (mocks.failEvent) throw new Error("event insert failed"); return { acknowledged: true }; } }),
   },
 }));
@@ -30,7 +31,7 @@ import { updateInterview } from "../src/lib/repo";
 const id = new ObjectId().toHexString();
 
 describe("updateInterview audit events", () => {
-  beforeEach(() => { mocks.events.length = 0; mocks.eventOptions.length = 0; mocks.failEvent = false; mocks.findOneAndUpdate.mockClear(); });
+  beforeEach(() => { mocks.events.length = 0; mocks.eventOptions.length = 0; mocks.failEvent = false; mocks.current = {}; mocks.findOneAndUpdate.mockClear(); });
 
   it("logs an update event naming the changed fields", async () => {
     await updateInterview(id, { name: "Renamed", description: "Notes" });
@@ -49,5 +50,11 @@ describe("updateInterview audit events", () => {
     mocks.failEvent = true;
     await expect(updateInterview(id, { name: "Renamed" })).rejects.toThrow("event insert failed");
     expect(mocks.eventOptions[0]).toEqual({ session: { transaction: true } });
+  });
+
+  it("does not revise or audit a patch that leaves all values unchanged", async () => {
+    await updateInterview(id, { name: "Existing", description: "Old notes", status: "open" });
+    expect(mocks.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(mocks.events).toHaveLength(0);
   });
 });

@@ -114,6 +114,9 @@ vi.mock("../src/lib/repo", async () => {
     getAddPeopleOperation: vi.fn(async () => null),
     regenerateTokenWithOperation: vi.fn(async () => ({ kind: "rotated" as const, token: "rotated-token", interviewId })),
     getRegenerateLinkOperation: vi.fn(async () => null),
+    updateInterview: vi.fn(async () => ({ _id: new ObjectId(interviewId) })),
+    updateInterviewWithOperation: vi.fn(async (id: string) => ({ kind: "updated" as const, interviewId: id })),
+    getUpdateInterviewOperation: vi.fn(async () => null),
     addParticipants: vi.fn(async (_interviewId: string, people: { name: string }[]) => people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited", answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" }))),
     getParticipant: vi.fn(async () => ({
       id: personId,
@@ -181,7 +184,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, regenerateTokenWithOperation, getRegenerateLinkOperation } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -511,6 +514,25 @@ describe("MCP tools", () => {
     expect(createInterview).toHaveBeenCalledOnce();
     expect(body.result.structuredContent.report.counts).toMatchObject({ error: 0 });
     expect(body.result.structuredContent.report.diagnostics).toEqual(expect.any(Array));
+  });
+
+  it("supports replay-safe update_interview operation IDs", async () => {
+    const tool = listToolDefs().find(({ name }) => name === "update_interview");
+    expect(tool?.inputSchema.properties).toMatchObject({ operationId: { type: "string", minLength: 1, maxLength: 128 } });
+    const response = await call("update_interview", { interviewId, name: "Renamed", operationId: "update-1" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: Record<string, unknown> } };
+    expect(body.result.isError).toBe(false);
+    expect(body.result.structuredContent).toMatchObject({ ok: true, interviewId });
+    expect(updateInterviewWithOperation).toHaveBeenCalledWith(interviewId, { name: "Renamed" }, expect.objectContaining({ operationId: "update-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
+    vi.mocked(getUpdateInterviewOperation).mockResolvedValueOnce({ kind: "replayed", interviewId });
+    const replay = await call("update_interview", { interviewId, name: "Renamed", operationId: "update-1" });
+    const replayBody = await replay.json() as { result: { structuredContent: Record<string, unknown> } };
+    expect(replayBody.result.structuredContent).toMatchObject({ ok: true, interviewId });
+    expect(updateInterviewWithOperation).toHaveBeenCalledOnce();
+    vi.mocked(getUpdateInterviewOperation).mockResolvedValueOnce({ kind: "conflict" });
+    const conflict = await call("update_interview", { interviewId, name: "Different", operationId: "update-1" });
+    const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(conflictBody.result).toMatchObject({ isError: true, structuredContent: { code: "operation_id_conflict" } });
   });
 
   it("accepts create_interview operationId and publishes its original result", async () => {

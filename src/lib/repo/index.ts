@@ -214,7 +214,7 @@ export async function createInterview(input: { name: string; description?: strin
   return doc;
 }
 
-const MCP_CREATE_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MCP_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CreateInterviewOperationResult =
   | { kind: "created" | "replayed"; result: CreateInterviewMcpResult }
@@ -306,7 +306,7 @@ export async function createInterviewWithOperation(
     const createdAt = new Date();
     await operations.insertOne({
       _id: new ObjectId(), ...scope, interviewId: doc._id, argumentDigest: operation.argumentDigest, result,
-      createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
+      createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
     }, { session });
     return { kind: "created" as const, result };
   });
@@ -331,24 +331,96 @@ export async function updateInterview(id: string, patch: { name?: string; descri
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
+  return withMongoTransaction((session) => updateInterviewInSession(tenantId, oid, patch, session));
+}
+
+async function updateInterviewInSession(tenantId: string, oid: ObjectId, patch: { name?: string; description?: string | null; status?: InterviewStatus }, session: ClientSession): Promise<InterviewDoc | null> {
+  const interviews = await col.interviews();
+  const current = await interviews.findOne(tenantFilter(tenantId, { _id: oid }), { session });
+  if (!current) return null;
   const set: Partial<InterviewDoc> = { updatedAt: new Date() };
   const unset: Record<string, ""> = {};
-  if (patch.name !== undefined) set.name = patch.name;
+  const changed: string[] = [];
+  if (patch.name !== undefined && patch.name !== current.name) { set.name = patch.name; changed.push("name"); }
   if (patch.description !== undefined) {
-    if (patch.description === null || patch.description === "") unset.description = "";
-    else set.description = patch.description;
+    const nextDescription = patch.description === null || patch.description === "" ? undefined : patch.description;
+    if (nextDescription !== current.description) {
+      if (nextDescription === undefined) unset.description = "";
+      else set.description = nextDescription;
+      changed.push("description");
+    }
   }
-  if (patch.status !== undefined) set.status = patch.status;
+  const statusChanged = patch.status !== undefined && patch.status !== current.status;
+  if (statusChanged && patch.status) set.status = patch.status;
+  if (!changed.length && !statusChanged) return current;
   const update: Record<string, unknown> = { $set: set, $inc: { respondentWriteRevision: 1 } };
   if (Object.keys(unset).length) update.$unset = unset;
-  const changed = [patch.name !== undefined && "name", patch.description !== undefined && "description"].filter((f): f is string => Boolean(f));
-  return withMongoTransaction(async (session) => {
-    const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
-    if (!res) return null;
-    if (patch.status) await insertEvent(tenantId, oid, "status", undefined, session, { status: patch.status });
-    if (changed.length) await insertEvent(tenantId, oid, "update", undefined, session, { fields: changed });
-    return res;
+  const res = await interviews.findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
+  if (!res) return null;
+  if (statusChanged && patch.status) await insertEvent(tenantId, oid, "status", undefined, session, { status: patch.status });
+  if (changed.length) await insertEvent(tenantId, oid, "update", undefined, session, { fields: changed });
+  return res;
+}
+
+export type UpdateInterviewOperationResult =
+  | { kind: "updated"; interviewId: string }
+  | { kind: "replayed"; interviewId: string }
+  | { kind: "conflict" }
+  | { kind: "deleted" }
+  | { kind: "not_found" };
+
+export async function getUpdateInterviewOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<UpdateInterviewOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "update_interview", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", interviewId: String(existing.result.interviewId ?? "") }
+    : { kind: "conflict" };
+}
+
+/** Update an interview and retain its exact MCP result in the same transaction. */
+export async function updateInterviewWithOperation(
+  id: string,
+  patch: { name?: string; description?: string | null; status?: InterviewStatus },
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<UpdateInterviewOperationResult> {
+  const oid = toOid(id);
+  const tenantId = await currentTenantId();
+  if (!oid || !tenantId) return { kind: "not_found" };
+  const scope = mcpOperationScope(tenantId, "update_interview", operation);
+  const operations = await col.mcpOperations();
+  const run = async () => withMongoTransaction(async (session) => {
+    const existing = await operations.findOne(scope, { session });
+    if (existing && existing.expiresAt > new Date()) {
+      if (existing.deletedAt) return { kind: "deleted" as const };
+      return existing.argumentDigest === operation.argumentDigest
+        ? { kind: "replayed" as const, interviewId: String(existing.result.interviewId ?? "") }
+        : { kind: "conflict" as const };
+    }
+    if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    const updated = await updateInterviewInSession(tenantId, oid, patch, session);
+    if (!updated) return { kind: "not_found" as const };
+    const interviewId = oid.toHexString();
+    const createdAt = new Date();
+    await operations.insertOne({
+      _id: new ObjectId(), ...scope, interviewId: oid, argumentDigest: operation.argumentDigest,
+      result: { ok: true, interviewId }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+    }, { session });
+    return { kind: "updated" as const, interviewId };
   });
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await operations.findOne(scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
+    return committed.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", interviewId: String(committed.result.interviewId ?? "") }
+      : { kind: "conflict" };
+  }
 }
 
 export async function addVersion(id: string, survey: NewSurvey): Promise<number | null> {
@@ -909,7 +981,7 @@ async function addParticipantsCore(
       const createdAt = new Date();
       await (await col.mcpOperations()).insertOne({
         _id: new ObjectId(), ...operation.scope, interviewId: oid, participantIds: docs.map((doc) => doc._id), argumentDigest: operation.argumentDigest,
-        result: { people: views }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
+        result: { people: views }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
       }, { session });
       return { kind: "created" as const, people: views };
     }
@@ -1116,7 +1188,7 @@ async function regenerateTokenCore(
     const createdAt = new Date();
     await (await col.mcpOperations()).insertOne({
       _id: new ObjectId(), ...operation.scope, interviewId: current.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest, result,
-      createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
+      createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
     }, { session });
     return { ...result, kind: "rotated" as const };
   });

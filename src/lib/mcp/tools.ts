@@ -50,6 +50,8 @@ import {
   reopenParticipant,
   saveQuestionnaireReviewDraft,
   updateInterview,
+  updateInterviewWithOperation,
+  getUpdateInterviewOperation,
   updateParticipant,
 } from "../repo";
 import { listCurrentMailByParticipants, listMailByPerson, mailRecord } from "../repo/mail";
@@ -1177,8 +1179,8 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "update_interview",
-    description: "Rename an interview, edit its notes, or open or close it.",
-    inputSchema: obj({ interviewId: str, name: str, description: str, status: { type: "string", enum: ["open", "closed"] } }, ["interviewId"]),
+    description: "Rename an interview, edit its notes, or open or close it. Optional operationId makes uncertain retries return the original result for seven days.",
+    inputSchema: obj({ interviewId: str, name: str, description: str, status: { type: "string", enum: ["open", "closed"] }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
@@ -1194,6 +1196,21 @@ const TOOLS: ToolDef[] = [
         patch.status = args.status;
       }
       if (!Object.keys(patch).length) return err("Nothing to update.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ interviewId: id, patch })).digest("hex") };
+        const existing = await getUpdateInterviewOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId for another update.", "operation_result_unavailable");
+        if (existing?.kind === "conflict") return err("operationId was already used with different update_interview arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ ok: true, interviewId: existing.interviewId });
+        const updated = await updateInterviewWithOperation(id, patch, operation);
+        if (updated.kind === "deleted") return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId for another update.", "operation_result_unavailable");
+        if (updated.kind === "conflict") return err("operationId was already used with different update_interview arguments.", "operation_id_conflict");
+        if (updated.kind === "not_found") return err("Interview not found.", "not_found");
+        return ok({ ok: true, interviewId: updated.interviewId });
+      }
       const updated = await updateInterview(id, patch);
       return updated ? ok({ ok: true, interviewId: id }) : err("Interview not found.", "not_found");
     },
