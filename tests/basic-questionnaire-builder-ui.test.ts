@@ -134,4 +134,34 @@ describe("basic questionnaire builder UI", () => {
     expect(html).toContain('data-kqa-note="question-1"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
+
+  it("sets a text answer length limit", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "text");
+    await change("#builder-max-length-0", "80");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"maxLength": 80');
+    expect(html).toContain('maxlength="80"');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
+
+  it("sets a number increment", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "number");
+    await change("#builder-step-0", "0.5");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"step": 0.5');
+    expect(html).toContain('step="0.5"');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
 });
