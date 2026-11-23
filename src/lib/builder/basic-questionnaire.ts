@@ -128,6 +128,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
   }
   if (!languageTag) throw new Error("Enter a valid BCP 47 language tag, such as en-AU or ar.");
   const direction = input.direction ?? "ltr";
+  if (direction !== "ltr" && direction !== "rtl" && direction !== "auto") throw new Error("Choose a text direction of left to right, right to left, or automatic.");
   const manifest = {
     format: "kqa/1",
     title: input.title,

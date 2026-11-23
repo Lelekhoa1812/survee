@@ -60,6 +60,7 @@ describe("basic questionnaire HTML generator", () => {
     const input: BasicQuestionnaire = { title: "Language", description: "", language: "EN-au", questions: [{ id: "reply", type: "text", label: "Reply", help: "", required: false }] };
     expect(generateBasicQuestionnaireHtml(input)).toContain('<html lang="en-AU" dir="ltr">');
     expect(() => generateBasicQuestionnaireHtml({ ...input, language: "en_US" })).toThrow(/valid BCP 47 language tag/i);
+    expect(() => generateBasicQuestionnaireHtml({ ...input, direction: "rtl\" onload=alert(1)" as BasicQuestionnaire["direction"] })).toThrow(/text direction/i);
   });
 
   it("groups assigned questions into checker-valid section lists and escapes section content", () => {
