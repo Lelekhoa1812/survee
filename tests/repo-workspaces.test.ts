@@ -95,7 +95,10 @@ vi.mock("../src/lib/db", () => ({
         return { matchedCount: 1, modifiedCount: 1 };
       },
     }),
-    events: async () => ({ insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; } }),
+    events: async () => ({
+      insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; },
+      find: (filter: any) => cursor(store.events.filter((item) => matches(item, filter))),
+    }),
   },
   withMongoTransaction: async (work: (session: object) => Promise<unknown>) => {
     const snapshot = Object.fromEntries(["users", "tenants", "memberships", "invitations", "oauthCodes", "apiKeys", "events"].map((key) => [key, (store as any)[key].map((doc: any) => ({ ...doc }))]));
@@ -162,7 +165,8 @@ function cursor(rows: any[]) {
       });
       return this;
     },
-    toArray: async () => rows,
+    limit(value: number) { this.values = this.values.slice(0, value); return this; },
+    toArray: async function() { return this.values; },
   };
 }
 
@@ -276,6 +280,7 @@ describe("workspace membership and invitations", () => {
       tokenHash: createHash("sha256").update(first.token).digest("hex"),
     });
     expect(store.invitations[0]).not.toHaveProperty("token");
+    expect(store.events[0]).toMatchObject({ tenantId: "axion", type: "workspace_invitation_created", meta: { invitationId: store.invitations[0]._id.toHexString(), actorUserId: ownerId.toHexString(), role: "member" } });
     await expect(getWorkspaceInvitation(first.token)).resolves.toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "new.person@example.test" });
 
     const second = await createWorkspaceInvitation({ tenantId: "axion", invitedByUserId: ownerId.toHexString(), email: "new.person@example.test", role: "admin" });
@@ -290,6 +295,7 @@ describe("workspace membership and invitations", () => {
       members: [{ userId: ownerId.toHexString(), email: "owner@example.test", role: "owner", createdAt: expect.any(String) }],
     });
     expect(access.invitations).toMatchObject([{ email: "new.person@example.test", role: "member" }]);
+    expect(access.invitationHistory).toMatchObject([{ type: "workspace_invitation_created", actorUserId: ownerId.toHexString(), role: "member" }]);
   });
 
   it("rolls back a membership when the invitation expires before its claim", async () => {
@@ -301,6 +307,7 @@ describe("workspace membership and invitations", () => {
       .resolves.toEqual({ ok: false, reason: "invalid" });
     expect(store.memberships.some((item) => item.tenantId === "axion" && item.userId.equals(inviteeId))).toBe(false);
     expect(store.invitations[0].acceptedAt).toBeUndefined();
+    expect(store.events.filter((event) => event.type === "workspace_invitation_accepted")).toHaveLength(0);
   });
 
   it("rolls back an invited account when the invitation expires before its claim", async () => {
@@ -451,8 +458,9 @@ describe("workspace membership and invitations", () => {
     expect(created.ok).toBe(true);
     if (!created.ok) return;
     const id = store.invitations[0]._id.toHexString();
-    await expect(revokeWorkspaceInvitation("workspace-b", id)).resolves.toBe(false);
-    await expect(revokeWorkspaceInvitation("axion", id)).resolves.toBe(true);
+    await expect(revokeWorkspaceInvitation("workspace-b", id, ownerId.toHexString())).resolves.toBe(false);
+    await expect(revokeWorkspaceInvitation("axion", id, ownerId.toHexString())).resolves.toBe(true);
+    expect(store.events.at(-1)).toMatchObject({ type: "workspace_invitation_revoked", tenantId: "axion", meta: { actorUserId: ownerId.toHexString(), role: "member" } });
     await expect(getWorkspaceInvitation(created.token)).resolves.toBeNull();
     await revokeWorkspaceInvitationByToken("axion", created.token);
   });
@@ -468,8 +476,11 @@ describe("workspace membership and invitations", () => {
     expect(store.memberships).toHaveLength(2);
     expect(store.memberships[1]).toMatchObject({ tenantId: "axion", role: "admin" });
     expect(store.users[1].lastTenantId).toBe("axion");
+    expect(store.events.filter((event) => event.type === "workspace_invitation_accepted")).toHaveLength(1);
+    expect(store.events.at(-1)).toMatchObject({ type: "workspace_invitation_accepted", tenantId: "axion", meta: { actorUserId: inviteeId.toHexString(), targetUserId: inviteeId.toHexString(), role: "admin" } });
     await expect(acceptWorkspaceInvitation(created.token, inviteeId.toHexString(), "member@example.test")).resolves.toEqual({ ok: true, tenantId: "axion" });
     expect(store.memberships).toHaveLength(2);
+    expect(store.events.filter((event) => event.type === "workspace_invitation_accepted")).toHaveLength(1);
   });
 
   it("creates a verified account from an invite and rejects an existing account collision", async () => {
@@ -484,6 +495,7 @@ describe("workspace membership and invitations", () => {
     expect(newUser).toMatchObject({ email: "brand-new@example.test", passwordHash: "test-hash:a sufficiently long password", lastTenantId: "axion", emailVerifiedAt: expect.any(Date) });
     expect(store.memberships.at(-1)).toMatchObject({ tenantId: "axion", userId: newUser._id, role: "member" });
     expect(store.invitations[0].acceptedByUserId).toEqual(newUser._id);
+    expect(store.events.at(-1)).toMatchObject({ type: "workspace_invitation_accepted", meta: { targetUserId: newUser._id.toHexString(), role: "member" } });
 
     const collision = await createWorkspaceInvitation({ tenantId: "axion", invitedByUserId: ownerId.toHexString(), email: "member@example.test", role: "member" });
     expect(collision.ok).toBe(true);

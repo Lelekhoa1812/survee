@@ -5,6 +5,28 @@ import { AXION_TENANT_ID } from "../env";
 import { hashPassword } from "./accounts";
 import type { MembershipDoc, TenantRole, UserDoc, WorkspaceInvitationDoc } from "./types";
 
+type WorkspaceInvitationEventType = "workspace_invitation_created" | "workspace_invitation_accepted" | "workspace_invitation_revoked";
+
+async function insertWorkspaceInvitationEvent(session: import("mongodb").ClientSession, input: {
+  tenantId: string;
+  type: WorkspaceInvitationEventType;
+  invitationId: ObjectId;
+  actorUserId: ObjectId;
+  targetUserId?: ObjectId;
+  role: "admin" | "member";
+  at: Date;
+}) {
+  await (await col.events()).insertOne({
+    _id: new ObjectId(), tenantId: input.tenantId, type: input.type, at: input.at,
+    meta: {
+      invitationId: input.invitationId.toHexString(),
+      actorUserId: input.actorUserId.toHexString(),
+      ...(input.targetUserId ? { targetUserId: input.targetUserId.toHexString() } : {}),
+      role: input.role,
+    },
+  }, { session });
+}
+
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function normalizeEmail(email: string): string {
@@ -88,12 +110,20 @@ export async function createWorkspaceInvitation(input: {
       { revokedAt: { $exists: true } },
     ],
   };
+  let saved: { _id: ObjectId } | null;
   try {
-    await (await col.workspaceInvitations()).updateOne(
-      replaceable,
-      { $set: invitation, $unset: { acceptedAt: "", acceptedByUserId: "", revokedAt: "" } },
-      { upsert: true },
-    );
+    saved = await withMongoTransaction(async (session) => {
+      const invitations = await col.workspaceInvitations();
+      await invitations.updateOne(
+        replaceable,
+        { $set: invitation, $unset: { acceptedAt: "", acceptedByUserId: "", revokedAt: "" } },
+        { upsert: true, session },
+      );
+      const saved = await invitations.findOne({ tenantId: input.tenantId, email, tokenHash: invitation.tokenHash }, { projection: { _id: 1 }, session });
+      if (!saved) throw new Error("Workspace invitation could not be reloaded.");
+      await insertWorkspaceInvitationEvent(session, { tenantId: input.tenantId, type: "workspace_invitation_created", invitationId: saved._id, actorUserId: inviterId, role: input.role, at: now });
+      return saved;
+    });
   } catch (error) {
     if ((error as { code?: number }).code !== 11000) throw error;
     // Another request created or retained the active slot. Never rotate its
@@ -105,7 +135,6 @@ export async function createWorkspaceInvitation(input: {
     if (current) return { ok: false, reason: "pending" };
     throw error;
   }
-  const saved = await (await col.workspaceInvitations()).findOne({ tenantId: input.tenantId, email, tokenHash: invitation.tokenHash }, { projection: { _id: 1 } });
   if (!saved) throw new Error("Workspace invitation could not be reloaded.");
   return { ok: true, id: saved._id.toHexString(), token, expiresAt: invitation.expiresAt };
 }
@@ -133,22 +162,30 @@ export async function getWorkspaceInvitationMail(tenantId: string, invitationId:
   return invitation ? { id: invitation._id.toHexString(), messageId: invitation.messageId, mailStatus: invitation.mailStatus } : null;
 }
 
-export async function revokeWorkspaceInvitation(tenantId: string, invitationId: string): Promise<boolean> {
+export async function revokeWorkspaceInvitation(tenantId: string, invitationId: string, actorUserId: string): Promise<boolean> {
   const id = objectId(invitationId);
-  if (!id || !tenantId) return false;
-  const result = await (await col.workspaceInvitations()).updateOne(
-    { _id: id, tenantId, expiresAt: { $gt: new Date() }, acceptedAt: { $exists: false }, revokedAt: { $exists: false } },
-    { $set: { revokedAt: new Date() } },
-  );
-  return result.modifiedCount === 1;
+  const actorId = objectId(actorUserId);
+  if (!id || !actorId || !tenantId) return false;
+  return withMongoTransaction(async (session) => {
+    const invitations = await col.workspaceInvitations();
+    const filter = { _id: id, tenantId, expiresAt: { $gt: new Date() }, acceptedAt: { $exists: false }, revokedAt: { $exists: false } };
+    const invitation = await invitations.findOne(filter, { session, projection: { role: 1 } });
+    if (!invitation) return false;
+    const at = new Date();
+    const result = await invitations.updateOne(filter, { $set: { revokedAt: at } }, { session });
+    if (result.modifiedCount !== 1) return false;
+    await insertWorkspaceInvitationEvent(session, { tenantId, type: "workspace_invitation_revoked", invitationId: id, actorUserId: actorId, role: invitation.role, at });
+    return true;
+  });
 }
 
 export async function listWorkspaceAccess(tenantId: string): Promise<{
   members: { userId: string; email: string; role: TenantRole; createdAt: string }[];
   invitations: { id: string; email: string; role: "admin" | "member"; expiresAt: string; mailStatus?: "pending" | "sent"; delivery?: "delivered" | "bounced" | "unknown"; deliveryCheckedAt?: string; canCheckDelivery: boolean }[];
+  invitationHistory: { id: string; invitationId: string; type: WorkspaceInvitationEventType; at: string; actorUserId: string; targetUserId?: string; role: "admin" | "member" }[];
   ownerCount: number;
 }> {
-  if (!tenantId) return { members: [], invitations: [], ownerCount: 0 };
+  if (!tenantId) return { members: [], invitations: [], invitationHistory: [], ownerCount: 0 };
   const memberships = await (await col.memberships()).find({ tenantId }).sort({ createdAt: 1 }).toArray();
   const users = memberships.length
     ? await (await col.users()).find({ _id: { $in: memberships.map((membership) => membership.userId) } }, { projection: { email: 1 } }).toArray()
@@ -157,6 +194,8 @@ export async function listWorkspaceAccess(tenantId: string): Promise<{
   const invitations = await (await col.workspaceInvitations()).find({
     tenantId, expiresAt: { $gt: new Date() }, acceptedAt: { $exists: false }, revokedAt: { $exists: false },
   }).sort({ createdAt: -1 }).toArray();
+  const invitationEvents = await (await col.events()).find({ tenantId, type: { $in: ["workspace_invitation_created", "workspace_invitation_accepted", "workspace_invitation_revoked"] } })
+    .sort({ at: -1, _id: -1 }).limit(50).toArray();
   return {
     ownerCount: memberships.filter((membership) => membership.role === "owner").length,
     members: memberships.flatMap((membership) => {
@@ -169,6 +208,15 @@ export async function listWorkspaceAccess(tenantId: string): Promise<{
       delivery: invitation.delivery, deliveryCheckedAt: invitation.deliveryCheckedAt?.toISOString(),
       canCheckDelivery: !!invitation.messageId,
     })),
+    invitationHistory: invitationEvents.flatMap((event) => {
+      const meta = event.meta;
+      if (!meta || typeof meta.invitationId !== "string" || typeof meta.actorUserId !== "string" || (meta.role !== "admin" && meta.role !== "member")) return [];
+      return [{
+        id: event._id.toHexString(), invitationId: meta.invitationId, type: event.type as WorkspaceInvitationEventType,
+        at: event.at.toISOString(), actorUserId: meta.actorUserId,
+        ...(typeof meta.targetUserId === "string" ? { targetUserId: meta.targetUserId } : {}), role: meta.role,
+      }];
+    }),
   };
 }
 
@@ -408,6 +456,7 @@ export async function acceptWorkspaceInvitation(token: string, userId: string, e
     );
     if (!claimed.modifiedCount) throw new InvitationTransactionAbort({ ok: false, reason: "invalid" });
     await users.updateOne({ _id: userObjectId }, { $set: { lastTenantId: invitation.tenantId, updatedAt: now } }, { session });
+    await insertWorkspaceInvitationEvent(session, { tenantId: invitation.tenantId, type: "workspace_invitation_accepted", invitationId: invitation._id, actorUserId: userObjectId, targetUserId: userObjectId, role: invitation.role, at: now });
     return { ok: true, tenantId: invitation.tenantId } as const;
     });
   } catch (error) {
@@ -452,6 +501,7 @@ export async function createInvitedAccount(token: string, password: string): Pro
         { $set: { acceptedAt: now, acceptedByUserId: userId } }, { session },
       );
       if (!claimed.modifiedCount) throw new InvitationTransactionAbort({ ok: false, reason: "invalid" });
+      await insertWorkspaceInvitationEvent(session, { tenantId: current.tenantId, type: "workspace_invitation_accepted", invitationId: current._id, actorUserId: userId, targetUserId: userId, role: current.role, at: now });
       return { ok: true, userId: userId.toHexString(), tenantId: current.tenantId } as const;
     });
   } catch (error) {

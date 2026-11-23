@@ -6,13 +6,15 @@ import { api, Icon, Modal, Spinner, useToast } from "./ui";
 
 interface WorkspaceMember { userId: string; email: string; role: string; createdAt: string }
 interface PendingInvitation { id: string; email: string; role: "admin" | "member"; expiresAt: string; mailStatus?: "pending" | "sent"; delivery?: "delivered" | "bounced" | "unknown"; deliveryCheckedAt?: string; canCheckDelivery?: boolean }
-interface AccessList { members?: WorkspaceMember[]; invitations?: PendingInvitation[]; ownerCount?: number }
+interface InvitationHistoryEntry { id: string; invitationId: string; type: "workspace_invitation_created" | "workspace_invitation_accepted" | "workspace_invitation_revoked"; at: string; actorUserId: string; targetUserId?: string; role: "admin" | "member" }
+interface AccessList { members?: WorkspaceMember[]; invitations?: PendingInvitation[]; invitationHistory?: InvitationHistoryEntry[]; ownerCount?: number }
 
 export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: string; userId: string }) {
   const toast = useToast();
   const router = useRouter();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [invitationHistory, setInvitationHistory] = useState<InvitationHistoryEntry[]>([]);
   const [ownerCount, setOwnerCount] = useState(0);
   const [removing, setRemoving] = useState<WorkspaceMember | null>(null);
   const [transferring, setTransferring] = useState<WorkspaceMember | null>(null);
@@ -35,6 +37,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
     setError("");
     setMembers(result.data.members ?? []);
     setInvitations(result.data.invitations ?? []);
+    setInvitationHistory(result.data.invitationHistory ?? []);
     setOwnerCount(result.data.ownerCount ?? (result.data.members ?? []).filter((member) => member.role === "owner").length);
   }
 
@@ -168,6 +171,18 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
                 const deliveryLabel = invitation.delivery === "delivered" ? "delivery confirmed" : invitation.delivery === "bounced" ? "bounced" : invitation.mailStatus === "pending" ? "send outcome unknown" : invitation.mailStatus === "sent" ? "delivery unconfirmed" : "delivery status unavailable";
                 return <li key={invitation.id} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{invitation.email}<small className="muted" style={{ display: "block" }}>{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()} · {deliveryLabel}{invitation.deliveryCheckedAt ? ` · checked ${new Date(invitation.deliveryCheckedAt).toLocaleString()}` : ""}</small></span><span className="row wrap">{invitation.canCheckDelivery && <button className="btn sm" type="button" disabled={busy} onClick={() => void checkDelivery(invitation)}>Check delivery</button>}<button className="btn sm" type="button" disabled={busy} onClick={() => void revoke(invitation)}>Revoke</button></span></li>;
               })}</ul> : <p className="muted">No pending invitations.</p>}
+            </section>
+            <section className="stack" aria-labelledby="workspace-invitation-history"><h3 id="workspace-invitation-history">Recent invitation history</h3>
+              {invitationHistory.length ? <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0 }}>{invitationHistory.map((event) => {
+                const accountLabel = (id: string) => id === userId ? "you" : members.find((member) => member.userId === id)?.email ?? `account …${id.slice(-6)}`;
+                const description = event.type === "workspace_invitation_created"
+                  ? `${accountLabel(event.actorUserId)} invited someone as ${event.role}`
+                  : event.type === "workspace_invitation_accepted"
+                    ? `${accountLabel(event.targetUserId ?? event.actorUserId)} accepted a ${event.role} invitation`
+                    : `${accountLabel(event.actorUserId)} revoked a ${event.role} invitation`;
+                return <li key={event.id} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}><span>{description}<small className="muted" style={{ display: "block" }}>Invitation ending …{event.invitationId.slice(-6)}</small></span><time className="muted" dateTime={event.at}>{new Date(event.at).toLocaleString()}</time></li>;
+              })}</ul> : <p className="muted">No invitation history in the last 180 days.</p>}
+              <p className="hint">Recent create, accept, and revoke actions are retained for up to 180 days. Invitation links and recipient email addresses are not stored in this history.</p>
             </section>
           </div>
         )}

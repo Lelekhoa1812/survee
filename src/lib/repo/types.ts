@@ -225,10 +225,10 @@ export interface QuestionOrderAssignmentView {
 export interface EventDoc {
   _id: ObjectId;
   tenantId?: string;
-  /** Absent only for an agent call that is not about one interview. */
+  /** Absent for workspace-level or agent events that are not about one interview. */
   interviewId?: ObjectId;
   participantId?: ObjectId;
-  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed" | "workspace_owner_transferred" | "workspace_member_role_changed";
+  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed" | "workspace_owner_transferred" | "workspace_member_role_changed" | "workspace_invitation_created" | "workspace_invitation_accepted" | "workspace_invitation_revoked";
   at: Date;
   meta?: Record<string, unknown>;
 }

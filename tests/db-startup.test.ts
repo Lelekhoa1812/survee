@@ -99,6 +99,7 @@ describe("MongoDB cold-start connection recovery", () => {
 
     expect(state.connectCalls).toBe(2);
     expect(state.indexes).toContain("tenant_people_cursor");
+    expect(state.indexes).toContain("tenant_workspace_events");
   });
 
   it("shares one in-flight cold-start attempt among concurrent callers", async () => {

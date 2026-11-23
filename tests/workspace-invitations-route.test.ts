@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => true),
   createWorkspaceInvitation: vi.fn(async (): Promise<{ ok: true; id: string; token: string } | { ok: false; reason: "invalid" | "already_member" | "pending" }> => ({ ok: true, id: "invite-1", token: "invite-token" })),
+  revokeWorkspaceInvitation: vi.fn(async () => true),
   updateWorkspaceInvitationMail: vi.fn(async () => true),
   sendSmtp: vi.fn(async (message: { messageId: string }) => ({ messageId: message.messageId })),
 }));
@@ -25,10 +26,12 @@ vi.mock("@/lib/repo", () => ({ consumeRateLimit: state.rateLimit }));
 vi.mock("@/lib/repo/workspaces", () => ({
   createWorkspaceInvitation: state.createWorkspaceInvitation,
   listWorkspaceAccess: vi.fn(),
+  revokeWorkspaceInvitation: state.revokeWorkspaceInvitation,
   updateWorkspaceInvitationMail: state.updateWorkspaceInvitationMail,
 }));
 
 import { POST } from "../src/app/api/admin/workspace-invitations/route";
+import { DELETE } from "../src/app/api/admin/workspace-invitations/[id]/route";
 
 function request() {
   return new Request("https://survee.example/api/admin/workspace-invitations", {
@@ -41,11 +44,19 @@ function request() {
 beforeEach(() => {
   state.rateLimit.mockReset().mockResolvedValue(true);
   state.createWorkspaceInvitation.mockReset().mockResolvedValue({ ok: true, id: "invite-1", token: "invite-token" });
+  state.revokeWorkspaceInvitation.mockReset().mockResolvedValue(true);
   state.updateWorkspaceInvitationMail.mockReset().mockResolvedValue(true);
   state.sendSmtp.mockReset().mockImplementation(async (message: { messageId: string }) => ({ messageId: message.messageId }));
 });
 
 describe("workspace invitation email throttling", () => {
+  it("records the authenticated actor when revoking a pending invitation", async () => {
+    const response = await DELETE(new Request("https://survee.example/api/admin/workspace-invitations/invite-1", { method: "DELETE" }), { params: Promise.resolve({ id: "invite-1" }) });
+
+    expect(response.status).toBe(200);
+    expect(state.revokeWorkspaceInvitation).toHaveBeenCalledWith("tenant-a", "invite-1", "user-a");
+  });
+
   it("limits invitations by tenant and normalized recipient before creating or sending", async () => {
     state.rateLimit.mockResolvedValueOnce(false);
     const response = await POST(request());

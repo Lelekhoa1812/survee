@@ -29,7 +29,7 @@ beforeEach(async () => {
   root = createRoot(host);
   state.refresh.mockReset();
   state.api.mockReset().mockImplementation(async (url: string) => url === "/api/admin/workspace-invitations"
-    ? { ok: true, data: { ownerCount: 1, members: [
+    ? { ok: true, data: { ownerCount: 1, invitationHistory: [{ id: "event-1", invitationId: "aaaaaaaaaaaaaaaaaaaaaa111111", type: "workspace_invitation_accepted", at: "2026-11-23T00:00:00.000Z", actorUserId: "000000000000000000000002", targetUserId: "000000000000000000000002", role: "member" }], members: [
       { userId: "000000000000000000000001", email: "owner@example.test", role: "owner", createdAt: "2026-11-01T00:00:00.000Z" },
       { userId: "000000000000000000000002", email: "member@example.test", role: "member", createdAt: "2026-11-02T00:00:00.000Z" },
     ], invitations: [] } }
@@ -43,6 +43,13 @@ afterEach(() => {
 });
 
 describe("workspace owner transfer UI", () => {
+  it("shows bounded invitation lifecycle history without exposing recipient addresses", () => {
+    expect(host.textContent).toContain("Recent invitation history");
+    expect(host.textContent).toContain("member@example.test accepted a member invitation");
+    expect(host.textContent).toContain("Invitation ending …111111");
+    expect(host.textContent).toContain("retained for up to 180 days");
+  });
+
   it("requires explicit confirmation and refreshes access after the transactional transfer", async () => {
     await click("Make owner");
     expect(host.textContent).toContain("Transfer workspace ownership to member@example.test?");

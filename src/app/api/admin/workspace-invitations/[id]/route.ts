@@ -10,7 +10,7 @@ export const DELETE = withServerErrors("admin/workspace-invitations/[id]", async
   if (!session) return fail(401, "Sign in to continue.");
   const { id } = await ctx.params;
   try {
-    if (!(await revokeWorkspaceInvitation(session.tenantId, id))) return fail(404, "That pending invitation was not found.");
+    if (!(await revokeWorkspaceInvitation(session.tenantId, id, session.userId))) return fail(404, "That pending invitation was not found.");
     return json({ ok: true });
   } catch {
     return fail(503, "The invitation could not be revoked. Try again.");
