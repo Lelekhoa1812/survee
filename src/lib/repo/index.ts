@@ -50,10 +50,23 @@ export async function listInterviews(): Promise<InterviewSummary[]> {
       { $group: { _id: { i: "$interviewId", s: "$status" }, n: { $sum: 1 }, last: { $max: "$updatedAt" } } },
     ])
     .toArray();
+  const statusByInterview = new Map<string, Map<ParticipantStatus, (typeof agg)[number]>>();
+  for (const row of agg) {
+    const interviewKey = row._id.i.toHexString();
+    let statuses = statusByInterview.get(interviewKey);
+    if (!statuses) {
+      statuses = new Map();
+      statusByInterview.set(interviewKey, statuses);
+    }
+    statuses.set(row._id.s, row);
+  }
   return docs.map((d) => {
-    const mine = agg.filter((a) => a._id.i.equals(d._id));
-    const get = (s: ParticipantStatus) => mine.find((a) => a._id.s === s)?.n ?? 0;
-    const last = mine.reduce<Date | undefined>((m, a) => (!m || a.last > m ? a.last : m), undefined);
+    const mine = statusByInterview.get(d._id.toHexString());
+    const get = (s: ParticipantStatus) => mine?.get(s)?.n ?? 0;
+    let last: Date | undefined;
+    for (const status of mine?.values() ?? []) {
+      if (!last || status.last > last) last = status.last;
+    }
     return {
       id: d._id.toHexString(), name: d.name, description: d.description, mode: d.mode, status: d.status, currentVersion: d.currentVersion,
       createdAt: d.createdAt.toISOString(), updatedAt: d.updatedAt.toISOString(),
