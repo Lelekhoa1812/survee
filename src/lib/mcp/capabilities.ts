@@ -64,6 +64,7 @@ export const MCP_TOOL_CAPABILITIES = {
   extract_design_profile: "interviews:read",
   audit_questionnaire_design: "interviews:read",
   list_interviews: "interviews:read",
+  list_interview_page: "interviews:read",
   get_interview: "interviews:read",
   get_survey_html: "interviews:read",
   list_versions: "interviews:read",

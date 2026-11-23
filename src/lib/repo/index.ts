@@ -76,6 +76,70 @@ export async function listInterviews(): Promise<InterviewSummary[]> {
   });
 }
 
+export const DEFAULT_INTERVIEW_PAGE_SIZE = 25;
+export const MAX_INTERVIEW_PAGE_SIZE = 100;
+
+export class InterviewPageCursorError extends Error {
+  constructor() {
+    super("cursor must be a valid interview page cursor.");
+    this.name = "InterviewPageCursorError";
+  }
+}
+
+function decodeInterviewCursor(cursor: string): { updatedAt: Date; id: ObjectId } {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { updatedAt?: unknown; id?: unknown };
+    if (typeof parsed.updatedAt !== "string" || typeof parsed.id !== "string" || !/^[0-9a-f]{24}$/i.test(parsed.id)) throw new Error();
+    const updatedAt = new Date(parsed.updatedAt);
+    if (!Number.isFinite(updatedAt.getTime()) || updatedAt.toISOString() !== parsed.updatedAt) throw new Error();
+    return { updatedAt, id: new ObjectId(parsed.id) };
+  } catch {
+    throw new InterviewPageCursorError();
+  }
+}
+
+export async function listInterviewPage(options: { cursor?: string; limit?: number } = {}): Promise<{ interviews: InterviewSummary[]; nextCursor: string | null; hasMore: boolean }> {
+  const limit = options.limit ?? DEFAULT_INTERVIEW_PAGE_SIZE;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_INTERVIEW_PAGE_SIZE) throw new RangeError(`limit must be an integer from 1 to ${MAX_INTERVIEW_PAGE_SIZE}.`);
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { interviews: [], nextCursor: null, hasMore: false };
+  const cursor = options.cursor ? decodeInterviewCursor(options.cursor) : null;
+  const interviewFilter = cursor
+    ? tenantFilter(tenantId, { $or: [{ updatedAt: { $lt: cursor.updatedAt } }, { updatedAt: cursor.updatedAt, _id: { $lt: cursor.id } }] })
+    : tenantFilter(tenantId);
+  const [interviews, participants] = await Promise.all([col.interviews(), col.participants()]);
+  const fetched = await interviews.find(interviewFilter).sort({ updatedAt: -1, _id: -1 }).limit(limit + 1).toArray();
+  const hasMore = fetched.length > limit;
+  const docs = fetched.slice(0, limit);
+  const ids = docs.map((doc) => doc._id);
+  const agg = ids.length ? await participants.aggregate<{ _id: { i: ObjectId; s: ParticipantStatus }; n: number; last: Date }>([
+    { $match: tenantFilter(tenantId, { interviewId: { $in: ids } }) },
+    { $group: { _id: { i: "$interviewId", s: "$status" }, n: { $sum: 1 }, last: { $max: "$updatedAt" } } },
+  ]).toArray() : [];
+  const statusByInterview = new Map<string, Map<ParticipantStatus, (typeof agg)[number]>>();
+  for (const row of agg) {
+    const interviewKey = row._id.i.toHexString();
+    let statuses = statusByInterview.get(interviewKey);
+    if (!statuses) { statuses = new Map(); statusByInterview.set(interviewKey, statuses); }
+    statuses.set(row._id.s, row);
+  }
+  const summaries = docs.map((d) => {
+    const mine = statusByInterview.get(d._id.toHexString());
+    const get = (s: ParticipantStatus) => mine?.get(s)?.n ?? 0;
+    let last: Date | undefined;
+    for (const status of mine?.values() ?? []) if (!last || status.last > last) last = status.last;
+    return {
+      id: d._id.toHexString(), name: d.name, description: d.description, mode: d.mode, status: d.status, currentVersion: d.currentVersion,
+      createdAt: d.createdAt.toISOString(), updatedAt: d.updatedAt.toISOString(),
+      counts: { people: get("invited") + get("in_progress") + get("submitted"), invited: get("invited"), inProgress: get("in_progress"), submitted: get("submitted") },
+      lastActivityAt: iso(last),
+    };
+  });
+  const last = docs.at(-1);
+  const nextCursor = hasMore && last ? Buffer.from(JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last._id.toHexString() })).toString("base64url") : null;
+  return { interviews: summaries, nextCursor, hasMore };
+}
+
 /** Aggregate respondent status counts for one interview without loading respondent records. */
 export async function getInterviewParticipantCounts(interviewId: string): Promise<{ people: number; invited: number; inProgress: number; submitted: number }> {
   const oid = toOid(interviewId);

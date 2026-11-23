@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   participantGroups: [] as Record<string, any>[],
   interviewFilter: null as Record<string, any> | null,
   interviewSort: null as Record<string, number> | null,
+  interviewLimit: null as number | null,
   aggregatePipeline: [] as Record<string, any>[],
   aggregateFilter: vi.fn(),
 }));
@@ -18,7 +19,13 @@ vi.mock("../src/lib/db", () => ({
         return {
           sort: (sort: Record<string, number>) => {
             mocks.interviewSort = sort;
-            return { toArray: async () => mocks.interviews };
+            return {
+              limit: (limit: number) => {
+                mocks.interviewLimit = limit;
+                return { toArray: async () => mocks.interviews.slice(0, limit) };
+              },
+              toArray: async () => mocks.interviews,
+            };
           },
         };
       },
@@ -34,7 +41,7 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
-import { listInterviews } from "../src/lib/repo";
+import { listInterviewPage, listInterviews } from "../src/lib/repo";
 import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
 
 const tenantId = "workspace-1";
@@ -56,9 +63,41 @@ beforeEach(() => {
   ];
   mocks.interviewFilter = null;
   mocks.interviewSort = null;
+  mocks.interviewLimit = null;
   mocks.aggregatePipeline = [];
   mocks.aggregateFilter.mockReset();
   mocks.aggregateFilter.mockImplementation(() => []);
+});
+
+describe("listInterviewPage", () => {
+  it("bounds the interview query and participant aggregation to the returned page", async () => {
+    const result = await withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ limit: 2 }));
+    expect(result.interviews.map((interview) => interview.id)).toEqual([interviewA.toHexString(), interviewB.toHexString()]);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBeTruthy();
+    expect(mocks.interviewFilter).toEqual(tenantFilter(tenantId));
+    expect(mocks.interviewSort).toEqual({ updatedAt: -1, _id: -1 });
+    expect(mocks.interviewLimit).toBe(3);
+    expect(mocks.aggregatePipeline[0]).toEqual({ $match: tenantFilter(tenantId, { interviewId: { $in: [interviewA, interviewB] } }) });
+  });
+
+  it("rejects invalid cursor and out of range page size", async () => {
+    await expect(withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ cursor: "bad" }))).rejects.toThrow("valid interview page cursor");
+    await expect(withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ limit: 101 }))).rejects.toThrow("limit must be an integer");
+  });
+
+  it("encodes the last row as a stable update-time and id boundary", async () => {
+    const first = await withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ limit: 2 }));
+    const boundary = JSON.parse(Buffer.from(first.nextCursor!, "base64url").toString("utf8"));
+    expect(boundary).toEqual({ updatedAt: "2026-01-03T00:00:00.000Z", id: interviewB.toHexString() });
+    await withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ cursor: first.nextCursor!, limit: 2 }));
+    expect(mocks.interviewFilter).toEqual(tenantFilter(tenantId, {
+      $or: [
+        { updatedAt: { $lt: new Date("2026-01-03T00:00:00.000Z") } },
+        { updatedAt: new Date("2026-01-03T00:00:00.000Z"), _id: { $lt: interviewB } },
+      ],
+    }));
+  });
 });
 
 describe("listInterviews", () => {

@@ -1,16 +1,27 @@
 import Link from "next/link";
 import { Badge, Icon } from "@/components/ui";
-import { listInterviews } from "@/lib/repo";
+import { InterviewPageCursorError, listInterviewPage } from "@/lib/repo";
 import { relTime } from "@/lib/time";
 import { adminSession } from "@/lib/http";
 
 export const metadata = { title: "Interviews" };
 export const dynamic = "force-dynamic";
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ cursor?: string | string[] }> } = {}) {
   const session = await adminSession();
   const canManage = session?.role === "owner" || session?.role === "admin";
-  const interviews = await listInterviews();
+  const params = await searchParams;
+  const cursor = typeof params.cursor === "string" ? params.cursor : undefined;
+  let page;
+  let invalidCursor = false;
+  try {
+    page = await listInterviewPage({ cursor });
+  } catch (error) {
+    if (!(error instanceof InterviewPageCursorError)) throw error;
+    page = await listInterviewPage();
+    invalidCursor = true;
+  }
+  const { interviews } = page;
   const totals = interviews.reduce((a, i) => ({ people: a.people + i.counts.people, submitted: a.submitted + i.counts.submitted, active: a.active + (i.status === "open" ? 1 : 0) }), { people: 0, submitted: 0, active: 0 });
 
   return (
@@ -25,16 +36,25 @@ export default async function Dashboard() {
         {canManage && interviews.length > 0 && <Link href="/admin/new" className="btn primary right"><Icon name="plus" size={16} /> New interview</Link>}
       </div>
 
+      {invalidCursor && <p role="status" className="muted">That interview page link is invalid or expired. Showing the latest interviews.</p>}
+
       {interviews.length > 0 && (
         <div className="stats" style={{ marginBottom: 20 }}>
-          <div className="stat"><b>{interviews.length}</b><span>{interviews.length === 1 ? "Interview" : "Interviews"}</span></div>
-          <div className="stat"><b>{totals.active}</b><span>Open now</span></div>
-          <div className="stat"><b>{totals.people}</b><span>People invited</span></div>
-          <div className="stat"><b>{totals.submitted}</b><span>Submitted</span></div>
+          <div className="stat"><b>{interviews.length}</b><span>{interviews.length === 1 ? "Interview on this page" : "Interviews on this page"}</span></div>
+          <div className="stat"><b>{totals.active}</b><span>Open on this page</span></div>
+          <div className="stat"><b>{totals.people}</b><span>People invited on this page</span></div>
+          <div className="stat"><b>{totals.submitted}</b><span>Submitted on this page</span></div>
         </div>
       )}
 
-      {interviews.length === 0 && !canManage ? (
+      {interviews.length === 0 && cursor ? (
+        <section className="card empty">
+          <div className="ico"><Icon name="info" size={24} /></div>
+          <h2>No more interviews</h2>
+          <p>You have reached the end of the interview list.</p>
+          <Link href="/admin" className="btn sm">Return to latest interviews</Link>
+        </section>
+      ) : interviews.length === 0 && !canManage ? (
         <section className="card empty">
           <div className="ico"><Icon name="info" size={24} /></div>
           <h2>No interviews yet</h2>
@@ -107,6 +127,12 @@ export default async function Dashboard() {
             })}
           </div>
         </div>
+      )}
+      {interviews.length > 0 && (cursor || page.nextCursor) && (
+        <nav aria-label="Interview pages" className="row wrap" style={{ justifyContent: "space-between", marginTop: 16 }}>
+          {cursor ? <Link className="btn sm" href="/admin">Return to latest interviews</Link> : <span />}
+          {page.nextCursor && <Link className="btn sm" href={`/admin?cursor=${encodeURIComponent(page.nextCursor)}`}>Load older interviews</Link>}
+        </nav>
       )}
     </main>
   );

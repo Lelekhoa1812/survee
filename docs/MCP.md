@@ -47,7 +47,7 @@ Prompt arguments must be non-empty strings when supplied. Input length is capped
 
 | Capability | Tools |
 |---|---|
-| `interviews:read` | `get_design_guidance`, `get_interview_packages`, `get_questionnaire_authoring_skill`, `audit_questionnaire_design`, `list_interviews`, `get_interview`, `get_survey_html`, `list_versions`, `check_questionnaire`, `preview_questionnaire_version_patch`, `preview_questionnaire_block_patch`, `preview_questionnaire_required_patch` |
+| `interviews:read` | `get_design_guidance`, `get_interview_packages`, `get_questionnaire_authoring_skill`, `audit_questionnaire_design`, `list_interviews`, `list_interview_page`, `get_interview`, `get_survey_html`, `list_versions`, `check_questionnaire`, `preview_questionnaire_version_patch`, `preview_questionnaire_block_patch`, `preview_questionnaire_required_patch` |
 | `analytics:read` | `get_analytics_guidance`, `analyze_answers` |
 | `respondents:read` | `list_people`, `get_person`, `get_answers`, `get_status`, `list_events`, `export_interview`, `get_mail_status` |
 | `respondents:manage` | `add_people`, `update_person`, `remove_person`, `reopen_person`, `regenerate_link` |
@@ -99,6 +99,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `extract_design_profile` | Parse CSS custom properties, legacy token JSON, or a bounded Design Tokens Format Module 2025.10 subset into semantic proposals; unresolved `$extends`, resolver-file modes, and external references are reported |
 | `audit_questionnaire_design` | Run static questionnaire diagnostics and return the design review checklist; it does not render or certify the page |
 | `list_interviews` | Host's interviews, open or closed, with people counts |
+| `list_interview_page` | Bounded page of interviews ordered by update time, with a `nextCursor` for older pages; summary counts cover the returned page only |
 | `get_interview` | One interview and its question list. No HTML |
 | `get_survey_html` | The stored file for a version |
 | `list_versions` | Upload history without HTML |

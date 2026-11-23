@@ -2,17 +2,17 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Dashboard from "../src/app/admin/(shell)/page";
-import { listInterviews } from "@/lib/repo";
+import { listInterviewPage } from "@/lib/repo";
 
 vi.mock("next/link", () => ({ default: "a" }));
-vi.mock("@/lib/repo", () => ({ listInterviews: vi.fn() }));
+vi.mock("@/lib/repo", () => ({ listInterviewPage: vi.fn(), InterviewPageCursorError: class InterviewPageCursorError extends Error {} }));
 vi.mock("@/lib/http", () => ({ adminSession: async () => ({ role: "admin" }) }));
 
 describe("empty dashboard quickstart", () => {
-  beforeEach(() => vi.mocked(listInterviews).mockReset());
+  beforeEach(() => vi.mocked(listInterviewPage).mockReset());
 
   it("guides a new host through the existing file, checker, and create workflow", async () => {
-    vi.mocked(listInterviews).mockResolvedValue([]);
+    vi.mocked(listInterviewPage).mockResolvedValue({ interviews: [], nextCursor: null, hasMore: false });
     const html = renderToStaticMarkup(await Dashboard());
 
     expect(html).toContain("Start with a questionnaire file");
@@ -25,7 +25,7 @@ describe("empty dashboard quickstart", () => {
   });
 
   it("keeps the quickstart out of an established dashboard", async () => {
-    vi.mocked(listInterviews).mockResolvedValue([{
+    vi.mocked(listInterviewPage).mockResolvedValue({ interviews: [{
       id: "interview-1",
       name: "Research interview",
       mode: "single",
@@ -34,7 +34,7 @@ describe("empty dashboard quickstart", () => {
       createdAt: "2026-11-15T00:00:00.000Z",
       updatedAt: "2026-11-15T00:00:00.000Z",
       counts: { people: 1, invited: 1, inProgress: 0, submitted: 0 },
-    }]);
+    }], nextCursor: null, hasMore: false });
     const html = renderToStaticMarkup(await Dashboard());
 
     expect(html).toContain("New interview</a>");

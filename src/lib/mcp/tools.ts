@@ -29,6 +29,8 @@ import {
   getVersion,
   iterateAnalyticsParticipants,
   listInterviews,
+  listInterviewPage,
+  InterviewPageCursorError,
   listParticipantPage,
   listParticipants,
   ParticipantCursorError,
@@ -87,6 +89,8 @@ interface ToolDef {
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 const str = { type: "string" };
 const bool = { type: "boolean" };
+const DEFAULT_INTERVIEW_PAGE_SIZE = 25;
+const MAX_INTERVIEW_PAGE_SIZE = 100;
 const requiredChanges = {
   type: "array",
   minItems: 1,
@@ -388,6 +392,22 @@ const TOOLS: ToolDef[] = [
     async run() {
       const interviews = await listInterviews();
       return ok({ interviews });
+    },
+  },
+  {
+    name: "list_interview_page",
+    description: "List a bounded page of interviews, ordered by most recently updated. Use nextCursor to load older interviews; counts cover only the returned page.",
+    inputSchema: obj({ cursor: str, limit: { type: "integer", minimum: 1, maximum: MAX_INTERVIEW_PAGE_SIZE } }),
+    async run(args) {
+      if (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 256)) return err("cursor must be a valid interview page cursor.", "invalid_args");
+      const limit = args.limit === undefined ? DEFAULT_INTERVIEW_PAGE_SIZE : args.limit;
+      if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > MAX_INTERVIEW_PAGE_SIZE) return err(`limit must be an integer from 1 to ${MAX_INTERVIEW_PAGE_SIZE}.`, "invalid_args");
+      try {
+        return ok(await listInterviewPage({ cursor: args.cursor as string | undefined, limit }));
+      } catch (error) {
+        if (error instanceof InterviewPageCursorError) return err(error.message, "invalid_args");
+        throw error;
+      }
     },
   },
   {
