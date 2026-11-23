@@ -48,7 +48,38 @@ async function rpc(method: string, params: unknown = {}) {
   return { status: response.status, body: await response.json() as { result?: Record<string, unknown>; error?: { code: number; message: string } } };
 }
 
+async function rawRpc(body: unknown, contentType: string | null = "application/json") {
+  const headers = new Headers({ accept: "application/json" });
+  if (contentType !== null) headers.set("content-type", contentType);
+  const response = await handleMcp(new Request("https://kqa.example/api/mcp", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  }));
+  return { status: response.status, body: response.status === 415 ? await response.json() as { error: string } : await response.json() as { id?: unknown; error?: { code: number; message: string } } };
+}
+
 describe("MCP protocol version negotiation", () => {
+  it("requires application/json for POST requests", async () => {
+    for (const contentType of [null, "text/plain", "application/json-rpc"]) {
+      const response = await rawRpc({ jsonrpc: "2.0", id: 1, method: "ping" }, contentType);
+      expect(response.status).toBe(415);
+      expect(response.body).toEqual({ error: "Content-Type must be application/json." });
+    }
+    const withCharset = await rawRpc({ jsonrpc: "2.0", id: 1, method: "ping" }, "Application/JSON; charset=utf-8");
+    expect(withCharset.status).toBe(200);
+  });
+
+  it("rejects JSON-RPC IDs outside the string, number and null types", async () => {
+    for (const id of [{ unexpected: true }, [1], true]) {
+      const response = await rawRpc({ jsonrpc: "2.0", id, method: "ping" });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid request." } });
+    }
+    const validNull = await rawRpc({ jsonrpc: "2.0", id: null, method: "ping" });
+    expect(validNull.body).toEqual({ jsonrpc: "2.0", id: null, result: expect.any(Object) });
+  });
+
   it("echoes the supported protocol version when the client requests it", async () => {
     const response = await initialize("2025-06-18");
     expect(response.status).toBe(200);

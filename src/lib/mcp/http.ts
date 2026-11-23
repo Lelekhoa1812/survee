@@ -39,6 +39,12 @@ function acceptable(req: Request): boolean {
   return /application\/json|\*\/\*|text\/event-stream/i.test(accept);
 }
 
+function hasJsonContentType(req: Request): boolean {
+  const contentType = req.headers.get("content-type");
+  if (!contentType) return false;
+  return contentType.split(";", 1)[0].trim().toLowerCase() === "application/json";
+}
+
 function protocolVersion(requested: unknown): string {
   // survee implements only this version. Echo it when requested; otherwise answer
   // with a version the server supports, as required by MCP version negotiation.
@@ -76,6 +82,9 @@ async function handleOne(msg: RpcRequest, capabilities?: McpCapability[]): Promi
     return rpcError(msg?.id ?? null, -32600, "Invalid request.");
   }
   const hasId = Object.prototype.hasOwnProperty.call(msg, "id");
+  if (hasId && msg.id !== null && typeof msg.id !== "string" && typeof msg.id !== "number") {
+    return rpcError(null, -32600, "Invalid request.");
+  }
   if (msg.method === "notifications/initialized" || msg.method.startsWith("notifications/")) return hasId ? rpcResult(msg.id ?? null, {}) : null;
   if (!hasId) return null;
   if (msg.method === "initialize") {
@@ -117,6 +126,7 @@ export async function handleMcp(req: Request): Promise<Response> {
   if (!auth.ok) return withMcpCors(req, unauthorized(req));
   const response = await withTenantPrincipal(auth.principal, async () => {
     if (!acceptable(req)) return new Response(JSON.stringify({ error: "Accept application/json or text/event-stream." }), { status: 406, headers: JSON_HEADERS });
+    if (!hasJsonContentType(req)) return new Response(JSON.stringify({ error: "Content-Type must be application/json." }), { status: 415, headers: JSON_HEADERS });
     const body = await readBody(req);
     if (!body.ok) return new Response(JSON.stringify(rpcError(null, -32700, body.message)), { status: body.status, headers: JSON_HEADERS });
     // survee speaks MCP 2025-06-18, which removed JSON-RPC batch support. Reject

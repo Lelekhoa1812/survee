@@ -68,6 +68,15 @@ describe("tool argument schema", () => {
     expect(validateToolArgs(section, 12)).toMatch(/match one of the allowed types/);
   });
 
+  it("enforces numeric bounds and rejects inherited object property names", () => {
+    const bounded = { type: "number", minimum: 1, maximum: 5 };
+    expect(validateToolArgs(bounded, 0.5)).toMatch(/at least 1/);
+    expect(validateToolArgs(bounded, 5.5)).toMatch(/at most 5/);
+    expect(validateToolArgs(bounded, 3.5)).toBeNull();
+    expect(validateToolArgs({ type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, { toString: "unexpected" }))
+      .toMatch(/Unknown field "toString"/);
+  });
+
   it("advertises and validates block patch batches up to the questionnaire question limit", () => {
     const tool = listToolDefs().find(({ name }) => name === "preview_questionnaire_block_patch");
     const properties = tool?.inputSchema.properties as Record<string, Record<string, unknown>> | undefined;

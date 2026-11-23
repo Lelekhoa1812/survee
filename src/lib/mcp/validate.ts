@@ -34,7 +34,7 @@ function check(schema: Schema, value: unknown, path: string): string | null {
     const props = schema.properties ?? {};
     if (schema.additionalProperties === false) {
       for (const key of Object.keys(rec)) {
-        if (!(key in props)) return `Unknown field "${key}".`;
+        if (!Object.prototype.hasOwnProperty.call(props, key)) return `Unknown field "${key}".`;
       }
     }
     for (const key of schema.required ?? []) {
@@ -71,6 +71,8 @@ function check(schema: Schema, value: unknown, path: string): string | null {
     if (schema.maximum !== undefined && value > schema.maximum) return `${where} must be at most ${schema.maximum}.`;
   } else if (schema.type === "number") {
     if (typeof value !== "number" || !Number.isFinite(value)) return `${where} must be a number.`;
+    if (schema.minimum !== undefined && value < schema.minimum) return `${where} must be at least ${schema.minimum}.`;
+    if (schema.maximum !== undefined && value > schema.maximum) return `${where} must be at most ${schema.maximum}.`;
   } else if (schema.type === "null") {
     if (value !== null) return `${where} must be null.`;
   }

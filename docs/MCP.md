@@ -15,12 +15,13 @@ Stateless Streamable HTTP. One JSON-RPC request, one JSON response. survee suppo
 | URL | `https://<your-host>/api/mcp` |
 | Method | `POST` |
 | Header | `Authorization: Bearer <key or KQA_MCP_TOKEN>` |
+| Content-Type | `application/json` |
 | Accept | `application/json, text/event-stream` |
 | Body | A single JSON-RPC 2.0 message |
 
 Requests with an `Origin` header are accepted only when it matches `KQA_PUBLIC_URL` or an origin in `KQA_MCP_ALLOWED_ORIGINS`. Set the optional value to comma-separated serialized origins such as `https://client.example,https://admin.example:8443`; do not include paths, queries, or trailing slashes. Invalid or unlisted origins receive HTTP 403 before bearer validation. Requests without `Origin` remain supported for server-to-server clients. This check applies to POST, GET, DELETE, and OPTIONS. Allowed browser origins receive an exact-origin CORS response; preflight permits POST with `Accept`, `Authorization`, `Content-Type`, and `MCP-Protocol-Version` headers. Cookies are not used.
 
-`GET` with a valid bearer and `DELETE` answer 405; an unauthenticated `GET` answers 401. This server does not open an SSE channel and does not keep a session. A `POST` with no bearer answers 401 and points ChatGPT at the OAuth discovery documents.
+`GET` with a valid bearer and `DELETE` answer 405; an unauthenticated `GET` answers 401. POST requires `Content-Type: application/json` (an optional charset is accepted) and an `Accept` header that permits JSON or event-stream; unsupported content types answer 415. This server does not open an SSE channel and does not keep a session. A `POST` with no bearer answers 401 and points ChatGPT at the OAuth discovery documents.
 
 ChatGPT connects to `https://<your-host>/api/mcp` with no pasted token. It discovers `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, then the host signs in and chooses Allow. That creates a key under Settings named after the app. The key is bound to the signed-in workspace. Revoke or delete the key to disconnect it. Other agents can use a workspace key or `KQA_MCP_TOKEN`.
 
