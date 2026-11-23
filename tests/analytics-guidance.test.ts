@@ -6,11 +6,16 @@ describe("versioned analytics guidance", () => {
   it("returns a deterministic, JSON-serializable package with primary sources", () => {
     const first = getAnalyticsGuidance();
     const second = getAnalyticsGuidance();
-    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/18");
+    expect(ANALYTICS_GUIDANCE_VERSION).toBe("kqa-analytics/19");
     const analysis = getAnalyticsGuidance();
     expect(analysis.principles.find((principle) => principle.id === "explore-answer-segments")?.guidance).toContain("crossTabWith");
     expect(analysis.productConstraints.join(" ")).toContain("400 cells");
     expect(analysis.productConstraints.join(" ")).toContain("current workspace threshold is applied to reported cells, margins, and denominators");
+    const segmentGuidance = analysis.principles.find((principle) => principle.id === "explore-answer-segments")?.guidance ?? "";
+    expect(segmentGuidance).toContain("Non-comparison cross-tabs omit per-status counts");
+    expect(segmentGuidance).toContain("undersized reported positive count withholds the complete requested result");
+    expect(segmentGuidance).not.toContain("without suppression");
+    expect(analysis.principles.find((principle) => principle.id === "protect-respondents")?.guidance).toContain("workspace minimum guards reported aggregate counts");
     expect(first).toEqual(second);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.sources.length).toBeGreaterThanOrEqual(6);
@@ -72,6 +77,7 @@ describe("versioned analytics guidance", () => {
     expect(constraints).toContain("complete result for a requested aggregate is withheld");
     expect(constraints).toContain("combined-cohort outputs omit per-status counts");
     expect(constraints).toContain("operational progress counts in interview status views are not governed");
+    expect(constraints).toContain("non-comparison cross-tabs omit per-status counts");
     expect(constraints).toContain("does not guarantee anonymity");
     expect(constraints).toContain("disclosurerisk metadata flags singleton segments");
     expect(constraints).toContain("questionsummary.disclosurerisk flags singleton");
