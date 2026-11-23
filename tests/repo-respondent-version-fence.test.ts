@@ -238,6 +238,40 @@ describe("respondent version fence", () => {
     expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({ ok: true, submittedAt: expect.any(String) });
   });
 
+  it("blocks submission when a retained scalar answer violates the current questionnaire", async () => {
+    mocks.versionManifest = { format: "kqa/1", title: "Changed", questions: [
+      { id: "q1", type: "single", label: "Choice", options: [{ value: "new", label: "New" }] },
+    ] };
+    mocks.participant.answers = { q1: { value: "removed", updatedAt: "now" } };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({
+      ok: false, status: 422, code: "incomplete_answers", invalidAnswers: [{ id: "q1", code: "invalid_option" }],
+    });
+    expect(mocks.participant.status).toBe("invited");
+
+    mocks.versionManifest.questions[0] = { id: "q1", type: "number", label: "Count", max: 10 };
+    mocks.participant.answers = { q1: { value: 11, updatedAt: "now" } };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({
+      ok: false, status: 422, invalidAnswers: [{ id: "q1", code: "above_maximum" }],
+    });
+  });
+
+  it("blocks submission when a retained repeat number is off its declared step", async () => {
+    mocks.versionManifest = { format: "kqa/1", title: "Repeat", questions: [{
+      id: "jobs", type: "repeat", label: "Jobs", maxRows: 2,
+      fields: [{ id: "hours", label: "Hours", type: "number", min: -4, max: 4, step: 2 }],
+    }] };
+    mocks.participant.recordGroups = { jobs: [{ id: "row-1", values: { hours: 1 } }] };
+    expect(await asAxion(() => submitAnswers(token, 4))).toMatchObject({
+      ok: false, status: 422, repeatErrors: [{ questionId: "jobs", rowId: "row-1", fieldId: "hours", code: "invalid_step" }],
+    });
+  });
+
+  it("rejects scalar number saves that do not match the declared step", async () => {
+    mocks.versionManifest = { format: "kqa/1", title: "Stepped", questions: [{ id: "q1", type: "number", label: "Count", min: -4, max: 4, step: 2 }] };
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: -2 } }))).toMatchObject({ ok: true });
+    expect(await asAxion(() => saveAnswers(token, 4, { q1: { value: -1 } }))).toMatchObject({ ok: false, status: 400 });
+  });
+
   it("rejects a save when publication wins before the transaction fence", async () => {
     mocks.publishBeforeTransaction = true;
 

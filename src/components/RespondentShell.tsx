@@ -887,7 +887,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     if (recordConflictRefreshFailedRef.current.size) { setSubmitting(false); return; }
     if (rejectedRecordDraftsRef.current.length) { setSubmitting(false); toast(t("repeatRejectedTitle"), "err", localeMeta); return; }
     if (inflight.current || Object.keys(pending.current).length || pendingRecordOperations.current.length) { setSubmitting(false); toast(t("notSavedYet"), "err", localeMeta); return; }
-    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RecordIssue[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current, writeEpoch: writeEpoch.current } });
+    const res = await api<{ submittedAt: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; invalidAnswers?: { id: string; code: string }[]; repeatErrors?: RecordIssue[] }>(`/api/p/${token}/submit`, { method: "POST", body: { version: version.current, writeEpoch: writeEpoch.current } });
     setSubmitting(false);
     if (res.ok) {
       submittedFocusPending.current = true;
@@ -916,6 +916,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         for (const item of res.data.invalidMinimumSelections ?? []) problems[item.id] = { key: "minSelections", count: item.minimum };
         for (const item of res.data.invalidExclusiveSelections ?? []) problems[item.id] = { key: "exclusiveError" };
         for (const item of res.data.invalidRankSelections ?? []) problems[item.id] = { key: "rankError" };
+        for (const item of res.data.invalidAnswers ?? []) problems[item.id] = { key: "submitError" };
         setSubmitRepeatProblems(Object.fromEntries((res.data.repeatErrors ?? []).map((item) => [item.questionId, item])));
         setSubmitProblems(problems);
         setSubmitError(true);

@@ -108,6 +108,48 @@ describe("answered, without scores", () => {
     expect(validateAnswer(date, "")).toEqual({ ok: true, value: null });
   });
 
+  it("enforces number steps from the minimum or zero base with decimal tolerance", () => {
+    const byMin: Question = { id: "amount", type: "number", label: "Amount", min: -5, max: 5, step: 2 };
+    expect(validateAnswer(byMin, -3)).toMatchObject({ ok: true, value: -3 });
+    expect(validateAnswer(byMin, -2)).toMatchObject({ ok: false, code: "invalid_step" });
+    const decimal: Question = { id: "fraction", type: "number", label: "Fraction", min: 0.1, step: 0.2 };
+    expect(validateAnswer(decimal, 0.3)).toMatchObject({ ok: true, value: 0.3 });
+    const zeroBased = { ...decimal, min: undefined, step: 0.1 };
+    expect(validateAnswer(zeroBased, 0.3)).toMatchObject({ ok: true, value: 0.3 });
+    expect(validateAnswer(zeroBased, 0.31)).toMatchObject({ ok: false, code: "invalid_step" });
+    const scale: Question = { id: "rating", type: "scale", label: "Rating", min: 1, max: 5, step: 2 };
+    expect(validateAnswer(scale, 3)).toMatchObject({ ok: true, value: 3 });
+    expect(validateAnswer(scale, 4)).toMatchObject({ ok: false, code: "invalid_step" });
+  });
+
+  it("flags retained scalar answers that no longer satisfy the current manifest", () => {
+    const manifest: Manifest = { format: "kqa/1", title: "Changed", questions: [
+      { id: "choice", type: "single", label: "Choice", options: [{ value: "new", label: "New" }] },
+      { id: "count", type: "number", label: "Count", max: 10 },
+      { id: "date", type: "date", label: "Date" },
+    ] };
+    const current = progress(manifest, {
+      choice: { value: "removed", updatedAt: "now" },
+      count: { value: 11, updatedAt: "now" },
+      date: { value: "2026-02-30", updatedAt: "now" },
+    });
+    expect(current.invalidAnswers).toEqual([
+      { id: "choice", code: "invalid_option" },
+      { id: "count", code: "above_maximum" },
+      { id: "date", code: "invalid_date" },
+    ]);
+  });
+
+  it("enforces numeric steps in repeat row fields", () => {
+    const field = { id: "hours", label: "Hours", type: "number" as const, min: -4, max: 4, step: 2 };
+    expect(validateRepeatFieldValue(field, -2)).toMatchObject({ ok: true, value: -2 });
+    expect(validateRepeatFieldValue(field, -1)).toMatchObject({ ok: false, code: "invalid_step" });
+    const manifest: Manifest = { format: "kqa/1", title: "Repeat", questions: [{ id: "jobs", type: "repeat", label: "Jobs", fields: [field], maxRows: 2 }] };
+    expect(progress(manifest, {}, { jobs: [{ id: "row-1", values: { hours: 1 }, revision: 0, fieldRevisions: {} }] })).toMatchObject({
+      repeatErrors: [{ questionId: "jobs", rowId: "row-1", fieldId: "hours", code: "invalid_step" }],
+    });
+  });
+
   it("evaluates earlier-question routing and excludes inactive questions from required progress", () => {
     const manifest: Manifest = {
       format: "kqa/1", title: "Routing", questions: [

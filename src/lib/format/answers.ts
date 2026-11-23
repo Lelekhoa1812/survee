@@ -1,9 +1,9 @@
 import { LIMITS, isCalendarDate, scaleBounds, type AnswerMap, type AnswerValue, type Condition, type Manifest, type Question, type RepeatField, type RepeatRecordMap } from "./schema";
 
-export type AnswerIssueCode = "expected_option" | "invalid_option" | "expected_option_list" | "below_minimum_selections" | "above_maximum_selections" | "exclusive_conflict" | "expected_rank" | "rank_incomplete" | "rank_duplicate" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "expected_scale" | "outside_scale" | "invalid_date" | "not_scalar";
+export type AnswerIssueCode = "expected_option" | "invalid_option" | "expected_option_list" | "below_minimum_selections" | "above_maximum_selections" | "exclusive_conflict" | "expected_rank" | "rank_incomplete" | "rank_duplicate" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "invalid_step" | "expected_scale" | "outside_scale" | "invalid_date" | "not_scalar";
 export type ValidateResult = { ok: true; value: AnswerValue | null } | { ok: false; reason: string; code: AnswerIssueCode; params?: { minimum?: number; maximum?: number } };
 
-export type RepeatIssueCode = "stale_revision" | "invalid_question" | "invalid_row_id" | "history_limit" | "max_rows" | "invalid_field" | "inactive_question" | "min_rows" | "required_field" | "invalid_option" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "expected_scale" | "outside_scale" | "invalid_date" | "nonempty_scalar";
+export type RepeatIssueCode = "stale_revision" | "invalid_question" | "invalid_row_id" | "history_limit" | "max_rows" | "invalid_field" | "inactive_question" | "min_rows" | "required_field" | "invalid_option" | "expected_text" | "max_length" | "expected_number" | "below_minimum" | "above_maximum" | "invalid_step" | "expected_scale" | "outside_scale" | "invalid_date" | "nonempty_scalar";
 export interface RepeatAnswerIssue { questionId: string; rowId?: string; fieldId?: string; reason: string; code: RepeatIssueCode; params?: { minimum?: number; maximum?: number } }
 
 type RepeatFieldResult = { ok: true; value: string | number } | { ok: false; reason: string; code: RepeatIssueCode; params?: { minimum?: number; maximum?: number } };
@@ -24,11 +24,14 @@ export function validateRepeatFieldValue(field: RepeatField, raw: unknown): Repe
       const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
       if (typeof n !== "number" || !Number.isFinite(n)) return { ok: false, reason, code: "expected_number" };
       if (field.min !== undefined && n < field.min) return { ok: false, reason, code: "below_minimum", params: { minimum: field.min } };
+      if (field.max !== undefined && n > field.max) return { ok: false, reason, code: "above_maximum", params: { maximum: field.max } };
+      if (field.step !== undefined) return { ok: false, reason, code: "invalid_step" };
       return { ok: false, reason, code: "above_maximum", params: { maximum: field.max } };
     }
     case "scale": {
       const n = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
       const { min, max } = scaleBounds(field as Question);
+      if (typeof n === "number" && Number.isInteger(n) && n >= min && n <= max && field.step !== undefined) return { ok: false, reason, code: "invalid_step" };
       return { ok: false, reason, code: typeof n !== "number" || !Number.isInteger(n) ? "expected_scale" : "outside_scale", params: { minimum: min, maximum: max } };
     }
     case "date": return { ok: false, reason, code: "invalid_date" };
@@ -94,6 +97,10 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
       if (typeof n !== "number" || !Number.isFinite(n)) return { ok: false, code: "expected_number", reason: `expected a number, got ${describe(raw)}` };
       if (q.min !== undefined && n < q.min) return { ok: false, code: "below_minimum", params: { minimum: q.min }, reason: `${n} is below the minimum ${q.min}` };
       if (q.max !== undefined && n > q.max) return { ok: false, code: "above_maximum", params: { maximum: q.max }, reason: `${n} is above the maximum ${q.max}` };
+      if (q.step !== undefined) {
+        const base = q.min ?? 0;
+        if (!matchesStep(n, base, q.step)) return { ok: false, code: "invalid_step", reason: `${n} does not match increments of ${q.step} from ${base}` };
+      }
       return { ok: true, value: n };
     }
     case "scale": {
@@ -101,6 +108,7 @@ export function validateAnswer(q: Question, raw: unknown, options: { allowOverLi
       const { min, max } = scaleBounds(q);
       if (typeof n !== "number" || !Number.isInteger(n)) return { ok: false, code: "expected_scale", reason: `expected a whole number from ${min} to ${max}, got ${describe(raw)}` };
       if (n < min || n > max) return { ok: false, code: "outside_scale", params: { minimum: min, maximum: max }, reason: `${n} is outside the scale ${min} to ${max}` };
+      if (q.step !== undefined && !matchesStep(n, min, q.step)) return { ok: false, code: "invalid_step", reason: `${n} does not match increments of ${q.step} from ${min}` };
       return { ok: true, value: n };
     }
     case "date": {
@@ -171,14 +179,16 @@ function typedValueIsUsable(question: Question, actual: unknown, expected: unkno
   if (question.type === "date") return typeof actual === "string" && isCalendarDate(actual) && typeof expected === "string" && isCalendarDate(expected);
   if (question.type !== "number" && question.type !== "scale") return false;
   if (typeof actual !== "number" || !Number.isFinite(actual) || typeof expected !== "number" || !Number.isFinite(expected)) return false;
-  if (question.type === "scale" && (!Number.isInteger(actual) || !Number.isInteger(expected))) return false;
-  if (question.min !== undefined && actual < question.min) return false;
-  if (question.max !== undefined && actual > question.max) return false;
+  if (question.type === "number") return validateAnswer(question, actual).ok;
   if (question.type === "scale") {
-    const { min, max } = scaleBounds(question);
-    return actual >= min && actual <= max && expected >= min && expected <= max;
+    return Number.isInteger(actual) && Number.isInteger(expected)
+      && validateAnswer(question, actual).ok && validateAnswer(question, expected).ok;
   }
-  return true;
+  return false;
+}
+
+function matchesStep(value: number, base: number, step: number): boolean {
+  return Math.abs((value - base) / step - Math.round((value - base) / step)) <= 1e-9;
 }
 function compareTypedValue(actual: string | number | string[] | undefined, expected: string | number, operator: TypedComparison["operator"]): boolean {
   if (actual === undefined || typeof actual !== typeof expected || Array.isArray(actual)) return false;
@@ -217,6 +227,7 @@ export interface Progress {
   invalidMinimumSelections: { id: string; selected: number; minimum: number }[];
   invalidExclusiveSelections: { id: string }[];
   invalidRankSelections: { id: string }[];
+  invalidAnswers: { id: string; code: AnswerIssueCode }[];
   eligible: Record<string, boolean>;
   inactive: number;
   repeatErrors: RepeatAnswerIssue[];
@@ -231,6 +242,7 @@ export function progress(manifest: Manifest, answers: AnswerMap, recordGroups: R
   const invalidMinimumSelections: Progress["invalidMinimumSelections"] = [];
   const invalidExclusiveSelections: Progress["invalidExclusiveSelections"] = [];
   const invalidRankSelections: Progress["invalidRankSelections"] = [];
+  const invalidAnswers: Progress["invalidAnswers"] = [];
   const eligible = evaluateEligibility(manifest, answers, recordGroups);
   const repeatErrors = validateRecordGroups(manifest, recordGroups, answers, eligible);
   let total = 0;
@@ -255,9 +267,16 @@ export function progress(manifest: Manifest, answers: AnswerMap, recordGroups: R
       if (selected > 0 && selected < q.minSelections) invalidMinimumSelections.push({ id: q.id, selected, minimum: q.minSelections });
     }
     if (q.type === "multi" && Array.isArray(value) && value.some((item) => q.exclusiveOptions?.includes(item)) && new Set(value).size > 1) invalidExclusiveSelections.push({ id: q.id });
-    if (q.type === "rank" && value !== undefined && value !== null && !validateAnswer(q, value).ok) invalidRankSelections.push({ id: q.id });
+    if (value !== undefined && value !== null) {
+      if (q.type === "rank") {
+        if (!validateAnswer(q, value).ok) invalidRankSelections.push({ id: q.id });
+      } else {
+        const result = validateAnswer(q, value, q.type === "multi" ? { allowUnderMinSelections: true, allowOverLimit: true, allowExclusiveConflict: true } : undefined);
+        if (!result.ok) invalidAnswers.push({ id: q.id, code: result.code });
+      }
+    }
   }
-  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidMinimumSelections, invalidExclusiveSelections, invalidRankSelections, eligible, inactive: manifest.questions.length - total, repeatErrors };
+  return { total, answered, requiredTotal, requiredAnswered, missingRequired, invalidSelections, invalidMinimumSelections, invalidExclusiveSelections, invalidRankSelections, invalidAnswers, eligible, inactive: manifest.questions.length - total, repeatErrors };
 }
 
 /** Validate retained repeat rows at submit; drafts remain saveable while required fields are incomplete. */

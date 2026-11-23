@@ -166,7 +166,7 @@ Use question-order variation only when the research question or usability goal w
 | Full-order contract | — | `rank` | A non-empty answer contains every declared option exactly once; partial rankings are invalid. The stored value is an array of option values in respondent-chosen order. An optional rank may remain unanswered. If a later questionnaire version changes the option set, a retained old order must be confirmed against every current option before submission. |
 | `note` | no | all | `true`, or `{ "label", "placeholder", "maxLength" }`. Enables an optional free-text note stored beside the answer. Up to 5000 characters |
 | `min`, `max` | no | `number`, `scale` | `scale` defaults to 1 to 5 and uses safely representable whole-number bounds, with `min` below `max` and a span of at most 20 steps |
-| `step` | no | `number`, `scale` | Positive number |
+| `step` | no | `number`, `scale` | Positive increment enforced by respondent saves and submission. Values must be on the arithmetic sequence starting at `min`, or at zero for a number without `min`; scales use their default minimum of 1 when `min` is omitted |
 | `maxLength` | no | `text`, `longtext` | Default 500 for `text`, 20000 for `longtext` |
 | `fields` | yes for `repeat` | `repeat` | 1 to 12 typed fields (`single`, `select`, `text`, `longtext`, `number`, `scale`, `date`); each has a stable `id`, `label`, optional `help` and `required`, plus type-appropriate options or bounds |
 | `maxRows` | yes for `repeat` | `repeat` | Maximum respondent-created rows, 1 to 20 |
@@ -428,7 +428,7 @@ Per respondent, in MongoDB collection `participants`:
 
 Answers are keyed by **question id**. That is why ids and option values must stay stable. The survey file itself is stored immutably per version in `survey_versions`, so older exports can always be reproduced.
 
-The app validates every value against the manifest before saving (types, option membership, number ranges, lengths). An invalid value is rejected, never stored, and the page is reset to what is actually saved. A retained full-order ranking is checked against the current option set; after options change, the respondent must confirm an order that includes every current option before submitting.
+The app validates every value against the manifest before saving (types, option membership, number ranges and increments, lengths). An invalid value is rejected, never stored, and the page is reset to what is actually saved. When a newer version makes a retained active scalar answer invalid, the respondent must update or clear it before submitting; retained full-order rankings must be confirmed against every current option. Answers to inactive questions remain retained and are excluded from current requiredness and submission validation.
 
 There is no answer key and no score. "Answered" means a non-empty value: one chosen option, at least one ticked checkbox, or text that is not blank after trimming. A note on its own does not count. An optional email address may be stored on the person so the host can send the private link. That address is not a question in this file, and this file never sends mail.
 

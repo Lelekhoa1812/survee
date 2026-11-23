@@ -17,5 +17,5 @@ export const POST = withServerErrors("p/submit", async function POST(req: Reques
   }
   if (typeof body.data.writeEpoch !== "number" || !Number.isSafeInteger(body.data.writeEpoch) || body.data.writeEpoch < 0) return fail(409, "This response state is missing. Reload the page to continue.", { code: "respondent_state_changed" });
   const result = await submitAnswers(token, body.data.version, body.data.writeEpoch);
-  return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, missing: result.missing, invalidSelections: result.invalidSelections, invalidMinimumSelections: result.invalidMinimumSelections, invalidExclusiveSelections: result.invalidExclusiveSelections, invalidRankSelections: result.invalidRankSelections, repeatErrors: result.repeatErrors });
+  return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, missing: result.missing, invalidSelections: result.invalidSelections, invalidMinimumSelections: result.invalidMinimumSelections, invalidExclusiveSelections: result.invalidExclusiveSelections, invalidRankSelections: result.invalidRankSelections, invalidAnswers: result.invalidAnswers, repeatErrors: result.repeatErrors });
 });

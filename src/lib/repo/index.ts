@@ -1149,7 +1149,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   return result;
 }
 
-export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; repeatErrors?: RepeatRecordIssue[] };
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; invalidAnswers?: { id: string; code: string }[]; repeatErrors?: RepeatRecordIssue[] };
 
 export async function submitAnswers(token: string, expectedVersion: number, expectedWriteEpoch?: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
@@ -1173,9 +1173,9 @@ export async function submitAnswers(token: string, expectedVersion: number, expe
     if ((current.writeEpoch ?? 0) !== writeEpoch) return { ok: false, status: 409, error: "This response changed in another window. Reload the page before continuing.", code: "respondent_state_changed" };
     if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
     const pr = progress(ctx.version.manifest, current.answers, current.recordGroups ?? {});
-    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length || pr.repeatErrors.length) {
+    if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length || pr.invalidAnswers.length || pr.repeatErrors.length) {
       const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
-      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidMinimumSelections.length + pr.invalidExclusiveSelections.length + pr.invalidRankSelections.length + pr.repeatErrors.length;
+      const issues = pr.missingRequired.length + pr.invalidSelections.length + pr.invalidMinimumSelections.length + pr.invalidExclusiveSelections.length + pr.invalidRankSelections.length + pr.invalidAnswers.length + pr.repeatErrors.length;
       return {
         ok: false,
         status: 422,
@@ -1186,6 +1186,7 @@ export async function submitAnswers(token: string, expectedVersion: number, expe
         invalidMinimumSelections: pr.invalidMinimumSelections,
         invalidExclusiveSelections: pr.invalidExclusiveSelections,
         invalidRankSelections: pr.invalidRankSelections,
+        invalidAnswers: pr.invalidAnswers,
         repeatErrors: pr.repeatErrors,
       };
     }
