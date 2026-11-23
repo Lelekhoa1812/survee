@@ -5,7 +5,7 @@ import { csvLong, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
 import { exportFilename, longParticipantRows, longTable, recordTable, slugify, wideParticipantRow, wideTable } from "../src/lib/export/rows";
 import { jsonExport } from "../src/lib/export/json";
 import { escapeInline, markdownExport } from "../src/lib/export/markdown";
-import { exportInterview, type ExportInput } from "../src/lib/export/index";
+import { exportInterview, ExportOutputSizeLimitError, MAX_EXPORT_OUTPUT_BYTES, type ExportInput } from "../src/lib/export/index";
 import { xlsxExport } from "../src/lib/export/xlsx";
 
 const T = "2026-11-05T02:00:00.000Z";
@@ -721,5 +721,17 @@ describe("filenames and dispatch", () => {
       "kqa-staff-pulse-survey-2026-20261113.xlsx",
       "kqa-staff-pulse-survey-2026-20261113.md",
     ]);
+  });
+
+  it("rejects a buffered export whose serialized file exceeds the output budget", async () => {
+    const oversized = {
+      ...input,
+      participants: [{
+        id: "large", name: "Large answer", status: "submitted" as const, createdAt: T,
+        answers: { role: { value: "x".repeat(MAX_EXPORT_OUTPUT_BYTES + 128), updatedAt: T } },
+      }],
+    };
+
+    await expect(exportInterview(oversized, "json")).rejects.toBeInstanceOf(ExportOutputSizeLimitError);
   });
 });

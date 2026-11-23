@@ -135,7 +135,7 @@ describe("workspace member access boundary", () => {
     expect(bytes.slice(0, 3)).toEqual(new Uint8Array([0xef, 0xbb, 0xbf]));
     expect(body).toContain("Person,Person note,Status");
     expect(body.indexOf("Newer")).toBeLessThan(body.indexOf("Older"));
-    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", "page-2", 10, false, true);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", "page-2", 10, false, true, 8 * 1024 * 1024);
     expect(state.listParticipants).not.toHaveBeenCalled();
   });
 

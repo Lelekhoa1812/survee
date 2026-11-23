@@ -3,27 +3,46 @@ import { jsonExport } from "./json";
 import { markdownExport } from "./markdown";
 import type { ExportFile, ExportFormat, ExportInput } from "./types";
 import { xlsxExport } from "./xlsx";
+import { MAX_EXPORT_OUTPUT_BYTES } from "../participant-limits";
 
 export { EXPORT_FORMATS } from "./types";
 export type { ExportFile, ExportFormat, ExportInput, ExportParticipant, ParticipantStatus } from "./types";
 export { exportFilename } from "./rows";
+export { MAX_EXPORT_OUTPUT_BYTES } from "../participant-limits";
+
+export class ExportOutputSizeLimitError extends Error {
+  readonly limitBytes = MAX_EXPORT_OUTPUT_BYTES;
+  constructor() {
+    super(`The generated export exceeds the ${MAX_EXPORT_OUTPUT_BYTES}-byte output limit.`);
+    this.name = "ExportOutputSizeLimitError";
+  }
+}
 
 /** Build one export of the interview in the requested format. */
 export async function exportInterview(input: ExportInput, format: ExportFormat): Promise<ExportFile> {
+  let file: ExportFile;
   switch (format) {
     case "json":
-      return jsonExport(input);
+      file = jsonExport(input);
+      break;
     case "csv-wide":
-      return csvWide(input);
+      file = csvWide(input);
+      break;
     case "csv-long":
-      return csvLong(input);
+      file = csvLong(input);
+      break;
     case "xlsx":
-      return xlsxExport(input);
+      file = await xlsxExport(input);
+      break;
     case "md":
-      return markdownExport(input);
+      file = markdownExport(input);
+      break;
     default: {
       const unknown: never = format;
       throw new Error(`Unknown export format: ${String(unknown)}`);
     }
   }
+  const outputBytes = typeof file.body === "string" ? Buffer.byteLength(file.body, "utf8") : file.body.byteLength;
+  if (outputBytes > MAX_EXPORT_OUTPUT_BYTES) throw new ExportOutputSizeLimitError();
+  return file;
 }

@@ -242,6 +242,16 @@ describe("MCP tools", () => {
     expect(oversizedBody.result.structuredContent).toMatchObject({ code: "export_payload_limit", limitBytes: 8 * 1024 * 1024 });
   });
 
+  it("caps the encoded MCP envelope after JSON escaping expands a valid file", async () => {
+    vi.mocked(listParticipants).mockResolvedValueOnce([
+      { id: personId, name: "Quote-heavy", status: "submitted", answers: { fit: { value: '"'.repeat(7 * 1024 * 1024), updatedAt: "2026-11-13T00:00:00.000Z" } } },
+    ] as never);
+    const response = await call("export_interview", { interviewId, format: "json" });
+    const result = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; limitBytes?: number } } };
+    expect(result.result.isError).toBe(true);
+    expect(result.result.structuredContent).toMatchObject({ code: "export_output_limit", limitBytes: 16 * 1024 * 1024 });
+  });
+
   it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {
     const repeatManifest = {
       ...analyticsManifest,

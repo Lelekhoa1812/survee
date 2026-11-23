@@ -8,8 +8,8 @@ import { readDoc } from "../docs";
 import { getInterviewPackage, INTERVIEW_PACKAGES } from "../interview-packages";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
-import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
-import { MAX_PEOPLE_PER_BATCH } from "../participant-limits";
+import { EXPORT_FORMATS, exportInterview, ExportOutputSizeLimitError, type ExportFormat } from "../export";
+import { MAX_EXPORT_OUTPUT_BYTES, MAX_PEOPLE_PER_BATCH } from "../participant-limits";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
 import { sendInvite } from "../mail/invite";
@@ -973,10 +973,17 @@ const TOOLS: ToolDef[] = [
       );
       const binary = typeof file.body !== "string";
       const body = typeof file.body === "string" ? file.body : file.body.toString("base64");
-      return ok(
+      const textBody = !binary && Buffer.byteLength(body, "utf8") <= 64 * 1024
+        ? body
+        : `Exported ${file.filename}. The complete file is in structuredContent.`;
+      const result = ok(
         { ok: true, filename: file.filename, contentType: file.contentType, encoding: binary ? "base64" : "utf8", body },
-        binary ? `Exported ${file.filename}. The file is base64 in structuredContent.` : body,
+        textBody,
       );
+      // Bound the fully encoded MCP result as well as the file bytes: base64
+      // and JSON string escaping can expand the payload substantially.
+      if (Buffer.byteLength(JSON.stringify(result), "utf8") > MAX_EXPORT_OUTPUT_BYTES) throw new ExportOutputSizeLimitError();
+      return result;
     },
   },
   {
@@ -1851,6 +1858,9 @@ export async function dispatchTool(name: string, args: unknown, capabilities?: r
     }
     if (error instanceof ParticipantExportSizeLimitError) {
       return finish(tool.name, err(error.message, "export_payload_limit", { limitBytes: error.limitBytes }), interviewId);
+    }
+    if (error instanceof ExportOutputSizeLimitError) {
+      return finish(tool.name, err(error.message, "export_output_limit", { limitBytes: error.limitBytes }), interviewId);
     }
     console.error(`[mcp:${tool.name}] unexpected error`, error instanceof Error ? error.name : "unknown");
     return finish(tool.name, err("That could not be done. Try again in a moment.", "server_error"), interviewId);

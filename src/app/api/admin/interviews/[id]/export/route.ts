@@ -1,8 +1,9 @@
-import { EXPORT_FORMATS, exportFilename, exportInterview, type ExportFormat, type ExportParticipant } from "@/lib/export";
+import { EXPORT_FORMATS, exportFilename, exportInterview, ExportOutputSizeLimitError, type ExportFormat, type ExportParticipant } from "@/lib/export";
 import { encodeCsvRow } from "@/lib/export/csv";
 import { LONG_HEADER, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
 import { getInterview, getInterviewParticipantCounts, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError } from "@/lib/repo";
+import { MAX_EXPORT_SOURCE_BYTES, MAX_STREAMED_CSV_OUTPUT_BYTES } from "@/lib/participant-limits";
 import { NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -29,8 +30,9 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     if (counts.people > 100) {
       let firstPage;
       try {
-        firstPage = await listParticipantPage(id, null, 10, false, true);
-      } catch {
+        firstPage = await listParticipantPage(id, null, 10, false, true, MAX_EXPORT_SOURCE_BYTES);
+      } catch (error) {
+        if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_page_limit", limitBytes: error.limitBytes });
         return fail(503, "The export could not be started. Try again in a moment.", { code: "export_stream_unavailable" });
       }
       const filename = exportFilename(base, format);
@@ -42,20 +44,27 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
       let rowIndex = 0;
       let cursor: string | null = null;
       let headerSent = false;
+      let emittedBytes = 0;
       const stream = new ReadableStream<Uint8Array>({
         async pull(controller) {
+          const enqueue = (value: string) => {
+            const chunk = encoder.encode(value);
+            if (emittedBytes + chunk.byteLength > MAX_STREAMED_CSV_OUTPUT_BYTES) throw new Error(`CSV export exceeded the ${MAX_STREAMED_CSV_OUTPUT_BYTES}-byte output limit.`);
+            emittedBytes += chunk.byteLength;
+            controller.enqueue(chunk);
+          };
           const rowsFor = (person: ExportParticipant) => format === "csv-wide"
             ? [wideParticipantRow(version.manifest, version.version, person)]
             : longParticipantRows(version.manifest, person);
           try {
             if (!headerSent) {
               headerSent = true;
-              controller.enqueue(encoder.encode("\uFEFF" + encodeCsvRow(headers)));
+              enqueue("\uFEFF" + encodeCsvRow(headers));
               return;
             }
             while (controller.desiredSize === null || controller.desiredSize > 0) {
               if (rowIndex < rows.length) {
-                controller.enqueue(encoder.encode(encodeCsvRow(rows[rowIndex++])));
+                enqueue(encodeCsvRow(rows[rowIndex++]));
                 continue;
               }
               if (personIndex < page.people.length) {
@@ -74,16 +83,16 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
                 return;
               }
               cursor = page.nextCursor;
-              page = await listParticipantPage(id, cursor, 10, false, true);
+              page = await listParticipantPage(id, cursor, 10, false, true, MAX_EXPORT_SOURCE_BYTES);
               personIndex = 0;
             }
-          } catch {
-            controller.error(new Error("CSV export stream failed"));
+          } catch (error) {
+            controller.error(error instanceof Error ? error : new Error("CSV export stream failed"));
           }
         },
       });
       return new NextResponse(stream, {
-        headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`, "Cache-Control": "no-store" },
+        headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`, "Cache-Control": "no-store", "X-Export-Max-Bytes": String(MAX_STREAMED_CSV_OUTPUT_BYTES) },
       });
     }
   }
@@ -95,13 +104,19 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_payload_limit", limitBytes: error.limitBytes });
     throw error;
   }
-  const file = await exportInterview(
+  let file: Awaited<ReturnType<typeof exportInterview>>;
+  try {
+    file = await exportInterview(
     {
       ...base,
       participants: people.map((p) => ({ id: p.id, name: p.name, note: p.note, status: p.status, createdAt: p.createdAt, lastSavedAt: p.lastSavedAt, submittedAt: p.submittedAt, answers: p.answers, recordGroups: p.recordGroups, questionOrderAssignments: p.questionOrderAssignments })),
     },
-    format,
-  );
+      format,
+    );
+  } catch (error) {
+    if (error instanceof ExportOutputSizeLimitError) return fail(413, error.message, { code: "export_output_limit", limitBytes: error.limitBytes });
+    throw error;
+  }
   const body = typeof file.body === "string" ? file.body : new Uint8Array(file.body);
   return new NextResponse(body, {
     headers: { "Content-Type": file.contentType, "Content-Disposition": `attachment; filename="${file.filename.replace(/"/g, "")}"`, "Cache-Control": "no-store" },

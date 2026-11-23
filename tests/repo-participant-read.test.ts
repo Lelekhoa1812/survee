@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   docs: [] as Record<string, any>[],
   participantBytes: 0,
+  pageSourceBytes: 0,
   requestedLimit: 0,
   sortedBy: {} as Record<string, number>,
   findCalls: 0,
@@ -16,8 +17,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/lib/db", () => ({
   col: {
     participants: async () => ({
-      aggregate: () => {
+      aggregate: (pipeline: Record<string, any>[]) => {
         mocks.aggregateCalls += 1;
+        if (pipeline.some((stage) => Boolean(stage.$set?._pageDocBytes))) {
+          return { toArray: async () => [{ summary: mocks.pageSourceBytes ? [{ sourceBytes: mocks.pageSourceBytes }] : [], docs: mocks.pageDocs.length ? mocks.pageDocs.shift()! : mocks.docs }] };
+        }
         const count = mocks.docs.length;
         const fits = count <= 100 && mocks.participantBytes <= 8 * 1024 * 1024;
         return { toArray: async () => [{
@@ -51,6 +55,7 @@ import { withTenantPrincipal } from "../src/lib/tenant-context";
 beforeEach(() => {
   mocks.docs = Array.from({ length: MAX_PARTICIPANTS_PER_READ + 1 }, () => ({ _id: new ObjectId() }));
   mocks.participantBytes = 0;
+  mocks.pageSourceBytes = 0;
   mocks.requestedLimit = 0;
   mocks.sortedBy = {};
   mocks.findCalls = 0;
@@ -113,6 +118,26 @@ describe("cursor participant pages", () => {
     const cursorFilter = mocks.filters[1];
     expect(JSON.stringify(cursorFilter)).toContain('"$lt"');
     expect(JSON.stringify(cursorFilter)).toContain(b._id.toHexString());
+  });
+
+  it("bounds source bytes before hydrating a streamed CSV page", async () => {
+    const personDoc = person("000000000000000000000006", "2026-01-06T00:00:00.000Z");
+    mocks.pageDocs = [[personDoc]];
+
+    const page = await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 10, false, true, MAX_EXPORT_SOURCE_BYTES));
+
+    expect(page.people.map((row) => row.id)).toEqual([personDoc._id.toHexString()]);
+    expect(mocks.findCalls).toBe(0);
+    expect(mocks.aggregateCalls).toBe(1);
+  });
+
+  it("rejects a streamed CSV page whose source payload exceeds the page budget", async () => {
+    mocks.pageSourceBytes = MAX_EXPORT_SOURCE_BYTES + 1;
+
+    await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 10, false, true, MAX_EXPORT_SOURCE_BYTES)))
+      .rejects.toBeInstanceOf(ParticipantExportSizeLimitError);
+    expect(mocks.findCalls).toBe(0);
+    expect(mocks.assignmentQueries).toBe(0);
   });
 
   it("rejects malformed and oversized cursors", async () => {
