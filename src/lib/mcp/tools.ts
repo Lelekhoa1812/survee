@@ -1155,6 +1155,7 @@ const TOOLS: ToolDef[] = [
         const argumentDigest = createHash("sha256").update(canonicalJson({ name, description, mode, html: inputHtml, fileName })).digest("hex");
         operation = { operationId: args.operationId, credentialId, argumentDigest };
         const existing = await getCreateInterviewOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to create another interview.", "operation_result_unavailable");
         if (existing?.kind === "conflict") return err("operationId was already used with different create_interview arguments.", "operation_id_conflict");
         if (existing?.kind === "replayed") return ok({ ...existing.result });
       }
@@ -1166,6 +1167,7 @@ const TOOLS: ToolDef[] = [
       const report = { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics };
       if (operation) {
         const created = await createInterviewWithOperation(input, { ...operation, report });
+        if (created.kind === "deleted") return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to create another interview.", "operation_result_unavailable");
         if (created.kind === "conflict") return err("operationId was already used with different create_interview arguments.", "operation_id_conflict");
         return ok({ ...created.result });
       }
@@ -1837,12 +1839,14 @@ const TOOLS: ToolDef[] = [
         if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
         const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ interviewId: id, people })).digest("hex") };
         const existing = await getAddPeopleOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its people were deleted. Use a new operationId for a new batch.", "operation_result_unavailable");
         if (existing?.kind === "conflict") return err("operationId was already used with different add_people arguments.", "operation_id_conflict");
         if (existing?.kind === "replayed") return ok({ people: existing.people.map((person) => shapePerson(person, null, [])) });
         const interview = await getInterview(id);
         if (!interview) return err("Interview not found.", "not_found");
         const added = await addParticipantsWithOperation(id, people, operation);
         if (added.kind === "conflict") return err("operationId was already used with different add_people arguments or the interview no longer exists.", "operation_id_conflict");
+        if (added.kind === "deleted") return err("This operation's retained result was cleared because its people were deleted. Use a new operationId for a new batch.", "operation_result_unavailable");
         return ok({ people: added.people.map((person) => shapePerson(person, null, [])) });
       }
       const interview = await getInterview(id);
@@ -1924,6 +1928,7 @@ const TOOLS: ToolDef[] = [
         if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
         const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ personId: id })).digest("hex") };
         const existing = await getRegenerateLinkOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained link was cleared because its person was deleted. Use a new operationId for another link.", "operation_result_unavailable");
         if (existing?.kind === "conflict") return err("operationId was already used with different regenerate_link arguments.", "operation_id_conflict");
         if (existing?.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before rotating the link.", "invite_outcome_pending");
         if (existing?.kind === "replayed") {
@@ -1931,6 +1936,7 @@ const TOOLS: ToolDef[] = [
           return ok({ token: existing.token, link: link.ok ? link.link : null, interviewId: existing.interviewId });
         }
         const result = await regenerateTokenWithOperation(id, operation);
+        if (result.kind === "deleted") return err("This operation's retained link was cleared because its person was deleted. Use a new operationId for another link.", "operation_result_unavailable");
         if (result.kind === "not_found") return err("Person not found.", "not_found");
         if (result.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before rotating the link.", "invite_outcome_pending");
         if (result.kind === "conflict") return err("operationId was already used with different regenerate_link arguments.", "operation_id_conflict");

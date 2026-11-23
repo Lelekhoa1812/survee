@@ -51,7 +51,8 @@ describe("addParticipantsWithOperation", () => {
     const first = await add();
     const replay = await add();
     expect(first.kind).toBe("created");
-    expect(replay).toEqual({ kind: "replayed", people: first.kind === "conflict" ? [] : first.people });
+    if (first.kind !== "created") throw new Error("expected add success");
+    expect(replay).toEqual({ kind: "replayed", people: first.people });
     expect(mocks.people).toHaveLength(1);
     expect(mocks.operations).toHaveLength(1);
     expect(mocks.operations[0]).toMatchObject({ tool: "add_people", tenantId: "workspace-1", result: { people: [{ name: "Ada" }] }, expiresAt: expect.any(Date) });
@@ -70,7 +71,7 @@ describe("addParticipantsWithOperation", () => {
 
   it("looks up a retained result without requiring the interview to remain available", async () => {
     const created = await add();
-    if (created.kind === "conflict") throw new Error("expected create success");
+    if (created.kind !== "created") throw new Error("expected create success");
     const replay = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => getAddPeopleOperation(args));
     expect(replay).toEqual({ kind: "replayed", people: created.people });
   });

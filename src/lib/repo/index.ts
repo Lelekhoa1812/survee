@@ -218,10 +218,11 @@ const MCP_CREATE_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CreateInterviewOperationResult =
   | { kind: "created" | "replayed"; result: CreateInterviewMcpResult }
-  | { kind: "conflict" };
+  | { kind: "conflict" }
+  | { kind: "deleted" };
 export interface CreateInterviewMcpResult { id: string; interviewId: string; report: Record<string, unknown> }
 
-export type AddPeopleOperationResult = { kind: "created" | "replayed"; people: ParticipantView[] } | { kind: "conflict" };
+export type AddPeopleOperationResult = { kind: "created" | "replayed"; people: ParticipantView[] } | { kind: "conflict" } | { kind: "deleted" };
 
 function createInterviewOperationScope(tenantId: string, operation: { operationId: string; credentialId: string }) {
   return {
@@ -248,6 +249,7 @@ export async function getAddPeopleOperation(
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "add_people", operation));
   if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
   return existing.argumentDigest === operation.argumentDigest
     ? { kind: "replayed", people: existing.result.people as ParticipantView[] }
     : { kind: "conflict" };
@@ -261,6 +263,7 @@ export async function getCreateInterviewOperation(
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const existing = await (await col.mcpOperations()).findOne(createInterviewOperationScope(tenantId, operation));
   if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
   return existing.argumentDigest === operation.argumentDigest
     ? { kind: "replayed", result: existing.result as unknown as CreateInterviewMcpResult }
     : { kind: "conflict" };
@@ -287,6 +290,7 @@ export async function createInterviewWithOperation(
   const run = async () => withMongoTransaction(async (session) => {
     const existing = await operations.findOne(scope, { session });
     if (existing && existing.expiresAt > new Date()) {
+      if (existing.deletedAt) return { kind: "deleted" as const };
       return existing.argumentDigest === operation.argumentDigest
         ? { kind: "replayed" as const, result: existing.result as unknown as CreateInterviewMcpResult }
         : { kind: "conflict" as const };
@@ -301,7 +305,7 @@ export async function createInterviewWithOperation(
     const result = { id: interviewId, interviewId, report: operation.report };
     const createdAt = new Date();
     await operations.insertOne({
-      _id: new ObjectId(), ...scope, argumentDigest: operation.argumentDigest, result,
+      _id: new ObjectId(), ...scope, interviewId: doc._id, argumentDigest: operation.argumentDigest, result,
       createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
     }, { session });
     return { kind: "created" as const, result };
@@ -315,6 +319,7 @@ export async function createInterviewWithOperation(
     if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
     const committed = await operations.findOne(scope);
     if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
     return committed.argumentDigest === operation.argumentDigest
       ? { kind: "replayed", result: committed.result as unknown as CreateInterviewMcpResult }
       : { kind: "conflict" };
@@ -444,6 +449,11 @@ export async function deleteInterview(id: string): Promise<boolean | "invite_pen
 
     // MongoDB does not support parallel operations in one transaction. Keep the cascade
     // sequential so a failed dependent delete rolls the parent removal back as well.
+    await (await col.mcpOperations()).updateMany(
+      tenantFilter(tenantId, { interviewId: oid }),
+      { $set: { result: { deleted: true }, deletedAt: new Date() }, $unset: { participantIds: "", interviewId: "", argumentDigest: "" } },
+      { session },
+    );
     await (await col.versions()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.participants()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
     await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { interviewId: oid }), { session });
@@ -840,6 +850,7 @@ export async function addParticipantsWithOperation(
   const operations = await col.mcpOperations();
   const existing = await operations.findOne(scope);
   if (existing && existing.expiresAt > new Date()) {
+    if (existing.deletedAt) return { kind: "deleted" };
     return existing.argumentDigest === operation.argumentDigest
       ? { kind: "replayed", people: existing.result.people as ParticipantView[] }
       : { kind: "conflict" };
@@ -872,6 +883,7 @@ async function addParticipantsCore(
       const operations = await col.mcpOperations();
       const existing = await operations.findOne(operation.scope, { session });
       if (existing && existing.expiresAt > new Date()) {
+        if (existing.deletedAt) return { kind: "deleted" as const };
         return existing.argumentDigest === operation.argumentDigest
           ? { kind: "replayed" as const, people: existing.result.people as ParticipantView[] }
           : { kind: "conflict" as const };
@@ -896,7 +908,7 @@ async function addParticipantsCore(
     if (operation) {
       const createdAt = new Date();
       await (await col.mcpOperations()).insertOne({
-        _id: new ObjectId(), ...operation.scope, argumentDigest: operation.argumentDigest,
+        _id: new ObjectId(), ...operation.scope, interviewId: oid, participantIds: docs.map((doc) => doc._id), argumentDigest: operation.argumentDigest,
         result: { people: views }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
       }, { session });
       return { kind: "created" as const, people: views };
@@ -910,6 +922,7 @@ async function addParticipantsCore(
     if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
     const committed = await (await col.mcpOperations()).findOne(operation.scope);
     if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
     return committed.argumentDigest === operation.argumentDigest
       ? { kind: "replayed", people: committed.result.people as ParticipantView[] }
       : { kind: "conflict" };
@@ -997,6 +1010,11 @@ export async function deleteParticipant(id: string): Promise<boolean | "invite_p
     if (pendingInvite) return "invite_pending";
     const res = await participants.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
+    await (await col.mcpOperations()).updateMany(
+      tenantFilter(tenantId, { participantIds: oid }),
+      { $set: { result: { deleted: true }, deletedAt: new Date() }, $unset: { participantIds: "", interviewId: "", argumentDigest: "" } },
+      { session },
+    );
     // Cache creation writes this same interview row and checks its pre-scan
     // respondent revision. This makes concurrent analysis creation retry or
     // fail stale instead of recreating an aggregate containing the erased person.
@@ -1018,20 +1036,22 @@ export async function deleteParticipant(id: string): Promise<boolean | "invite_p
 
 export async function regenerateToken(id: string): Promise<string | null | "invite_pending"> {
   const result = await regenerateTokenCore(id);
-  return result === null || result === "invite_pending" ? result : result === "conflict" ? null : result.token;
+  return result === null || result === "invite_pending" ? result : result === "conflict" || result.kind === "deleted" ? null : result.token;
 }
 
 export type RegenerateLinkOperationResult =
   | { kind: "rotated" | "replayed"; token: string; interviewId: string }
   | { kind: "conflict" }
   | { kind: "not_found" }
-  | { kind: "invite_pending" };
+  | { kind: "invite_pending" }
+  | { kind: "deleted" };
 
 export async function getRegenerateLinkOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<RegenerateLinkOperationResult | null> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "regenerate_link", operation));
   if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
   return existing.argumentDigest === operation.argumentDigest
     ? { ...(existing.result as { token: string; interviewId: string }), kind: "replayed" }
     : { kind: "conflict" };
@@ -1043,6 +1063,7 @@ export async function regenerateTokenWithOperation(id: string, operation: { oper
   const scope = mcpOperationScope(tenantId, "regenerate_link", operation);
   const existing = await (await col.mcpOperations()).findOne(scope);
   if (existing && existing.expiresAt > new Date()) {
+    if (existing.deletedAt) return { kind: "deleted" };
     return existing.argumentDigest === operation.argumentDigest
       ? { ...(existing.result as { token: string; interviewId: string }), kind: "replayed" }
       : { kind: "conflict" };
@@ -1051,13 +1072,14 @@ export async function regenerateTokenWithOperation(id: string, operation: { oper
   if (!rotated) return { kind: "not_found" };
   if (rotated === "invite_pending") return { kind: "invite_pending" };
   if (rotated === "conflict") return { kind: "conflict" };
+  if (typeof rotated === "object" && rotated.kind === "deleted") return { kind: "deleted" };
   return rotated;
 }
 
 async function regenerateTokenCore(
   id: string,
   operation?: { scope: ReturnType<typeof mcpOperationScope>; argumentDigest: string },
-): Promise<{ token: string; interviewId: string; kind: "rotated" | "replayed" } | null | "invite_pending" | "conflict"> {
+): Promise<{ token: string; interviewId: string; kind: "rotated" | "replayed" } | null | "invite_pending" | "conflict" | { kind: "deleted" }> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
@@ -1068,6 +1090,7 @@ async function regenerateTokenCore(
       const operations = await col.mcpOperations();
       const existing = await operations.findOne(operation.scope, { session });
       if (existing && existing.expiresAt > new Date()) {
+        if (existing.deletedAt) return { kind: "deleted" as const };
         return existing.argumentDigest === operation.argumentDigest
           ? { ...(existing.result as { token: string; interviewId: string }), kind: "replayed" as const }
           : "conflict" as const;
@@ -1092,7 +1115,7 @@ async function regenerateTokenCore(
     const result = { token, interviewId: current.interviewId.toHexString() };
     const createdAt = new Date();
     await (await col.mcpOperations()).insertOne({
-      _id: new ObjectId(), ...operation.scope, argumentDigest: operation.argumentDigest, result,
+      _id: new ObjectId(), ...operation.scope, interviewId: current.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest, result,
       createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
     }, { session });
     return { ...result, kind: "rotated" as const };
@@ -1102,6 +1125,7 @@ async function regenerateTokenCore(
     if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
     const committed = await (await col.mcpOperations()).findOne(operation.scope);
     if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
     return committed.argumentDigest === operation.argumentDigest
       ? { ...(committed.result as { token: string; interviewId: string }), kind: "replayed" }
       : "conflict";

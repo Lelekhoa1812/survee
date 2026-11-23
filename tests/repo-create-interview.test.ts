@@ -123,7 +123,8 @@ describe("createInterview", () => {
     const first = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
     const replay = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
     expect(first.kind).toBe("created");
-    expect(replay).toEqual({ kind: "replayed", result: first.kind === "conflict" ? undefined : first.result });
+    if (first.kind !== "created") throw new Error("expected create success");
+    expect(replay).toEqual({ kind: "replayed", result: first.result });
     expect(mocks.interviewInserts).toHaveLength(1);
     expect(mocks.operations).toHaveLength(1);
     expect(mocks.operations[0]).toMatchObject({ tool: "create_interview", tenantId: "workspace-1", expiresAt: expect.any(Date) });
@@ -152,7 +153,8 @@ describe("createInterview", () => {
     const operation = { operationId: "request-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", report: { ok: true } };
     const results = await Promise.all([1, 2].map(() => withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation))));
     expect(results.map((result) => result.kind).sort()).toEqual(["created", "replayed"]);
-    expect(results[0].kind === "conflict" ? null : results[0].result.id).toBe(results[1].kind === "conflict" ? undefined : results[1].result.id);
+    const ids = results.flatMap((result) => result.kind === "created" || result.kind === "replayed" ? [result.result.id] : []);
+    expect(ids[0]).toBe(ids[1]);
     expect(mocks.interviewInserts).toHaveLength(1);
     expect(mocks.operations).toHaveLength(1);
   });

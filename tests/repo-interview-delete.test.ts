@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   pendingInvite: null as Record<string, unknown> | null,
   aggregateRows: [] as { _id: "invited" | "in_progress" | "submitted"; count: number }[],
   aggregatePipelines: [] as unknown[][],
-  calls: [] as { collection: string; filter: Record<string, unknown>; options: Record<string, unknown> }[],
+  calls: [] as { collection: string; filter: Record<string, unknown>; update?: unknown; options: Record<string, unknown> }[],
   participantAfterUpdate: null as Record<string, unknown> | null,
   failParticipantInsert: false,
   failEventInsert: false,
@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/lib/db", () => ({
   withMongoTransaction: mocks.withMongoTransaction,
   col: {
+    mcpOperations: async () => ({ updateMany: async (filter: Record<string, unknown>, update: unknown, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mcpOperations", filter, update, options }); } }),
     interviews: async () => ({
       findOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "interviewLookup", filter, options }); return mocks.interviewExists ? { _id: new ObjectId(interviewId) } : null; },
       deleteOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => {
@@ -103,11 +104,12 @@ describe("deleteInterview", () => {
     expect(deleted).toBe(true);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.calls.map(({ collection }) => collection)).toEqual([
-      "interviewLookup", "interviewPendingLookup", "interviews", "versions", "participants", "questionOrderAssignments", "events", "analyticsRuns", "mail", "questionnaireReviewDrafts",
+      "interviewLookup", "interviewPendingLookup", "interviews", "mcpOperations", "versions", "participants", "questionOrderAssignments", "events", "analyticsRuns", "mail", "questionnaireReviewDrafts",
     ]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
     expect(mocks.calls[0].filter).toEqual(tenantFilter("axion", { _id: new ObjectId(interviewId) }));
     expect(mocks.calls[1].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId), status: "pending", delivery: { $nin: ["delivered", "bounced"] } }));
+    expect(mocks.calls[3]).toMatchObject({ filter: tenantFilter("axion", { interviewId: new ObjectId(interviewId) }), update: { $set: { result: { deleted: true }, deletedAt: expect.any(Date) }, $unset: { participantIds: "", interviewId: "", argumentDigest: "" } }, options: { session } });
   });
 
   it("retains the interview while one of its invite outcomes is unconfirmed", async () => {
@@ -190,13 +192,14 @@ describe("deleteParticipant", () => {
 
     expect(deleted).toBe(true);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "mailPendingLookup", "participants", "interviews", "questionOrderAssignments", "events", "mail", "analyticsRuns"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "mailPendingLookup", "participants", "mcpOperations", "interviews", "questionOrderAssignments", "events", "mail", "analyticsRuns"]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
     expect(mocks.calls[1].filter).toEqual({ participantId: new ObjectId(interviewId), status: "pending", delivery: { $nin: ["delivered", "bounced"] } });
     expect(mocks.calls[1].options).toMatchObject({ session, projection: { _id: 1 } });
-    expect(mocks.calls[5].filter).toEqual({ participantId: new ObjectId(interviewId) });
+    expect(mocks.calls[3]).toMatchObject({ filter: tenantFilter("axion", { participantIds: new ObjectId(interviewId) }), update: { $set: { result: { deleted: true }, deletedAt: expect.any(Date) }, $unset: { participantIds: "", interviewId: "", argumentDigest: "" } }, options: { session } });
     expect(mocks.calls[6].filter).toEqual({ participantId: new ObjectId(interviewId) });
-    expect(mocks.calls[7].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId) }));
+    expect(mocks.calls[7].filter).toEqual({ participantId: new ObjectId(interviewId) });
+    expect(mocks.calls[8].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId) }));
   });
 
   it("retains respondent data while an invite outcome is unconfirmed", async () => {

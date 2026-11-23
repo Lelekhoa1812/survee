@@ -148,8 +148,12 @@ export interface McpOperationDoc {
   tool: string;
   credentialIdHash: string;
   operationIdHash: string;
-  argumentDigest: string;
+  argumentDigest?: string;
   result: Record<string, unknown>;
+  /** Entity references allow erasure to scrub retained retry results without freeing the key. */
+  interviewId?: ObjectId;
+  participantIds?: ObjectId[];
+  deletedAt?: Date;
   createdAt: Date;
   expiresAt: Date;
 }
