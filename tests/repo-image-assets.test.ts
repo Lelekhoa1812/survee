@@ -201,6 +201,13 @@ describe("workspace image assets", () => {
     expect(store.assets).toHaveLength(0);
   });
 
+  it("does not refresh metadata when an image is renamed to its current name", async () => {
+    const asset = await addImageAsset({ name: "Brand mark", fileName: "mark.png", data: png });
+    const updatedAt = store.assets[0].updatedAt;
+    expect(await renameImageAsset(asset.id, " Brand mark ")).toMatchObject({ name: "Brand mark" });
+    expect(store.assets[0].updatedAt).toBe(updatedAt);
+  });
+
   it("does not allow a different tenant to rename or delete an image", async () => {
     const asset = await addImageAsset({ name: "Logo", fileName: "logo.png", data: png });
     store.tenantId = "tenant-b";

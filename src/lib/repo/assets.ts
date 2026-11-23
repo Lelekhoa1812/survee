@@ -195,8 +195,13 @@ export async function renameImageAsset(id: string, name: string): Promise<ImageA
   const tenantId = await currentTenantId();
   const trimmed = name.trim().slice(0, 120);
   if (!oid || !tenantId || !trimmed) return null;
-  const doc = await (await col.imageAssets()).findOneAndUpdate(
-    tenantFilter(tenantId, { _id: oid }),
+  const assets = await col.imageAssets();
+  const filter = tenantFilter(tenantId, { _id: oid });
+  const current = await assets.findOne(filter, { projection: { data: 0 } });
+  if (!current) return null;
+  if (current.name === trimmed) return summary(current);
+  const doc = await assets.findOneAndUpdate(
+    filter,
     { $set: { name: trimmed, updatedAt: new Date() } },
     { returnDocument: "after", projection: { data: 0 } },
   );
