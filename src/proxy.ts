@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { SESSION_COOKIE, verifySession } from "./lib/auth";
 
 /**
@@ -12,7 +13,10 @@ export function proxy(req: NextRequest) {
   if (open) return NextResponse.next();
   const ok = !!verifySession(req.cookies.get(SESSION_COOKIE)?.value);
   if (ok) return NextResponse.next();
-  if (pathname.startsWith("/api/")) return NextResponse.json({ ok: false, error: "Sign in to continue." }, { status: 401 });
+  if (pathname.startsWith("/api/")) {
+    const requestId = randomUUID();
+    return NextResponse.json({ ok: false, error: "Sign in to continue.", requestId }, { status: 401, headers: { "x-request-id": requestId } });
+  }
   const url = req.nextUrl.clone();
   url.pathname = "/admin/login";
   url.search = pathname === "/admin" ? "" : `?next=${encodeURIComponent(pathname)}`;
