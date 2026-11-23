@@ -222,6 +222,20 @@ describe("MCP tools", () => {
     expect(vi.mocked(listParticipantPage).mock.calls.map(([, cursor, limit]) => [cursor, limit])).toEqual([[null, 1], ["page-2", 1]]);
   });
 
+  it("returns text exports with UTF-8 encoding and maps the participant ceiling", async () => {
+    const response = await call("export_interview", { interviewId, format: "json" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { encoding?: string; body?: string; participants?: unknown[] } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.encoding).toBe("utf8");
+    expect(JSON.parse(body.result.structuredContent.body!).participants).toHaveLength(2);
+
+    vi.mocked(listParticipants).mockRejectedValueOnce(new ParticipantReadLimitError());
+    const limited = await call("export_interview", { interviewId, format: "json" });
+    const limitedBody = await limited.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(limitedBody.result.isError).toBe(true);
+    expect(limitedBody.result.structuredContent).toMatchObject({ code: "participant_read_limit" });
+  });
+
   it("returns repeat rows separately from ordinary answer values without internal revisions", async () => {
     const repeatManifest = {
       ...analyticsManifest,
