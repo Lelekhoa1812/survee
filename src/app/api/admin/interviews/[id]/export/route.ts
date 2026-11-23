@@ -13,7 +13,7 @@ async function csvPage(id: string, cursor: string | null) {
   // each respondent is valid. Reduce the page until its lookahead also fits.
   for (let limit = 10; limit >= 1; limit = Math.max(1, Math.floor(limit / 2))) {
     try {
-      return await listParticipantPage(id, cursor, limit, false, false, MAX_EXPORT_SOURCE_BYTES);
+      return await listParticipantPage(id, cursor, limit, false, true, MAX_EXPORT_SOURCE_BYTES);
     } catch (error) {
       if (!(error instanceof ParticipantExportSizeLimitError) || limit === 1) throw error;
     }

@@ -157,7 +157,7 @@ describe("workspace member access boundary", () => {
     expect(bytes.slice(0, 3)).toEqual(new Uint8Array([0xef, 0xbb, 0xbf]));
     expect(body).toContain("Person,Person note,Status");
     expect(body.indexOf("Newer")).toBeLessThan(body.indexOf("Older"));
-    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", "page-2", 10, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", "page-2", 10, false, true, 8 * 1024 * 1024);
     expect(state.listParticipants).not.toHaveBeenCalled();
   });
 
@@ -170,7 +170,7 @@ describe("workspace member access boundary", () => {
     const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=csv-wide"), interviewCtx);
     expect(response.status).toBe(200);
     expect(new TextDecoder().decode(await response.arrayBuffer())).toContain("Large answer");
-    expect(state.listParticipantPage).toHaveBeenCalledWith("0123456789abcdef01234567", null, 10, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenCalledWith("0123456789abcdef01234567", null, 10, false, true, 8 * 1024 * 1024);
     expect(state.listParticipants).not.toHaveBeenCalled();
   });
 
@@ -185,9 +185,9 @@ describe("workspace member access boundary", () => {
     const response = await exportInterview(new Request("https://kqa.test/api/admin/interviews/0123456789abcdef01234567/export?format=csv-long"), interviewCtx);
     expect(response.status).toBe(200);
     await response.arrayBuffer();
-    expect(state.listParticipantPage).toHaveBeenNthCalledWith(1, "0123456789abcdef01234567", null, 10, false, false, 8 * 1024 * 1024);
-    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", null, 5, false, false, 8 * 1024 * 1024);
-    expect(state.listParticipantPage).toHaveBeenNthCalledWith(3, "0123456789abcdef01234567", null, 2, false, false, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(1, "0123456789abcdef01234567", null, 10, false, true, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(2, "0123456789abcdef01234567", null, 5, false, true, 8 * 1024 * 1024);
+    expect(state.listParticipantPage).toHaveBeenNthCalledWith(3, "0123456789abcdef01234567", null, 2, false, true, 8 * 1024 * 1024);
     expect(state.listParticipants).not.toHaveBeenCalled();
   });
 
