@@ -30,6 +30,11 @@ The following changes are pushed to `main` and deployed:
 - The host People list and MCP people/status/mail-status reads paginate in bounded cursor pages. MCP interview-wide answer reads now page through bounded 50-row results (maximum 100) and apply `submittedOnly` in the database query; the host answer matrix still shows only the newest page and full exports remain capped at 100. Targeted MCP answer reads load one tenant-scoped person.
 - A rejected cold-start Mongo connection now clears only its own cached promise so a warm worker can retry when the database recovers.
 - Published questionnaire assets and asset deletion now share a transactional coordination point; a concurrent deletion cannot leave a newly published version pointing at a missing image.
+- Preview-draft saves now touch referenced assets in a transaction, coordinating draft creation and reclamation with asset deletion.
+- Respondent deletion now erases linked activity events and stale analytics runs, including legacy event/mail rows without a tenant field. Deletion, invitee additions, and reopening submitted answers increment the respondent revision in their transaction.
+- Paged analytics cache creation now fences against concurrent respondent writes and questionnaire publication. A stale scan returns `analysis_run_stale` rather than caching results after a conflicting change.
+- Public accessibility auditing now checks for an `h1` in each questionnaire document while allowing the respondent shell to identify its embedded questionnaire through the iframe title.
+- Public respondent GET, save, and submit APIs now have separate hashed per-link and per-Vercel-IP rate limits; an unavailable shared limiter fails closed with 503.
 
 ## Ranked remaining gaps
 
@@ -37,7 +42,7 @@ The following changes are pushed to `main` and deployed:
 | --- | --- | --- | --- |
 | P1 | **Outbound mail reconciliation is partial.** Participant and workspace sends persist Message-IDs before SMTP and suppress silent token rotation/retry. Hosts can perform rate-limited IMAP checks for exact stored IDs. Attempts without a matching delivery-status notice can remain unknown indefinitely. | Hosts still need a duplicate-risk decision for an ambiguous participant invite; an IMAP status check cannot prove delivery when the mailbox has no matching notice. | Add provider delivery webhooks or an explicit host resolution workflow for pending attempts, with audit history and duplicate-send warnings. |
 | P1 | **Bulk review and exports remain only partly scalable.** The host People list and MCP people/status/mail-status reads use bounded cursor pages. MCP `get_answers` now pages interview-wide answers and applies `submittedOnly` in the database. The host answer matrix shows only the newest 50, full exports stop at 100, and exports below the cap are assembled in memory. | Large interviews can be reviewed through MCP pages, but hosts cannot page the answer matrix or export more than 100 people; large answer payloads can still make a capped export expensive. | Add answer-matrix pagination; stream text exports and use a background job or bounded download workflow for XLSX and other large formats. Keep page sizes and output limits explicit. |
-| P1 | **Asset storage has no workspace quota, and active preview drafts can race deletion.** Publication now touches each referenced tenant asset in its transaction, while deletion scans references and deletes in a transaction that writes the same asset. This prevents a concurrent publish from committing a dangling image URL. Draft creation does not use that coordination point, but publication rejects a missing asset. | Aggregate storage costs can grow without a tenant bound; a preview draft created during deletion can become stale and fail when published. | Add configurable workspace quotas and coordinate draft creation with deletion or use a staged tombstone/garbage-collection flow. |
+| P1 | **Asset storage has no workspace quota.** Publication, preview-draft saves, and deletion now coordinate through transactional asset writes, preventing a concurrent draft or publish from committing a dangling image URL. | Aggregate storage costs can grow without a tenant bound. | Add configurable workspace quotas and usage visibility, with a clear policy for existing over-quota workspaces. |
 | P1 | **Consent, retention, and withdrawal rely on host procedures.** The app stores person-linked answers and supports manual deletion, but it does not manage notice versions, consent records, retention windows, or respondent withdrawal. | Hosts can collect data without a consistent in-product record of the notice or planned deletion. | Design a versioned notice and optional consent gate, plus workspace-configured retention, dry-run review, audited deletion, and a respondent withdrawal route. Avoid legal defaults; make policy owner-configurable. |
 | P2 | **Questionnaires require HTML authoring.** There is no in-app builder for the supported question types and routing. | Non-technical hosts must source or edit files to create and revise a questionnaire. | Build a schema-backed editor with HTML import/export, checker diagnostics, live preview, accessibility states, and version diff/publish review. |
 | P2 | **Campaign operations are mostly manual.** Hosts refresh progress and resend/check invitations manually; there are no scheduled reminders or completion notifications. | Follow-up work and response monitoring do not scale well across larger cohorts. | Add optional close dates, rate-limited reminders for eligible non-submitters, and owner-configured completion/failure notifications with audit history. |
@@ -48,18 +53,19 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **941 tests passed across 137 files** after the current code changes.
+- Full automated suite: **950 tests passed across 138 files**; TypeScript check and optimized Next.js production build passed.
 - TypeScript check and optimized Next.js production build passed.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
-- Production code release `815bb41` reached **READY**. `https://kqa-bay.vercel.app` returned HTTP 200; unauthenticated MCP POST returned 401; Vercel reported no runtime errors in the hour after the preceding `686ca16` release. The earlier authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools, and a disposable interview was created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
+- Production release `1ca5a10` reached **READY**. Runtime error review found no errors in the 15 minutes after deployment. The homepage returns HTTP 200; unauthenticated MCP POST returns 401. A live rate-limit probe against a fabricated nonexistent respondent token returned 180 expected 404s followed by 429 on request 181. Public accessibility audit covered five public routes at four viewport widths (20 samples): zero automated violations, six axe contrast needs-review results, and no authenticated host or respondent fixture coverage. An authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools; disposable interviews were created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
 
 Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The public-route accessibility audit has been run previously; authenticated host and respondent flows still need a dedicated browser audit with a disposable account and interview fixture.
 
 ## Next review order
 
-1. Stream or background large exports; add host answer-matrix paging.
-2. Add workspace asset quotas and close the preview-draft reference race.
+1. Add host answer-matrix paging and reduce People-list payloads that currently include unnecessary answer/history fields.
+2. Add workspace asset quotas and usage visibility.
 3. Decide and implement consent, retention, withdrawal, and complete participant-erasure workflows.
 4. Settle delivery attempts with no delivery-status notice through provider reconciliation or a host resolution workflow.
-5. Scope the in-app questionnaire builder and campaign automation.
+5. Add token-bucket limits for public respondent APIs.
+6. Scope the in-app questionnaire builder and campaign automation.
 
