@@ -52,6 +52,30 @@ afterEach(() => {
 });
 
 describe("respondent required-answer recovery", () => {
+  it("renders only configured workspace policy as plain respondent-facing text", async () => {
+    state.api.mockResolvedValue({ ok: true, status: 200, data: {
+      participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+      questions: [{ id: "q1", type: "text", label: "Question" }], answers: {},
+      respondentPolicy: { notice: "Use <script>alert(1)</script> as authored text", purpose: "Collect feedback", retention: "Kept for 30 days" },
+    } });
+
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+
+    const policy = host.querySelector<HTMLElement>(".rs-policy")!;
+    expect(policy).not.toBeNull();
+    expect(policy.querySelector("h2")?.textContent).toBe("Information from your host");
+    expect(policy.textContent).toContain("Use <script>alert(1)</script> as authored text");
+    expect(policy.querySelector("script")).toBeNull();
+    expect(policy.textContent).toContain("PurposeCollect feedback");
+    expect(policy.textContent).toContain("How long answers are keptKept for 30 days");
+    expect(policy.textContent).not.toContain("Contact");
+  });
+
+  it("does not show a workspace policy when the workspace has not configured any text", async () => {
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    expect(host.querySelector(".rs-policy")).toBeNull();
+  });
+
   it("blocks review and submission of a saved record while an invalid local draft awaits explicit discard confirmation", async () => {
     state.api.mockResolvedValue({ ok: true, status: 200, data: {
       participant: { name: "Ada", status: "in_progress" }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",

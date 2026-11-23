@@ -71,7 +71,7 @@ export function WorkspacePolicyPanel() {
       <div className="field"><label className="label" htmlFor="respondent-contact">Contact information</label><textarea id="respondent-contact" rows={2} maxLength={500} value={form.contact} onChange={update("contact")} placeholder="Optional contact details supplied by your workspace." /></div>
       <div className="field"><label className="label" htmlFor="respondent-withdrawal">Withdrawal instructions</label><textarea id="respondent-withdrawal" rows={3} maxLength={1000} value={form.withdrawal} onChange={update("withdrawal")} placeholder="Optional host-authored instructions. Self-service withdrawal is not enabled by this setting." /></div>
       <div className="row wrap" style={{ justifyContent: "space-between" }}>
-        <span className="hint">{data.respondentPolicy ? `Policy revision ${data.respondentPolicy.revision}. Interview and respondent flows are not yet wired to display or enforce this text.` : "No respondent policy is configured."}</span>
+        <span className="hint">{data.respondentPolicy ? `Policy revision ${data.respondentPolicy.revision}. Configured text is shown to respondents with an active private link. It does not collect consent, schedule retention deletion, or provide self-service withdrawal.` : "No respondent policy is configured. Blank fields remain absent from respondent pages."}</span>
         <button className="btn primary" type="button" disabled={saving || !Number.isInteger(threshold) || threshold < 2 || threshold > 100} onClick={() => void save()}>{saving ? "Saving…" : "Save workspace policies"}</button>
       </div>
     </div>

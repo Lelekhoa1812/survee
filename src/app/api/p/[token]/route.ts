@@ -3,6 +3,7 @@ import { orderOptions } from "@/lib/format/option-order";
 import { assignQuestionOrder, presentedQuestionIds } from "@/lib/format/question-order";
 import { fail, json, withServerErrors } from "@/lib/http";
 import { ensureQuestionOrderAssignment, loadByToken } from "@/lib/repo";
+import { getWorkspacePolicy } from "@/lib/repo/workspace-policy";
 import { looksLikeToken } from "@/lib/tokens";
 import { shouldRecordVisit } from "@/lib/visit";
 import { respondentRateLimit } from "@/lib/respondent-rate-limit";
@@ -20,6 +21,7 @@ export const GET = withServerErrors("p/questionnaire", async function GET(req: R
   const ctx = await loadByToken(token, { touch: respondentVisit });
   if (!ctx) return fail(404, "This link is not valid.", { code: "not_found" });
   const { manifest } = ctx.version;
+  const respondentPolicy = (await getWorkspacePolicy(ctx.tenantId))?.respondentPolicy;
   const proposedOrder = assignQuestionOrder(manifest, ctx.participant.id, ctx.version.version);
   const questionOrderAssignment = respondentVisit && manifest.questionOrderGroups?.length
     ? await ensureQuestionOrderAssignment({ tenantId: ctx.tenantId, interviewId: ctx.interview.id, participantId: ctx.participant.id, surveyVersion: ctx.version.version, ...proposedOrder })
@@ -32,6 +34,13 @@ export const GET = withServerErrors("p/questionnaire", async function GET(req: R
     ok: true,
     participant: { name: ctx.participant.name, status: ctx.participant.status, revision: ctx.participant.revision, writeEpoch: ctx.participant.writeEpoch ?? 0, submittedAt: ctx.participant.submittedAt },
     interview: { name: ctx.interview.name, status: ctx.interview.status },
+    respondentPolicy: respondentPolicy ? {
+      notice: respondentPolicy.notice,
+      purpose: respondentPolicy.purpose,
+      retention: respondentPolicy.retention,
+      contact: respondentPolicy.contact,
+      withdrawal: respondentPolicy.withdrawal,
+    } : null,
     version: ctx.version.version,
     title: manifest.title,
     presentation: manifest.presentation ?? "all",
