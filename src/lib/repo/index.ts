@@ -221,6 +221,8 @@ export type CreateInterviewOperationResult =
   | { kind: "conflict" };
 export interface CreateInterviewMcpResult { id: string; interviewId: string; report: Record<string, unknown> }
 
+export type AddPeopleOperationResult = { kind: "created" | "replayed"; people: ParticipantView[] } | { kind: "conflict" };
+
 function createInterviewOperationScope(tenantId: string, operation: { operationId: string; credentialId: string }) {
   return {
     tenantId,
@@ -228,6 +230,27 @@ function createInterviewOperationScope(tenantId: string, operation: { operationI
     credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
     operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
   };
+}
+
+function mcpOperationScope(tenantId: string, tool: string, operation: { operationId: string; credentialId: string }) {
+  return {
+    tenantId,
+    tool,
+    credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
+    operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
+  };
+}
+
+export async function getAddPeopleOperation(
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<AddPeopleOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "add_people", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", people: existing.result.people as ParticipantView[] }
+    : { kind: "conflict" };
 }
 
 /** Read a retained successful result before rechecking a caller's retry under newer checker rules. */
@@ -802,10 +825,38 @@ export async function* iterateAnalyticsParticipants(
 }
 
 export async function addParticipants(interviewId: string, people: { name: string; note?: string; email?: string }[]): Promise<ParticipantView[]> {
-  const oid = toOid(interviewId);
-  if (!oid || people.length === 0) return [];
+  const result = await addParticipantsCore(interviewId, people);
+  return Array.isArray(result) ? result : [];
+}
+
+export async function addParticipantsWithOperation(
+  interviewId: string,
+  people: { name: string; note?: string; email?: string }[],
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<AddPeopleOperationResult> {
   const tenantId = await currentTenantId();
-  if (!tenantId) return [];
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const scope = mcpOperationScope(tenantId, "add_people", operation);
+  const operations = await col.mcpOperations();
+  const existing = await operations.findOne(scope);
+  if (existing && existing.expiresAt > new Date()) {
+    return existing.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", people: existing.result.people as ParticipantView[] }
+      : { kind: "conflict" };
+  }
+  const result = await addParticipantsCore(interviewId, people, { scope, argumentDigest: operation.argumentDigest });
+  return Array.isArray(result) ? { kind: "conflict" } : result;
+}
+
+async function addParticipantsCore(
+  interviewId: string,
+  people: { name: string; note?: string; email?: string }[],
+  operation?: { scope: ReturnType<typeof mcpOperationScope>; argumentDigest: string },
+): Promise<ParticipantView[] | AddPeopleOperationResult> {
+  const oid = toOid(interviewId);
+  if (!oid || people.length === 0) return operation ? { kind: "conflict" } : [];
+  const tenantId = await currentTenantId();
+  if (!tenantId) return operation ? { kind: "conflict" } : [];
   const now = new Date();
   const docs: ParticipantDoc[] = people.map((p, i) => {
     const parsed = p.email ? parseEmail(p.email) : { ok: true as const, email: null };
@@ -816,7 +867,17 @@ export async function addParticipants(interviewId: string, people: { name: strin
       status: "invited" as const, answers: {}, revision: 0, createdAt: new Date(now.getTime() + i), updatedAt: now,
     };
   });
-  const added = await withMongoTransaction(async (session) => {
+  const run = async () => withMongoTransaction(async (session) => {
+    if (operation) {
+      const operations = await col.mcpOperations();
+      const existing = await operations.findOne(operation.scope, { session });
+      if (existing && existing.expiresAt > new Date()) {
+        return existing.argumentDigest === operation.argumentDigest
+          ? { kind: "replayed" as const, people: existing.result.people as ParticipantView[] }
+          : { kind: "conflict" as const };
+      }
+      if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    }
     const interviews = await col.interviews();
     const promoted = await interviews.updateOne(
       tenantFilter(tenantId, { _id: oid, mode: "single" }),
@@ -828,13 +889,35 @@ export async function addParticipants(interviewId: string, people: { name: strin
       { $set: { updatedAt: now }, $inc: { respondentWriteRevision: 1 } },
       { session },
     );
-    if (!touched.matchedCount) return false;
+    if (!touched.matchedCount) return operation ? { kind: "conflict" as const } : false;
     await (await col.participants()).insertMany(docs, { session });
     if (promoted.modifiedCount) await insertEvent(tenantId, oid, "update", undefined, session, { fields: ["mode"] });
+    const views = docs.map(participantView);
+    if (operation) {
+      const createdAt = new Date();
+      await (await col.mcpOperations()).insertOne({
+        _id: new ObjectId(), ...operation.scope, argumentDigest: operation.argumentDigest,
+        result: { people: views }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_CREATE_OPERATION_TTL_MS),
+      }, { session });
+      return { kind: "created" as const, people: views };
+    }
     return true;
   });
-  if (!added) return [];
-  return docs.map(participantView);
+  let added: Awaited<ReturnType<typeof run>>;
+  try {
+    added = await run();
+  } catch (error) {
+    if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await (await col.mcpOperations()).findOne(operation.scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    return committed.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", people: committed.result.people as ParticipantView[] }
+      : { kind: "conflict" };
+  }
+  if (operation) {
+    return added && typeof added === "object" && !Array.isArray(added) ? added as AddPeopleOperationResult : { kind: "conflict" };
+  }
+  return added === true ? docs.map(participantView) : [];
 }
 
 export async function getParticipant(id: string): Promise<ParticipantView | null> {

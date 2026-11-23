@@ -110,6 +110,8 @@ vi.mock("../src/lib/repo", async () => {
     createInterview: vi.fn(async () => ({ _id: new ObjectId(interviewId) })),
     createInterviewWithOperation: vi.fn(async () => ({ kind: "created" as const, result: { id: interviewId, interviewId, report: { ok: true, counts: { error: 0 }, diagnostics: [] } } })),
     getCreateInterviewOperation: vi.fn(async () => null),
+    addParticipantsWithOperation: vi.fn(async (interviewId: string, people: { name: string }[]) => ({ kind: "created" as const, people: people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited" as const, answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" })) })),
+    getAddPeopleOperation: vi.fn(async () => null),
     addParticipants: vi.fn(async (_interviewId: string, people: { name: string }[]) => people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited", answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" }))),
     getParticipant: vi.fn(async () => ({
       id: personId,
@@ -177,7 +179,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -200,6 +202,8 @@ beforeEach(() => {
   vi.mocked(createInterview).mockClear();
   vi.mocked(createInterviewWithOperation).mockClear().mockResolvedValue({ kind: "created", result: { id: interviewId, interviewId, report: { ok: true, counts: { error: 0 }, diagnostics: [] } } });
   vi.mocked(getCreateInterviewOperation).mockClear().mockResolvedValue(null);
+  vi.mocked(addParticipantsWithOperation).mockClear();
+  vi.mocked(getAddPeopleOperation).mockClear().mockResolvedValue(null);
   vi.mocked(deleteInterview).mockReset().mockResolvedValue(true);
   vi.mocked(createAnalyticsRun).mockClear();
 });
@@ -831,6 +835,30 @@ describe("MCP tools", () => {
     const body = await response.json() as { result: { isError?: boolean } };
     expect(body.result.isError).toBeFalsy();
     expect(vi.mocked(addParticipants)).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: undefined }]);
+  });
+
+  it("accepts add_people operationId and binds retries to the normalized people batch", async () => {
+    const response = await call("add_people", { interviewId, people: [{ name: " Grace ", note: " synthetic " }], operationId: "batch-1" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { people?: Array<{ name: string }> } } };
+    expect(body.result.isError).toBe(false);
+    expect(body.result.structuredContent.people?.[0]).toMatchObject({ name: "Grace" });
+    expect(addParticipantsWithOperation).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: "synthetic" }], expect.objectContaining({ operationId: "batch-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
+    expect(getAddPeopleOperation).toHaveBeenCalledOnce();
+    await call("add_people", { interviewId, people: [{ name: "Grace", note: "synthetic" }], operationId: "batch-1" });
+    expect(vi.mocked(addParticipantsWithOperation).mock.calls[0][2].argumentDigest).toBe(vi.mocked(addParticipantsWithOperation).mock.calls[1][2].argumentDigest);
+  });
+
+  it("replays add_people results and rejects a mismatched operation key before another write", async () => {
+    vi.mocked(getAddPeopleOperation).mockResolvedValueOnce({ kind: "replayed", people: [{ id: personId, interviewId, token: "original-token", name: "Original", status: "invited", answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z", updatedAt: "2026-11-20T00:00:00.000Z" }] });
+    const replay = await call("add_people", { interviewId, people: [{ name: "Original" }], operationId: "batch-1" });
+    const replayBody = await replay.json() as { result: { structuredContent: { people: Array<{ id: string; name: string }> } } };
+    expect(replayBody.result.structuredContent.people[0]).toMatchObject({ id: personId, name: "Original" });
+    expect(addParticipantsWithOperation).not.toHaveBeenCalled();
+    vi.mocked(getAddPeopleOperation).mockResolvedValueOnce({ kind: "conflict" });
+    const conflict = await call("add_people", { interviewId, people: [{ name: "Different" }], operationId: "batch-1" });
+    const conflictBody = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(conflictBody.result).toMatchObject({ isError: true, structuredContent: { code: "operation_id_conflict" } });
+    expect(addParticipantsWithOperation).not.toHaveBeenCalled();
   });
 
   it("does not switch the mode when the people list is refused", async () => {

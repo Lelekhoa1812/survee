@@ -18,10 +18,12 @@ import { inviteLink } from "../mail/policy";
 import { currentMail } from "../mail/state";
 import {
   addParticipants,
+  addParticipantsWithOperation,
   createAnalyticsRun,
   createInterview,
   createInterviewWithOperation,
   getCreateInterviewOperation,
+  getAddPeopleOperation,
   deleteInterview,
   deleteParticipant,
   getInterview,
@@ -1782,13 +1784,12 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "add_people",
-    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user.`,
-    inputSchema: obj({ interviewId: str, people: { type: "array", minItems: 1, maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
+    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user. Optional operationId makes uncertain retries return the original people for seven days.`,
+    inputSchema: obj({ interviewId: str, people: { type: "array", minItems: 1, maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["interviewId", "people"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
-      const interview = await getInterview(id);
-      if (!interview) return err("Interview not found.", "not_found");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
       if (!Array.isArray(args.people)) return err("people must be a list.", "invalid_args");
       if (args.people.length > MAX_PEOPLE_PER_BATCH) return err(`Add at most ${MAX_PEOPLE_PER_BATCH} people per request. Split the list into batches.`, "invalid_args");
       const people: { name: string; email?: string; note?: string }[] = [];
@@ -1807,6 +1808,21 @@ const TOOLS: ToolDef[] = [
         people.push({ name, email, note: asString(item.note, 1000) });
       }
       if (!people.length) return err("Add at least one person with a name.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ interviewId: id, people })).digest("hex") };
+        const existing = await getAddPeopleOperation(operation);
+        if (existing?.kind === "conflict") return err("operationId was already used with different add_people arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ people: existing.people.map((person) => shapePerson(person, null, [])) });
+        const interview = await getInterview(id);
+        if (!interview) return err("Interview not found.", "not_found");
+        const added = await addParticipantsWithOperation(id, people, operation);
+        if (added.kind === "conflict") return err("operationId was already used with different add_people arguments or the interview no longer exists.", "operation_id_conflict");
+        return ok({ people: added.people.map((person) => shapePerson(person, null, [])) });
+      }
+      const interview = await getInterview(id);
+      if (!interview) return err("Interview not found.", "not_found");
       const created = await addParticipants(id, people);
       const views = created.map((person) => shapePerson(person, null, []));
       return ok({ people: views });
