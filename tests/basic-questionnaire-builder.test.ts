@@ -11,6 +11,7 @@ describe("basic questionnaire HTML generator", () => {
         { id: "single-choice", type: "single", label: "Pick one", help: "One answer", required: true, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
         { id: "multi-choice", type: "multi", label: "Pick any", help: "Several answers", required: false, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
         { id: "dropdown", type: "select", label: "Choose a value", help: "", required: false, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
+        { id: "priority-order", type: "rank", label: "Order your priorities", help: "", required: false, options: [{ value: "cost", label: "Cost" }, { value: "speed", label: "Speed" }, { value: "quality", label: "Quality" }] },
         { id: "short-answer", type: "text", label: "Short answer", help: "", required: false, options: [] },
         { id: "long-answer", type: "longtext", label: "Long answer", help: "", required: false, options: [] },
         { id: "quantity", type: "number", label: "How many?", help: "", required: false, options: [], min: 0, max: 100 },
@@ -23,7 +24,7 @@ describe("basic questionnaire HTML generator", () => {
     expect(report.ok).toBe(true);
     expect(report.diagnostics).toEqual([]);
     expect((html.match(/data-kqa-question-id=/g) ?? [])).toHaveLength(input.questions.length);
-    expect((html.match(/data-kqa="/g) ?? [])).toHaveLength(2 + 2 + 1 + 1 + 1 + 1 + 5 + 1);
+    expect((html.match(/data-kqa="/g) ?? [])).toHaveLength(2 + 2 + 1 + 1 + 1 + 1 + 1 + 5 + 1);
     expect(html).not.toMatch(/<(?:input|option)[^>]*\s(?:checked|selected|required|disabled)(?:\s|=|>)/i);
   });
 

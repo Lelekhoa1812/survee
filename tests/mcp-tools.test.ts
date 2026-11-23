@@ -96,6 +96,7 @@ vi.mock("../src/lib/repo", async () => {
     noteMcp: vi.fn(async () => {}),
     reopenParticipant: vi.fn(async () => null),
     promoteToMultiUser: vi.fn(async () => {}),
+    createInterview: vi.fn(async () => ({ _id: new ObjectId(interviewId) })),
     addParticipants: vi.fn(async (_interviewId: string, people: { name: string }[]) => people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited", answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" }))),
     getParticipant: vi.fn(async () => ({
       id: personId,
@@ -163,7 +164,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, createAnalyticsRun, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, createAnalyticsRun, createInterview, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -183,6 +184,7 @@ beforeEach(() => {
   sent.length = 0;
   searches.length = 0;
   vi.mocked(noteMcp).mockClear();
+  vi.mocked(createInterview).mockClear();
   vi.mocked(deleteInterview).mockReset().mockResolvedValue(true);
   vi.mocked(createAnalyticsRun).mockClear();
 });
@@ -434,6 +436,14 @@ describe("MCP tools", () => {
     const res = await call("list_events", { interviewId });
     const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[] } } };
     expect(body.result.structuredContent.events[0].meta).toEqual({ tool: "get_design_guidance", ok: true });
+  });
+
+  it("returns questionnaire diagnostics with a successful create result", async () => {
+    const response = await call("create_interview", { name: "Disposable fixture", mode: "multi", html: patchTestHtml });
+    const body = await response.json() as { result: { structuredContent: { report: { counts: Record<string, number>; diagnostics: unknown[] } } } };
+    expect(createInterview).toHaveBeenCalledOnce();
+    expect(body.result.structuredContent.report.counts).toMatchObject({ error: 0 });
+    expect(body.result.structuredContent.report.diagnostics).toEqual(expect.any(Array));
   });
 
   it("reports not found when an interview disappears before the delete completes", async () => {

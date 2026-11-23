@@ -1036,7 +1036,7 @@ const TOOLS: ToolDef[] = [
         return { ...err("The file did not pass the checker.", "checker"), structuredContent: { ok: false, error: "The file did not pass the checker.", code: "checker", markdown: prepared.markdown } };
       }
       const doc = await createInterview({ name, description: asString(args.description, 500) || undefined, mode: args.mode, survey: prepared.survey });
-      return ok({ id: doc._id.toHexString(), interviewId: doc._id.toHexString(), report: { ok: true, counts: prepared.report.counts } });
+      return ok({ id: doc._id.toHexString(), interviewId: doc._id.toHexString(), report: { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics } });
     },
   },
   {

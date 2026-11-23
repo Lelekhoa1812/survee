@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { generateBasicQuestionnaireHtml, type BasicQuestion, type BasicQuestionType, type BasicQuestionnaire } from "@/lib/builder/basic-questionnaire";
 
 const questionTypes: Array<{ value: BasicQuestionType; label: string }> = [
-  { value: "single", label: "Single choice" }, { value: "multi", label: "Checkboxes" }, { value: "select", label: "Dropdown" },
+  { value: "single", label: "Single choice" }, { value: "multi", label: "Checkboxes" }, { value: "select", label: "Dropdown" }, { value: "rank", label: "Full-order ranking" },
   { value: "text", label: "Short text" }, { value: "longtext", label: "Paragraph" }, { value: "number", label: "Number" },
   { value: "scale", label: "Scale" }, { value: "date", label: "Date" },
 ];
@@ -27,10 +27,11 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
 
   function changeType(index: number, type: BasicQuestionType) {
     const current = data.questions[index];
-    const needsOptions = ["single", "multi", "select"].includes(type);
+    const needsOptions = ["single", "multi", "select", "rank"].includes(type);
+    const optionLimit = type === "rank" ? 8 : 50;
     updateQuestion(index, {
       type,
-      options: needsOptions ? (current.options.length >= 2 ? current.options : [{ value: "option-1", label: "Option 1" }, { value: "option-2", label: "Option 2" }]) : [],
+      options: needsOptions ? (current.options.length >= 2 ? current.options.slice(0, optionLimit) : [{ value: "option-1", label: "Option 1" }, { value: "option-2", label: "Option 2" }]) : [],
       min: type === "scale" ? 1 : undefined,
       max: type === "scale" ? 5 : undefined,
       step: undefined,
@@ -81,18 +82,18 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         <div className="field"><label htmlFor={`builder-label-${index}`}>Question text</label><input id={`builder-label-${index}`} className="input" maxLength={300} value={question.label} onChange={(event) => updateQuestion(index, { label: event.target.value })} /></div>
         <div className="field"><label htmlFor={`builder-help-${index}`}>Help text <span className="muted">(optional)</span></label><textarea id={`builder-help-${index}`} className="textarea" rows={2} maxLength={1000} value={question.help} onChange={(event) => updateQuestion(index, { help: event.target.value })} /></div>
         <label className="choice"><input type="checkbox" checked={question.required} onChange={(event) => updateQuestion(index, { required: event.target.checked })} /><span>Required to submit</span></label>
-        {["single", "multi", "select"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}><strong>Answer choices</strong>{question.options.map((option, optionIndex) => <div className="row wrap" key={optionIndex}>
+        {["single", "multi", "select", "rank"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}><strong>{question.type === "rank" ? "Ranked options" : "Answer choices"}</strong>{question.options.map((option, optionIndex) => <div className="row wrap" key={optionIndex}>
           <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Stored value</span><input className="input mono" maxLength={64} value={option.value} onChange={(event) => updateQuestion(index, { options: question.options.map((item, i) => i === optionIndex ? { ...item, value: event.target.value } : item) })} /></label>
           <label className="field" style={{ flex: "2 1 180px", margin: 0 }}><span>Displayed label</span><input className="input" maxLength={300} value={option.label} onChange={(event) => updateQuestion(index, { options: question.options.map((item, i) => i === optionIndex ? { ...item, label: event.target.value } : item) })} /></label>
           <button className="btn danger sm" type="button" disabled={question.options.length <= 2} aria-label={`Remove choice ${optionIndex + 1} from question ${index + 1}`} onClick={() => updateQuestion(index, { options: question.options.filter((_, i) => i !== optionIndex) })}>Remove choice</button>
-        </div>)}<button className="btn sm" type="button" disabled={question.options.length >= 50} onClick={() => updateQuestion(index, { options: [...question.options, { value: `option-${question.options.length + 1}`, label: `Option ${question.options.length + 1}` }] })}>Add choice</button></div>}
+        </div>)}<button className="btn sm" type="button" disabled={question.options.length >= (question.type === "rank" ? 8 : 50)} onClick={() => updateQuestion(index, { options: [...question.options, { value: `option-${question.options.length + 1}`, label: `Option ${question.options.length + 1}` }] })}>Add choice</button>{question.type === "rank" && <span className="hint">Respondents order all 2–8 options; KQA stores the full permutation without scoring responses.</span>}</div>}
         {["number", "scale"].includes(question.type) && <div className="row wrap" style={{ marginTop: 14 }}>
           <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Minimum</span><input className="input" type="number" value={question.min ?? (question.type === "scale" ? 1 : "")} onChange={(event) => updateQuestion(index, { min: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
           <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Maximum</span><input className="input" type="number" value={question.max ?? (question.type === "scale" ? 5 : "")} onChange={(event) => updateQuestion(index, { max: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
         </div>}
       </fieldset>)}
       <div className="row wrap"><button className="btn" type="button" disabled={data.questions.length >= 500} onClick={addQuestion}>Add question</button><span className="muted">{data.questions.length} question{data.questions.length === 1 ? "" : "s"}</span></div>
-      <p className="hint">This composer covers single choice, checkboxes, dropdown, short text, paragraph, number, scale, and date. For ranking, repeat groups, routing, sections, custom controls, or an existing interview version, use the HTML upload workflow so those details stay explicit and reviewable.</p>
+      <p className="hint">This composer covers common question types, including full-order ranking. For repeat groups, routing, sections, custom controls, or an existing interview version, use the HTML upload workflow so those details stay explicit and reviewable.</p>
       {(built.error || error) && <pre className="callout err" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error || built.error}</pre>}
       <div className="row wrap" style={{ justifyContent: "flex-end" }}><button className="btn" type="button" disabled={!built.html} onClick={download}>Download HTML</button><button className="btn primary" type="button" disabled={!built.html} onClick={() => { setError(""); onUse(built.html); }}>Use questionnaire</button></div>
     </div>

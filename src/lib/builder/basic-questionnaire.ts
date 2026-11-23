@@ -1,6 +1,6 @@
 import { LIMITS, manifestSchema, type QuestionType } from "@/lib/format/schema";
 
-export type BasicQuestionType = Extract<QuestionType, "single" | "multi" | "select" | "text" | "longtext" | "number" | "scale" | "date">;
+export type BasicQuestionType = Extract<QuestionType, "single" | "multi" | "select" | "rank" | "text" | "longtext" | "number" | "scale" | "date">;
 
 export type BasicQuestion = {
   id: string;
@@ -43,6 +43,10 @@ function control(question: BasicQuestion, index: number): string {
     const rows = options.map((option) => `<option value="${option.value}">${option.label}</option>`).join("\n");
     return `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><label for="field-${id}">${label}</label>${required}</div>${help}<select id="field-${id}" data-kqa="${id}"${describedBy}><option value="">Choose one…</option>${rows}</select></section>`;
   }
+  if (question.type === "rank") {
+    const rows = options.map((option) => `<li data-value="${option.value}">${option.label}</li>`).join("\n");
+    return `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><h2 id="heading-${id}">${label}</h2>${required}</div>${help}<p class="rank-hint">Place every option in the order that best answers the question. You can confirm the starting order.</p><ol class="rank" data-kqa="${id}" aria-labelledby="heading-${id}"${question.help ? ` aria-describedby="help-${id}"` : ""}>${rows}</ol></section>`;
+  }
   if (question.type === "scale") {
     const min = question.min ?? 1;
     const max = question.max ?? 5;
@@ -70,7 +74,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
       label: question.label,
       ...(question.help ? { help: question.help } : {}),
       ...(question.required ? { required: true } : {}),
-      ...(question.options.length ? { options: question.options } : {}),
+      ...(["single", "multi", "select", "rank"].includes(question.type) ? { options: question.options } : {}),
       ...(question.min !== undefined ? { min: question.min } : {}),
       ...(question.max !== undefined ? { max: question.max } : {}),
       ...(question.step !== undefined ? { step: question.step } : {}),
@@ -104,6 +108,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     select,input[type=text],input[type=number],input[type=date],textarea { width:100%; max-width:100%; padding:10px 12px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:9px; }
     textarea { resize:vertical; } .scale { display:grid; grid-template-columns:repeat(var(--scale-count),minmax(0,1fr)); gap:6px; margin-top:12px; }
     .scale-choice { display:grid; justify-items:center; gap:4px; padding:8px 2px; border:1px solid var(--line); border-radius:9px; cursor:pointer; }
+    .rank { display:grid; gap:8px; padding-left:2rem; } .rank li { padding:10px; border:1px solid var(--line); border-radius:9px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     input:focus-visible,select:focus-visible,textarea:focus-visible,label:focus-within { outline:3px solid var(--accent); outline-offset:2px; }
     @media(max-width:400px) { main { width:calc(100% - 20px); margin-top:14px; } .question { padding:14px; } .scale { gap:3px; } }

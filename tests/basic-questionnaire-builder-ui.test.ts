@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { checkHtml } from "../src/lib/diagnostics/static";
 import { BasicQuestionnaireBuilder } from "../src/components/BasicQuestionnaireBuilder";
 
 let host: HTMLDivElement;
@@ -59,5 +60,24 @@ describe("basic questionnaire builder UI", () => {
     const removeButtons = Array.from(host.querySelectorAll("button")).filter((item) => item.textContent?.trim() === "Remove");
     await act(async () => { removeButtons[1].click(); });
     expect(host.textContent).not.toContain("Question 2");
+  });
+
+  it("creates a full-order ranking with the KQA option count visible", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "rank");
+    expect(host.textContent).toContain("Ranked options");
+    expect(host.textContent).toContain("2–8 options");
+    for (let i = 0; i < 6; i += 1) await click("Add choice");
+    expect(Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes("Add choice"))?.disabled).toBe(true);
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"type": "rank"');
+    expect(html).toContain('"value": "option-8"');
+    expect(html).toContain('<ol class="rank" data-kqa="question-1"');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 });

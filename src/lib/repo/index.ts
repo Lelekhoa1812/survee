@@ -130,8 +130,10 @@ export async function createInterview(input: { name: string; description?: strin
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const now = new Date();
   const doc: InterviewDoc = { _id: new ObjectId(), tenantId, name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1, createdAt: now, updatedAt: now };
-  await (await col.interviews()).insertOne(doc);
-  await (await col.versions()).insertOne(versionDoc(tenantId, doc._id, 1, input.survey));
+  await withMongoTransaction(async (session) => {
+    await (await col.interviews()).insertOne(doc, { session });
+    await (await col.versions()).insertOne(versionDoc(tenantId, doc._id, 1, input.survey), { session });
+  });
   if (input.mode === "single") await addParticipants(doc._id.toHexString(), [{ name: "Respondent" }]);
   logEvent(tenantId, doc._id, "created");
   return doc;
@@ -658,6 +660,7 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
   const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { returnDocument: "after" });
+  if (res) logEvent(tenantId, res.interviewId, "update", res._id, { fields: Object.keys(patch).sort() });
   return res ? participantView(res) : null;
 }
 
