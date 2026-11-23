@@ -2,10 +2,11 @@ import { consumeRateLimit } from "@/lib/repo";
 import { fail } from "@/lib/http";
 import type { NextResponse } from "next/server";
 
-type RespondentAction = "load" | "save" | "submit";
+type RespondentAction = "load" | "frame" | "save" | "submit";
 
 const LIMITS: Record<RespondentAction, { token: number; ip: number }> = {
   load: { token: 180, ip: 1800 },
+  frame: { token: 180, ip: 1800 },
   save: { token: 600, ip: 3600 },
   submit: { token: 60, ip: 600 },
 };

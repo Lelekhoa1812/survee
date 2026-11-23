@@ -4,11 +4,12 @@ const mocks = vi.hoisted(() => ({
   context: {
     participant: { name: "Ada", status: "invited", revision: 0, answers: {}, recordGroups: { people: [{ id: "row-1", values: {}, revision: 0, fieldRevisions: {} }] } },
     interview: { name: "Study", status: "open" },
-    version: { version: 7, manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] as { id: string }[] } as Record<string, any> },
+    version: { version: 7, html: "<!doctype html><title>Study</title>", manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] as { id: string }[] } as Record<string, any> },
   },
   loadByToken: vi.fn(),
   ensureQuestionOrderAssignment: vi.fn(),
   shouldRecordVisit: vi.fn(() => false),
+  respondentRateLimit: vi.fn(async () => null as Response | null),
   saveAnswers: vi.fn(),
   submitAnswers: vi.fn(),
 }));
@@ -30,9 +31,10 @@ vi.mock("@/lib/repo", () => ({
 }));
 vi.mock("@/lib/tokens", () => ({ looksLikeToken: () => true }));
 vi.mock("@/lib/visit", () => ({ shouldRecordVisit: mocks.shouldRecordVisit }));
-vi.mock("@/lib/respondent-rate-limit", () => ({ respondentRateLimit: vi.fn(async () => null) }));
+vi.mock("@/lib/respondent-rate-limit", () => ({ respondentRateLimit: mocks.respondentRateLimit }));
 
 import { GET as getRespondent } from "../src/app/api/p/[token]/route";
+import { GET as getQuestionnaireFrame } from "../src/app/api/frame/[token]/route";
 import { PUT as saveRespondentAnswers } from "../src/app/api/p/[token]/answers/route";
 import { POST as submitRespondentAnswers } from "../src/app/api/p/[token]/submit/route";
 
@@ -49,6 +51,7 @@ beforeEach(() => {
   mocks.loadByToken.mockResolvedValue(mocks.context);
   mocks.ensureQuestionOrderAssignment.mockImplementation(async (input) => ({ ...input, assignedAt: "2026-11-16T00:00:00.000Z" }));
   mocks.shouldRecordVisit.mockReturnValue(false);
+  mocks.respondentRateLimit.mockResolvedValue(null);
   mocks.saveAnswers.mockResolvedValue({ ok: true, revision: 1, savedAt: "2026-11-16T00:00:00.000Z", status: "in_progress" });
   mocks.submitAnswers.mockResolvedValue({ ok: true, submittedAt: "2026-11-16T00:00:00.000Z" });
 });
@@ -58,7 +61,24 @@ describe("respondent questionnaire version routes", () => {
     const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
 
     expect(response.status).toBe(200);
+    expect(mocks.respondentRateLimit).toHaveBeenCalledWith(expect.any(Request), token, "load");
     await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }], recordGroups: { people: [{ id: "row-1" }] } });
+  });
+
+  it("throttles respondent reads before looking up a link", async () => {
+    mocks.respondentRateLimit.mockResolvedValueOnce(new Response("rate limited", { status: 429 }));
+
+    const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
+
+    expect(response.status).toBe(429);
+    expect(mocks.loadByToken).not.toHaveBeenCalled();
+  });
+
+  it("rate limits questionnaire frame reads before loading HTML", async () => {
+    const response = await getQuestionnaireFrame(request(`https://kqa.local/api/frame/${token}`, "GET"), params);
+
+    expect(response.status).toBe(200);
+    expect(mocks.respondentRateLimit).toHaveBeenCalledWith(expect.any(Request), token, "frame");
   });
 
   it("persists and returns a complete order on respondent visits while preserving canonical questions", async () => {

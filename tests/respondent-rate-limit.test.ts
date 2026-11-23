@@ -25,6 +25,16 @@ describe("respondent API rate limits", () => {
     ]);
   });
 
+  it("limits repeated questionnaire frame loads too", async () => {
+    const req = new Request("https://kqa.example/api/frame/token", { headers: { "x-vercel-forwarded-for": "192.0.2.4" } });
+
+    expect(await respondentRateLimit(req, token, "frame")).toBeNull();
+    expect(state.consumeRateLimit.mock.calls).toEqual([
+      [`respondent-frame-token:${token}`, 180, 15],
+      ["respondent-frame-ip:192.0.2.4", 1800, 15],
+    ]);
+  });
+
   it("does not trust caller supplied forwarding headers when the platform IP header is absent", async () => {
     const req = new Request("https://kqa.example/api/p/token", { headers: { "x-forwarded-for": "203.0.113.5" } });
 
