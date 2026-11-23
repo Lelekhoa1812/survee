@@ -6,12 +6,15 @@ const mongoMocks = vi.hoisted(() => {
   const deleteMany = vi.fn();
   const insertOne = vi.fn();
   const findOne = vi.fn();
+  const interviewUpdateOne = vi.fn();
   const participants = vi.fn(async () => ({ find }));
   const analyticsRuns = vi.fn(async () => ({ deleteMany, insertOne, findOne }));
-  return { find, participants, deleteMany, insertOne, findOne, analyticsRuns };
+  const interviews = vi.fn(async () => ({ updateOne: interviewUpdateOne }));
+  const withMongoTransaction = vi.fn(async (work: (session: object) => Promise<unknown>) => work({}));
+  return { find, participants, deleteMany, insertOne, findOne, analyticsRuns, interviewUpdateOne, interviews, withMongoTransaction };
 });
 
-vi.mock("../src/lib/db", () => ({ col: { participants: mongoMocks.participants, analyticsRuns: mongoMocks.analyticsRuns } }));
+vi.mock("../src/lib/db", () => ({ col: { participants: mongoMocks.participants, analyticsRuns: mongoMocks.analyticsRuns, interviews: mongoMocks.interviews }, withMongoTransaction: mongoMocks.withMongoTransaction }));
 
 import { createAnalyticsRun, getAnalyticsRun, iterateAnalyticsParticipants, type AnalyticsParticipant } from "../src/lib/repo";
 import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
@@ -46,6 +49,9 @@ describe("analytics participant query", () => {
     mongoMocks.insertOne.mockReset().mockResolvedValue({ acknowledged: true });
     mongoMocks.findOne.mockReset().mockResolvedValue(null);
     mongoMocks.analyticsRuns.mockClear();
+    mongoMocks.interviewUpdateOne.mockReset().mockResolvedValue({ matchedCount: 1 });
+    mongoMocks.interviews.mockClear();
+    mongoMocks.withMongoTransaction.mockClear();
   });
 
   it("filters status in Mongo and streams only selected answer fields without identity or note text", async () => {
@@ -107,7 +113,27 @@ describe("repeatable analytics runs", () => {
     expect(mongoMocks.deleteMany).toHaveBeenCalledWith({ tenantId: "axion", expiresAt: { $lte: expect.any(Date) } });
     const doc = mongoMocks.insertOne.mock.calls[0][0];
     expect(doc).toMatchObject({ tenantId: "axion", interviewId, slot: 0, surveyVersion: 2, result });
+    expect(mongoMocks.interviewUpdateOne).toHaveBeenCalledWith(
+      tenantFilter("axion", { _id: interviewId, currentVersion: 2 }),
+      { $inc: { analyticsRunRevision: 1 } },
+      { session: expect.any(Object) },
+    );
+    expect(mongoMocks.insertOne).toHaveBeenCalledWith(doc, { session: expect.any(Object) });
     expect((doc.expiresAt as Date).getTime() - (doc.createdAt as Date).getTime()).toBe(60 * 60 * 1000);
+  });
+
+  it("refuses a run when participant data changed after the scan and does not persist its aggregates", async () => {
+    mongoMocks.interviewUpdateOne.mockResolvedValueOnce({ matchedCount: 0 });
+
+    const created = await asAxion(() => createAnalyticsRun(interviewId.toHexString(), 2, { questionCount: 1 }, 7));
+
+    expect(created).toEqual({ ok: false, reason: "stale" });
+    expect(mongoMocks.interviewUpdateOne).toHaveBeenCalledWith(
+      tenantFilter("axion", { _id: interviewId, currentVersion: 2, respondentWriteRevision: 7 }),
+      { $inc: { analyticsRunRevision: 1 } },
+      { session: expect.any(Object) },
+    );
+    expect(mongoMocks.insertOne).not.toHaveBeenCalled();
   });
 
   it("retrieves runs with a strict tenant and interview filter", async () => {

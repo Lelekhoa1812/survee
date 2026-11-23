@@ -203,6 +203,7 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `asset_unavailable` | A questionnaire candidate references an image missing from this workspace. Upload it again or remove the asset URL, then preview the candidate again. |
 | `invalid_image` | The upload is not an accepted image type. |
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
+| `analysis_run_stale` | Participant answers or the questionnaire changed while the analysis was running, so its aggregate page set was not cached. Run the analysis again. |
 | `participant_read_limit` | A full export has more than 100 people. The result is not truncated; use aggregate tools or read answers with `get_answers` cursor pages. |
 | `participant_cursor_invalid` | A participant or answer page cursor is malformed. Restart the read without a cursor. |
 | `docs_unavailable` | Bundled documentation could not be read. Try again later. |

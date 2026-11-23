@@ -140,6 +140,8 @@ export interface InterviewDoc {
   currentVersion: number;
   /** Written by respondent saves/submits and version publication to serialize the version fence. */
   respondentWriteRevision?: number;
+  /** Updated when an aggregate cache is created so cache creation conflicts with participant erasure. */
+  analyticsRunRevision?: number;
   createdAt: Date;
   updatedAt: Date;
 }

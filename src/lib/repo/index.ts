@@ -405,7 +405,7 @@ export interface AnalyticsParticipantScope {
 
 export type AnalyticsRunCreateResult =
   | { ok: true; id: string; expiresAt: string }
-  | { ok: false; reason: "too_large" | "capacity" };
+  | { ok: false; reason: "too_large" | "capacity" | "stale" };
 
 const ANALYTICS_RUN_TTL_MS = 60 * 60 * 1000;
 const ANALYTICS_RUN_MAX_BYTES = 1024 * 1024;
@@ -417,6 +417,7 @@ export async function createAnalyticsRun(
   interviewId: string,
   surveyVersion: number,
   result: Record<string, unknown>,
+  expectedRespondentRevision?: number,
 ): Promise<AnalyticsRunCreateResult | null> {
   const oid = toOid(interviewId);
   if (!oid || !Number.isInteger(surveyVersion) || surveyVersion < 1) return null;
@@ -431,6 +432,7 @@ export async function createAnalyticsRun(
   if (Buffer.byteLength(serialized, "utf8") > ANALYTICS_RUN_MAX_BYTES) return { ok: false, reason: "too_large" };
 
   const runs = await col.analyticsRuns();
+  const interviews = await col.interviews();
   const now = new Date();
   await runs.deleteMany({ tenantId, expiresAt: { $lte: now } });
   for (let slot = 0; slot < ANALYTICS_RUN_SLOTS_PER_TENANT; slot += 1) {
@@ -439,7 +441,24 @@ export async function createAnalyticsRun(
       createdAt: now, expiresAt: new Date(now.getTime() + ANALYTICS_RUN_TTL_MS), result,
     };
     try {
-      await runs.insertOne(doc);
+      const stored = await withMongoTransaction(async (session) => {
+        const filter: Record<string, unknown> = { _id: oid, currentVersion: surveyVersion };
+        if (expectedRespondentRevision !== undefined) {
+          if (!Number.isSafeInteger(expectedRespondentRevision) || expectedRespondentRevision < 0) return "stale" as const;
+          filter.respondentWriteRevision = expectedRespondentRevision === 0
+            ? { $in: [null, 0] }
+            : expectedRespondentRevision;
+        }
+        const touched = await interviews.updateOne(
+          tenantFilter(tenantId, filter),
+          { $inc: { analyticsRunRevision: 1 } },
+          { session },
+        );
+        if (!touched.matchedCount) return "stale" as const;
+        await runs.insertOne(doc, { session });
+        return "stored" as const;
+      });
+      if (stored === "stale") return { ok: false, reason: "stale" };
       return { ok: true, id: doc._id.toHexString(), expiresAt: doc.expiresAt.toISOString() };
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === 11000) continue;
@@ -516,7 +535,7 @@ export async function addParticipants(interviewId: string, people: { name: strin
   const oid = toOid(interviewId);
   if (!oid || people.length === 0) return [];
   const tenantId = await currentTenantId();
-  if (!tenantId || !(await (await col.interviews()).findOne(tenantFilter(tenantId, { _id: oid }), { projection: { _id: 1 } }))) return [];
+  if (!tenantId) return [];
   const now = new Date();
   const docs: ParticipantDoc[] = people.map((p, i) => {
     const parsed = p.email ? parseEmail(p.email) : { ok: true as const, email: null };
@@ -527,8 +546,18 @@ export async function addParticipants(interviewId: string, people: { name: strin
       status: "invited" as const, answers: {}, revision: 0, createdAt: new Date(now.getTime() + i), updatedAt: now,
     };
   });
-  await (await col.participants()).insertMany(docs);
-  await (await col.interviews()).updateOne(tenantFilter(tenantId, { _id: oid }), { $set: { updatedAt: now } });
+  const added = await withMongoTransaction(async (session) => {
+    const interviews = await col.interviews();
+    const touched = await interviews.updateOne(
+      tenantFilter(tenantId, { _id: oid }),
+      { $set: { updatedAt: now }, $inc: { respondentWriteRevision: 1 } },
+      { session },
+    );
+    if (!touched.matchedCount) return false;
+    await (await col.participants()).insertMany(docs, { session });
+    return true;
+  });
+  if (!added) return [];
   return docs.map(participantView);
 }
 
@@ -578,6 +607,14 @@ export async function deleteParticipant(id: string): Promise<boolean> {
     if (!participant) return false;
     const res = await participants.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
+    // Cache creation writes this same interview row and checks its pre-scan
+    // respondent revision. This makes concurrent analysis creation retry or
+    // fail stale instead of recreating an aggregate containing the erased person.
+    await (await col.interviews()).updateOne(
+      tenantFilter(tenantId, { _id: participant.interviewId }),
+      { $inc: { respondentWriteRevision: 1 } },
+      { session },
+    );
     await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
     // Mongo _id values are globally unique, so this exact relationship also
     // removes legacy event rows that predate tenantId without crossing tenants.
@@ -605,9 +642,23 @@ export async function reopenParticipant(id: string): Promise<ParticipantView | n
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
-  const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid, status: "submitted" }), { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" } }, { returnDocument: "after" });
-  if (res) logEvent(tenantId, res.interviewId, "reopen", res._id);
-  return res ? participantView(res) : null;
+  const reopened = await withMongoTransaction(async (session) => {
+    const res = await (await col.participants()).findOneAndUpdate(
+      tenantFilter(tenantId, { _id: oid, status: "submitted" }),
+      { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" } },
+      { returnDocument: "after", session },
+    );
+    if (!res) return null;
+    const touched = await (await col.interviews()).updateOne(
+      tenantFilter(tenantId, { _id: res.interviewId }),
+      { $inc: { respondentWriteRevision: 1 } },
+      { session },
+    );
+    if (!touched.matchedCount) throw new Error("Could not update respondent revision for interview.");
+    return res;
+  });
+  if (reopened) logEvent(tenantId, reopened.interviewId, "reopen", reopened._id);
+  return reopened ? participantView(reopened) : null;
 }
 
 // ------------------------------------------------------------------------------------------ respondent side

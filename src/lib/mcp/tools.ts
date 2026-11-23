@@ -602,7 +602,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "analyze_answers",
-    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Repeat-group field values are excluded; rows are never counted as participants. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer. Set crossTabWith with segmentBy to produce a bounded two-question count matrix with row denominators and checkbox overlap notes. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; completed aggregate pages remain stable for up to one hour. Initial scans are live, not database snapshots. Returns no raw answer text and creates no score.",
+    description: "Compute descriptive current-version answer summaries for selected participant statuses, with explicit scope, denominators, missingness, and caveats. Repeat-group field values are excluded; rows are never counted as participants. Set compareStatuses to return per-status summaries from one shared scan. Set segmentBy to compare up to 20 selected outcomes across a closed categorical answer. Set crossTabWith with segmentBy to produce a bounded two-question count matrix with row denominators and checkbox overlap notes. For paginated results, reuse analysisRunId as runId with interviewId and offset/limit; completed aggregate pages remain stable for up to one hour. Initial scans are live rather than MongoDB snapshot reads; repeatable runs check the questionnaire and respondent-write revision before caching, and return `analysis_run_stale` if either changed during the scan. Returns no raw answer text and creates no score.",
     inputSchema: obj({
       interviewId: str,
       runId: str,
@@ -786,13 +786,15 @@ const TOOLS: ToolDef[] = [
           ],
         };
         if (createRun) {
-          const stored = await createAnalyticsRun(id, version.version, fullResult);
+          const stored = await createAnalyticsRun(id, version.version, fullResult, interview.respondentWriteRevision ?? 0);
           if (!stored) return err("Could not create an analysis run for this tenant and interview.");
           if (!stored.ok) return err(
-            stored.reason === "too_large"
+            stored.reason === "stale"
+              ? "Answers or the questionnaire changed while this analysis was running. Run the analysis again."
+              : stored.reason === "too_large"
               ? "The aggregate result is too large to keep as a repeatable analysis run. Select up to 20 outcome questions with questionIds, or analyze fewer outcomes at a time."
               : "This tenant already has the maximum number of active analysis runs. Retry after an existing run expires.",
-            stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
+            stored.reason === "stale" ? "analysis_run_stale" : stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
           );
           return ok(pageAnalyticsRunResult(fullResult as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
         }
@@ -870,13 +872,15 @@ const TOOLS: ToolDef[] = [
         ],
       };
       if (createRun) {
-        const stored = await createAnalyticsRun(id, version.version, fullResult);
+        const stored = await createAnalyticsRun(id, version.version, fullResult, interview.respondentWriteRevision ?? 0);
         if (!stored) return err("Could not create an analysis run for this tenant and interview.");
         if (!stored.ok) return err(
-          stored.reason === "too_large"
+          stored.reason === "stale"
+            ? "Answers or the questionnaire changed while this analysis was running. Run the analysis again."
+            : stored.reason === "too_large"
             ? "The aggregate result is too large to keep as a repeatable analysis run. Select one question with questionId, or use smaller questionIds selections when segmenting."
             : "This tenant already has the maximum number of active analysis runs. Retry after an existing run expires.",
-          stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
+          stored.reason === "stale" ? "analysis_run_stale" : stored.reason === "too_large" ? "analysis_run_too_large" : "analysis_run_capacity",
         );
         return ok(pageAnalyticsRunResult(fullResult as AnalyticsRunPayload, offset, limit, stored.id, stored.expiresAt));
       }

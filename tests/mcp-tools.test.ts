@@ -163,7 +163,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, createAnalyticsRun, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -184,6 +184,7 @@ beforeEach(() => {
   searches.length = 0;
   vi.mocked(noteMcp).mockClear();
   vi.mocked(deleteInterview).mockReset().mockResolvedValue(true);
+  vi.mocked(createAnalyticsRun).mockClear();
 });
 
 describe("MCP tools", () => {
@@ -914,6 +915,7 @@ describe("MCP tools", () => {
     expect(firstBody.result.structuredContent).toMatchObject({ offset: 0, limit: 1, questionCount: 3, nextOffset: 1 });
     expect(firstBody.result.structuredContent.analysisRunId).toMatch(/^[a-f0-9]{24}$/);
     expect(firstBody.result.structuredContent.analysisRunExpiresAt).toBe("2026-11-16T01:00:00.000Z");
+    expect(createAnalyticsRun).toHaveBeenCalledWith(interviewId, 1, expect.any(Object), 0);
     expect(firstBody.result.structuredContent.scope).toMatchObject({ statuses: ["invited"], participantCount: 1, respondentCount: 1 });
     expect(firstBody.result.structuredContent.questions.map((question) => question.id)).toEqual(["fit"]);
     expect(firstBody.result.structuredContent.methodology.join(" ")).toContain("participant changes during the initial live scan were not isolated");
@@ -933,6 +935,17 @@ describe("MCP tools", () => {
     expect(thirdBody.result.isError).toBeFalsy();
     expect(thirdBody.result.structuredContent).toMatchObject({ offset: 2, limit: 1, nextOffset: null });
     expect(thirdBody.result.structuredContent.questions.map(({ id }) => id)).toEqual(["confidence"]);
+  });
+
+  it("returns analysis_run_stale when participant data changes during a paged scan", async () => {
+    vi.mocked(createAnalyticsRun).mockResolvedValueOnce({ ok: false, reason: "stale" } as never);
+
+    const response = await call("analyze_answers", { interviewId, limit: 1 });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toBe("analysis_run_stale");
+    expect(body.result.structuredContent.error).toContain("changed while this analysis was running");
   });
 
   it("keeps segmented singleton and zero-count groups stable across pages", async () => {
