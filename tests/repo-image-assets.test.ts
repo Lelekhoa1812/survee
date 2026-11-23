@@ -6,6 +6,7 @@ const store = vi.hoisted(() => ({
   assets: [] as any[],
   versions: [] as any[],
   drafts: [] as any[],
+  renameBeforeDelete: false,
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -34,6 +35,11 @@ vi.mock("../src/lib/db", () => ({
         return doc;
       },
       deleteOne: async (filter: any) => {
+        if (store.renameBeforeDelete) {
+          store.renameBeforeDelete = false;
+          const doc = store.assets.find((item) => item._id.equals(filter._id));
+          if (doc) doc.name = "Renamed during delete";
+        }
         const index = store.assets.findIndex((doc) => matches(doc, filter));
         if (index < 0) return { deletedCount: 0 };
         store.assets.splice(index, 1);
@@ -53,6 +59,7 @@ vi.mock("../src/lib/tenant-context", () => ({
 function matches(doc: any, filter: any): boolean {
   if (filter.tenantId !== undefined && doc.tenantId !== filter.tenantId) return false;
   if (filter.publicId !== undefined && doc.publicId !== filter.publicId) return false;
+  if (filter.name !== undefined && doc.name !== filter.name) return false;
   if (filter._id instanceof ObjectId && !doc._id.equals(filter._id)) return false;
   if (filter._id?.$lt instanceof ObjectId && !(doc._id.toHexString() < filter._id.$lt.toHexString())) return false;
   if (filter.html?.$regex && !new RegExp(filter.html.$regex).test(doc.html)) return false;
@@ -69,6 +76,7 @@ beforeEach(() => {
   store.assets.splice(0);
   store.versions.splice(0);
   store.drafts.splice(0);
+  store.renameBeforeDelete = false;
 });
 
 describe("workspace image assets", () => {
@@ -135,5 +143,14 @@ describe("workspace image assets", () => {
     expect(await renameImageAsset(asset.id, "Changed")).toBeNull();
     expect(await deleteImageAsset(asset.id, "Logo")).toEqual({ ok: false, reason: "not_found" });
     expect(store.assets).toHaveLength(1);
+  });
+
+  it("does not delete an asset if it is renamed after confirmation but before deletion", async () => {
+    const asset = await addImageAsset({ name: "Logo", fileName: "logo.png", data: png });
+    store.renameBeforeDelete = true;
+
+    expect(await deleteImageAsset(asset.id, "Logo")).toEqual({ ok: false, reason: "confirmation_mismatch" });
+    expect(store.assets).toHaveLength(1);
+    expect(store.assets[0].name).toBe("Renamed during delete");
   });
 });

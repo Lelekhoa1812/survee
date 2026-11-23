@@ -113,6 +113,11 @@ export async function deleteImageAsset(id: string, expectedName: string): Promis
     (await col.questionnaireReviewDrafts()).findOne(tenantFilter(tenantId, { html: { $regex: pattern }, expiresAt: { $gt: new Date() } }), { projection: { _id: 1 } }),
   ]);
   if (version || draft) return { ok: false, reason: "in_use" };
-  await assets.deleteOne(tenantFilter(tenantId, { _id: oid }));
-  return { ok: true };
+  // Include the confirmed name in the delete predicate. A concurrent rename
+  // between the read above and this write must not make a stale confirmation
+  // delete the newly named asset.
+  const deleted = await assets.deleteOne(tenantFilter(tenantId, { _id: oid, name: expectedName, publicId: asset.publicId }));
+  if (deleted.deletedCount) return { ok: true };
+  const current = await assets.findOne(tenantFilter(tenantId, { _id: oid }), { projection: { _id: 1 } });
+  return current ? { ok: false, reason: "confirmation_mismatch" } : { ok: false, reason: "not_found" };
 }
