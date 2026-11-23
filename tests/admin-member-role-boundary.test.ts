@@ -24,7 +24,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => ({ value: "signed-session" }) }),
-  headers: async () => new Headers({ origin: "https://kqa.test", host: "kqa.test" }),
+  headers: async () => new Headers({ origin: "https://kqa.test", host: "kqa.test", "x-forwarded-proto": "https" }),
 }));
 vi.mock("../src/lib/auth", () => ({
   SESSION_COOKIE: "kqa_admin",

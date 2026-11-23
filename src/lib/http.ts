@@ -69,10 +69,12 @@ export async function adminSession(): Promise<{ userId: string; tenantId: string
 export async function sameOrigin(): Promise<boolean> {
   const h = await headers();
   const origin = h.get("origin");
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  if (!origin || !host) return false;
+  const host = (h.get("x-forwarded-host") ?? h.get("host"))?.split(",", 1)[0]?.trim();
+  const protocol = h.get("x-forwarded-proto")?.split(",", 1)[0]?.trim().toLowerCase();
+  if (!origin || !host || (protocol !== "http" && protocol !== "https")) return false;
   try {
-    return new URL(origin).host === host;
+    const parsed = new URL(origin);
+    return !parsed.username && !parsed.password && parsed.protocol === `${protocol}:` && parsed.host.toLowerCase() === host.toLowerCase();
   } catch {
     return false;
   }
