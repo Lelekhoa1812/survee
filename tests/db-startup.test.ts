@@ -1,20 +1,61 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ connectCalls: 0, indexes: [] as string[], reviewMigrationDone: false, reviewBackfills: 0, reviewIndexDrops: 0 }));
+const state = vi.hoisted(() => ({
+  connectCalls: 0,
+  indexes: [] as string[],
+  reviewMigrationDone: false,
+  reviewBackfills: 0,
+  reviewIndexDrops: 0,
+  signupRows: [] as { _id: { key: number }; email: string; createdAt: Date }[],
+  signupEmailIndex: false,
+  signupBulkWriteSizes: [] as number[],
+  signupDuplicateDeleteSizes: [] as number[],
+  signupDeletedIds: [] as number[],
+  signupEmailUpdates: [] as { id: number; email: string }[],
+}));
 
 vi.mock("mongodb", async (importOriginal) => {
   const actual = await importOriginal<typeof import("mongodb")>();
   const database = {
     collection(name: string) {
       return {
-        async createIndex(_spec: unknown, options?: { name?: string }) { if (options?.name) state.indexes.push(options.name); return "index"; },
+        async createIndex(_spec: unknown, options?: { name?: string }) {
+          if (options?.name) state.indexes.push(options.name);
+          if (name === "pending_signups" && options?.name === "signup_email_unique") state.signupEmailIndex = true;
+          return "index";
+        },
         async dropIndex() { if (name === "questionnaire_review_drafts") state.reviewIndexDrops++; const error = new Error("index not found") as Error & { code: number }; error.code = 27; throw error; },
         async updateMany() { if (name === "questionnaire_review_drafts") state.reviewBackfills++; return { modifiedCount: 0 }; },
-        async deleteMany() { return { deletedCount: 0 }; },
+        async deleteMany(filter?: { _id?: { $in?: unknown[] } }) {
+          if (name === "pending_signups" && filter?._id?.$in) {
+            state.signupDuplicateDeleteSizes.push(filter._id.$in.length);
+            state.signupDeletedIds.push(...filter._id.$in.map((id) => (id as { key: number }).key));
+          }
+          return { deletedCount: 0 };
+        },
+        async bulkWrite(operations: unknown[]) {
+          if (name === "pending_signups") {
+            state.signupBulkWriteSizes.push(operations.length);
+            const updates = operations as { updateOne: { filter: { _id: { key: number } }; update: { $set: { email: string } } } }[];
+            state.signupEmailUpdates.push(...updates.map(({ updateOne }) => ({ id: updateOne.filter._id.key, email: updateOne.update.$set.email })));
+          }
+          return { modifiedCount: operations.length };
+        },
         async findOne() { return name === "schema_migrations" && state.reviewMigrationDone ? { _id: "questionnaire_review_slots_v1" } : null; },
         async insertOne() { if (name === "schema_migrations") state.reviewMigrationDone = true; return { acknowledged: true }; },
-        listIndexes() { return { toArray: async () => [] }; },
-        find() { return { sort() { return { toArray: async () => [] }; } }; },
+        listIndexes() { return { toArray: async () => state.signupEmailIndex && name === "pending_signups" ? [{ key: { email: 1 }, unique: true }] : [] }; },
+        find() {
+          const rows = name === "pending_signups" ? [...state.signupRows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b._id.key - a._id.key) : [];
+          return {
+            sort() { return this; },
+            batchSize() { return this; },
+            async toArray() {
+              if (name === "pending_signups") throw new Error("Pending signup migration must stream its cursor.");
+              return rows;
+            },
+            async *[Symbol.asyncIterator]() { yield* rows; },
+          };
+        },
       };
     },
   };
@@ -38,6 +79,12 @@ describe("MongoDB cold-start connection recovery", () => {
     state.reviewMigrationDone = false;
     state.reviewBackfills = 0;
     state.reviewIndexDrops = 0;
+    state.signupRows = [];
+    state.signupEmailIndex = false;
+    state.signupBulkWriteSizes = [];
+    state.signupDuplicateDeleteSizes = [];
+    state.signupDeletedIds = [];
+    state.signupEmailUpdates = [];
     (globalThis as typeof globalThis & { __kqaMongo?: unknown }).__kqaMongo = undefined;
     process.env.MONGODB_URI = "mongodb://127.0.0.1:27017/kqa-test";
     process.env.MONGODB_DB = "kqa-test";
@@ -79,5 +126,29 @@ describe("MongoDB cold-start connection recovery", () => {
 
     expect(state.reviewBackfills).toBe(1);
     expect(state.reviewIndexDrops).toBe(1);
+  });
+
+  it("streams signup rows and flushes email cleanup in bounded batches", async () => {
+    state.signupRows = Array.from({ length: 1001 }, (_, index) => ({
+      _id: { key: index },
+      email: `Person-${index}@Example.com`,
+      createdAt: new Date(1001 - index),
+    }));
+    state.signupRows.push(
+      { _id: { key: 2000 }, email: " Duplicate@Example.com ", createdAt: new Date(2000) },
+      { _id: { key: 2001 }, email: "duplicate@example.com", createdAt: new Date(1000) },
+      { _id: { key: 2002 }, email: "   ", createdAt: new Date(999) },
+    );
+
+    const { db } = await import("../src/lib/db");
+    await expect(db()).rejects.toThrow("MongoDB unavailable during cold start");
+    await expect(db()).resolves.toBeDefined();
+
+    expect(state.signupEmailIndex).toBe(true);
+    expect(state.signupBulkWriteSizes).toEqual([500, 500, 2]);
+    expect(state.signupDuplicateDeleteSizes).toEqual([2]);
+    expect(state.signupDeletedIds).toEqual([2001, 2002]);
+    expect(state.signupEmailUpdates).toContainEqual({ id: 2000, email: "duplicate@example.com" });
+    expect(Math.max(...state.signupBulkWriteSizes, ...state.signupDuplicateDeleteSizes)).toBeLessThanOrEqual(500);
   });
 });
