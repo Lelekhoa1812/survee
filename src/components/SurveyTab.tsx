@@ -61,16 +61,16 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
   const canPreview = upload.ok && upload.settled && !busy;
   const canPublish = !!preview && reviewedCandidate && (!preview.compatibilityImpact || ackCompatibility) && !busy;
 
-  async function downloadCurrentSource() {
-    if (!current || busy) return;
+  async function downloadSource(versionNumber: number) {
+    if (busy) return;
     setBusy(true);
-    const res = await api<{ html: string; fileName: string }>(`${endpoint}?action=restore&restoreVersion=${current.version}`);
+    const res = await api<{ html: string; fileName: string }>(`${endpoint}?action=restore&restoreVersion=${versionNumber}`);
     setBusy(false);
     if (!res.ok || typeof res.data.html !== "string") {
-      toast(res.data.error ?? "Could not download the current questionnaire file.", "err");
+      toast(res.data.error ?? "Could not download that questionnaire file.", "err");
       return;
     }
-    const fileName = res.data.fileName.replace(/[\\/\u0000-\u001f\u007f]/g, "-").slice(0, 200) || `version-${current.version}.html`;
+    const fileName = res.data.fileName.replace(/[\\/\u0000-\u001f\u007f]/g, "-").slice(0, 200) || `version-${versionNumber}.html`;
     const url = URL.createObjectURL(new Blob([res.data.html], { type: "text/html;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -190,7 +190,7 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
           <h2>Current file</h2>
           <Badge kind="ok">Version {data.interview.currentVersion}</Badge>
           <span className="right" />
-          {canManage && current && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => void downloadCurrentSource()}><Icon name="download" size={15} /> Download source file</button>}
+          {canManage && current && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => void downloadSource(current.version)}><Icon name="download" size={15} /> Download current source</button>}
           {canManage && !replacing && <button type="button" className="btn sm" onClick={() => setReplacing(true)}><Icon name="upload" size={15} /> Upload a new version</button>}
         </div>
         <div className="card-pad row wrap" style={{ gap: 28 }}>
@@ -374,10 +374,13 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
                   <td className="muted nowrap">{fullTime(version.createdAt)}</td>
                   <td className="muted">{version.check.errors} errors · {version.check.warnings} warnings</td>
                   <td>
-                    {version.version === data.interview.currentVersion ? <Badge kind="ok">Live</Badge> : <div className="row wrap">
-                      <a className="btn sm" href={`/api/admin/frame?interview=${data.interview.id}&version=${version.version}`} target="_blank" rel="noreferrer">View</a>
-                      {canManage && <button type="button" className="btn sm" disabled={busy || replacing || upload.ok} title={replacing || upload.ok ? "Cancel the current candidate before restoring a prior version." : undefined} onClick={() => void restoreAsCandidate(version.version)}>Restore as candidate</button>}
-                    </div>}
+                    <div className="row wrap">
+                      {version.version === data.interview.currentVersion
+                        ? <Badge kind="ok">Live</Badge>
+                        : <a className="btn sm" href={`/api/admin/frame?interview=${data.interview.id}&version=${version.version}`} target="_blank" rel="noreferrer">View</a>}
+                      {canManage && <button type="button" className="btn sm" disabled={busy} aria-label={`Download source for version ${version.version}`} onClick={() => void downloadSource(version.version)}>Download source</button>}
+                      {canManage && version.version !== data.interview.currentVersion && <button type="button" className="btn sm" disabled={busy || replacing || upload.ok} title={replacing || upload.ok ? "Cancel the current candidate before restoring a prior version." : undefined} onClick={() => void restoreAsCandidate(version.version)}>Restore as candidate</button>}
+                    </div>
                   </td>
                 </tr>
               ))}

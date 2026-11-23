@@ -81,7 +81,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 async function click(label: string) {
-  const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes(label));
+  const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes(label) || item.getAttribute("aria-label") === label);
   if (!button) throw new Error(`Button not found: ${label}`);
   await act(async () => { button.click(); });
 }
@@ -97,6 +97,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
 });
 
 describe("host questionnaire version preview", () => {
@@ -108,13 +109,28 @@ describe("host questionnaire version preview", () => {
     state.api.mockResolvedValue({ ok: true, data: { html: "<html>live</html>", fileName: "live.html" } });
     await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {} })));
 
-    await click("Download source file");
+    await click("Download current source");
 
     expect(state.api).toHaveBeenCalledWith("/api/admin/interviews/interview-1/versions?action=restore&restoreVersion=2");
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(anchorClick).toHaveBeenCalledOnce();
     expect(downloadedFile).toBe("live.html");
     expect(revokeObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("downloads a historical source directly without loading it as a candidate", async () => {
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:previous-questionnaire");
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    state.api.mockResolvedValue({ ok: true, data: { html: "<html>previous</html>", fileName: "previous.html" } });
+    const withHistory = { ...data, versions: [data.versions[0], { ...data.versions[0], version: 1, fileName: "previous.html" }] } as unknown as InterviewData;
+    await act(async () => root.render(createElement(SurveyTab, { data: withHistory, refresh: () => {} })));
+
+    await click("Download source for version 1");
+
+    expect(state.api).toHaveBeenCalledWith("/api/admin/interviews/interview-1/versions?action=restore&restoreVersion=1");
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(anchorClick).toHaveBeenCalledOnce();
+    expect(state.api).toHaveBeenCalledTimes(1);
   });
 
   it("restores a stored version into the candidate preview flow", async () => {
@@ -173,7 +189,7 @@ describe("host questionnaire version preview", () => {
     expect(host.textContent).toContain("Current live preview");
     expect(host.textContent).toContain("Version history");
     expect(host.textContent).not.toContain("Upload a new version");
-    expect(host.textContent).not.toContain("Download source file");
+    expect(host.textContent).not.toContain("Download source");
     expect(host.textContent).not.toContain("Make this version live");
   });
 
