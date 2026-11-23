@@ -49,6 +49,9 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
   const uploadRevision = useRef(0);
   const current = data.versions.find((v) => v.version === data.interview.currentVersion);
   const answered = data.people.reduce((n, p) => n + p.answered, 0);
+  const answeredOnLoadedPage = data.people.length > 0
+    ? ` The ${data.people.length} ${data.people.length === 1 ? "person" : "people"} on the first page ${data.people.length === 1 ? "has" : "have"} ${answered} saved answers represented here.`
+    : "";
   const endpoint = `/api/admin/interviews/${data.interview.id}/versions`;
   const compatibilityFindings = preview?.diagnostics.filter((diagnostic) => diagnostic.category === "compat") ?? [];
   const changes = preview?.changes.questionChanges ?? null;
@@ -163,7 +166,7 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
         <section className="card" aria-busy={busy}>
           <div className="card-head"><h2>Review a new version</h2><span className="right" /><button type="button" className="btn ghost sm" disabled={busy} onClick={cancelReplacement}>Cancel</button></div>
           <div className="card-pad stack">
-            <div className="callout"><Icon name="info" /><div>The candidate is checked and previewed before it can go live. Publishing replaces the questionnaire for everyone; saved answers remain attached to matching question IDs{answered ? ` (${answered} answers so far)` : ""}.</div></div>
+            <div className="callout"><Icon name="info" /><div>The candidate is checked and previewed before it can go live. Publishing replaces the questionnaire for everyone; saved answers remain attached to matching question IDs.{answeredOnLoadedPage}</div></div>
             <Uploader key={uploaderKey} interviewId={data.interview.id} onChange={onUploadChange} compact disabled={busy} />
             {!preview && (
               <div className="row" style={{ justifyContent: "flex-end" }}>

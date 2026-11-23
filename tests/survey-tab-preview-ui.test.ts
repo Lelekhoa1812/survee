@@ -109,6 +109,14 @@ describe("host questionnaire version preview", () => {
     expect(host.textContent).not.toContain("Make this version live");
   });
 
+  it("labels the existing-answer count as a first-page count", async () => {
+    const withFirstPage = { ...data, people: [{ answered: 3 }] } as unknown as InterviewData;
+    await act(async () => root.render(createElement(SurveyTab, { data: withFirstPage, refresh: () => {} })));
+    await click("Upload a new version");
+
+    expect(host.textContent).toContain("The 1 person on the first page has 3 saved answers represented here.");
+  });
+
   it("shows exact option, help, numeric-bound, section-edit, and section-order changes before publish", async () => {
     await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {} })));
     await click("Upload a new version");

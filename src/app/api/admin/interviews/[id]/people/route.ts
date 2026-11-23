@@ -1,5 +1,6 @@
 import { parseEmail } from "@/lib/mail/address";
 import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
+import { MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
 import { addParticipants, getInterview, promoteToMultiUser } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -13,8 +14,9 @@ export const POST = withServerErrors("admin/interviews/[id]/people", async funct
   const body = await readJson<{ people?: unknown }>(req, 64 * 1024);
   if (!body.ok) return body.res;
   const raw = Array.isArray(body.data.people) ? body.data.people : [];
+  if (raw.length > MAX_PEOPLE_PER_BATCH) return fail(400, `Add at most ${MAX_PEOPLE_PER_BATCH} people per request. Split the list into batches.`);
   const people: { name: string; note?: string; email?: string }[] = [];
-  for (const item of raw.slice(0, 100)) {
+  for (const item of raw) {
     const row = item as { name?: unknown; note?: unknown; email?: unknown };
     const name = str(row?.name, 120) ?? "";
     if (!name) continue;

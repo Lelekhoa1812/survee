@@ -38,6 +38,8 @@ The following changes are pushed to `main` and deployed:
 - Host Overview and People pages now retain progress counts but omit answer, repeat-record, and order-history payloads; assignment history is not queried until the Answers tab loads.
 - The host Answers matrix now pages through respondents using the same bounded cursor contract as the People list.
 - Settings now shows tenant-scoped workspace image count and aggregate stored bytes; the app still does not enforce a workspace quota.
+- Adding more than 100 people in one request is now rejected atomically at the host API and MCP boundaries. The host dialog no longer truncates oversized pasted lists silently and directs hosts to split them into batches.
+- Questionnaire publication guidance labels its answer count as the first loaded respondent page, avoiding an implied interview-wide total for larger interviews.
 
 ## Ranked remaining gaps
 
@@ -56,7 +58,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **964 tests passed across 140 files**; TypeScript check and optimized Next.js production build passed. The answer-pagination interaction also has a DOM test that exercises loading and appending an older page.
+- Full automated suite: **968 tests passed across 140 files**; TypeScript check and optimized Next.js production build passed. The answer-pagination interaction also has a DOM test that exercises loading and appending an older page. New host, API, and MCP regressions cover oversized add-people batches; the survey tab test checks that the publish warning labels its page-limited answer count.
 - `npm audit --audit-level=moderate` and `npm audit --omit=dev --audit-level=moderate` found no known package vulnerabilities.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production release `fffc14a` reached **READY**. Runtime error review found no errors in the 15 minutes after deployment. The homepage returns HTTP 200, the image-usage endpoint requires authentication (401 without a session), an unknown frame token returns 404, and unauthenticated MCP POST returns 401. A live rate-limit probe against a fabricated nonexistent respondent token returned 180 expected 404s followed by 429 on request 181. Public accessibility audit covered five public routes at four viewport widths (20 samples): zero automated violations and six axe contrast needs-review results; authenticated host screens were not included. An authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools; disposable interviews were created, read, listed, deleted, and confirmed absent; no respondent data or email was used.

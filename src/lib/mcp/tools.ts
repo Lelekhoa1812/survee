@@ -9,6 +9,7 @@ import { getInterviewPackage, INTERVIEW_PACKAGES } from "../interview-packages";
 import { getDesignGuidance, type DesignSurface } from "../design/guidance";
 import { extractDesignProfile, type DesignProfileFormat, type DesignProfileSurface } from "../design/profile";
 import { EXPORT_FORMATS, exportInterview, type ExportFormat } from "../export";
+import { MAX_PEOPLE_PER_BATCH } from "../participant-limits";
 import { parseEmail } from "../mail/address";
 import { checkInviteDelivery } from "../mail/delivery";
 import { sendInvite } from "../mail/invite";
@@ -1644,16 +1645,17 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "add_people",
-    description: "Add people to an interview. Email is optional. Adding people to a One-person interview switches it to Multi-user.",
-    inputSchema: obj({ interviewId: str, people: { type: "array", items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
+    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people to a multi-user interview per request. Email is optional. Adding people to a One-person interview switches it to Multi-user.`,
+    inputSchema: obj({ interviewId: str, people: { type: "array", maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) } }, ["interviewId", "people"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       if (!Array.isArray(args.people)) return err("people must be a list.", "invalid_args");
+      if (args.people.length > MAX_PEOPLE_PER_BATCH) return err(`Add at most ${MAX_PEOPLE_PER_BATCH} people per request. Split the list into batches.`, "invalid_args");
       const people: { name: string; email?: string; note?: string }[] = [];
-      for (const raw of args.people.slice(0, 100)) {
+      for (const raw of args.people) {
         if (!raw || typeof raw !== "object") return err("Each person needs a name.", "invalid_args");
         const item = raw as Record<string, unknown>;
         const name = asString(item.name, 120);

@@ -52,4 +52,15 @@ describe("Add people on a One-person interview", () => {
     expect(document.body.textContent).toContain("Add people");
     expect(document.body.textContent).not.toContain("switches it to Multi-user");
   });
+
+  it("does not silently truncate a paste larger than one batch", () => {
+    act(() => root.render(createElement(PeopleTab, { data: dataFor("multi"), origin: "https://kqa.example", refresh: () => {} })));
+    openAddPeople();
+    const input = host.querySelector<HTMLInputElement>("#add-name-0")!;
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: { getData: () => Array.from({ length: 101 }, (_, i) => `Person ${i + 1}`).join("\n") } });
+    act(() => input.dispatchEvent(event));
+
+    expect(host.querySelectorAll("input[aria-label^='Name ']")).toHaveLength(2);
+  });
 });

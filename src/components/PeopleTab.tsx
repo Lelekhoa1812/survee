@@ -6,6 +6,7 @@ import type { InterviewData, PersonRow } from "./interview-types";
 import { InviteActions } from "./InviteActions";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
+import { MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
 
 const STATUS: Record<PersonRow["status"], { label: string; kind: "" | "info" | "ok" }> = { invited: { label: "Not started", kind: "" }, in_progress: { label: "In progress", kind: "info" }, submitted: { label: "Submitted", kind: "ok" } };
 
@@ -150,24 +151,34 @@ function AddPeople({ interviewId, switchesToMulti, onClose, onDone }: { intervie
   const parsed = rows.map((r) => ({ ...r, emailResult: r.email.trim() ? parseEmail(r.email) : { ok: true as const, email: null } }));
   const filled = parsed.filter((r) => r.name.trim());
   const invalid = filled.some((r) => !r.emailResult.ok);
+  const tooMany = filled.length > MAX_PEOPLE_PER_BATCH;
   const set = (i: number, k: "name" | "email" | "note", v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
 
   function onPaste(i: number, e: React.ClipboardEvent<HTMLInputElement>) {
     const text = e.clipboardData.getData("text");
     if (!/\n/.test(text.trim())) return;
     e.preventDefault();
-    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 100);
+    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (lines.length > MAX_PEOPLE_PER_BATCH) {
+      toast(`Paste at most ${MAX_PEOPLE_PER_BATCH} people at a time. Split the list into batches; no rows were added.`, "err");
+      return;
+    }
     const next = lines.map((line) => {
       const parsedLine = parsePersonLine(line);
       if (!parsedLine.ok) return { name: parsedLine.name || line, email: parsedLine.emailRaw, note: "" };
       if (!parsedLine.person) return { name: "", email: "", note: "" };
       return { name: parsedLine.person.name, email: parsedLine.person.email ?? "", note: "" };
     });
-    setRows((r) => [...r.slice(0, i), ...next.filter((row) => row.name || row.email), ...r.slice(i + 1).filter((x) => x.name || x.email || x.note)]);
+    const replacement = [...rows.slice(0, i), ...next.filter((row) => row.name || row.email), ...rows.slice(i + 1).filter((x) => x.name || x.email || x.note)];
+    if (replacement.filter((row) => row.name.trim()).length > MAX_PEOPLE_PER_BATCH) {
+      toast(`Add at most ${MAX_PEOPLE_PER_BATCH} people per batch. No rows were added.`, "err");
+      return;
+    }
+    setRows(replacement);
   }
 
   async function save() {
-    if (invalid || filled.length === 0) return;
+    if (invalid || tooMany || filled.length === 0) return;
     setBusy(true);
     const people = filled.map((r) => ({ name: r.name.trim(), email: r.emailResult.ok ? r.emailResult.email ?? undefined : undefined, note: r.note.trim() || undefined }));
     const res = await api(`/api/admin/interviews/${interviewId}/people`, { method: "POST", body: { people } });
@@ -177,8 +188,9 @@ function AddPeople({ interviewId, switchesToMulti, onClose, onDone }: { intervie
   }
 
   return (
-    <Modal title="Add people" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || filled.length === 0 || invalid} onClick={() => void save()}>{busy && <Spinner />} {filled.length === 0 ? "Add people" : <>Add {filled.length} {filled.length === 1 ? "person" : "people"} and create {filled.length === 1 ? "a link" : "links"}</>}</button></>}>
-      <p className="muted" style={{ marginTop: -6 }}>A name is enough. Email is optional. Paste one person per line: a name, Name, email, or Name &lt;email&gt;.</p>
+    <Modal title="Add people" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || filled.length === 0 || invalid || tooMany} onClick={() => void save()}>{busy && <Spinner />} {filled.length === 0 ? "Add people" : <>Add {filled.length} {filled.length === 1 ? "person" : "people"} and create {filled.length === 1 ? "a link" : "links"}</>}</button></>}>
+      <p className="muted" style={{ marginTop: -6 }}>A name is enough. Email is optional. Add at most {MAX_PEOPLE_PER_BATCH} people per batch. Paste one person per line: a name, Name, email, or Name &lt;email&gt;.</p>
+      {tooMany && <p className="field-error" role="alert">There are {filled.length} named people. Split them into batches of at most {MAX_PEOPLE_PER_BATCH}.</p>}
       {switchesToMulti && <div className="callout"><Icon name="info" /><div>This is a One-person interview. Adding people switches it to Multi-user. The existing link and its answers stay as they are.</div></div>}
       <div className="stack" style={{ gap: 10 }}>
         {parsed.map((r, i) => (

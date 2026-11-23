@@ -687,6 +687,15 @@ describe("MCP tools", () => {
     expect(vi.mocked(promoteToMultiUser)).not.toHaveBeenCalled();
   });
 
+  it("rejects an oversized add_people batch instead of truncating it", async () => {
+    const response = await call("add_people", { interviewId, people: Array.from({ length: 101 }, (_, i) => ({ name: `Person ${i + 1}` })) });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toBe("invalid_args");
+    expect(body.result.structuredContent.error).toMatch(/at most 100 items/);
+    expect(vi.mocked(addParticipants)).not.toHaveBeenCalled();
+  });
+
   it("gives add_people refusals an error code", async () => {
     const response = await call("add_people", { interviewId, people: "not a list" });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
