@@ -475,10 +475,10 @@ export async function deleteParticipant(id: string): Promise<boolean> {
     const res = await (await col.participants()).deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
     await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
+    await deleteMailForPerson(oid, session);
     return true;
   });
   if (!deleted) return false;
-  await deleteMailForPerson(oid);
   return true;
 }
 

@@ -51,8 +51,8 @@ export async function deleteMailForInterview(interviewId: ObjectId, session?: Cl
   await (await col.mail()).deleteMany(tenantFilter(tenantId, { interviewId }), { session });
 }
 
-export async function deleteMailForPerson(participantId: ObjectId): Promise<void> {
+export async function deleteMailForPerson(participantId: ObjectId, session?: ClientSession): Promise<void> {
   const tenantId = await currentTenantId();
   if (!tenantId) return;
-  await (await col.mail()).deleteMany(tenantFilter(tenantId, { participantId }));
+  await (await col.mail()).deleteMany(tenantFilter(tenantId, { participantId }), { session });
 }

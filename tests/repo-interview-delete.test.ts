@@ -21,6 +21,7 @@ vi.mock("../src/lib/db", () => ({
     }),
     versions: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "versions", filter, options }); } }),
     participants: async () => ({
+      deleteOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); return { deletedCount: mocks.deletedCount }; },
       deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); },
       aggregate: (pipeline: unknown[]) => {
         mocks.aggregatePipelines.push(pipeline);
@@ -34,7 +35,7 @@ vi.mock("../src/lib/db", () => ({
   },
 }));
 
-import { deleteInterview, getInterviewParticipantCounts } from "../src/lib/repo";
+import { deleteInterview, deleteParticipant, getInterviewParticipantCounts } from "../src/lib/repo";
 import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
 
 const interviewId = new ObjectId().toHexString();
@@ -84,5 +85,25 @@ describe("aggregate interview participant counts", () => {
     expect(counts).toEqual({ people: 7, invited: 2, inProgress: 1, submitted: 4 });
     expect(mocks.aggregatePipelines[0][0]).toEqual({ $match: tenantFilter("axion", { interviewId: new ObjectId(interviewId) }) });
     expect(mocks.aggregatePipelines[0][1]).toEqual({ $group: { _id: "$status", count: { $sum: 1 } } });
+  });
+});
+
+describe("deleteParticipant", () => {
+  it("removes participant mail in the same tenant-scoped transaction", async () => {
+    const deleted = await asAxion(() => deleteParticipant(interviewId));
+
+    expect(deleted).toBe(true);
+    expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants", "questionOrderAssignments", "mail"]);
+    expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
+  });
+
+  it("leaves dependent records untouched when the participant no longer exists", async () => {
+    mocks.deletedCount = 0;
+
+    const deleted = await asAxion(() => deleteParticipant(interviewId));
+
+    expect(deleted).toBe(false);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants"]);
   });
 });
