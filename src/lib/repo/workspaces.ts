@@ -339,12 +339,17 @@ export async function getWorkspaceInvitation(token: string): Promise<{ tenantId:
 
 export type AcceptWorkspaceInvitationResult = { ok: true; tenantId: string } | { ok: false; reason: "invalid" | "email_mismatch" | "account_required" };
 
+class InvitationTransactionAbort extends Error {
+  constructor(readonly result: AcceptWorkspaceInvitationResult | CreateInvitedAccountResult) { super("Invitation claim rejected."); }
+}
+
 export async function acceptWorkspaceInvitation(token: string, userId: string, emailInput: string): Promise<AcceptWorkspaceInvitationResult> {
   const tokenHash = invitationHash(token);
   const userObjectId = objectId(userId);
   if (!tokenHash || !userObjectId) return { ok: false, reason: "invalid" };
   const email = normalizeEmail(emailInput);
-  return withMongoTransaction(async (session) => {
+  try {
+    return await withMongoTransaction(async (session) => {
     const invitations = await col.workspaceInvitations();
     const invitation = await invitations.findOne({ tokenHash, revokedAt: { $exists: false } }, { session });
     if (!invitation) return { ok: false, reason: "invalid" as const };
@@ -370,10 +375,14 @@ export async function acceptWorkspaceInvitation(token: string, userId: string, e
       { _id: invitation._id, tokenHash, expiresAt: { $gt: now }, acceptedAt: { $exists: false }, revokedAt: { $exists: false } },
       { $set: { acceptedAt: now, acceptedByUserId: userObjectId } }, { session },
     );
-    if (!claimed.modifiedCount) return { ok: false, reason: "invalid" as const };
+    if (!claimed.modifiedCount) throw new InvitationTransactionAbort({ ok: false, reason: "invalid" });
     await users.updateOne({ _id: userObjectId }, { $set: { lastTenantId: invitation.tenantId, updatedAt: now } }, { session });
     return { ok: true, tenantId: invitation.tenantId } as const;
-  });
+    });
+  } catch (error) {
+    if (error instanceof InvitationTransactionAbort) return error.result as AcceptWorkspaceInvitationResult;
+    throw error;
+  }
 }
 
 export type CreateInvitedAccountResult = { ok: true; userId: string; tenantId: string } | { ok: false; reason: "invalid" | "account_exists" };
@@ -389,7 +398,7 @@ export async function createInvitedAccount(token: string, password: string): Pro
   const now = new Date();
   const userId = new ObjectId();
   try {
-    return await withMongoTransaction(async (session) => {
+      return await withMongoTransaction(async (session) => {
       const invitations = await col.workspaceInvitations();
       const current = await invitations.findOne({
         _id: invitation._id, tokenHash, expiresAt: { $gt: new Date() }, acceptedAt: { $exists: false }, revokedAt: { $exists: false },
@@ -411,10 +420,11 @@ export async function createInvitedAccount(token: string, password: string): Pro
         { _id: current._id, tokenHash, expiresAt: { $gt: now }, acceptedAt: { $exists: false }, revokedAt: { $exists: false } },
         { $set: { acceptedAt: now, acceptedByUserId: userId } }, { session },
       );
-      if (!claimed.modifiedCount) return { ok: false, reason: "invalid" as const };
+      if (!claimed.modifiedCount) throw new InvitationTransactionAbort({ ok: false, reason: "invalid" });
       return { ok: true, userId: userId.toHexString(), tenantId: current.tenantId } as const;
     });
   } catch (error) {
+    if (error instanceof InvitationTransactionAbort) return error.result as CreateInvitedAccountResult;
     if ((error as { code?: number }).code === 11000 && await (await col.users()).findOne({ email: invitation.email }, { projection: { _id: 1 } })) {
       return { ok: false, reason: "account_exists" };
     }

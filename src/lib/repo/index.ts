@@ -825,6 +825,11 @@ export type RepeatRecordIssue = RepeatAnswerIssue;
 
 type FenceFailure = { ok: false; status: 403 | 404 | 409; error: string; code?: string };
 
+/** Carry a normal domain result out of a transaction that must not commit. */
+class RespondentTransactionAbort<T> extends Error {
+  constructor(readonly result: T) { super("Respondent transaction rejected."); }
+}
+
 /** Atomically touch the interview row used by publishers before changing respondent data. */
 async function fenceRespondentWrite(
   session: ClientSession,
@@ -865,9 +870,12 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   const now = new Date();
   const nowIso = now.toISOString();
   const participants = await col.participants();
-  const result = await withMongoTransaction(async (session): Promise<SaveResult> => {
+  let result: SaveResult;
+  try {
+    result = await withMongoTransaction(async (session): Promise<SaveResult> => {
     const fence = await fenceRespondentWrite(session, ctx.tenantId, new ObjectId(ctx.interview.id), expectedVersion);
     if (!fence.ok) return fence;
+    const outcome = await (async (): Promise<SaveResult> => {
     // Always use the current participant inside the transaction callback. Mongo retries this
     // callback after transient write conflicts, so sibling field operations merge on retry.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: new ObjectId(ctx.participant.id), token }), { session });
@@ -1029,7 +1037,14 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     const returnedGroups: RepeatRecordMap = {};
     for (const id of touched) returnedGroups[id] = (res.recordGroups?.[id] ?? []).filter((row) => !row.deletedAt);
     return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status, ...(touched.size ? { recordGroups: returnedGroups } : {}) };
-  });
+    })();
+    if (!outcome.ok) throw new RespondentTransactionAbort(outcome);
+    return outcome;
+    });
+  } catch (error) {
+    if (error instanceof RespondentTransactionAbort) return error.result as SaveResult;
+    throw error;
+  }
   return result;
 }
 
@@ -1044,9 +1059,12 @@ export async function submitAnswers(token: string, expectedVersion: number, expe
   const interviewId = new ObjectId(ctx.interview.id);
   const participantId = new ObjectId(ctx.participant.id);
   const writeEpoch = expectedWriteEpoch ?? ctx.participant.writeEpoch ?? 0;
-  const result = await withMongoTransaction(async (session): Promise<SubmitResult & { newlySubmitted?: boolean }> => {
+  let result: SubmitResult & { newlySubmitted?: boolean };
+  try {
+    result = await withMongoTransaction(async (session): Promise<SubmitResult & { newlySubmitted?: boolean }> => {
     const fence = await fenceRespondentWrite(session, ctx.tenantId, interviewId, expectedVersion);
     if (!fence.ok) return fence;
+    const outcome = await (async (): Promise<SubmitResult & { newlySubmitted?: boolean }> => {
     // Read after the shared write fence, on every transaction retry. A save that
     // wins the fence must be reflected in the answers used for validation.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: participantId, token }), { session });
@@ -1079,7 +1097,16 @@ export async function submitAnswers(token: string, expectedVersion: number, expe
     if (!res) return { ok: false, status: 409, error: "Your answers changed in another window. Please try submitting again.", code: "concurrent_change" };
     await insertEvent(ctx.tenantId, interviewId, "submit", participantId, session);
     return { ok: true, submittedAt: (res.submittedAt ?? now).toISOString(), newlySubmitted: true };
-  });
+    })();
+    // A repeat submit is successful but makes no participant change, so its fence
+    // update must also be rolled back.
+    if (!outcome.ok || !outcome.newlySubmitted) throw new RespondentTransactionAbort(outcome);
+    return outcome;
+    });
+  } catch (error) {
+    if (error instanceof RespondentTransactionAbort) return error.result as SubmitResult & { newlySubmitted?: boolean };
+    throw error;
+  }
   if (result.ok) return { ok: true, submittedAt: result.submittedAt };
   return result;
 }

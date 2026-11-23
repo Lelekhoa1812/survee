@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   currentVersion: 4,
   interviewStatus: "open",
+  respondentWriteRevision: 0,
   participant: {} as Record<string, any>,
   interviewId: {} as any,
   participantId: {} as any,
@@ -57,6 +58,7 @@ function assignPath(target: Record<string, any>, path: string, value: unknown) {
 beforeEach(() => {
   mocks.currentVersion = 4;
   mocks.interviewStatus = "open";
+  mocks.respondentWriteRevision = 0;
   mocks.interviewId = new ObjectId();
   mocks.participantId = new ObjectId();
   mocks.versionManifest = { format: "kqa/1", title: "Test", questions: [question] };
@@ -80,6 +82,7 @@ beforeEach(() => {
     expect(options.session).toBe(mocks.session);
     const f = fields(filter);
     const matched = f.currentVersion === mocks.currentVersion && f.status === mocks.interviewStatus && mocks.interviewStatus === "open";
+    if (matched) mocks.respondentWriteRevision += 1;
     return { matchedCount: matched ? 1 : 0, modifiedCount: matched ? 1 : 0 };
   });
   mocks.participantUpdate.mockReset().mockImplementation(async (filter: Record<string, any>, update: Record<string, any>, options: Record<string, any>) => {
@@ -98,15 +101,49 @@ beforeEach(() => {
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => {
     if (mocks.publishBeforeTransaction) mocks.currentVersion = 5;
     mocks.beforeTransaction?.();
-    const result = await work(mocks.session);
-    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
-    return result;
+    const revisionBefore = mocks.respondentWriteRevision;
+    try {
+      const result = await work(mocks.session);
+      if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+      return result;
+    } catch (error) {
+      mocks.respondentWriteRevision = revisionBefore;
+      throw error;
+    }
   });
 });
 
 const asAxion = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, work);
 
 describe("respondent version fence", () => {
+  it("does not commit the write fence when an answer save is rejected", async () => {
+    const result = await asAxion(() => saveAnswers(token, 4, { q1: { value: 42 } }));
+
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    expect(mocks.respondentWriteRevision).toBe(0);
+    expect(mocks.participant.revision).toBe(0);
+  });
+
+  it("does not commit the write fence for an incomplete submission", async () => {
+    mocks.versionManifest.questions[0] = { ...question, required: true };
+
+    const result = await asAxion(() => submitAnswers(token, 4));
+
+    expect(result).toMatchObject({ ok: false, status: 422 });
+    expect(mocks.respondentWriteRevision).toBe(0);
+    expect(mocks.participant.status).toBe("invited");
+  });
+
+  it("does not commit the write fence for an idempotent repeat submission", async () => {
+    mocks.participant.status = "submitted";
+    mocks.participant.submittedAt = new Date("2026-01-01T00:00:00.000Z");
+
+    const result = await asAxion(() => submitAnswers(token, 4));
+
+    expect(result).toMatchObject({ ok: true, submittedAt: "2026-01-01T00:00:00.000Z" });
+    expect(mocks.respondentWriteRevision).toBe(0);
+  });
+
   it("writes answers through the same transaction fence used by publication", async () => {
     const result = await asAxion(() => saveAnswers(token, 4, { q1: { value: "current answer" } }));
 

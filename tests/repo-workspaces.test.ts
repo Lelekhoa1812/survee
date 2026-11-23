@@ -8,6 +8,7 @@ const store = vi.hoisted(() => ({
   memberships: [] as any[],
   invitations: [] as any[],
   events: [] as any[],
+  failInvitationClaim: false,
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -47,6 +48,10 @@ vi.mock("../src/lib/db", () => ({
       findOne: async (filter: any) => store.invitations.find((item) => matches(item, filter)) ?? null,
       find: (filter: any) => cursor(store.invitations.filter((item) => matches(item, filter))),
       updateOne: async (filter: any, update: any, options?: any) => {
+        if (store.failInvitationClaim && filter.expiresAt?.$gt && filter.acceptedAt?.$exists === false) {
+          store.failInvitationClaim = false;
+          return { matchedCount: 0, modifiedCount: 0 };
+        }
         let doc = store.invitations.find((item) => matches(item, filter));
         if (!doc && options?.upsert) {
           const equality = plainFilter(filter);
@@ -65,9 +70,15 @@ vi.mock("../src/lib/db", () => ({
     events: async () => ({ insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; } }),
   },
   withMongoTransaction: async (work: (session: object) => Promise<unknown>) => {
-    const result = await work({});
-    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
-    return result;
+    const snapshot = Object.fromEntries(["users", "tenants", "memberships", "invitations", "events"].map((key) => [key, (store as any)[key].map((doc: any) => ({ ...doc }))]));
+    try {
+      const result = await work({});
+      if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+      return result;
+    } catch (error) {
+      for (const key of Object.keys(snapshot)) (store as any)[key].splice(0, (store as any)[key].length, ...(snapshot as any)[key]);
+      throw error;
+    }
   },
 }));
 
@@ -160,6 +171,7 @@ beforeEach(() => {
   store.memberships.splice(0);
   store.invitations.splice(0);
   store.events.splice(0);
+  store.failInvitationClaim = false;
   addTenant("axion", "Axion");
   addTenant("workspace-b", "Workspace B");
   addTenant("workspace-suspended", "Suspended", "suspended");
@@ -219,6 +231,29 @@ describe("workspace membership and invitations", () => {
       members: [{ userId: ownerId.toHexString(), email: "owner@example.test", role: "owner", createdAt: expect.any(String) }],
     });
     expect(access.invitations).toMatchObject([{ email: "new.person@example.test", role: "member" }]);
+  });
+
+  it("rolls back a membership when the invitation expires before its claim", async () => {
+    const created = await createWorkspaceInvitation({ tenantId: "axion", invitedByUserId: ownerId.toHexString(), email: "member@example.test", role: "member" });
+    if (!created.ok) throw new Error("Expected invitation creation to succeed.");
+    store.failInvitationClaim = true;
+
+    await expect(acceptWorkspaceInvitation(created.token, inviteeId.toHexString(), "member@example.test"))
+      .resolves.toEqual({ ok: false, reason: "invalid" });
+    expect(store.memberships.some((item) => item.tenantId === "axion" && item.userId.equals(inviteeId))).toBe(false);
+    expect(store.invitations[0].acceptedAt).toBeUndefined();
+  });
+
+  it("rolls back an invited account when the invitation expires before its claim", async () => {
+    const created = await createWorkspaceInvitation({ tenantId: "axion", invitedByUserId: ownerId.toHexString(), email: "new-account@example.test", role: "member" });
+    if (!created.ok) throw new Error("Expected invitation creation to succeed.");
+    store.failInvitationClaim = true;
+
+    await expect(createInvitedAccount(created.token, "a sufficiently long password"))
+      .resolves.toEqual({ ok: false, reason: "invalid" });
+    expect(store.users.some((item) => item.email === "new-account@example.test")).toBe(false);
+    expect(store.memberships.some((item) => item.tenantId === "axion" && item.userId !== ownerId)).toBe(false);
+    expect(store.invitations[0].acceptedAt).toBeUndefined();
   });
 
   it("removes one tenant membership, preserves other workspaces, and writes a minimal audit event", async () => {
