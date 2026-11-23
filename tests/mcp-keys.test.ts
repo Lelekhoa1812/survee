@@ -22,6 +22,7 @@ interface Doc {
 
 const docs: Doc[] = [];
 const eventRows: Record<string, unknown>[] = [];
+const rateBuckets = new Map<string, { count: number }>();
 const lookups = vi.fn();
 const activeTenants = new Set<string>();
 
@@ -53,6 +54,14 @@ vi.mock("../src/lib/db", () => ({
     },
     events: async () => ({
       insertOne: async (row: Record<string, unknown>) => { eventRows.push(row); return { insertedId: row._id }; },
+    }),
+    rateLimits: async () => ({
+      findOneAndUpdate: async (query: { _id: string }) => {
+        const bucket = rateBuckets.get(query._id) ?? { count: 0 };
+        bucket.count += 1;
+        rateBuckets.set(query._id, bucket);
+        return bucket;
+      },
     }),
   },
 }));
@@ -95,6 +104,7 @@ describe("API keys as MCP credentials", () => {
   beforeEach(() => {
     docs.splice(0, docs.length);
     eventRows.splice(0, eventRows.length);
+    rateBuckets.clear();
     lookups.mockClear();
     activeTenants.clear();
     activeTenants.add("axion");
