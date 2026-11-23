@@ -73,7 +73,7 @@ import { validateToolArgs } from "./validate";
 import { canCallMcpTool, MCP_TOOL_CAPABILITIES, type McpCapability } from "./capabilities";
 import { patchQuestionnaireBlocks, type QuestionnaireBlockOperation } from "./questionnaire-block-patch";
 import { patchRequiredQuestions, type RequiredQuestionChange } from "./questionnaire-required-patch";
-import { addImageAsset, deleteImageAsset, listImageAssets, renameImageAsset, inspectImage, ImageAssetQuotaError, WORKSPACE_IMAGE_QUOTA_BYTES } from "../repo/assets";
+import { addImageAsset, addImageAssetWithOperation, getImageUploadOperation, deleteImageAsset, listImageAssets, renameImageAsset, inspectImage, ImageAssetQuotaError, WORKSPACE_IMAGE_QUOTA_BYTES } from "../repo/assets";
 import { MAX_IMAGE_BASE64_CHARS } from "../image-assets";
 
 export interface ToolResult {
@@ -477,18 +477,40 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "upload_image_asset",
-    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB and each workspace has 100 MiB total image storage. The returned URL can be used in questionnaire HTML as <img src> or in CSS url().",
-    inputSchema: obj({ name: str, fileName: str, dataBase64: { type: "string", minLength: 1, maxLength: MAX_IMAGE_BASE64_CHARS + 64 } }, ["fileName", "dataBase64"]),
+    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB and each workspace has 100 MiB total image storage. The returned URL can be used in questionnaire HTML as <img src> or in CSS url(). Optional operationId makes uncertain retries return the original asset for seven days.",
+    inputSchema: obj({ name: str, fileName: str, dataBase64: { type: "string", minLength: 1, maxLength: MAX_IMAGE_BASE64_CHARS + 64 }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["fileName", "dataBase64"]),
     async run(args) {
       if (typeof args.fileName !== "string" || !args.fileName.trim()) return err("fileName is required.");
       if (typeof args.dataBase64 !== "string") return err("dataBase64 is required.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
       const data = decodeImageData(args.dataBase64);
       if (!data) return err("dataBase64 must be valid base64 image data within the 2 MB size limit.");
       const checked = inspectImage(data);
       if (!checked.ok) return err(checked.error, "invalid_image");
+      const input = { name: asString(args.name, 120), fileName: asString(args.fileName, 160) || "image", data };
+      const operation = typeof args.operationId === "string" ? {
+        operationId: args.operationId,
+        credentialId: stableMcpCredentialId() ?? "",
+        argumentDigest: createHash("sha256").update(canonicalJson({ name: input.name, fileName: input.fileName, dataSha256: createHash("sha256").update(data).digest("hex") })).digest("hex"),
+      } : undefined;
+      if (operation && !operation.credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+      if (operation) {
+        const existing = await getImageUploadOperation(operation);
+        if (existing?.kind === "conflict") return err("operationId was already used with different upload_image_asset arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") {
+          const alt = escapeHtml(existing.asset.name);
+          return ok({ asset: existing.asset, htmlExample: `<img src="${existing.asset.url}" alt="${alt}">` });
+        }
+      }
       let asset;
       try {
-        asset = await addImageAsset({ name: asString(args.name, 120), fileName: asString(args.fileName, 160) || "image", data });
+        if (operation) {
+          const added = await addImageAssetWithOperation(input, operation);
+          if (added.kind === "conflict") return err("operationId was already used with different upload_image_asset arguments.", "operation_id_conflict");
+          asset = added.asset;
+        } else {
+          asset = await addImageAsset(input);
+        }
       } catch (error) {
         if (error instanceof ImageAssetQuotaError) return err(`${error.message} ${error.usedBytes} of ${WORKSPACE_IMAGE_QUOTA_BYTES} bytes are in use.`, "workspace_image_quota_exceeded");
         throw error;

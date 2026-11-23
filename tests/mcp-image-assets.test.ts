@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   addImageAsset: vi.fn(),
+  addImageAssetWithOperation: vi.fn(),
+  getImageUploadOperation: vi.fn(),
   deleteImageAsset: vi.fn(),
   listImageAssets: vi.fn(),
   renameImageAsset: vi.fn(),
@@ -12,6 +14,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../src/lib/repo/assets", () => ({
   addImageAsset: mocks.addImageAsset,
+  addImageAssetWithOperation: mocks.addImageAssetWithOperation,
+  getImageUploadOperation: mocks.getImageUploadOperation,
   deleteImageAsset: mocks.deleteImageAsset,
   listImageAssets: mocks.listImageAssets,
   renameImageAsset: mocks.renameImageAsset,
@@ -23,6 +27,7 @@ vi.mock("../src/lib/repo", () => ({ noteMcp: mocks.noteMcp }));
 
 import { dispatchTool, listToolDefs } from "../src/lib/mcp/tools";
 import type { McpCapability } from "../src/lib/mcp/capabilities";
+import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const asset = {
@@ -34,6 +39,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.inspectImage.mockReturnValue({ ok: true, mimeType: "image/png" });
   mocks.addImageAsset.mockImplementation(async (input: { name: string }) => ({ ...asset, name: input.name }));
+  mocks.addImageAssetWithOperation.mockImplementation(async (input: { name: string }) => ({ kind: "created", asset: { ...asset, name: input.name } }));
+  mocks.getImageUploadOperation.mockResolvedValue(null);
   mocks.listImageAssets.mockResolvedValue({ assets: [asset], nextCursor: null });
   mocks.renameImageAsset.mockResolvedValue(asset);
   mocks.deleteImageAsset.mockResolvedValue({ ok: true });
@@ -54,6 +61,16 @@ describe("MCP image asset tools", () => {
     expect(result.isError).toBe(false);
     expect(mocks.addImageAsset).toHaveBeenCalledWith(expect.objectContaining({ fileName: "logo.png", name: "Logo & mark", data: png }));
     expect(result.structuredContent).toMatchObject({ asset: { ...asset, name: "Logo & mark" }, htmlExample: `<img src="${asset.url}" alt="Logo &amp; mark">` });
+  });
+
+  it("accepts upload operation IDs and replays the original asset without another write", async () => {
+    const first = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token", auditActor: { kind: "service_token", id: "axion-service-token", name: "test" } }, () => dispatchTool("upload_image_asset", { fileName: "logo.png", name: "Logo", dataBase64: png.toString("base64"), operationId: "upload-1" }));
+    expect(first.isError).toBe(false);
+    expect(mocks.addImageAssetWithOperation).toHaveBeenCalledWith(expect.objectContaining({ fileName: "logo.png", name: "Logo", data: png }), expect.objectContaining({ operationId: "upload-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
+    mocks.getImageUploadOperation.mockResolvedValueOnce({ kind: "replayed", asset });
+    const replay = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token", auditActor: { kind: "service_token", id: "axion-service-token", name: "test" } }, () => dispatchTool("upload_image_asset", { fileName: "logo.png", name: "Logo", dataBase64: png.toString("base64"), operationId: "upload-1" }));
+    expect(replay.structuredContent).toMatchObject({ asset, htmlExample: "<img src=\"" + asset.url + "\" alt=\"Logo\">" });
+    expect(mocks.addImageAssetWithOperation).toHaveBeenCalledOnce();
   });
 
   it("rejects malformed image data before writing an asset", async () => {

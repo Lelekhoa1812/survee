@@ -6,6 +6,7 @@ const store = vi.hoisted(() => ({
   assets: [] as any[],
   versions: [] as any[],
   drafts: [] as any[],
+  operations: [] as any[],
   renameBeforeDelete: false,
   assetWriteEpoch: 0,
 }));
@@ -69,6 +70,11 @@ vi.mock("../src/lib/db", () => ({
     }),
     versions: async () => ({ findOne: async (filter: any) => store.versions.find((doc) => matches(doc, filter)) ?? null }),
     questionnaireReviewDrafts: async () => ({ findOne: async (filter: any) => store.drafts.find((doc) => matches(doc, filter)) ?? null }),
+    mcpOperations: async () => ({
+      findOne: async (filter: any) => store.operations.find((doc) => Object.entries(filter).every(([key, value]) => doc[key] === value)) ?? null,
+      deleteOne: async ({ _id }: any) => { const index = store.operations.findIndex((doc) => doc._id === _id); if (index >= 0) store.operations.splice(index, 1); return { deletedCount: index >= 0 ? 1 : 0 }; },
+      insertOne: async (doc: any) => { store.operations.push(doc); return { insertedId: doc._id }; },
+    }),
   },
 }));
 
@@ -88,7 +94,7 @@ function matches(doc: any, filter: any): boolean {
   return true;
 }
 
-import { addImageAsset, deleteImageAsset, getImageAssetUsage, getPublicImageAsset, inspectImage, listImageAssets, MAX_IMAGE_BYTES, renameImageAsset, ImageAssetQuotaError, WORKSPACE_IMAGE_QUOTA_BYTES } from "../src/lib/repo/assets";
+import { addImageAsset, addImageAssetWithOperation, getImageUploadOperation, deleteImageAsset, getImageAssetUsage, getPublicImageAsset, inspectImage, listImageAssets, MAX_IMAGE_BYTES, renameImageAsset, ImageAssetQuotaError, WORKSPACE_IMAGE_QUOTA_BYTES } from "../src/lib/repo/assets";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
 
@@ -97,11 +103,27 @@ beforeEach(() => {
   store.assets.splice(0);
   store.versions.splice(0);
   store.drafts.splice(0);
+  store.operations.splice(0);
   store.renameBeforeDelete = false;
   store.assetWriteEpoch = 0;
 });
 
 describe("workspace image assets", () => {
+  it("stores an upload result atomically for credential-scoped MCP retry", async () => {
+    const operation = { operationId: "image-1", credentialId: "api_key:key-a", argumentDigest: "digest-a" };
+    const input = { name: "Brand mark", fileName: "logo.png", data: png };
+    const first = await addImageAssetWithOperation(input, operation);
+    const replay = await addImageAssetWithOperation(input, operation);
+    expect(first.kind).toBe("created");
+    expect(replay).toEqual({ kind: "replayed", asset: first.kind === "conflict" ? undefined : first.asset });
+    expect(store.assets).toHaveLength(1);
+    expect(store.operations).toHaveLength(1);
+    const mismatch = await addImageAssetWithOperation(input, { ...operation, argumentDigest: "digest-b" });
+    expect(mismatch).toEqual({ kind: "conflict" });
+    const lookedUp = await getImageUploadOperation(operation);
+    expect(lookedUp).toEqual({ kind: "replayed", asset: first.kind === "conflict" ? undefined : first.asset });
+  });
+
   it("detects browser image formats from bytes and rejects spoofed or oversized files", () => {
     const cases: [Buffer, string][] = [
       [png, "image/png"],

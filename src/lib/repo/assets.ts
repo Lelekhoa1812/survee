@@ -16,6 +16,29 @@ export class ImageAssetQuotaError extends Error {
   }
 }
 
+const MCP_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function imageUploadOperationScope(tenantId: string, operation: { operationId: string; credentialId: string }) {
+  return {
+    tenantId, tool: "upload_image_asset",
+    credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
+    operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
+  };
+}
+
+export type ImageUploadOperation = { operationId: string; credentialId: string; argumentDigest: string };
+export type ImageUploadOperationResult = { kind: "created" | "replayed"; asset: ImageAssetSummary } | { kind: "conflict" };
+
+export async function getImageUploadOperation(operation: ImageUploadOperation): Promise<ImageUploadOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(imageUploadOperationScope(tenantId, operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", asset: existing.result.asset as ImageAssetSummary }
+    : { kind: "conflict" };
+}
+
 function normalizedFileName(value: string): string {
   const leaf = value.replace(/\\/g, "/").split("/").pop() ?? "image";
   return leaf.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 160) || "image";
@@ -55,6 +78,28 @@ export function inspectImage(data: Buffer): { ok: true; mimeType: string } | { o
 }
 
 export async function addImageAsset(input: { name?: string; fileName: string; data: Buffer }): Promise<ImageAssetSummary> {
+  const result = await addImageAssetCore(input);
+  if (result.kind === "conflict") throw new Error("An image upload operation conflicted unexpectedly.");
+  return result.asset;
+}
+
+export async function addImageAssetWithOperation(input: { name?: string; fileName: string; data: Buffer }, operation: ImageUploadOperation): Promise<ImageUploadOperationResult> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const scope = imageUploadOperationScope(tenantId, operation);
+  const existing = await (await col.mcpOperations()).findOne(scope);
+  if (existing && existing.expiresAt > new Date()) {
+    return existing.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", asset: existing.result.asset as ImageAssetSummary }
+      : { kind: "conflict" };
+  }
+  return addImageAssetCore(input, { scope, argumentDigest: operation.argumentDigest });
+}
+
+async function addImageAssetCore(
+  input: { name?: string; fileName: string; data: Buffer },
+  operation?: { scope: ReturnType<typeof imageUploadOperationScope>; argumentDigest: string },
+): Promise<ImageUploadOperationResult | { kind: "created"; asset: ImageAssetSummary }> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const detected = inspectImage(input.data);
@@ -68,7 +113,17 @@ export async function addImageAsset(input: { name?: string; fileName: string; da
     sha256: createHash("sha256").update(input.data).digest("hex"), data: Buffer.from(input.data),
     createdAt: now, updatedAt: now,
   };
-  await withMongoTransaction(async (session) => {
+  const run = async () => withMongoTransaction(async (session) => {
+    if (operation) {
+      const operations = await col.mcpOperations();
+      const existing = await operations.findOne(operation.scope, { session });
+      if (existing && existing.expiresAt > new Date()) {
+        return existing.argumentDigest === operation.argumentDigest
+          ? { kind: "replayed" as const, asset: existing.result.asset as ImageAssetSummary }
+          : { kind: "conflict" as const };
+      }
+      if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    }
     const guard = await (await col.tenants()).updateOne(
       { _id: tenantId, status: "active" },
       { $inc: { imageAssetWriteEpoch: 1 } },
@@ -82,9 +137,26 @@ export async function addImageAsset(input: { name?: string; fileName: string; da
     const usedBytes = current[0]?.totalBytes ?? 0;
     if (usedBytes + doc.bytes > WORKSPACE_IMAGE_QUOTA_BYTES) throw new ImageAssetQuotaError(usedBytes, doc.bytes);
     await (await col.imageAssets()).insertOne(doc, { session });
-    return true;
+    const asset = summary(doc);
+    if (operation) {
+      const createdAt = new Date();
+      await (await col.mcpOperations()).insertOne({
+        _id: new ObjectId(), ...operation.scope, argumentDigest: operation.argumentDigest,
+        result: { asset }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+      }, { session });
+    }
+    return { kind: "created" as const, asset };
   });
-  return summary(doc);
+  try {
+    return await run();
+  } catch (error) {
+    if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await (await col.mcpOperations()).findOne(operation.scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    return committed.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", asset: committed.result.asset as ImageAssetSummary }
+      : { kind: "conflict" };
+  }
 }
 
 export async function listImageAssets(input: { cursor?: string; limit?: number } = {}): Promise<{ assets: ImageAssetSummary[]; nextCursor: string | null }> {
