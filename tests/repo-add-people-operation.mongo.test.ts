@@ -31,6 +31,7 @@ integration("addParticipantsWithOperation MongoDB replica-set integration", () =
   let dbName: string;
   let client!: import("mongodb").MongoClient;
   let mongo!: typeof import("mongodb");
+  let dbModule!: typeof import("../src/lib/db");
   let repository!: typeof import("../src/lib/repo");
   let withTenantPrincipal!: typeof import("../src/lib/tenant-context").withTenantPrincipal;
   let interviewId!: import("mongodb").ObjectId;
@@ -50,7 +51,7 @@ integration("addParticipantsWithOperation MongoDB replica-set integration", () =
     process.env.KQA_AXION_LEGACY_TENANT_FALLBACK = "false";
 
     mongo = await import("mongodb");
-    const dbModule = await import("../src/lib/db");
+    dbModule = await import("../src/lib/db");
     repository = await import("../src/lib/repo");
     ({ withTenantPrincipal } = await import("../src/lib/tenant-context"));
     client = await new mongo.MongoClient(isolated.uri, { serverSelectionTimeoutMS: 8_000 }).connect();
@@ -149,5 +150,103 @@ integration("addParticipantsWithOperation MongoDB replica-set integration", () =
       tool: "add_people",
       operationIdHash,
     })).toBe(1);
+  });
+
+  it("recovers the unique-index E11000 race as an operation-id conflict", async () => {
+    const secondInterviewId = new mongo.ObjectId();
+    await client.db(dbName).collection("interviews").insertOne({
+      _id: secondInterviewId,
+      tenantId: "integration-workspace",
+      name: "Retry race fixture",
+      mode: "multi",
+      status: "open",
+      currentVersion: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const operationId = `unique-index-race-${randomUUID()}`;
+    const credentialId = "api_key:integration-key";
+    const originalFactory = dbModule.col.mcpOperations;
+    let insertArrivals = 0;
+    let releaseInserts!: () => void;
+    let gateTimer!: ReturnType<typeof setTimeout>;
+    const insertGate = new Promise<void>((resolve, reject) => {
+      releaseInserts = () => {
+        clearTimeout(gateTimer);
+        resolve();
+      };
+      gateTimer = setTimeout(() => reject(new Error("Both operation transactions did not reach ledger insertOne.")), 10_000);
+    });
+
+    dbModule.col.mcpOperations = async () => {
+      const collection = await originalFactory();
+      return new Proxy(collection, {
+        get(target, property) {
+          const value = Reflect.get(target, property, target) as unknown;
+          if (property === "insertOne" && typeof value === "function") {
+            return async (...args: Parameters<typeof collection.insertOne>) => {
+              insertArrivals += 1;
+              if (insertArrivals === 2) releaseInserts();
+              await insertGate;
+              return value.apply(target, args);
+            };
+          }
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      }) as Awaited<ReturnType<typeof originalFactory>>;
+    };
+
+    const operationFor = (argumentDigest: string) => ({ operationId, credentialId, argumentDigest });
+    const run = (id: import("mongodb").ObjectId, name: string, argumentDigest: string) => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.addParticipantsWithOperation(id.toHexString(), [{ name }], operationFor(argumentDigest)),
+    );
+
+    let results: Awaited<ReturnType<typeof repository.addParticipantsWithOperation>>[];
+    try {
+      results = await Promise.all([
+        run(interviewId, "Winner A", "digest-race-a"),
+        run(secondInterviewId, "Winner B", "digest-race-b"),
+      ]);
+    } finally {
+      clearTimeout(gateTimer);
+      releaseInserts();
+      dbModule.col.mcpOperations = originalFactory;
+    }
+
+    expect(insertArrivals).toBe(2);
+    // Both transactions passed their empty-ledger read before either insert.
+    // The repository only converts a duplicate-key (E11000) transaction error
+    // into a replay/conflict; any other error escapes and fails Promise.all.
+    expect(results.map(({ kind }) => kind).sort()).toEqual(["conflict", "created"]);
+    const created = results.find((result) => result.kind === "created");
+    expect(created?.kind).toBe("created");
+
+    const operationIdHash = createHash("sha256").update(operationId).digest("hex");
+    const operationRows = await client.db(dbName).collection("mcp_operations").find({
+      tenantId: "integration-workspace",
+      tool: "add_people",
+      credentialIdHash: createHash("sha256").update(credentialId).digest("hex"),
+      operationIdHash,
+    }).toArray();
+    expect(operationRows).toHaveLength(1);
+    const winningInterviewId = operationRows[0].interviewId;
+    expect([interviewId, secondInterviewId]).toContainEqual(winningInterviewId);
+    expect(await client.db(dbName).collection("participants").countDocuments({
+      tenantId: "integration-workspace",
+      interviewId: { $in: [interviewId, secondInterviewId] },
+      name: { $in: ["Winner A", "Winner B"] },
+    })).toBe(1);
+    expect(await client.db(dbName).collection("participants").countDocuments({
+      tenantId: "integration-workspace",
+      interviewId: winningInterviewId,
+      name: created?.kind === "created" ? created.people[0].name : "",
+    })).toBe(1);
+    expect(await client.db(dbName).collection("participants").countDocuments({
+      tenantId: "integration-workspace",
+      interviewId: { $in: [interviewId, secondInterviewId].filter((id) => !id.equals(winningInterviewId)) },
+      name: { $in: ["Winner A", "Winner B"] },
+    })).toBe(0);
   });
 });
