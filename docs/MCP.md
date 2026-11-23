@@ -126,7 +126,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `analyze_answers` | Current-version descriptive summaries with participant scope, denominators, missingness, repeatable aggregate pagination, optional side-by-side status groups, and optional answer segmentation for up to 20 outcomes from one scan; repeat rows are excluded and never count as participants; no raw text or score |
 | `get_status` | Open or closed, aggregate counts for the full interview, and one bounded newest-first progress page; pass `nextCursor` as `cursor` to continue |
 | `list_events` | Recent audit rows |
-| `export_interview` | `json`, `csv-wide`, `csv-long`, `md`, or `xlsx` (base64); a full export is limited to 100 people and fails with `participant_read_limit` above that |
+| `export_interview` | `json`, `csv-wide`, `csv-long`, `md`, or `xlsx` (base64); MCP exports are limited to 100 people and fail with `participant_read_limit` above that. The host export screen can stream CSV-wide and CSV-long beyond 100 people; other host formats remain limited to 100. CSV rows use newest-first creation order. |
 | `get_mail_status` | Stored send and delivery state for a person or one bounded newest-first interview page. Interview-wide calls accept `cursor` and `limit`; this tool does not open the mailbox |
 | `send_invite` | Ask SMTP to send one person's private link. One message per call; per-person, per-recipient, and workspace limits prevent repeated sends |
 | `check_invite_delivery` | IMAP check of a stored message id. Returns `delivered`, `bounced`, or `unknown`; per-person and workspace limits constrain mailbox checks |

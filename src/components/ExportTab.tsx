@@ -23,7 +23,7 @@ export function ExportTab({ data }: { data: InterviewData }) {
         <Icon name="info" />
         <div>Exports use survey version {data.interview.currentVersion} and include all {total} {total === 1 ? "person" : "people"}: {done} submitted, {total - done} still in progress or not started. Each file records its status.</div>
       </div>
-      {tooLarge && <div className="callout warn" role="status"><Icon name="info" /><div>CSV exports stream all {total} people in creation order. Excel, Markdown and JSON exports support up to {MAX_PARTICIPANTS_PER_READ} people per file.</div></div>}
+      {tooLarge && <div className="callout warn" role="status"><Icon name="info" /><div>CSV exports sort people in creation order and stream files above {MAX_PARTICIPANTS_PER_READ} people. Excel, Markdown and JSON exports support up to {MAX_PARTICIPANTS_PER_READ} people per file.</div></div>}
       <div className="callout warn">
         <Icon name="info" />
         <div>Exports contain person-level information such as names, statuses, notes, answers, and free text. Share only with authorized people. Review the contents before uploading a file to an AI tool or another service.</div>

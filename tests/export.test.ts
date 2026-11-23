@@ -318,10 +318,14 @@ describe("CSV", () => {
     expect(wide.body).toContain('"Too slow, ""again""\nneeds work"');
     expect(wide.body).toContain("\r\n");
     expect(wide.filename).toBe("kqa-staff-pulse-survey-2026-20261113-wide.csv");
+    expect((wide.body as string).indexOf("'=SUM(A1)")).toBeLessThan((wide.body as string).indexOf("Ben Okafor"));
+    expect((wide.body as string).indexOf("Ben Okafor")).toBeLessThan((wide.body as string).indexOf("Ana Lopez"));
 
     const long = csvLong(input);
     expect(long.filename).toBe("kqa-staff-pulse-survey-2026-20261113-long.csv");
     expect(long.body).toContain("Email; CRM");
+    expect((long.body as string).indexOf("'=SUM(A1)")).toBeLessThan((long.body as string).indexOf("Ben Okafor"));
+    expect((long.body as string).indexOf("Ben Okafor")).toBeLessThan((long.body as string).indexOf("Ana Lopez"));
   });
 });
 

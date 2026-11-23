@@ -32,7 +32,7 @@ export function csvWide(input: ExportInput): ExportFile {
   return {
     filename: exportFilename(input, "csv-wide"),
     contentType: "text/csv; charset=utf-8",
-    body: toCsv(wideTable(input)),
+    body: toCsv(wideTable(input, "created-desc")),
   };
 }
 
@@ -40,6 +40,6 @@ export function csvLong(input: ExportInput): ExportFile {
   return {
     filename: exportFilename(input, "csv-long"),
     contentType: "text/csv; charset=utf-8",
-    body: toCsv(longTable(input)),
+    body: toCsv(longTable(input, "created-desc")),
   };
 }

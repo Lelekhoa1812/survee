@@ -14,8 +14,13 @@ export interface WideColumn {
   cell: (p: ExportParticipant) => string;
 }
 
+export type ParticipantOrder = "name" | "created-desc";
+
 /** Participants sorted by name (case-insensitive), then by creation time. */
-export function sortedParticipants(input: ExportInput): ExportParticipant[] {
+export function sortedParticipants(input: ExportInput, order: ParticipantOrder = "name"): ExportParticipant[] {
+  if (order === "created-desc") {
+    return [...input.participants].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  }
   return [...input.participants].sort((a, b) => {
     const byName = a.name.localeCompare(b.name, "en", { sensitivity: "base" });
     if (byName !== 0) return byName;
@@ -72,11 +77,11 @@ export function wideColumns(manifest: Manifest, surveyVersion: number): WideColu
 }
 
 /** One row per participant; one answer column per question, plus a note column where notes are enabled. */
-export function wideTable(input: ExportInput): Table {
+export function wideTable(input: ExportInput, order: ParticipantOrder = "name"): Table {
   const cols = wideColumns(input.manifest, input.surveyVersion);
   return {
     header: cols.map((c) => c.header),
-    rows: sortedParticipants(input).map((p) => cols.map((c) => c.cell(p))),
+    rows: sortedParticipants(input, order).map((p) => cols.map((c) => c.cell(p))),
   };
 }
 
@@ -110,10 +115,10 @@ export function rawValue(value: AnswerValue | undefined): string {
 }
 
 /** One row per participant and question that has an answer or a note. Empty questions are skipped. */
-export function longTable(input: ExportInput): Table {
+export function longTable(input: ExportInput, order: ParticipantOrder = "name"): Table {
   const sectionTitles = new Map((input.manifest.sections ?? []).map((s) => [s.id, s.title]));
   const rows: string[][] = [];
-  for (const p of sortedParticipants(input)) {
+  for (const p of sortedParticipants(input, order)) {
     const eligibility = evaluateEligibility(input.manifest, p.answers, p.recordGroups);
     for (const q of input.manifest.questions) {
       const a = p.answers[q.id];
