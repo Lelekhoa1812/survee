@@ -108,6 +108,27 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "localized-rank.html" }).ok).toBe(true);
   });
 
+  it("reorders repeat record fields and their choice options in the generated HTML", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "repeat");
+    await click("Add record field");
+    await click("Move record field 2 up in question 1");
+    await change('select[aria-label="Record field 1 type"]', "single");
+    await click("Move choice 1 down in record field 1 of question 1");
+    await click("Use questionnaire");
+
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"fields": [\n        {\n          "id": "field-2"');
+    expect(html).toContain('"options": [\n            {\n              "value": "option-2"');
+    expect(html).toContain('data-kqa-repeat-field="field-2"');
+    expect(html).toContain('<input type="radio" data-kqa-repeat-field="field-2" value="option-2">');
+    expect(checkHtml(html, { fileName: "repeat-order.html" }).ok).toBe(true);
+  });
+
   it("adds a section, assigns the current question, and emits a checked manifest", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");
