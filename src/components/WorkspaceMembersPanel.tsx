@@ -40,10 +40,12 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
     if (busy || !email.trim()) return;
     setBusy(true);
     setError("");
-    const result = await api<{ message?: string }>("/api/admin/workspace-invitations", { method: "POST", body: { email, role } });
+    const result = await api<{ message?: string; code?: string }>("/api/admin/workspace-invitations", { method: "POST", body: { email, role } });
     setBusy(false);
     if (!result.ok) {
-      setError(result.data.error ?? "The invitation could not be sent.");
+      const message = result.data.error ?? "The invitation could not be sent.";
+      if (result.status === 409 || result.data.code === "delivery_unknown") await load();
+      setError(message);
       return;
     }
     setEmail("");
@@ -91,7 +93,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
           <label className="field" style={{ flex: "1 1 150px", margin: 0 }}><span>Workspace role</span><select className="select" value={role} onChange={(event) => setRole(event.target.value === "admin" ? "admin" : "member")}><option value="member">Member</option><option value="admin">Admin</option></select></label>
           <button className="btn primary" disabled={busy || !email.trim()}>{busy ? <Spinner /> : null} Send invitation</button>
         </form>
-        <p className="hint">The secure invitation link expires after 7 days. An invited person can create an account from that link or sign in with an existing account using the invited email.</p>
+        <p className="hint">The secure invitation link expires after 7 days. An invited person can create an account from that link or sign in with an existing account using the invited email. Active links stay valid until they expire or you revoke them; revoke a pending link before sending a replacement.</p>
         {error && <p className="field-error" role="alert">{error}</p>}
         {loading ? <p className="muted" role="status"><Spinner /> Loading workspace access…</p> : (
           <div className="settings-grid" style={{ margin: 0 }}>

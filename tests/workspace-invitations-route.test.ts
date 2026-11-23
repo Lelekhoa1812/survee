@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => true),
-  createWorkspaceInvitation: vi.fn(async () => ({ ok: true as const, token: "invite-token" })),
+  createWorkspaceInvitation: vi.fn(async (): Promise<{ ok: true; token: string } | { ok: false; reason: "invalid" | "already_member" | "pending" }> => ({ ok: true, token: "invite-token" })),
   sendSmtp: vi.fn(async () => undefined),
 }));
 
@@ -24,7 +24,6 @@ vi.mock("@/lib/repo", () => ({ consumeRateLimit: state.rateLimit }));
 vi.mock("@/lib/repo/workspaces", () => ({
   createWorkspaceInvitation: state.createWorkspaceInvitation,
   listWorkspaceAccess: vi.fn(),
-  revokeWorkspaceInvitationByToken: vi.fn(),
 }));
 
 import { POST } from "../src/app/api/admin/workspace-invitations/route";
@@ -71,5 +70,25 @@ describe("workspace invitation email throttling", () => {
     expect(state.rateLimit).toHaveBeenNthCalledWith(2, "workspace-invite-tenant:tenant-a", 100, 60);
     expect(state.createWorkspaceInvitation).toHaveBeenCalledOnce();
     expect(state.sendSmtp).toHaveBeenCalledOnce();
+  });
+
+  it("does not send or rotate an already pending invitation", async () => {
+    state.createWorkspaceInvitation.mockResolvedValueOnce({ ok: false, reason: "pending" });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "invitation_pending" });
+    expect(state.sendSmtp).not.toHaveBeenCalled();
+  });
+
+  it("keeps the invitation active when SMTP outcome is uncertain", async () => {
+    state.sendSmtp.mockRejectedValueOnce(new Error("connection closed after DATA"));
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "delivery_unknown" });
+    expect(state.createWorkspaceInvitation).toHaveBeenCalledOnce();
   });
 });

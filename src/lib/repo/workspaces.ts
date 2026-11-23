@@ -55,7 +55,7 @@ export async function createWorkspaceInvitation(input: {
   invitedByUserId: string;
   email: string;
   role: "admin" | "member";
-}): Promise<{ ok: true; token: string; expiresAt: Date } | { ok: false; reason: "invalid" | "already_member" }> {
+}): Promise<{ ok: true; token: string; expiresAt: Date } | { ok: false; reason: "invalid" | "already_member" | "pending" }> {
   const inviterId = objectId(input.invitedByUserId);
   const email = normalizeEmail(input.email);
   if (!inviterId || !input.tenantId || !email || (input.role !== "admin" && input.role !== "member")) return { ok: false, reason: "invalid" };
@@ -76,20 +76,31 @@ export async function createWorkspaceInvitation(input: {
     tokenHash: createHash("sha256").update(token).digest("hex"), createdAt: now,
     expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
   };
+  const replaceable = {
+    tenantId: input.tenantId,
+    email,
+    $or: [
+      { expiresAt: { $lte: now } },
+      { acceptedAt: { $exists: true } },
+      { revokedAt: { $exists: true } },
+    ],
+  };
   try {
     await (await col.workspaceInvitations()).updateOne(
-      { tenantId: input.tenantId, email },
+      replaceable,
       { $set: invitation, $unset: { acceptedAt: "", acceptedByUserId: "", revokedAt: "" } },
       { upsert: true },
     );
   } catch (error) {
     if ((error as { code?: number }).code !== 11000) throw error;
-    // A concurrent invitation won the unique workspace/email slot. Replace its
-    // token atomically so only the most recently sent link remains valid.
-    await (await col.workspaceInvitations()).updateOne(
-      { tenantId: input.tenantId, email },
-      { $set: invitation, $unset: { acceptedAt: "", acceptedByUserId: "", revokedAt: "" } },
-    );
+    // Another request created or retained the active slot. Never rotate its
+    // token here: its link may already have been delivered.
+    const current = await (await col.workspaceInvitations()).findOne({
+      tenantId: input.tenantId, email, expiresAt: { $gt: now },
+      acceptedAt: { $exists: false }, revokedAt: { $exists: false },
+    }, { projection: { _id: 1 } });
+    if (current) return { ok: false, reason: "pending" };
+    throw error;
   }
   return { ok: true, token, expiresAt: invitation.expiresAt };
 }

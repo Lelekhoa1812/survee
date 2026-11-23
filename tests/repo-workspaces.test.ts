@@ -48,7 +48,11 @@ vi.mock("../src/lib/db", () => ({
       updateOne: async (filter: any, update: any, options?: any) => {
         let doc = store.invitations.find((item) => matches(item, filter));
         if (!doc && options?.upsert) {
-          doc = { _id: new ObjectId(), ...plainFilter(filter) };
+          const equality = plainFilter(filter);
+          if (store.invitations.some((item) => item.tenantId === equality.tenantId && item.email === equality.email)) {
+            throw Object.assign(new Error("duplicate"), { code: 11000 });
+          }
+          doc = { _id: new ObjectId(), ...equality };
           store.invitations.push(doc);
         }
         if (!doc) return { matchedCount: 0, modifiedCount: 0 };
@@ -77,6 +81,7 @@ function matches(doc: any, filter: any): boolean {
       if ("$in" in expected) return expected.$in.some((value: any) => same(actual, value));
       if ("$exists" in expected) return (actual !== undefined) === expected.$exists;
       if ("$gt" in expected) return actual instanceof Date ? actual > expected.$gt : actual > expected.$gt;
+      if ("$lte" in expected) return actual instanceof Date ? actual <= expected.$lte : actual <= expected.$lte;
       return matches(actual ?? {}, expected);
     }
     return same(actual, expected);
@@ -172,7 +177,7 @@ describe("workspace membership and invitations", () => {
     expect(store.users[0].lastTenantId).toBe("workspace-b");
   });
 
-  it("stores only a token hash, rotates an earlier pending invite, and lists safe metadata", async () => {
+  it("stores only a token hash and refuses to rotate an active invitation", async () => {
     const first = await createWorkspaceInvitation({ tenantId: "axion", invitedByUserId: ownerId.toHexString(), email: " New.Person@Example.test ", role: "member" });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
@@ -185,18 +190,17 @@ describe("workspace membership and invitations", () => {
     await expect(getWorkspaceInvitation(first.token)).resolves.toMatchObject({ tenantId: "axion", tenantName: "Axion", email: "new.person@example.test" });
 
     const second = await createWorkspaceInvitation({ tenantId: "axion", invitedByUserId: ownerId.toHexString(), email: "new.person@example.test", role: "admin" });
-    expect(second.ok).toBe(true);
-    if (!second.ok) return;
+    expect(second).toEqual({ ok: false, reason: "pending" });
     expect(store.invitations).toHaveLength(1);
-    expect(store.invitations[0].role).toBe("admin");
-    expect(store.invitations[0].tokenHash).toBe(createHash("sha256").update(second.token).digest("hex"));
-    await expect(getWorkspaceInvitation(first.token)).resolves.toBeNull();
+    expect(store.invitations[0].role).toBe("member");
+    expect(store.invitations[0].tokenHash).toBe(createHash("sha256").update(first.token).digest("hex"));
+    await expect(getWorkspaceInvitation(first.token)).resolves.toMatchObject({ tenantId: "axion" });
     const access = await listWorkspaceAccess("axion");
     expect(access).toMatchObject({
       ownerCount: 1,
       members: [{ userId: ownerId.toHexString(), email: "owner@example.test", role: "owner", createdAt: expect.any(String) }],
     });
-    expect(access.invitations).toMatchObject([{ email: "new.person@example.test", role: "admin" }]);
+    expect(access.invitations).toMatchObject([{ email: "new.person@example.test", role: "member" }]);
   });
 
   it("removes one tenant membership, preserves other workspaces, and writes a minimal audit event", async () => {

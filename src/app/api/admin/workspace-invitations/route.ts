@@ -4,7 +4,7 @@ import { parseEmail } from "@/lib/mail/address";
 import { newMessageId, sendSmtp } from "@/lib/mail/smtp";
 import { publicBaseUrl, smtpSettings } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/repo";
-import { createWorkspaceInvitation, listWorkspaceAccess, revokeWorkspaceInvitationByToken } from "@/lib/repo/workspaces";
+import { createWorkspaceInvitation, listWorkspaceAccess } from "@/lib/repo/workspaces";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
@@ -52,6 +52,7 @@ export const POST = withServerErrors("admin/workspace-invitations", async functi
     return fail(503, "The workspace invitation could not be created. Try again.");
   }
   if (!invitation.ok && invitation.reason === "already_member") return fail(409, "That account already belongs to this workspace.");
+  if (!invitation.ok && invitation.reason === "pending") return fail(409, "A valid invitation is already pending for this address. Revoke it before sending a replacement.", { code: "invitation_pending" });
   if (!invitation.ok) return fail(403, "You cannot invite people to this workspace.");
   const joinUrl = new URL("/join", base.origin);
   joinUrl.searchParams.set("token", invitation.token);
@@ -66,7 +67,6 @@ export const POST = withServerErrors("admin/workspace-invitations", async functi
     });
     return json({ ok: true, message: `Invitation sent to ${parsed.email}.` }, 201);
   } catch {
-    await revokeWorkspaceInvitationByToken(session.tenantId, invitation.token).catch(() => {});
-    return fail(503, "The invitation email could not be sent. Try again.");
+    return fail(503, "The email delivery could not be confirmed. The invitation remains active because the mail server may have accepted it. Check the pending invitations before revoking or replacing it.", { code: "delivery_unknown" });
   }
 });
