@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { fail, guardAdmin, json, readJson, sameOrigin, withServerErrors } from "@/lib/http";
 import { adminSession } from "@/lib/http";
 import { changeAccountPassword } from "@/lib/repo/accounts";
+import { clearRateLimit, consumeRateLimit } from "@/lib/repo";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
 
 export const POST = withServerErrors("admin/account/password", async function POST(req: Request) {
@@ -14,9 +16,16 @@ export const POST = withServerErrors("admin/account/password", async function PO
   const currentPassword = typeof body.data.currentPassword === "string" ? body.data.currentPassword : "";
   const newPassword = typeof body.data.newPassword === "string" ? body.data.newPassword : "";
   if (newPassword.length < 8 || newPassword.length > 200) return fail(400, "Use a password between 8 and 200 characters.");
+  const rateKey = `account-password:${createHash("sha256").update(session.userId).digest("hex")}`;
+  try {
+    if (!(await consumeRateLimit(rateKey, 5, 15))) return fail(429, "Too many password attempts. Wait a few minutes and try again.");
+  } catch {
+    return fail(503, "Password changes are temporarily unavailable.");
+  }
   try {
     const authVersion = await changeAccountPassword(session.userId, currentPassword, newPassword);
     if (authVersion === null) return fail(401, "The current password is incorrect.");
+    await clearRateLimit(rateKey).catch(() => {});
     const nextSession = createSession({ ...session, authVersion });
     if (!nextSession) return fail(503, "The password was updated. Sign in again to continue.");
     const res = json({ ok: true });
