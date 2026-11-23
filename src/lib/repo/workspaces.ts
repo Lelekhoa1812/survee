@@ -183,6 +183,18 @@ export type ChangeWorkspaceMemberRoleResult =
   | { ok: true; previousRole: "admin" | "member"; role: "admin" | "member" }
   | { ok: false; reason: "invalid" | "forbidden" | "not_found" | "owner_transfer_required" };
 
+class WorkspaceMutationAbort extends Error {
+  constructor(readonly result: unknown) { super("Workspace mutation did not complete."); }
+}
+
+async function returnAbortedWorkspaceMutation<T>(operation: () => Promise<T>): Promise<T> {
+  try { return await operation(); }
+  catch (error) {
+    if (error instanceof WorkspaceMutationAbort) return error.result as T;
+    throw error;
+  }
+}
+
 /** Change an existing non-owner's workspace role without revoking their membership. */
 export async function changeWorkspaceMemberRole(input: {
   tenantId: string;
@@ -194,7 +206,7 @@ export async function changeWorkspaceMemberRole(input: {
   const targetId = objectId(input.targetUserId);
   if (!input.tenantId || input.tenantId.length > 80 || !actorId || !targetId || (input.role !== "admin" && input.role !== "member")) return { ok: false, reason: "invalid" };
 
-  return withMongoTransaction(async (session) => {
+  return returnAbortedWorkspaceMutation(() => withMongoTransaction(async (session) => {
     const tenants = await col.tenants();
     const tenant = await tenants.findOne({ _id: input.tenantId, status: "active" }, { session, projection: { _id: 1 } });
     if (!tenant) return { ok: false, reason: "forbidden" };
@@ -220,13 +232,13 @@ export async function changeWorkspaceMemberRole(input: {
       { $set: { role: input.role } },
       { session },
     );
-    if (changed.matchedCount !== 1) return { ok: false, reason: "not_found" };
+    if (changed.matchedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "not_found" });
     await (await col.events()).insertOne({
       _id: new ObjectId(), tenantId: input.tenantId, type: "workspace_member_role_changed", at: new Date(),
       meta: { actorUserId: actorId.toHexString(), targetUserId: targetId.toHexString(), previousRole, role: input.role },
     }, { session });
     return { ok: true, previousRole, role: input.role };
-  });
+  }));
 }
 
 /** Promote an existing member and leave the transferring owner as an admin. */
@@ -239,7 +251,7 @@ export async function transferWorkspaceOwnership(input: {
   const targetId = objectId(input.targetUserId);
   if (!input.tenantId || input.tenantId.length > 80 || !actorId || !targetId || actorId.equals(targetId)) return { ok: false, reason: "invalid" };
 
-  return withMongoTransaction(async (session) => {
+  return returnAbortedWorkspaceMutation(() => withMongoTransaction(async (session) => {
     const tenants = await col.tenants();
     const tenant = await tenants.findOne({ _id: input.tenantId, status: "active" }, { session, projection: { _id: 1 } });
     if (!tenant) return { ok: false, reason: "forbidden" };
@@ -262,7 +274,7 @@ export async function transferWorkspaceOwnership(input: {
       { $set: { role: "owner" } },
       { session },
     );
-    if (promoted.matchedCount !== 1) return { ok: false, reason: "not_found" };
+    if (promoted.matchedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "not_found" });
     const demoted = await memberships.updateOne(
       { _id: actor._id, tenantId: input.tenantId, userId: actorId, role: "owner" },
       { $set: { role: "admin" } },
@@ -277,7 +289,7 @@ export async function transferWorkspaceOwnership(input: {
       meta: { previousOwnerUserId: actorId.toHexString(), newOwnerUserId: targetId.toHexString() },
     }, { session });
     return { ok: true, previousOwnerUserId: actorId.toHexString(), newOwnerUserId: targetId.toHexString() };
-  });
+  }));
 }
 
 /** Remove one membership in the current tenant; the account and other workspace memberships remain. */
@@ -290,7 +302,7 @@ export async function removeWorkspaceMember(input: {
   const targetId = objectId(input.targetUserId);
   if (!input.tenantId || input.tenantId.length > 80 || !actorId || !targetId) return { ok: false, reason: "invalid" };
 
-  return withMongoTransaction(async (session) => {
+  return returnAbortedWorkspaceMutation(() => withMongoTransaction(async (session) => {
     const tenant = await (await col.tenants()).findOne({ _id: input.tenantId, status: "active" }, { session, projection: { _id: 1 } });
     if (!tenant) return { ok: false, reason: "forbidden" };
     const memberships = await col.memberships();
@@ -304,17 +316,18 @@ export async function removeWorkspaceMember(input: {
       if (owners.length <= 1) return { ok: false, reason: "last_owner" };
       // Competing owner-removal transactions write this tenant row. Mongo retries
       // a write-conflicted transaction against a fresh snapshot before rechecking.
-      await (await col.tenants()).updateOne(
+      const fenced = await (await col.tenants()).updateOne(
         { _id: input.tenantId, status: "active" },
         { $inc: { membershipEpoch: 1 }, $set: { updatedAt: new Date() } },
         { session },
       );
+      if (fenced.matchedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "forbidden" });
     }
     const deleted = await memberships.deleteOne(
       { _id: target._id, tenantId: input.tenantId, userId: targetId },
       { session },
     );
-    if (deleted.deletedCount !== 1) return { ok: false, reason: "not_found" };
+    if (deleted.deletedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "not_found" });
     await (await col.events()).insertOne({
       _id: new ObjectId(),
       tenantId: input.tenantId,
@@ -323,7 +336,7 @@ export async function removeWorkspaceMember(input: {
       meta: { actorUserId: actorId.toHexString(), targetUserId: targetId.toHexString(), role: target.role },
     }, { session });
     return { ok: true, role: target.role };
-  });
+  }));
 }
 
 export async function getWorkspaceInvitation(token: string): Promise<{ tenantId: string; tenantName: string; email: string; role: "admin" | "member"; expiresAt: string } | null> {

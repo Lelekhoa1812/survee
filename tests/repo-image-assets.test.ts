@@ -12,12 +12,21 @@ const store = vi.hoisted(() => ({
 
 vi.mock("../src/lib/db", () => ({
   withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => {
-    const result = await work({ transaction: true });
-    if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
-    return result;
+    const epochBefore = store.assetWriteEpoch;
+    try {
+      const result = await work({ transaction: true });
+      if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
+      return result;
+    } catch (error) {
+      store.assetWriteEpoch = epochBefore;
+      throw error;
+    }
   },
   col: {
-    tenants: async () => ({ updateOne: async () => ({ matchedCount: 1, modifiedCount: 1 }) }),
+    tenants: async () => ({ updateOne: async (_filter: any, update: any) => {
+      store.assetWriteEpoch += update.$inc?.imageAssetWriteEpoch ?? 0;
+      return { matchedCount: 1, modifiedCount: 1 };
+    } }),
     imageAssets: async () => ({
       insertOne: async (doc: any) => { store.assets.push(doc); return { insertedId: doc._id }; },
       findOne: async (filter: any, options?: any) => {
@@ -89,6 +98,7 @@ beforeEach(() => {
   store.versions.splice(0);
   store.drafts.splice(0);
   store.renameBeforeDelete = false;
+  store.assetWriteEpoch = 0;
 });
 
 describe("workspace image assets", () => {
@@ -155,13 +165,17 @@ describe("workspace image assets", () => {
     expect(await renameImageAsset(asset.id, "New logo")).toMatchObject({ name: "New logo" });
     expect(await deleteImageAsset(asset.id, "Logo")).toEqual({ ok: false, reason: "confirmation_mismatch" });
 
+    const epochBeforeReferenceChecks = store.assetWriteEpoch;
     store.versions.push({ tenantId: "tenant-a", html: `<img src="${asset.url}">` });
     expect(await deleteImageAsset(asset.id, "New logo")).toEqual({ ok: false, reason: "in_use" });
+    expect(store.assetWriteEpoch).toBe(epochBeforeReferenceChecks);
     store.versions.splice(0);
     store.drafts.push({ tenantId: "tenant-a", html: asset.url, expiresAt: new Date(Date.now() + 60_000) });
     expect(await deleteImageAsset(asset.id, "New logo")).toEqual({ ok: false, reason: "in_use" });
+    expect(store.assetWriteEpoch).toBe(epochBeforeReferenceChecks);
     store.drafts.splice(0);
     expect(await deleteImageAsset(asset.id, "New logo")).toEqual({ ok: true });
+    expect(store.assetWriteEpoch).toBe(epochBeforeReferenceChecks + 1);
     expect(store.assets).toHaveLength(0);
   });
 

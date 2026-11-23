@@ -9,6 +9,8 @@ const store = vi.hoisted(() => ({
   invitations: [] as any[],
   events: [] as any[],
   failInvitationClaim: false,
+  failMembershipMutation: false,
+  failMembershipDelete: false,
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -36,8 +38,18 @@ vi.mock("../src/lib/db", () => ({
         store.memberships.push(doc);
         return { insertedId: doc._id };
       },
-      updateOne: async (filter: any, update: any) => updateOne(store.memberships, filter, update),
+      updateOne: async (filter: any, update: any) => {
+        if (store.failMembershipMutation) {
+          store.failMembershipMutation = false;
+          return { matchedCount: 0, modifiedCount: 0 };
+        }
+        return updateOne(store.memberships, filter, update);
+      },
       deleteOne: async (filter: any) => {
+        if (store.failMembershipDelete) {
+          store.failMembershipDelete = false;
+          return { deletedCount: 0 };
+        }
         const index = store.memberships.findIndex((item) => matches(item, filter));
         if (index < 0) return { deletedCount: 0 };
         store.memberships.splice(index, 1);
@@ -172,6 +184,8 @@ beforeEach(() => {
   store.invitations.splice(0);
   store.events.splice(0);
   store.failInvitationClaim = false;
+  store.failMembershipMutation = false;
+  store.failMembershipDelete = false;
   addTenant("axion", "Axion");
   addTenant("workspace-b", "Workspace B");
   addTenant("workspace-suspended", "Suspended", "suspended");
@@ -348,6 +362,29 @@ describe("workspace membership and invitations", () => {
     expect(store.tenants[0].membershipEpoch).toBe(2);
     expect(store.events.map((event) => event.type)).toEqual(["workspace_member_role_changed", "workspace_member_role_changed"]);
     expect(store.events[0].meta).toMatchObject({ actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), previousRole: "member", role: "admin" });
+  });
+
+  it("rolls back workspace epochs when a role change, transfer, or owner removal loses its conditional write", async () => {
+    addMembership("axion", inviteeId, "member");
+    store.failMembershipMutation = true;
+    await expect(changeWorkspaceMemberRole({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), role: "admin" }))
+      .resolves.toEqual({ ok: false, reason: "not_found" });
+    expect(store.tenants[0].membershipEpoch ?? 0).toBe(0);
+    expect(store.memberships.find((item) => item.userId.equals(inviteeId))?.role).toBe("member");
+
+    store.failMembershipMutation = true;
+    await expect(transferWorkspaceOwnership({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "not_found" });
+    expect(store.tenants[0].membershipEpoch ?? 0).toBe(0);
+    expect(store.memberships.find((item) => item.userId.equals(inviteeId))?.role).toBe("member");
+
+    const secondOwnerId = new ObjectId("000000000000000000000005");
+    addMembership("axion", secondOwnerId, "owner");
+    store.failMembershipDelete = true;
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: secondOwnerId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "not_found" });
+    expect(store.tenants[0].membershipEpoch ?? 0).toBe(0);
+    expect(store.memberships.some((item) => item.userId.equals(secondOwnerId))).toBe(true);
   });
 
   it("keeps owner transfer separate from ordinary role changes", async () => {

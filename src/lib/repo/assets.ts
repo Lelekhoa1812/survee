@@ -131,11 +131,17 @@ export async function renameImageAsset(id: string, name: string): Promise<ImageA
   return doc ? summary(doc) : null;
 }
 
+class ImageAssetDeleteAbort extends Error {
+  constructor(readonly result: "in_use" | "changed") { super("Image asset delete did not complete."); }
+}
+
 export async function deleteImageAsset(id: string, expectedName: string): Promise<{ ok: true } | { ok: false; reason: "not_found" | "in_use" | "confirmation_mismatch" }> {
   const oid = toOid(id);
   const tenantId = await currentTenantId();
   if (!oid || !tenantId) return { ok: false, reason: "not_found" };
-  const result = await withMongoTransaction(async (session) => {
+  let result: "deleted" | "in_use" | "not_found" | "confirmation_mismatch" | "changed";
+  try {
+    result = await withMongoTransaction(async (session) => {
     const assets = await col.imageAssets();
     const asset = await assets.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { name: 1, publicId: 1 } });
     if (!asset) return "not_found" as const;
@@ -159,12 +165,17 @@ export async function deleteImageAsset(id: string, expectedName: string): Promis
       tenantFilter(tenantId, { html: { $regex: pattern }, expiresAt: { $gt: new Date() } }),
       { session, projection: { _id: 1 } },
     );
-    if (version || draft) return "in_use" as const;
+    if (version || draft) throw new ImageAssetDeleteAbort("in_use");
 
     // Keep the exact confirmation and public ID in the conditional delete.
     const deleted = await assets.deleteOne(tenantFilter(tenantId, { _id: oid, name: expectedName, publicId: asset.publicId }), { session });
-    return deleted.deletedCount ? "deleted" as const : "changed" as const;
-  });
+    if (!deleted.deletedCount) throw new ImageAssetDeleteAbort("changed");
+    return "deleted" as const;
+    });
+  } catch (error) {
+    if (error instanceof ImageAssetDeleteAbort) result = error.result;
+    else throw error;
+  }
   if (result === "deleted") return { ok: true };
   if (result === "in_use") return { ok: false, reason: "in_use" };
   if (result === "not_found") return { ok: false, reason: "not_found" };
