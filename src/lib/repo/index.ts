@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { ObjectId, type ClientSession } from "mongodb";
+import { BSON, ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
 import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer, validateRepeatFieldValue, type RepeatAnswerIssue } from "../format/answers";
@@ -259,23 +259,31 @@ export async function publishVersionIfCurrent(
   expectedBaseHash: string,
   survey: NewSurvey,
   source: "mcp_patch" | "mcp_upload" | "host_patch" = "mcp_patch",
+  expectedRespondentRevision?: number,
 ): Promise<{ version: number } | { conflict: true } | { assetUnavailable: true } | null> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
   const version = expectedVersion + 1;
+  const publishFilter: Record<string, unknown> = {
+    _id: oid,
+    currentVersion: expectedVersion,
+    ...(expectedRespondentRevision === undefined ? {} : expectedRespondentRevision === 0
+      ? { $or: [{ respondentWriteRevision: 0 }, { respondentWriteRevision: { $exists: false } }] }
+      : { respondentWriteRevision: expectedRespondentRevision }),
+  };
   try {
     const result = await withMongoTransaction(async (session) => {
       const interviews = await col.interviews();
       const versions = await col.versions();
-      const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }), { session });
+      const interview = await interviews.findOne(tenantFilter(tenantId, publishFilter), { session });
       if (!interview) return { conflict: true as const };
       const current = await versions.findOne(tenantFilter(tenantId, { interviewId: oid, version: expectedVersion }), { session });
       if (!current || current.htmlSha256 !== expectedBaseHash) return { conflict: true as const };
 
       const changed = await interviews.updateOne(
-        tenantFilter(tenantId, { _id: oid, currentVersion: expectedVersion }),
+        tenantFilter(tenantId, publishFilter),
         { $set: { currentVersion: version, updatedAt: new Date() }, $inc: { respondentWriteRevision: 1 } },
         { session },
       );
@@ -354,8 +362,8 @@ export class ParticipantExportSizeLimitError extends Error {
   readonly limitBytes: number;
   constructor(limitBytes = MAX_EXPORT_SOURCE_BYTES, streamPage = false) {
     super(streamPage
-      ? `A streamed CSV page exceeds the ${Math.floor(limitBytes / (1024 * 1024))} MiB participant-data page limit.`
-      : `This interview's answer data is too large for a buffered export. Buffered exports support up to ${Math.floor(limitBytes / (1024 * 1024))} MiB of participant data; use streamed CSV where available.`);
+      ? `A streamed CSV page exceeds the ${Math.floor(limitBytes / (1024 * 1024))} MiB participant and presentation-history page limit.`
+      : `This interview's answer and presentation-history data is too large for a buffered export. Buffered exports support up to ${Math.floor(limitBytes / (1024 * 1024))} MiB of source data; use streamed CSV where available.`);
     this.limitBytes = limitBytes;
     this.name = "ParticipantExportSizeLimitError";
   }
@@ -385,6 +393,33 @@ function decodeParticipantCursor(cursor: string): { createdAt: Date; id: ObjectI
   }
 }
 
+async function readQuestionOrderAssignments(
+  tenantId: string,
+  interviewId: ObjectId,
+  participantIds: ObjectId[],
+  maxBytes?: number,
+  streamPage = false,
+): Promise<QuestionOrderAssignmentDoc[]> {
+  if (!participantIds.length) return [];
+  const cursor = (await col.questionOrderAssignments()).find(tenantFilter(tenantId, {
+    interviewId, participantId: { $in: participantIds },
+  }), { projection: { participantId: 1, surveyVersion: 1, algorithmVersion: 1, groups: 1, assignedAt: 1 } }).sort({ surveyVersion: 1 });
+  const rows: QuestionOrderAssignmentDoc[] = [];
+  let bytes = 0;
+  try {
+    for await (const assignment of cursor) {
+      if (maxBytes !== undefined) {
+        bytes += BSON.calculateObjectSize(assignment);
+        if (bytes > maxBytes) throw new ParticipantExportSizeLimitError(maxBytes, streamPage);
+      }
+      rows.push(assignment);
+    }
+  } finally {
+    await cursor.close();
+  }
+  return rows;
+}
+
 /** Read one bounded participant page in stable tenant-scoped order. */
 export async function listParticipantPage(
   interviewId: string,
@@ -401,6 +436,7 @@ export async function listParticipantPage(
   const limit = Math.max(1, Math.min(MAX_PARTICIPANT_PAGE_SIZE, Math.floor(requestedLimit) || DEFAULT_PARTICIPANT_PAGE_SIZE));
   const participants = await col.participants();
   const filter: Record<string, unknown> = { interviewId: oid, ...(submittedOnly ? { status: "submitted" } : {}) };
+  let participantSourceBytes = 0;
   if (cursor !== null) {
     const anchor = decodeParticipantCursor(cursor);
     filter.$or = [
@@ -426,6 +462,7 @@ export async function listParticipantPage(
     ]).toArray();
     const page = rows[0];
     if ((page?.summary[0]?.sourceBytes ?? 0) > maxSourceBytes) throw new ParticipantExportSizeLimitError(maxSourceBytes, true);
+    participantSourceBytes = page?.summary[0]?.sourceBytes ?? 0;
     docs = page?.docs ?? [];
   } else {
     docs = await participants.find(tenantFilter(tenantId, filter)).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
@@ -435,9 +472,8 @@ export async function listParticipantPage(
   if (!pageDocs.length) return { people: [], nextCursor: null };
   const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
   if (includeOrderAssignments) {
-    const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, {
-      interviewId: oid, participantId: { $in: pageDocs.map((doc) => doc._id) },
-    })).sort({ surveyVersion: 1 }).toArray();
+    const assignmentBudget = maxSourceBytes === undefined ? undefined : Math.max(0, maxSourceBytes - participantSourceBytes);
+    const assignments = await readQuestionOrderAssignments(tenantId, oid, pageDocs.map((doc) => doc._id), assignmentBudget, true);
     for (const assignment of assignments) {
       const id = assignment.participantId.toHexString();
       const rows = byParticipant.get(id) ?? [];
@@ -487,7 +523,8 @@ export async function listParticipants(interviewId: string): Promise<Participant
   // The aggregation returns payload documents only when the whole cohort fits both limits.
   const docs = exportData[0]?.docs ?? [];
   if (!docs.length) return [];
-  const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, { interviewId: oid, participantId: { $in: docs.map((doc) => doc._id) } })).sort({ surveyVersion: 1 }).toArray();
+  const assignmentBudget = Math.max(0, MAX_EXPORT_SOURCE_BYTES - (summary?.cohortBytes ?? summary?.bytes ?? 0));
+  const assignments = await readQuestionOrderAssignments(tenantId, oid, docs.map((doc) => doc._id), assignmentBudget);
   const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
   for (const assignment of assignments) {
     const id = assignment.participantId.toHexString();

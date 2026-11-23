@@ -58,10 +58,14 @@ vi.mock("../src/lib/db", () => ({
   withMongoTransaction: async (work: (session: Record<string, never>) => Promise<unknown>) => work({}),
   col: {
     tenants: async () => ({ findOne: async (query: { _id: string; status: string }) => query._id === "axion" && query.status === "active" ? { _id: "axion" } : null }),
-    interviews: async () => ({ findOne: async () => ({ currentVersion: 1 }) }),
+    interviews: async () => ({ findOne: async () => ({ currentVersion: 1, respondentWriteRevision: 0 }) }),
     versions: async () => ({ findOne: async () => ({ manifest: patchTestManifest }) }),
     participants: async () => ({
-      find: () => ({ toArray: async () => [] }),
+      find: () => ({
+        toArray: async () => [],
+        [Symbol.asyncIterator]: async function* () {},
+        close: async () => {},
+      }),
       updateOne: async () => ({ matchedCount: 1 }),
     }),
     mail: async () => ({
@@ -619,7 +623,7 @@ describe("MCP tools", () => {
     expect(applyBody.result.structuredContent).toMatchObject({ version: 2, changes: [{ questionId: optionalQuestion.id, beforeRequired: false, afterRequired: true }] });
     expect(vi.mocked(publishVersionIfCurrent)).toHaveBeenCalledWith(interviewId, 1, current.htmlSha256, expect.objectContaining({
       html: expect.stringContaining('"required": true'),
-    }));
+    }), "mcp_patch", 0);
   });
 
   it("surfaces a missing workspace image when an MCP questionnaire publish is blocked", async () => {

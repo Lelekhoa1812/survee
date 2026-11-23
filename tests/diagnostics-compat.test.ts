@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { Manifest } from "../src/lib/format/schema";
-import { compareVersions } from "../src/lib/diagnostics/compat";
+import { compareVersions, createCompatibilityAccumulator } from "../src/lib/diagnostics/compat";
 
 const manifest = (questions: Manifest["questions"]): Manifest => ({ format: "kqa/1", title: "Survey", questions });
 
 describe("compareVersions", () => {
+  it("keeps streamed accumulator results identical to the compatibility helper", () => {
+    const previous = manifest([{ id: "q", type: "multi", label: "Choices", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }] }]);
+    const next = manifest([{ id: "q", type: "multi", label: "Choices", maxSelections: 1, options: [{ value: "a", label: "A" }] }]);
+    const answers = [
+      { status: "in_progress", answers: { q: { value: ["a", "b"], updatedAt: "now" } } },
+      { status: "submitted", answers: { q: { value: "b", note: "context", updatedAt: "now" } } },
+    ];
+    const accumulator = createCompatibilityAccumulator(previous, next);
+    for (const answer of answers) accumulator.add(answer);
+    expect(accumulator.finish()).toEqual(compareVersions({ previous, next, answers }));
+  });
+
   it("warns when the respondent flow changes after answers are saved", () => {
     const previous: Manifest = { ...manifest([{ id: "q", type: "text", label: "Prompt" }]), presentation: "all" };
     const next: Manifest = { ...previous, presentation: "guided-question" };

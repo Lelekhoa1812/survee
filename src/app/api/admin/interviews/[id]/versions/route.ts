@@ -182,7 +182,9 @@ export const POST = withServerErrors("admin/interviews/[id]/versions", async fun
       }, 409);
     }
 
-    const published = await publishVersionIfCurrent(id, expectedVersion as number, baseHash, prepared.survey, "host_patch");
+    const published = prepared.compatibilityRevision === undefined
+      ? await publishVersionIfCurrent(id, expectedVersion as number, baseHash, prepared.survey, "host_patch")
+      : await publishVersionIfCurrent(id, expectedVersion as number, baseHash, prepared.survey, "host_patch", prepared.compatibilityRevision);
     if (!published) return fail(404, "Interview not found.");
     if ("assetUnavailable" in published) return fail(409, "A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview the candidate again.", { code: "asset_unavailable" });
     if ("conflict" in published) return fail(409, "Another change was published first. Preview the candidate again.", { code: "stale_preview" });

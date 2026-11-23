@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   filters: [] as Record<string, any>[],
   pageDocs: [] as Record<string, any>[][],
   assignmentQueries: 0,
+  assignmentRows: [] as Record<string, any>[],
+  assignmentClose: vi.fn(async () => {}),
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -45,7 +47,14 @@ vi.mock("../src/lib/db", () => ({
       };
       },
     }),
-    questionOrderAssignments: async () => ({ find: () => { mocks.assignmentQueries += 1; return { sort: () => ({ toArray: async () => [] }) }; } }),
+    questionOrderAssignments: async () => ({ find: () => {
+      mocks.assignmentQueries += 1;
+      return { sort: () => ({
+        [Symbol.asyncIterator]: async function* () { for (const row of mocks.assignmentRows) yield row; },
+        close: mocks.assignmentClose,
+        toArray: async () => mocks.assignmentRows,
+      }) };
+    } }),
   },
 }));
 
@@ -63,6 +72,8 @@ beforeEach(() => {
   mocks.filters = [];
   mocks.pageDocs = [];
   mocks.assignmentQueries = 0;
+  mocks.assignmentRows = [];
+  mocks.assignmentClose.mockReset().mockResolvedValue(undefined);
 });
 
 describe("bounded participant hydration", () => {
@@ -138,6 +149,34 @@ describe("cursor participant pages", () => {
       .rejects.toBeInstanceOf(ParticipantExportSizeLimitError);
     expect(mocks.findCalls).toBe(0);
     expect(mocks.assignmentQueries).toBe(0);
+  });
+
+  it("includes question-order history in the streamed page source-byte budget", async () => {
+    const personDoc = person("000000000000000000000007", "2026-01-07T00:00:00.000Z");
+    mocks.pageDocs = [[personDoc]];
+    mocks.pageSourceBytes = MAX_EXPORT_SOURCE_BYTES - 1;
+    mocks.assignmentRows = [{
+      _id: new ObjectId(), participantId: personDoc._id, interviewId: personDoc.interviewId, tenantId: "workspace-1",
+      surveyVersion: 1, algorithmVersion: "qorder/1", groups: { group: ["question-one", "question-two"] }, assignedAt: new Date(),
+    }];
+    await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 10, false, true, MAX_EXPORT_SOURCE_BYTES)))
+      .rejects.toBeInstanceOf(ParticipantExportSizeLimitError);
+    expect(mocks.assignmentClose).toHaveBeenCalledOnce();
+  });
+
+  it("includes assignment-history BSON in the buffered export source-byte budget", async () => {
+    mocks.docs = [{
+      _id: new ObjectId(), interviewId: new ObjectId(), token: "token-one", name: "Person", status: "invited",
+      answers: {}, recordGroups: {}, createdAt: new Date(), updatedAt: new Date(), revision: 0,
+    }];
+    mocks.participantBytes = MAX_EXPORT_SOURCE_BYTES - 1;
+    mocks.assignmentRows = [{
+      _id: new ObjectId(), participantId: mocks.docs[0]._id, interviewId: mocks.docs[0].interviewId, tenantId: "workspace-1",
+      surveyVersion: 1, algorithmVersion: "qorder/1", groups: { group: ["question-one", "question-two"] }, assignedAt: new Date(),
+    }];
+    await expect(withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipants(new ObjectId().toHexString())))
+      .rejects.toBeInstanceOf(ParticipantExportSizeLimitError);
+    expect(mocks.assignmentClose).toHaveBeenCalledOnce();
   });
 
   it("rejects malformed and oversized cursors", async () => {

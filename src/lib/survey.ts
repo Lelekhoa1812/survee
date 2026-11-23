@@ -1,5 +1,5 @@
 import { checkHtml } from "./diagnostics/static";
-import { compareVersions } from "./diagnostics/compat";
+import { createCompatibilityAccumulator } from "./diagnostics/compat";
 import { mergeDiagnostics, toAgentMarkdown } from "./diagnostics/report";
 import { CHECKER_VERSION, type Report } from "./diagnostics/types";
 import type { NewSurvey } from "./repo";
@@ -12,6 +12,8 @@ export interface Prepared {
   report: Report;
   markdown: string;
   survey?: NewSurvey;
+  /** Respondent revision observed before the compatibility scan; publication must match it. */
+  compatibilityRevision?: number;
 }
 
 /** Run the static checker on an uploaded file and, when it passes, shape it for storage. */
@@ -35,9 +37,16 @@ export async function withCompat(prepared: Prepared, interviewId: string): Promi
   if (!interview) return prepared;
   const current = await (await col.versions()).findOne(tenantFilter(tenantId, { interviewId: oid, version: interview.currentVersion }), { projection: { manifest: 1 } });
   if (!current) return prepared;
-  const people = await (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }), { projection: { answers: 1, recordGroups: 1, status: 1 } }).toArray();
-  const extra = compareVersions({ previous: current.manifest, next: prepared.report.manifest, answers: people.map((p) => ({ answers: p.answers ?? {}, recordGroups: p.recordGroups ?? {}, status: p.status })) });
-  if (!extra.length) return prepared;
+  const accumulator = createCompatibilityAccumulator(current.manifest, prepared.report.manifest);
+  const cursor = (await col.participants()).find(tenantFilter(tenantId, { interviewId: oid }), { projection: { answers: 1, recordGroups: 1, status: 1 } });
+  try {
+    for await (const person of cursor) accumulator.add({ answers: person.answers ?? {}, recordGroups: person.recordGroups ?? {}, status: person.status });
+  } finally {
+    await cursor.close();
+  }
+  const extra = accumulator.finish();
+  const compatibilityRevision = interview.respondentWriteRevision ?? 0;
+  if (!extra.length) return { ...prepared, compatibilityRevision };
   const report = mergeDiagnostics(prepared.report, extra);
-  return { ...prepared, report, markdown: toAgentMarkdown(report) };
+  return { ...prepared, report, markdown: toAgentMarkdown(report), compatibilityRevision };
 }

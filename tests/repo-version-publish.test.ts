@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   currentVersion: 4,
+  respondentRevision: 8 as number | undefined,
   baseHash: "c".repeat(64),
   modifiedCount: 1,
   inserted: [] as Record<string, unknown>[],
@@ -33,8 +34,11 @@ vi.mock("../src/lib/db", () => ({
     interviews: async () => ({
       findOne: async (filter: Record<string, unknown>) => {
         const clauses = Array.isArray(filter.$and) ? filter.$and as Record<string, unknown>[] : [filter];
-        const interviewFilter = clauses.find((clause) => "currentVersion" in clause) as { currentVersion?: number } | undefined;
-        return interviewFilter?.currentVersion === mocks.currentVersion ? { currentVersion: mocks.currentVersion } : null;
+        const interviewFilter = clauses.find((clause) => "currentVersion" in clause) as { currentVersion?: number; respondentWriteRevision?: number; $or?: unknown[] } | undefined;
+        if (interviewFilter?.currentVersion !== mocks.currentVersion) return null;
+        if ("respondentWriteRevision" in interviewFilter && interviewFilter.respondentWriteRevision !== mocks.respondentRevision) return null;
+        if (Array.isArray(interviewFilter?.$or) && mocks.respondentRevision !== undefined && mocks.respondentRevision !== 0) return null;
+        return { currentVersion: mocks.currentVersion };
       },
       updateOne: mocks.updateOne,
     }),
@@ -59,6 +63,7 @@ const survey = {
 
 beforeEach(() => {
   mocks.currentVersion = 4;
+  mocks.respondentRevision = 8;
   mocks.baseHash = "c".repeat(64);
   mocks.modifiedCount = 1;
   mocks.inserted.length = 0;
@@ -92,6 +97,36 @@ describe("publishVersionIfCurrent", () => {
       { session: { transaction: true } },
     );
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
+  });
+
+  it("fences publication against respondent writes observed after compatibility review", async () => {
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey, "mcp_patch", 8));
+    expect(result).toEqual({ version: 5 });
+    const expectedFilter = tenantFilter("axion", { _id: expect.any(ObjectId), currentVersion: 4, respondentWriteRevision: 8 });
+    expect(mocks.updateOne).toHaveBeenCalledWith(
+      expectedFilter,
+      { $set: { currentVersion: 5, updatedAt: expect.any(Date) }, $inc: { respondentWriteRevision: 1 } },
+      { session: { transaction: true } },
+    );
+  });
+
+  it("returns a conflict when respondents changed after the compatibility scan", async () => {
+    mocks.respondentRevision = 9;
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey, "mcp_patch", 8));
+    expect(result).toEqual({ conflict: true });
+    expect(mocks.updateOne).not.toHaveBeenCalled();
+    expect(mocks.inserted).toHaveLength(0);
+  });
+
+  it("matches legacy interviews with a missing respondent revision when the observed revision is zero", async () => {
+    mocks.respondentRevision = undefined;
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey, "mcp_patch", 0));
+    expect(result).toEqual({ version: 5 });
+    expect(mocks.updateOne).toHaveBeenCalledWith(
+      tenantFilter("axion", { _id: expect.any(ObjectId), currentVersion: 4, $or: [{ respondentWriteRevision: 0 }, { respondentWriteRevision: { $exists: false } }] }),
+      { $set: { currentVersion: 5, updatedAt: expect.any(Date) }, $inc: { respondentWriteRevision: 1 } },
+      { session: { transaction: true } },
+    );
   });
 
   it("returns a conflict when another publisher wins the compare-and-swap", async () => {
