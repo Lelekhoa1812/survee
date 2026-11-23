@@ -1794,6 +1794,7 @@ const TOOLS: ToolDef[] = [
       if (args.note !== undefined) patch.note = args.note === null ? null : (asString(args.note, 1000) ?? null);
       if (!Object.keys(patch).length) return err("Nothing to update.");
       const updated = await updateParticipant(id, patch);
+      if (updated === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
       if (!updated) return err("Person not found.", "not_found");
       const loaded = await onePerson(id);
       return ok({ person: loaded?.view ?? shapePerson(updated, null, []) });

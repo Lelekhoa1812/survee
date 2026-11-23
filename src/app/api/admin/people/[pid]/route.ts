@@ -27,6 +27,7 @@ export const PATCH = withServerErrors("admin/people/[pid]", async function PATCH
     }
   }
   const p = await updateParticipant(pid, patch);
+  if (p === "invite_pending") return fail(409, "This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", { code: "invite_outcome_pending" });
   return p ? json({ ok: true, person: p }) : fail(404, "Person not found.");
 });
 

@@ -31,7 +31,7 @@ Two credentials are accepted. The `KQA_MCP_TOKEN` environment variable is a tena
 
 `tools/list` returns only tools available to that credential, and the server checks permission again for every `tools/call`. Hiding a tool from the list is not the authorization boundary. `initialize` and `ping` remain available to any authenticated credential.
 
-Tool calls share a 15-minute budget per authenticated principal: 600 calls total, with an additional 60-call budget for `analyze_answers`, `export_interview`, `get_answers`, and `list_people`. When the trusted Vercel client IP header is available, shared IP budgets are 6,000 total and 240 expensive calls per 15 minutes. Limits return HTTP 429 with `Retry-After`; if the durable limiter cannot be checked, tool calls fail closed with HTTP 503. Initialization, tool discovery, ping, and prompt methods do not consume these budgets.
+Tool calls share a 15-minute budget per authenticated principal: 600 calls total, with an additional 60-call budget for `analyze_answers`, `export_interview`, `get_answers`, `list_people`, and `send_invites`. When the trusted Vercel client IP header is available, shared IP budgets are 6,000 total and 240 expensive calls per 15 minutes. Limits return HTTP 429 with `Retry-After`; if the durable limiter cannot be checked, tool calls fail closed with HTTP 503. Initialization, tool discovery, ping, and prompt methods do not consume these budgets.
 
 ### Prompt templates
 

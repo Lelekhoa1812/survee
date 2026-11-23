@@ -762,30 +762,46 @@ export async function getParticipant(id: string): Promise<ParticipantView | null
   return doc ? participantView(doc) : null;
 }
 
-export async function updateParticipant(id: string, patch: { name?: string; note?: string | null; email?: string | null }): Promise<ParticipantView | null> {
+export async function updateParticipant(id: string, patch: { name?: string; note?: string | null; email?: string | null }): Promise<ParticipantView | null | "invite_pending"> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
   const set: Partial<ParticipantDoc> = { updatedAt: new Date() };
   const unset: Record<string, ""> = {};
+  let nextEmail: string | null | undefined;
   if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120) || "Respondent";
   if (patch.note !== undefined) {
     if (patch.note === null || patch.note.trim() === "") unset.note = "";
     else set.note = patch.note.trim().slice(0, 1000);
   }
   if (patch.email !== undefined) {
-    if (patch.email === null || patch.email.trim() === "") unset.email = "";
+    if (patch.email === null || patch.email.trim() === "") {
+      nextEmail = null;
+      unset.email = "";
+    }
     else {
       const parsed = parseEmail(patch.email);
       if (!parsed.ok || !parsed.email) throw new Error("Invalid email");
+      nextEmail = parsed.email;
       set.email = parsed.email;
     }
   }
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
   return withMongoTransaction(async (session) => {
-    const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
+    const participants = await col.participants();
+    const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { email: 1, interviewId: 1 } });
+    if (!current) return null;
+    const currentEmail = typeof current.email === "string" ? current.email.trim().toLowerCase() : null;
+    if (nextEmail !== undefined && currentEmail !== nextEmail) {
+      const pendingInvite = await (await col.mail()).findOne(
+        { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } },
+        { session, projection: { _id: 1 } },
+      );
+      if (pendingInvite) return "invite_pending";
+    }
+    const res = await participants.findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
     if (!res) return null;
     const touched = await (await col.interviews()).updateOne(
       tenantFilter(tenantId, { _id: res.interviewId }),

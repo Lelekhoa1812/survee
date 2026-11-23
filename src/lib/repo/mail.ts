@@ -28,7 +28,7 @@ export async function insertMail(doc: Omit<MailMessageDoc, "_id" | "tenantId">):
   // so the two operations serialize instead of recreating erased mail after a delete.
   const started = await withMongoTransaction(async (session) => {
     const participant = await (await col.participants()).updateOne(
-      tenantFilter(tenantId, { _id: doc.participantId, interviewId: doc.interviewId }),
+      tenantFilter(tenantId, { _id: doc.participantId, interviewId: doc.interviewId, email: doc.to, token: doc.token }),
       { $inc: { inviteAttemptRevision: 1 } },
       { session },
     );

@@ -40,12 +40,12 @@ describe("insertMail", () => {
     expect(row?._id).toBeInstanceOf(ObjectId);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants", "mail"]);
-    expect(mocks.calls[0].args[0]).toMatchObject({ $and: [{ $or: [{ tenantId: "axion" }, { tenantId: { $exists: false } }] }, { _id: participantId, interviewId }] });
+    expect(mocks.calls[0].args[0]).toMatchObject({ $and: [{ $or: [{ tenantId: "axion" }, { tenantId: { $exists: false } }] }, { _id: participantId, interviewId, email: "ada@example.test", token: "private-token" }] });
     expect(mocks.calls[0].args[1]).toEqual({ $inc: { inviteAttemptRevision: 1 } });
     expect(mocks.calls.every(({ args }) => (args.at(-1) as { session?: unknown }).session === mocks.session)).toBe(true);
   });
 
-  it("does not create a mail attempt when the participant was already removed", async () => {
+  it("does not create a mail attempt when the participant was removed or its recipient details changed", async () => {
     mocks.matchedCount = 0;
     const interviewId = new ObjectId();
     const participantId = new ObjectId();

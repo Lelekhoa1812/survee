@@ -58,7 +58,7 @@ describe("sendInvite", () => {
   it("does not send if the participant is removed before the durable attempt can be reserved", async () => {
     const { send, deps } = harness(ctx({ email: "ada@example.com" }), { begin: async () => null });
 
-    expect(await sendInvite({ personId, triggeredBy: "admin" }, deps)).toMatchObject({ ok: false, code: "not_found" });
+    expect(await sendInvite({ personId, triggeredBy: "admin" }, deps)).toMatchObject({ ok: false, code: "attempt_unavailable" });
     expect(send).not.toHaveBeenCalled();
   });
 

@@ -156,7 +156,7 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   } catch {
     return { ok: false, code: "attempt_unavailable", error: "The invite attempt could not be recorded, so no email was sent. Try again later.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
-  if (!attemptId) return { ok: false, code: "not_found", error: "Person not found." };
+  if (!attemptId) return { ok: false, code: "attempt_unavailable", error: "This person's details changed before the invite could be recorded, so no email was sent. Reload the details and try again.", interviewId: ctx.interview.id, personId: ctx.person.id };
   let sent: { messageId: string };
   try {
     sent = await send({ to: parsed.email, subject: message.subject, text: message.text, html: message.html, messageId });
