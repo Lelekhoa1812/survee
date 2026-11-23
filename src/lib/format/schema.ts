@@ -289,6 +289,8 @@ export interface StoredAnswer {
   value?: AnswerValue;
   note?: string;
   updatedAt: string;
+  /** Independent revisions prevent stale tabs from overwriting the same answer field. */
+  fieldRevisions?: { value?: number; note?: number };
   /** Option order presented to this respondent when the answer was saved. */
   presentedOptionOrder?: string[];
   /** Questionnaire version whose presentation order was shown. */

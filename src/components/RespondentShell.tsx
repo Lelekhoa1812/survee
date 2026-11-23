@@ -28,7 +28,7 @@ type Patch = Record<string, { value?: unknown; note?: unknown }>;
 type PendingRecordOperation = { operationId: string; operation: RepeatRecordOperation };
 type RecordIssue = RespondentRepeatIssue & { questionId: string; rowId?: string; fieldId?: string; reason?: string };
 type RejectedRecordDraft = { operationId: string; operation: RepeatRecordOperation; issue?: RespondentRepeatIssue; message?: "previousDraftWarning" | "lockedError" | "couldNotSave" };
-type DraftRecoveryReason = "version" | "locked" | "record-conflict";
+type DraftRecoveryReason = "version" | "locked" | "record-conflict" | "answer-conflict";
 type InvalidRecordDraft = { questionId: string; rowId: string; fieldId: string };
 
 export function applyRecordOperation(groups: RepeatRecordMap, operation: RepeatRecordOperation): RepeatRecordMap {
@@ -167,6 +167,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const questionNavTrigger = useRef<HTMLButtonElement>(null);
   const guidedErrorRef = useRef<HTMLDivElement>(null);
   const answers = useRef<AnswerMap>({});
+  const answerFieldRevisions = useRef<Record<string, { value: number; note: number }>>({});
   const recordGroupsRef = useRef<RepeatRecordMap>({});
   const authoritativeRecordGroupsRef = useRef<RepeatRecordMap>({});
   const version = useRef(0);
@@ -392,6 +393,10 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     setSave("idle");
     applyLock(true);
   }, [applyLock, post, recount]);
+  const handleAnswerConflict = useCallback((failedBatch: Patch, failedRecords: PendingRecordOperation[]) => {
+    handleVersionConflict(failedBatch, failedRecords);
+    setDraftRecoveryReason("answer-conflict");
+  }, [handleVersionConflict]);
 
   const rememberRejectedRecords = useCallback((operations: PendingRecordOperation[], message: "lockedError" | "couldNotSave") => {
     const unique = operations.filter((item, index, all) => all.findIndex((candidate) => candidate.operationId === item.operationId) === index);
@@ -444,6 +449,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     setConflictDraftOpen(false);
     setRefreshRequired(false);
     answers.current = res.data.answers ?? {};
+    answerFieldRevisions.current = Object.fromEntries(Object.entries(res.data.answers ?? {}).map(([id, answer]) => [id, { value: answer.fieldRevisions?.value ?? 0, note: answer.fieldRevisions?.note ?? 0 }]));
     recordGroupsRef.current = res.data.recordGroups ?? {};
     authoritativeRecordGroupsRef.current = recordGroupsRef.current;
     setRecordGroups(recordGroupsRef.current);
@@ -472,10 +478,12 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     pendingRecordOperations.current = [];
     inflight.current = true;
     setSave("saving");
-    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string; code?: string; params?: Record<string, number> }[]; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, writeEpoch: writeEpoch.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) } });
+    const expectedAnswerRevisions = Object.fromEntries(Object.keys(batch).map((id) => [id, answerFieldRevisions.current[id] ?? { value: 0, note: 0 }]));
+    const res = await api<{ savedAt: string; code?: string; details?: { id: string; reason: string; code?: string; params?: Record<string, number> }[]; answerRevisions?: Record<string, { value: number; note: number }>; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, { method: "PUT", body: { version: version.current, writeEpoch: writeEpoch.current, answers: batch, expectedAnswerRevisions, recordOperations: recordBatch.map((item) => item.operation) } });
     if (res.ok) {
       inflight.current = false;
       attempts.current = 0;
+      if (res.data.answerRevisions) answerFieldRevisions.current = { ...answerFieldRevisions.current, ...res.data.answerRevisions };
       if (res.data.recordGroups) {
         authoritativeRecordGroupsRef.current = { ...authoritativeRecordGroupsRef.current, ...res.data.recordGroups };
         recordGroupsRef.current = pendingRecordOperations.current.reduce((groups, item) => applyRecordOperation(groups, item.operation), authoritativeRecordGroupsRef.current);
@@ -500,6 +508,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
       inflight.current = false;
       handleVersionConflict(batch, recordBatch);
+      return;
+    }
+    if (res.status === 409 && res.data.code === "answer_conflict") {
+      inflight.current = false;
+      handleAnswerConflict(batch, recordBatch);
       return;
     }
     if (res.status === 403) {
@@ -608,7 +621,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         timer.current = setTimeout(flush, 350);
       }
     }
-  }, [token, applyLock, handleVersionConflict, handleLockedWrite, post, recount, rememberRejectedRecords, toast, locale]);
+  }, [token, applyLock, handleVersionConflict, handleAnswerConflict, handleLockedWrite, post, recount, rememberRejectedRecords, toast, locale]);
 
   const handleRecordConflict = useCallback(async (failedBatch: Patch, failedRecords: PendingRecordOperation[], issues: RecordIssue[], retryRefresh = false) => {
     // A stale repeat-row revision rejects the complete write transaction. Preserve the record
@@ -796,16 +809,18 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         clearTimeout(timer.current);
         const batch = pending.current;
         const recordBatch = pendingRecordOperations.current;
+        const expectedAnswerRevisions = Object.fromEntries(Object.keys(batch).map((id) => [id, answerFieldRevisions.current[id] ?? { value: 0, note: 0 }]));
         pending.current = {};
         pendingRecordOperations.current = [];
         inflight.current = true;
         setSave("saving");
-        void api<{ savedAt?: string; code?: string; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, {
-          method: "PUT", body: { version: version.current, writeEpoch: writeEpoch.current, answers: batch, recordOperations: recordBatch.map((item) => item.operation) }, keepalive: true,
+        void api<{ savedAt?: string; code?: string; answerRevisions?: Record<string, { value: number; note: number }>; recordGroups?: RepeatRecordMap; recordErrors?: RecordIssue[] }>(`/api/p/${token}/answers`, {
+          method: "PUT", body: { version: version.current, writeEpoch: writeEpoch.current, answers: batch, expectedAnswerRevisions, recordOperations: recordBatch.map((item) => item.operation) }, keepalive: true,
         }).then((res) => {
           if (res.ok) {
             inflight.current = false;
             attempts.current = 0;
+            if (res.data.answerRevisions) answerFieldRevisions.current = { ...answerFieldRevisions.current, ...res.data.answerRevisions };
             if (res.data.recordGroups) {
               authoritativeRecordGroupsRef.current = { ...authoritativeRecordGroupsRef.current, ...res.data.recordGroups };
               recordGroupsRef.current = pendingRecordOperations.current.reduce((groups, item) => applyRecordOperation(groups, item.operation), authoritativeRecordGroupsRef.current);
@@ -821,6 +836,11 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           if (res.status === 409 && res.data.code === "questionnaire_version_changed") {
             inflight.current = false;
             handleVersionConflict(batch, recordBatch);
+            return;
+          }
+          if (res.status === 409 && res.data.code === "answer_conflict") {
+            inflight.current = false;
+            handleAnswerConflict(batch, recordBatch);
             return;
           }
           if (res.status === 403) {
@@ -864,7 +884,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
     document.addEventListener("visibilitychange", hide);
     window.addEventListener("pagehide", hide);
     return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); document.removeEventListener("visibilitychange", hide); window.removeEventListener("pagehide", hide); };
-  }, [applyLock, flush, handleVersionConflict, handleLockedWrite, post, token, toast, locale]);
+  }, [applyLock, flush, handleVersionConflict, handleAnswerConflict, handleLockedWrite, post, token, toast, locale]);
 
   useEffect(() => () => { clearTimeout(timer.current); clearTimeout(retry.current); }, []);
 
@@ -1106,7 +1126,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       </div>
 
       <div ref={submittedStatusRef} tabIndex={submitted ? -1 : undefined} className={`rs-banner ${refreshRequired || (!submitted && closed) ? "warn" : submitted ? "ok" : "none"}`} role={refreshRequired ? "alert" : submitted || closed ? "status" : undefined}>
-        {refreshRequired && <><Icon name="lock" size={16} /> {staleDraft.length > 0 || rejectedRecordDrafts.length > 0 ? t("changedDraft") : t("changedSaved")} <span className="row">{(staleDraft.length > 0 || rejectedRecordDrafts.length > 0) && <button className="btn" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button>}<button className="btn" onClick={reloadLatestVersion}>{t("reloadQuestionnaire")}</button></span></>}
+        {refreshRequired && <><Icon name="lock" size={16} /> {staleDraft.length > 0 || rejectedRecordDrafts.length > 0 ? t(draftRecoveryReason === "answer-conflict" ? "answerChangedDraft" : "changedDraft") : t("changedSaved")} <span className="row">{(staleDraft.length > 0 || rejectedRecordDrafts.length > 0) && <button className="btn" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button>}<button className="btn" onClick={reloadLatestVersion}>{t("reloadQuestionnaire")}</button></span></>}
         {submitted && <><Icon name="check" size={16} /> {t("submittedMessage")}</>}
         {!refreshRequired && !submitted && closed && <><Icon name="lock" size={16} /> {t("closedMessage")}</>}
       </div>
@@ -1314,7 +1334,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
           }
         >
           <div className="review-content">
-            <p className="muted">{draftRecoveryReason === "version" ? t("conflictDescription") : draftRecoveryReason === "locked" ? <>{t("lockedError")} {t("unsavedTitle")}</> : t("repeatRejectedDescription")}</p>
+            <p className="muted">{draftRecoveryReason === "answer-conflict" ? t("answerConflictDescription") : draftRecoveryReason === "version" ? t("conflictDescription") : draftRecoveryReason === "locked" ? <>{t("lockedError")} {t("unsavedTitle")}</> : t("repeatRejectedDescription")}</p>
             <div className="review-list">
               {staleDraft.map(({ question, patch }) => (
                 <section className="review-entry" key={question.id}>

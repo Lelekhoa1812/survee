@@ -141,17 +141,25 @@ describe("respondent questionnaire version routes", () => {
   });
 
   it("requires and forwards the loaded version on answer saves", async () => {
-    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, answers: { q1: { value: "answer" } } }), params);
+    const expectedAnswerRevisions = { q1: { value: 0, note: 0 } };
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, answers: { q1: { value: "answer" } }, expectedAnswerRevisions }), params);
 
     expect(response.status).toBe(200);
-    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, { q1: { value: "answer" } }, [], 0);
+    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, { q1: { value: "answer" } }, [], 0, expectedAnswerRevisions);
+  });
+
+  it("requires scalar field revisions before accepting answer writes", async () => {
+    const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, answers: { q1: { value: "answer" } } }), params);
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "answer_conflict" });
+    expect(mocks.saveAnswers).not.toHaveBeenCalled();
   });
 
   it("forwards explicit record operations alongside scalar answers", async () => {
     const recordOperations = [{ op: "set", questionId: "people", rowId: "row-1", fieldId: "name", expectedFieldRevision: 0, value: "Ada" }];
     const response = await saveRespondentAnswers(request(`https://kqa.local/api/p/${token}/answers`, "PUT", { version: 7, writeEpoch: 0, recordOperations }), params);
     expect(response.status).toBe(200);
-    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, {}, recordOperations, 0);
+    expect(mocks.saveAnswers).toHaveBeenCalledWith(token, 7, {}, recordOperations, 0, undefined);
   });
 
   it("rejects malformed record operations before repository access", async () => {

@@ -29,7 +29,7 @@ export function jsonExport(input: ExportInput): ExportFile {
       const answers: Record<string, { value?: unknown; display: string; note?: string; updatedAt: string; presentedOptionOrder?: string[]; optionOrderVersion?: number }> = {};
       for (const q of manifest.questions) {
         const a = p.answers[q.id];
-        if (!a) continue;
+        if (!a || (a.value === undefined && a.note === undefined)) continue;
         answers[q.id] = {
           value: a.value,
           display: displayValue(q, a.value),

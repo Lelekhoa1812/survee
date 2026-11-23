@@ -6,13 +6,13 @@ import { respondentRateLimit } from "@/lib/respondent-rate-limit";
 
 type Ctx = { params: Promise<{ token: string }> };
 
-/** Body: { version, writeEpoch, answers?, recordOperations? }. Only supplied scalar ids and explicit record operations are changed. */
+/** Body: { version, writeEpoch, answers?, expectedAnswerRevisions?, recordOperations? }. Only supplied scalar ids and explicit record operations are changed. */
 export const PUT = withServerErrors("p/answers", async function PUT(req: Request, { params }: Ctx) {
   const { token } = await params;
   if (!looksLikeToken(token)) return fail(404, "This link is not valid.", { code: "not_found" });
   const rateLimitFailure = await respondentRateLimit(req, token, "save");
   if (rateLimitFailure) return rateLimitFailure;
-  const body = await readJson<{ version?: unknown; writeEpoch?: unknown; answers?: unknown; recordOperations?: unknown }>(req, 512 * 1024);
+  const body = await readJson<{ version?: unknown; writeEpoch?: unknown; answers?: unknown; expectedAnswerRevisions?: unknown; recordOperations?: unknown }>(req, 512 * 1024);
   if (!body.ok) return body.res;
   if (typeof body.data.version !== "number" || !Number.isSafeInteger(body.data.version) || body.data.version < 1) {
     return fail(409, "This questionnaire version is missing. Reload the page to continue.", { code: "questionnaire_version_changed" });
@@ -20,11 +20,20 @@ export const PUT = withServerErrors("p/answers", async function PUT(req: Request
   if (typeof body.data.writeEpoch !== "number" || !Number.isSafeInteger(body.data.writeEpoch) || body.data.writeEpoch < 0) return fail(409, "This response state is missing. Reload the page to continue.", { code: "respondent_state_changed" });
   const a = body.data.answers;
   if (a !== undefined && (!a || typeof a !== "object" || Array.isArray(a))) return fail(400, "Send answers as an object keyed by question id.", { code: "invalid_args" });
+  const revisions = body.data.expectedAnswerRevisions;
+  const answerIds = Object.keys((a ?? {}) as Record<string, unknown>);
+  if (answerIds.length && (!revisions || typeof revisions !== "object" || Array.isArray(revisions))) return fail(409, "This page cannot confirm that the edited answers are current. Copy the edits before reloading.", { code: "answer_conflict" });
+  if (answerIds.length && answerIds.some((id) => {
+    const value = (revisions as Record<string, unknown>)[id];
+    if (!value || typeof value !== "object" || Array.isArray(value)) return true;
+    const fields = value as Record<string, unknown>;
+    return !Number.isSafeInteger(fields.value) || (fields.value as number) < 0 || !Number.isSafeInteger(fields.note) || (fields.note as number) < 0;
+  })) return fail(409, "This page cannot confirm that the edited answers are current. Copy the edits before reloading.", { code: "answer_conflict" });
   const ops = body.data.recordOperations;
   if (ops !== undefined && (!Array.isArray(ops) || ops.length > 200 || ops.some((op) => !isRepeatRecordOperation(op)))) {
     return fail(400, "Send recordOperations as an array of record operations.", { code: "invalid_args" });
   }
-  const result = await saveAnswers(token, body.data.version, (a ?? {}) as AnswerPatch, (ops ?? []) as RepeatRecordOperation[], body.data.writeEpoch);
+  const result = await saveAnswers(token, body.data.version, (a ?? {}) as AnswerPatch, (ops ?? []) as RepeatRecordOperation[], body.data.writeEpoch, (revisions ?? undefined) as Record<string, { value: number; note: number }> | undefined);
   return result.ok ? json(result) : fail(result.status, result.error, { code: result.code, details: result.details, recordErrors: result.recordErrors });
 });
 

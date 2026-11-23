@@ -192,7 +192,7 @@ describe("respondent required-answer recovery", () => {
     });
     expect(saves).toBe(2);
     const write = state.api.mock.calls.filter(([url]) => String(url).endsWith("/answers"))[1];
-    expect(write?.[1]).toMatchObject({ body: { answers: { answer: { value: "newer" } } } });
+    expect(write?.[1]).toMatchObject({ body: { answers: { answer: { value: "newer" } }, expectedAnswerRevisions: { answer: { value: 0, note: 0 } } } });
     expect(host.querySelector("[role=dialog]")?.textContent).toContain("newer");
   });
   it("switches shell locale and direction while initializing the authored questionnaire independently", async () => {
@@ -1102,6 +1102,29 @@ describe("respondent required-answer recovery", () => {
     });
     expect(state.api.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
     expect(state.toast).toHaveBeenCalledWith(expect.stringContaining("not saved yet"), "err", expect.anything());
+    vi.useRealTimers();
+  });
+
+  it("retains a scalar draft for review when another tab saved the same answer first", async () => {
+    vi.useFakeTimers();
+    state.api.mockImplementation((url: string) => {
+      if (url.endsWith("/answers")) return Promise.resolve({ ok: false, status: 409, data: { code: "answer_conflict" } });
+      return Promise.resolve({ ok: true, status: 200, data: {
+        participant: { name: "Ada", status: "in_progress", writeEpoch: 0 }, interview: { name: "Study", status: "open" }, version: 7, title: "Study",
+        questions: [{ id: "answer", type: "text", label: "Answer" }], answers: { answer: { value: "earlier", updatedAt: "2026-11-20T00:00:00Z", fieldRevisions: { value: 1, note: 0 } } },
+      } });
+    });
+    await act(async () => { root.render(createElement(RespondentShell, { token: "participant-token" })); await Promise.resolve(); });
+    const frame = host.querySelector("iframe")!;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { kqa: 1, type: "set", id: "answer", value: "newer local draft" }, origin: "null", source: frame.contentWindow }));
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    expect(state.api.mock.calls.find(([url]) => String(url).endsWith("/answers"))?.[1]).toMatchObject({ body: { expectedAnswerRevisions: { answer: { value: 1, note: 0 } } } });
+    expect(host.textContent).toContain("This answer changed in another window.");
+    await act(async () => Array.from(host.querySelectorAll<HTMLButtonElement>(".rs-banner button")).find((button) => button.textContent === "Review unsaved changes")!.click());
+    expect(host.querySelector<HTMLTextAreaElement>("#conflict-draft-copy")?.value).toContain("newer local draft");
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Another window saved a newer version of one of these answers.");
     vi.useRealTimers();
   });
 

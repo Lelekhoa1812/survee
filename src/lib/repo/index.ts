@@ -931,11 +931,17 @@ export async function loadByToken(token: string, opts: { touch?: boolean } = {})
 export interface AnswerProblem { id: string; reason: string; code: string; params?: { minimum?: number; maximum?: number } }
 
 export type SaveResult =
-  | { ok: true; revision: number; savedAt: string; status: ParticipantStatus; recordGroups?: RepeatRecordMap }
+  | { ok: true; revision: number; savedAt: string; status: ParticipantStatus; answerRevisions?: Record<string, { value: number; note: number }>; recordGroups?: RepeatRecordMap }
   | { ok: false; status: 400 | 403 | 404 | 409 | 413; error: string; code?: string; details?: AnswerProblem[]; recordErrors?: RepeatRecordIssue[] };
 
 export interface AnswerPatch {
   [questionId: string]: { value?: unknown; note?: unknown };
+}
+
+function sameAnswerValue(left: unknown, right: unknown): boolean {
+  return Array.isArray(left) && Array.isArray(right)
+    ? left.length === right.length && left.every((value, index) => value === right[index])
+    : Object.is(left, right);
 }
 
 export type RepeatRecordIssue = RepeatAnswerIssue;
@@ -969,7 +975,7 @@ async function fenceRespondentWrite(
 }
 
 /** Validate respondent operations against the manifest and apply them without replacing stale group snapshots. */
-export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch, operations: RepeatRecordOperation[] = [], expectedWriteEpoch?: number): Promise<SaveResult> {
+export async function saveAnswers(token: string, expectedVersion: number, patch: AnswerPatch, operations: RepeatRecordOperation[] = [], expectedWriteEpoch?: number, expectedAnswerRevisions?: Record<string, { value: number; note: number }>): Promise<SaveResult> {
   const ids = Object.keys(patch);
   if (ids.length === 0 && operations.length === 0) return { ok: false, status: 400, error: "Nothing to save.", code: "invalid_args" };
   if (ids.length + operations.length > 200) return { ok: false, status: 413, error: "Too many answer operations in one request.", code: "payload_too_large" };
@@ -1008,7 +1014,16 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
       if (!q) { problems.push({ id, reason: "not a question in this interview", code: "unknown_question" }); continue; }
       const entry = patch[id] ?? {};
       const cur = next[id] ?? { updatedAt: nowIso };
-      const merged = { ...cur, updatedAt: nowIso };
+      const fieldRevisions = { value: cur.fieldRevisions?.value ?? 0, note: cur.fieldRevisions?.note ?? 0 };
+      const expected = expectedAnswerRevisions?.[id];
+      const replayedValue = expected && "value" in entry && expected.value + 1 === fieldRevisions.value
+        && ((entry.value === null || entry.value === undefined) ? cur.value === undefined : sameAnswerValue(entry.value, cur.value));
+      const replayedNote = expected && "note" in entry && expected.note + 1 === fieldRevisions.note
+        && ((entry.note === null || entry.note === undefined || entry.note === "") ? cur.note === undefined : entry.note === cur.note);
+      if (expected && (("value" in entry && expected.value !== fieldRevisions.value && !replayedValue) || ("note" in entry && expected.note !== fieldRevisions.note && !replayedNote))) {
+        return { ok: false, status: 409, error: "This answer changed in another window. Your edits are still available on this page; copy them before reloading.", code: "answer_conflict", details: [{ id, reason: "the expected answer revision is stale", code: "stale_revision" }] };
+      }
+      const merged = { ...cur, fieldRevisions, updatedAt: nowIso };
       if ("value" in entry) {
         const v = validateAnswer(q, entry.value, { allowOverLimit: q.type === "multi", allowExclusiveConflict: q.type === "multi", allowUnderMinSelections: q.type === "multi" });
         if (!v.ok) { problems.push({ id, reason: v.reason, code: v.code, params: v.params }); continue; }
@@ -1023,6 +1038,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
         }
         if (v.value === null) delete merged.value;
         else merged.value = v.value;
+        merged.fieldRevisions = { ...merged.fieldRevisions, value: replayedValue ? fieldRevisions.value : fieldRevisions.value + 1 };
         if (q.randomizeOptions && v.value !== null) {
           merged.presentedOptionOrder = orderOptions({ options: q.options ?? [], randomizeOptions: true, fixedOptionValues: q.fixedOptionValues, participantId: ctx.participant.id, questionnaireVersion: String(ctx.version.version), questionId: q.id }).map((option) => option.value);
           merged.optionOrderVersion = ctx.version.version;
@@ -1036,9 +1052,11 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
         else if (typeof note !== "string") { problems.push({ id, reason: "the note must be text", code: "expected_text" }); continue; }
         else if (note.length > cfg.maxLength) { problems.push({ id, reason: `the note is ${note.length} characters, the limit is ${cfg.maxLength}`, code: "max_length", params: { maximum: cfg.maxLength } }); continue; }
         else merged.note = note;
+        merged.fieldRevisions = { ...merged.fieldRevisions, note: replayedNote ? fieldRevisions.note : fieldRevisions.note + 1 };
       }
-      if (merged.value === undefined && merged.note === undefined) delete next[id];
-      else next[id] = merged;
+      // Keep the small revision tombstone when both user-facing fields are cleared, so a
+      // stale tab cannot recreate an answer from revision zero.
+      next[id] = merged;
     }
     const groups: RepeatRecordMap = { ...(current.recordGroups ?? {}) };
     const touched = new Set<string>();
@@ -1153,7 +1171,8 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
     await insertEvent(ctx.tenantId, new ObjectId(ctx.interview.id), "save", new ObjectId(ctx.participant.id), session, { ids: ids.slice(0, 20) });
     const returnedGroups: RepeatRecordMap = {};
     for (const id of touched) returnedGroups[id] = (res.recordGroups?.[id] ?? []).filter((row) => !row.deletedAt);
-    return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status, ...(touched.size ? { recordGroups: returnedGroups } : {}) };
+    const answerRevisions = Object.fromEntries(ids.map((id) => [id, { value: next[id]?.fieldRevisions?.value ?? 0, note: next[id]?.fieldRevisions?.note ?? 0 }]));
+    return { ok: true, revision: res.revision, savedAt: nowIso, status: res.status, answerRevisions, ...(touched.size ? { recordGroups: returnedGroups } : {}) };
     })();
     if (!outcome.ok) throw new RespondentTransactionAbort(outcome);
     return outcome;

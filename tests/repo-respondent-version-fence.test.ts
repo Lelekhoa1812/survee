@@ -42,7 +42,7 @@ import { saveAnswers, submitAnswers } from "../src/lib/repo";
 import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 const token = "A".repeat(24);
-const question = { id: "q1", type: "text", label: "Answer", required: false };
+const question = { id: "q1", type: "text", label: "Answer", required: false, note: true };
 
 function fields(filter: Record<string, any>) {
   return Object.assign({}, ...(Array.isArray(filter.$and) ? filter.$and : [filter]));
@@ -151,6 +151,28 @@ describe("respondent version fence", () => {
     expect(mocks.events.slice(0, 2)).toEqual(["fence", "participant"]);
     expect(mocks.fenceUpdate).toHaveBeenCalledOnce();
     expect(mocks.participantUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("rejects stale same-answer writes while allowing an independent note edit", async () => {
+    mocks.participant.answers = { q1: { value: "saved", updatedAt: "2026-11-01T00:00:00.000Z", fieldRevisions: { value: 1, note: 0 } } };
+    const staleValue = await asAxion(() => saveAnswers(token, 4, { q1: { value: "new from tab A" } }, [], 0, { q1: { value: 1, note: 0 } }));
+    expect(staleValue).toMatchObject({ ok: true, answerRevisions: { q1: { value: 2, note: 0 } } });
+
+    const staleTab = await asAxion(() => saveAnswers(token, 4, { q1: { value: "old draft from tab B" } }, [], 0, { q1: { value: 1, note: 0 } }));
+    expect(staleTab).toMatchObject({ ok: false, status: 409, code: "answer_conflict", details: [{ id: "q1", code: "stale_revision" }] });
+
+    const separateNote = await asAxion(() => saveAnswers(token, 4, { q1: { note: "independent note" } }, [], 0, { q1: { value: 1, note: 0 } }));
+    expect(separateNote).toMatchObject({ ok: true, answerRevisions: { q1: { value: 2, note: 1 } } });
+    expect(mocks.participant.answers.q1).toMatchObject({ value: "new from tab A", note: "independent note" });
+  });
+
+  it("retains revision tombstones when the saved answer is cleared", async () => {
+    mocks.participant.answers = { q1: { value: "saved", updatedAt: "2026-11-01T00:00:00.000Z", fieldRevisions: { value: 1, note: 0 } } };
+    const cleared = await asAxion(() => saveAnswers(token, 4, { q1: { value: null } }, [], 0, { q1: { value: 1, note: 0 } }));
+    expect(cleared).toMatchObject({ ok: true, answerRevisions: { q1: { value: 2, note: 0 } } });
+    expect(mocks.participant.answers.q1).not.toHaveProperty("value");
+    const stale = await asAxion(() => saveAnswers(token, 4, { q1: { value: "stale" } }, [], 0, { q1: { value: 1, note: 0 } }));
+    expect(stale).toMatchObject({ ok: false, code: "answer_conflict" });
   });
 
   it("rejects saves from a tab opened before the response was submitted and reopened", async () => {
