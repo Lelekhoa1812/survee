@@ -8,9 +8,12 @@ export type BasicQuestion = {
   label: string;
   help: string;
   required: boolean;
+  note?: boolean;
   section?: string;
   when?: { all?: Condition[] };
   options: Array<{ value: string; label: string }>;
+  minSelections?: number;
+  maxSelections?: number;
   min?: number;
   max?: number;
   step?: number;
@@ -30,6 +33,15 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
 
+function withOptionalNote(question: BasicQuestion, markup: string): string {
+  if (!question.note) return markup;
+  const id = escapeHtml(question.id);
+  const close = Math.max(markup.lastIndexOf("</fieldset>"), markup.lastIndexOf("</section>"));
+  if (close < 0) return markup;
+  const field = `<div class="note-control"><label for="note-${id}">Additional comment <span>(optional)</span></label><textarea id="note-${id}" data-kqa-note="${id}" rows="3" maxlength="${LIMITS.noteMax}"></textarea></div>`;
+  return `${markup.slice(0, close)}${field}${markup.slice(close)}`;
+}
+
 function control(question: BasicQuestion, index: number): string {
   const id = escapeHtml(question.id);
   const label = escapeHtml(question.label);
@@ -42,21 +54,21 @@ function control(question: BasicQuestion, index: number): string {
   if (question.type === "single" || question.type === "multi") {
     const type = question.type === "single" ? "radio" : "checkbox";
     const rows = options.map((option) => `<label class="choice" for="${option.inputId}"><input id="${option.inputId}" type="${type}"${question.type === "single" ? ` name="${id}"` : ""} data-kqa="${id}" value="${option.value}"${describedBy}><span>${option.label}</span></label>`).join("\n");
-    return `<fieldset class="question" data-kqa-question-id="${id}" aria-describedby="heading-${id}${question.help ? ` help-${id}` : ""}"><legend class="sr-only">${label}</legend>${header}<div class="choices">${rows}</div></fieldset>`;
+    return withOptionalNote(question, `<fieldset class="question" data-kqa-question-id="${id}" aria-describedby="heading-${id}${question.help ? ` help-${id}` : ""}"><legend class="sr-only">${label}</legend>${header}<div class="choices">${rows}</div></fieldset>`);
   }
   if (question.type === "select") {
     const rows = options.map((option) => `<option value="${option.value}">${option.label}</option>`).join("\n");
-    return `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><label for="field-${id}">${label}</label>${required}</div>${help}<select id="field-${id}" data-kqa="${id}"${describedBy}><option value="">Choose one…</option>${rows}</select></section>`;
+    return withOptionalNote(question, `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><label for="field-${id}">${label}</label>${required}</div>${help}<select id="field-${id}" data-kqa="${id}"${describedBy}><option value="">Choose one…</option>${rows}</select></section>`);
   }
   if (question.type === "rank") {
     const rows = options.map((option) => `<li data-value="${option.value}">${option.label}</li>`).join("\n");
-    return `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><h2 id="heading-${id}">${label}</h2>${required}</div>${help}<p class="rank-hint">Place every option in the order that best answers the question. You can confirm the starting order.</p><ol class="rank" data-kqa="${id}" aria-labelledby="heading-${id}"${question.help ? ` aria-describedby="help-${id}"` : ""}>${rows}</ol></section>`;
+    return withOptionalNote(question, `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><h2 id="heading-${id}">${label}</h2>${required}</div>${help}<p class="rank-hint">Place every option in the order that best answers the question. You can confirm the starting order.</p><ol class="rank" data-kqa="${id}" aria-labelledby="heading-${id}"${question.help ? ` aria-describedby="help-${id}"` : ""}>${rows}</ol></section>`);
   }
   if (question.type === "scale") {
     const min = question.min ?? 1;
     const max = question.max ?? 5;
     const rows = Array.from({ length: max - min + 1 }, (_, n) => min + n).map((value) => `<label class="scale-choice" for="${id}-${value}"><input id="${id}-${value}" type="radio" name="${id}" data-kqa="${id}" value="${value}"${describedBy}><span>${value}</span></label>`).join("\n");
-    return `<fieldset class="question" data-kqa-question-id="${id}" aria-describedby="heading-${id}${question.help ? ` help-${id}` : ""}"><legend class="sr-only">${label}</legend>${header}<div class="scale" style="--scale-count:${max - min + 1}">${rows}</div></fieldset>`;
+    return withOptionalNote(question, `<fieldset class="question" data-kqa-question-id="${id}" aria-describedby="heading-${id}${question.help ? ` help-${id}` : ""}"><legend class="sr-only">${label}</legend>${header}<div class="scale" style="--scale-count:${max - min + 1}">${rows}</div></fieldset>`);
   }
   const type = question.type === "longtext" ? "textarea" : "input";
   const inputType = question.type === "longtext" ? "" : ` type="${question.type === "text" ? "text" : question.type}"`;
@@ -64,7 +76,7 @@ function control(question: BasicQuestion, index: number): string {
   const field = question.type === "longtext"
     ? `<textarea id="field-${id}" data-kqa="${id}" rows="5"${bounds}${describedBy}></textarea>`
     : `<input id="field-${id}"${inputType} data-kqa="${id}"${bounds}${describedBy}>`;
-  return `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><label for="field-${id}">${label}</label>${required}</div>${help}${field}</section>`;
+  return withOptionalNote(question, `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><label for="field-${id}">${label}</label>${required}</div>${help}${field}</section>`);
 }
 
 /** Generate bounded, portable, script-free HTML for the native question types supported by the composer. */
@@ -82,7 +94,10 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
       ...(question.when ? { when: question.when } : {}),
       ...(question.help ? { help: question.help } : {}),
       ...(question.required ? { required: true } : {}),
+      ...(question.note ? { note: true } : {}),
       ...(["single", "multi", "select", "rank"].includes(question.type) ? { options: question.options } : {}),
+      ...(question.minSelections !== undefined ? { minSelections: question.minSelections } : {}),
+      ...(question.maxSelections !== undefined ? { maxSelections: question.maxSelections } : {}),
       ...(question.min !== undefined ? { min: question.min } : {}),
       ...(question.max !== undefined ? { max: question.max } : {}),
       ...(question.step !== undefined ? { step: question.step } : {}),
@@ -118,7 +133,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
     fieldset.question { border:1px solid var(--line); } .question-head { display:flex; align-items:flex-start; gap:10px; margin:0 0 8px; font-weight:650; font-size:1.08rem; }
     .question-head h2,.question-head label { font:inherit; margin:0; } .number { color:var(--accent); font-variant-numeric:tabular-nums; }
     .required { margin-left:auto; color:var(--muted); font-size:.8rem; font-weight:500; white-space:nowrap; }
-    .help { margin:4px 0 12px 25px; color:var(--muted); } .choices { display:grid; gap:8px; margin-top:12px; }
+    .help { margin:4px 0 12px 25px; color:var(--muted); } .choices { display:grid; gap:8px; margin-top:12px; } .note-control { display:grid; gap:5px; margin-top:12px; } .note-control label { font-size:.9rem; font-weight:600; } .note-control label span { color:var(--muted); font-weight:400; }
     .choice { display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border:1px solid var(--line); border-radius:10px; cursor:pointer; }
     input,select,textarea { accent-color:var(--accent); font:inherit; } .choice input,.scale-choice input { margin-top:5px; }
     select,input[type=text],input[type=number],input[type=date],textarea { width:100%; max-width:100%; padding:10px 12px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:9px; }

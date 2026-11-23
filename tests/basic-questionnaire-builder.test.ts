@@ -9,7 +9,7 @@ describe("basic questionnaire HTML generator", () => {
       description: "Short description",
       questions: [
         { id: "single-choice", type: "single", label: "Pick one", help: "One answer", required: true, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
-        { id: "multi-choice", type: "multi", label: "Pick any", help: "Several answers", required: false, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
+        { id: "multi-choice", type: "multi", label: "Pick any", help: "Several answers", required: false, note: true, minSelections: 1, maxSelections: 2, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
         { id: "dropdown", type: "select", label: "Choose a value", help: "", required: false, options: [{ value: "one", label: "One" }, { value: "two", label: "Two" }] },
         { id: "priority-order", type: "rank", label: "Order your priorities", help: "", required: false, options: [{ value: "cost", label: "Cost" }, { value: "speed", label: "Speed" }, { value: "quality", label: "Quality" }] },
         { id: "short-answer", type: "text", label: "Short answer", help: "", required: false, options: [] },
@@ -23,6 +23,9 @@ describe("basic questionnaire HTML generator", () => {
     const report = checkHtml(html, { fileName: "generated.html" });
     expect(report.ok).toBe(true);
     expect(report.diagnostics).toEqual([]);
+    expect(html).toContain('data-kqa-note="multi-choice"');
+    expect(html).toContain('"minSelections": 1');
+    expect(html).toContain('"maxSelections": 2');
     expect((html.match(/data-kqa-question-id=/g) ?? [])).toHaveLength(input.questions.length);
     expect((html.match(/data-kqa="/g) ?? [])).toHaveLength(2 + 2 + 1 + 1 + 1 + 1 + 1 + 5 + 1);
     expect(html).not.toMatch(/<(?:input|option)[^>]*\s(?:checked|selected|required|disabled)(?:\s|=|>)/i);

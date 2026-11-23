@@ -113,4 +113,25 @@ describe("basic questionnaire builder UI", () => {
     expect(html).toContain('"operator": "equals"');
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
+
+  it("generates optional comment fields and bounded checkbox selections", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "multi");
+    const noteToggle = host.querySelector<HTMLInputElement>("#builder-note-0");
+    expect(noteToggle).not.toBeNull();
+    await act(async () => noteToggle!.click());
+    await change("#builder-min-selections-0", "1");
+    await change("#builder-max-selections-0", "2");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"note": true');
+    expect(html).toContain('"minSelections": 1');
+    expect(html).toContain('"maxSelections": 2');
+    expect(html).toContain('data-kqa-note="question-1"');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
 });
