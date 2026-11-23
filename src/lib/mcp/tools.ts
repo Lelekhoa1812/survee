@@ -49,6 +49,8 @@ import {
   regenerateTokenWithOperation,
   getRegenerateLinkOperation,
   reopenParticipant,
+  getReopenPersonOperation,
+  reopenParticipantWithOperation,
   saveQuestionnaireReviewDraft,
   updateInterview,
   updateInterviewWithOperation,
@@ -1984,11 +1986,27 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "reopen_person",
-    description: "Unlock a submitted person so they can edit again.",
-    inputSchema: obj({ personId: str }, ["personId"]),
+    description: "Unlock a submitted person so they can edit again. Optional operationId makes uncertain retries return the original result for seven days.",
+    inputSchema: obj({ personId: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId"]),
     async run(args) {
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ personId: id })).digest("hex") };
+        const existing = await getReopenPersonOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId to reopen another person.", "operation_result_unavailable");
+        if (existing?.kind === "conflict") return err("operationId was already used with different reopen_person arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ person: existing.person });
+        const result = await reopenParticipantWithOperation(id, operation);
+        if (result.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId to reopen another person.", "operation_result_unavailable");
+        if (result.kind === "conflict") return err("operationId was already used with different reopen_person arguments.", "operation_id_conflict");
+        if (result.kind === "not_found") return err("Person not found.", "not_found");
+        if (result.kind === "not_submitted") return err("That person has not submitted, so there is nothing to reopen.", "not_submitted");
+        return ok({ person: result.person });
+      }
       const person = await reopenParticipant(id);
       if (!person) {
         if (!(await onePerson(id))) return err("Person not found.", "not_found");

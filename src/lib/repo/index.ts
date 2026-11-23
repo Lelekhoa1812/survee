@@ -1374,6 +1374,82 @@ export async function reopenParticipant(id: string): Promise<ParticipantView | n
   return reopened ? participantView(reopened) : null;
 }
 
+export type ReopenPersonOperationResult =
+  | { kind: "reopened" | "replayed"; person: ParticipantView }
+  | { kind: "conflict" }
+  | { kind: "deleted" }
+  | { kind: "not_found" }
+  | { kind: "not_submitted" };
+
+export async function getReopenPersonOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<ReopenPersonOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "reopen_person", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", person: existing.result.person as ParticipantView }
+    : { kind: "conflict" };
+}
+
+/** Reopen a submitted respondent and retain the exact result atomically for uncertain MCP retries. */
+export async function reopenParticipantWithOperation(
+  id: string,
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<ReopenPersonOperationResult> {
+  const oid = toOid(id);
+  const tenantId = await currentTenantId();
+  if (!oid || !tenantId) return { kind: "not_found" };
+  const scope = mcpOperationScope(tenantId, "reopen_person", operation);
+  const operations = await col.mcpOperations();
+  const run = async () => withMongoTransaction(async (session) => {
+    const existing = await operations.findOne(scope, { session });
+    if (existing && existing.expiresAt > new Date()) {
+      if (existing.deletedAt) return { kind: "deleted" as const };
+      return existing.argumentDigest === operation.argumentDigest
+        ? { kind: "replayed" as const, person: existing.result.person as ParticipantView }
+        : { kind: "conflict" as const };
+    }
+    if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    const participants = await col.participants();
+    const reopened = await participants.findOneAndUpdate(
+      tenantFilter(tenantId, { _id: oid, status: "submitted" }),
+      { $set: { status: "in_progress", updatedAt: new Date() }, $unset: { submittedAt: "" }, $inc: { writeEpoch: 1 } },
+      { returnDocument: "after", session },
+    );
+    if (!reopened) {
+      const person = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
+      return person ? { kind: "not_submitted" as const } : { kind: "not_found" as const };
+    }
+    const touched = await (await col.interviews()).updateOne(
+      tenantFilter(tenantId, { _id: reopened.interviewId }),
+      { $inc: { respondentWriteRevision: 1 } },
+      { session },
+    );
+    if (!touched.matchedCount) throw new Error("Could not update respondent revision for interview.");
+    reopened.writeEpoch ??= 1;
+    await insertEvent(tenantId, reopened.interviewId, "reopen", reopened._id, session);
+    const person = participantView(reopened);
+    const createdAt = new Date();
+    await operations.insertOne({
+      _id: new ObjectId(), ...scope, interviewId: reopened.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest,
+      result: { person }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+    }, { session });
+    return { kind: "reopened" as const, person };
+  });
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await operations.findOne(scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
+    return committed.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", person: committed.result.person as ParticipantView }
+      : { kind: "conflict" };
+  }
+}
+
 // ------------------------------------------------------------------------------------------ respondent side
 export interface RespondentContext {
   tenantId: string;
