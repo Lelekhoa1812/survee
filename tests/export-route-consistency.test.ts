@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   interviewReads: 0,
   mutateOnInterviewRead: 0,
   pageReads: 0,
+  singlePage: false,
   denied: null as Response | null,
   participant: {
     id: "participant-1", name: "Alex", status: "invited", createdAt: "2026-01-01T00:00:00.000Z",
@@ -31,7 +32,7 @@ vi.mock("@/lib/repo", () => ({
   listParticipants: async () => [state.participant],
   listParticipantPage: async () => {
     state.pageReads += 1;
-    return { people: [state.participant], nextCursor: state.pageReads === 1 ? "next" : null };
+    return { people: [state.participant], nextCursor: !state.singlePage && state.pageReads === 1 ? "next" : null };
   },
   ParticipantExportSizeLimitError: class ParticipantExportSizeLimitError extends Error {},
   ParticipantReadLimitError: class ParticipantReadLimitError extends Error {},
@@ -50,6 +51,7 @@ beforeEach(() => {
   state.interviewReads = 0;
   state.mutateOnInterviewRead = 0;
   state.pageReads = 0;
+  state.singlePage = false;
   state.denied = null;
 });
 
@@ -73,8 +75,28 @@ describe("export revision checks", () => {
     expect(state.pageReads).toBe(1);
   });
 
+  it("checks the revision immediately before closing a single-page CSV stream", async () => {
+    state.singlePage = true;
+    state.mutateOnInterviewRead = 5; // Final check before controller.close().
+
+    const response = await GET(request(), params);
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).rejects.toThrow("Interview data changed while the export was being created");
+    expect(state.pageReads).toBe(1);
+  });
+
   it("returns a stale conflict when respondent data changes during a buffered read", async () => {
     state.mutateOnInterviewRead = 4; // The post-read check around listParticipants.
+
+    const response = await GET(request("json"), params);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, code: "export_stale" });
+  });
+
+  it("returns a stale conflict when respondent data changes during buffered serialization", async () => {
+    state.mutateOnInterviewRead = 5; // Final check after exportInterview returns.
 
     const response = await GET(request("json"), params);
 

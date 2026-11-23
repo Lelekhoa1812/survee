@@ -29,6 +29,7 @@ class StaleExportError extends Error {
 }
 
 async function assertExportSnapshot(id: string, version: number, revision: number): Promise<void> {
+  // This brackets bounded reads; it detects concurrent writes without promising MVCC snapshot isolation.
   const current = await getInterview(id);
   if (!current || current.currentVersion !== version || (current.respondentWriteRevision ?? 0) !== revision) {
     throw new StaleExportError();
@@ -115,6 +116,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
                 continue;
               }
               if (!page.nextCursor) {
+                await assertExportSnapshot(id, snapshot.version, snapshot.revision);
                 controller.close();
                 return;
               }
@@ -154,7 +156,9 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     },
       format,
     );
+    await assertExportSnapshot(id, snapshot.version, snapshot.revision);
   } catch (error) {
+    if (error instanceof StaleExportError) return fail(409, error.message, { code: "export_stale" });
     if (error instanceof ExportOutputSizeLimitError) return fail(413, error.message, { code: "export_output_limit", limitBytes: error.limitBytes });
     throw error;
   }
