@@ -73,6 +73,17 @@ vi.mock("../src/lib/db", () => ({
     mcpOperations: async () => ({
       findOne: async (filter: any) => store.operations.find((doc) => Object.entries(filter).every(([key, value]) => doc[key] === value)) ?? null,
       deleteOne: async ({ _id }: any) => { const index = store.operations.findIndex((doc) => doc._id === _id); if (index >= 0) store.operations.splice(index, 1); return { deletedCount: index >= 0 ? 1 : 0 }; },
+      deleteMany: async (filter: any) => {
+        const before = store.operations.length;
+        for (let index = store.operations.length - 1; index >= 0; index -= 1) {
+          const doc = store.operations[index];
+          if (Object.entries(filter).every(([key, value]) => {
+            if (key === "result.asset.id") return doc.result?.asset?.id === value;
+            return doc[key] === value;
+          })) store.operations.splice(index, 1);
+        }
+        return { deletedCount: before - store.operations.length };
+      },
       insertOne: async (doc: any) => { store.operations.push(doc); return { insertedId: doc._id }; },
     }),
   },
@@ -122,6 +133,43 @@ describe("workspace image assets", () => {
     expect(mismatch).toEqual({ kind: "conflict" });
     const lookedUp = await getImageUploadOperation(operation);
     expect(lookedUp).toEqual({ kind: "replayed", asset: first.kind === "conflict" ? undefined : first.asset });
+  });
+
+  it("clears an upload replay result atomically when its image asset is deleted", async () => {
+    const operation = { operationId: "image-delete-1", credentialId: "api_key:key-a", argumentDigest: "digest-a" };
+    const input = { name: "Disposable logo", fileName: "logo.png", data: png };
+    const uploaded = await addImageAssetWithOperation(input, operation);
+    expect(uploaded.kind).toBe("created");
+    if (uploaded.kind === "conflict") throw new Error("Unexpected upload operation conflict.");
+
+    expect(await deleteImageAsset(uploaded.asset.id, uploaded.asset.name)).toEqual({ ok: true });
+    expect(store.operations).toHaveLength(0);
+    await expect(getImageUploadOperation(operation)).resolves.toBeNull();
+
+    const retried = await addImageAssetWithOperation(input, operation);
+    expect(retried.kind).toBe("created");
+    if (retried.kind === "conflict") throw new Error("Unexpected upload operation conflict.");
+    expect(retried.asset.id).not.toBe(uploaded.asset.id);
+    await expect(getPublicImageAsset(retried.asset.url.split("/").pop()!)).resolves.toMatchObject({ data: png });
+  });
+
+  it("cleans up a legacy upload replay row when its asset is already missing", async () => {
+    const operation = { operationId: "image-legacy-delete-1", credentialId: "api_key:key-a", argumentDigest: "digest-a" };
+    const input = { name: "Legacy logo", fileName: "logo.png", data: png };
+    const uploaded = await addImageAssetWithOperation(input, operation);
+    expect(uploaded.kind).toBe("created");
+    if (uploaded.kind === "conflict") throw new Error("Unexpected upload operation conflict.");
+
+    // Simulate an old deletion that removed the asset but left its TTL row.
+    store.assets.splice(store.assets.findIndex((asset) => asset._id.toHexString() === uploaded.asset.id), 1);
+    await expect(getImageUploadOperation(operation)).resolves.toBeNull();
+    expect(store.operations).toHaveLength(0);
+
+    const retried = await addImageAssetWithOperation(input, operation);
+    expect(retried.kind).toBe("created");
+    if (retried.kind === "conflict") throw new Error("Unexpected upload operation conflict.");
+    expect(retried.asset.id).not.toBe(uploaded.asset.id);
+    await expect(getPublicImageAsset(retried.asset.url.split("/").pop()!)).resolves.toMatchObject({ data: png });
   });
 
   it("detects browser image formats from bytes and rejects spoofed or oversized files", () => {

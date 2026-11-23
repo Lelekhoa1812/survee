@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Binary, ObjectId } from "mongodb";
+import { Binary, ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { MAX_IMAGE_BYTES, WORKSPACE_IMAGE_QUOTA_BYTES, type ImageAssetSummary } from "../image-assets";
@@ -29,14 +29,40 @@ function imageUploadOperationScope(tenantId: string, operation: { operationId: s
 export type ImageUploadOperation = { operationId: string; credentialId: string; argumentDigest: string };
 export type ImageUploadOperationResult = { kind: "created" | "replayed"; asset: ImageAssetSummary } | { kind: "conflict" };
 
+async function findLiveImageUploadOperation(
+  tenantId: string,
+  scope: ReturnType<typeof imageUploadOperationScope>,
+  session: ClientSession,
+) {
+  const operations = await col.mcpOperations();
+  const existing = await operations.findOne(scope, { session });
+  if (!existing) return null;
+
+  const storedAssetId = (existing.result as { asset?: { id?: string } } | undefined)?.asset?.id ?? "";
+  const assetId = toOid(storedAssetId);
+  const asset = assetId
+    ? await (await col.imageAssets()).findOne(tenantFilter(tenantId, { _id: assetId }), { session, projection: { _id: 1 } })
+    : null;
+  if (existing.expiresAt <= new Date() || !asset) {
+    // Remove expired rows and legacy rows whose asset was deleted before
+    // deletion began clearing its upload replay record.
+    await operations.deleteOne({ _id: existing._id, ...scope }, { session });
+    return null;
+  }
+  return existing;
+}
+
 export async function getImageUploadOperation(operation: ImageUploadOperation): Promise<ImageUploadOperationResult | null> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
-  const existing = await (await col.mcpOperations()).findOne(imageUploadOperationScope(tenantId, operation));
-  if (!existing || existing.expiresAt <= new Date()) return null;
-  return existing.argumentDigest === operation.argumentDigest
-    ? { kind: "replayed", asset: existing.result.asset as ImageAssetSummary }
-    : { kind: "conflict" };
+  const scope = imageUploadOperationScope(tenantId, operation);
+  return withMongoTransaction(async (session) => {
+    const existing = await findLiveImageUploadOperation(tenantId, scope, session);
+    if (!existing) return null;
+    return existing.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed" as const, asset: existing.result.asset as ImageAssetSummary }
+      : { kind: "conflict" as const };
+  });
 }
 
 function normalizedFileName(value: string): string {
@@ -87,12 +113,6 @@ export async function addImageAssetWithOperation(input: { name?: string; fileNam
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const scope = imageUploadOperationScope(tenantId, operation);
-  const existing = await (await col.mcpOperations()).findOne(scope);
-  if (existing && existing.expiresAt > new Date()) {
-    return existing.argumentDigest === operation.argumentDigest
-      ? { kind: "replayed", asset: existing.result.asset as ImageAssetSummary }
-      : { kind: "conflict" };
-  }
   return addImageAssetCore(input, { scope, argumentDigest: operation.argumentDigest });
 }
 
@@ -115,14 +135,12 @@ async function addImageAssetCore(
   };
   const run = async () => withMongoTransaction(async (session) => {
     if (operation) {
-      const operations = await col.mcpOperations();
-      const existing = await operations.findOne(operation.scope, { session });
-      if (existing && existing.expiresAt > new Date()) {
+      const existing = await findLiveImageUploadOperation(tenantId, operation.scope, session);
+      if (existing) {
         return existing.argumentDigest === operation.argumentDigest
           ? { kind: "replayed" as const, asset: existing.result.asset as ImageAssetSummary }
           : { kind: "conflict" as const };
       }
-      if (existing) await operations.deleteOne({ _id: existing._id }, { session });
     }
     const guard = await (await col.tenants()).updateOne(
       { _id: tenantId, status: "active" },
@@ -151,8 +169,8 @@ async function addImageAssetCore(
     return await run();
   } catch (error) {
     if (!operation || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
-    const committed = await (await col.mcpOperations()).findOne(operation.scope);
-    if (!committed || committed.expiresAt <= new Date()) throw error;
+    const committed = await withMongoTransaction((session) => findLiveImageUploadOperation(tenantId, operation.scope, session));
+    if (!committed) throw error;
     return committed.argumentDigest === operation.argumentDigest
       ? { kind: "replayed", asset: committed.result.asset as ImageAssetSummary }
       : { kind: "conflict" };
@@ -247,6 +265,13 @@ export async function deleteImageAsset(id: string, expectedName: string): Promis
     // Keep the exact confirmation and public ID in the conditional delete.
     const deleted = await assets.deleteOne(tenantFilter(tenantId, { _id: oid, name: expectedName, publicId: asset.publicId }), { session });
     if (!deleted.deletedCount) throw new ImageAssetDeleteAbort("changed");
+    // An upload operation stores the original asset summary for safe retries.
+    // Remove that replay record in the same transaction so a later retry
+    // cannot return a URL for an asset that no longer exists.
+    await (await col.mcpOperations()).deleteMany(tenantFilter(tenantId, {
+      tool: "upload_image_asset",
+      "result.asset.id": oid.toHexString(),
+    }), { session });
     return "deleted" as const;
     });
   } catch (error) {
