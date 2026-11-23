@@ -126,6 +126,8 @@ describe("delivery classification", () => {
   it("reads a bounce, a delivery, and ignores the message we sent", () => {
     expect(classifyDeliverySource("Message-ID: <bounce@x>\r\nAction: failed\r\n", id)).toBe("bounced");
     expect(classifyDeliverySource("Message-ID: <ok@x>\r\nAction: delivered\r\n", id)).toBe("delivered");
+    expect(classifyDeliverySource("Message-ID: <relay@x>\r\nAction: relayed\r\n", id)).toBe("unknown");
+    expect(classifyDeliverySource("Message-ID: <expanded@x>\r\nAction: expanded\r\n", id)).toBe("unknown");
     expect(classifyDeliverySource(`Message-ID: ${id}\r\nSubject: hello\r\n`, id)).toBe("ignore");
     expect(classifyDeliverySource("Message-ID: <other@x>\r\nSubject: newsletter\r\n", id)).toBe("unknown");
   });

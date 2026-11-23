@@ -17,7 +17,9 @@ export function classifyDeliverySource(source: string, trackedId: string): Deliv
   if (action) {
     const value = action[1].toLowerCase();
     if (value === "failed") return "bounced";
-    if (value === "delayed") return "unknown";
+    // RFC 3464 distinguishes final delivery from relaying/expansion. Those
+    // actions only confirm onward handling, not arrival at the recipient.
+    if (value !== "delivered") return "unknown";
     return "delivered";
   }
   if (/delivery status notification \(failure\)|undelivered mail|mail delivery failed|delivery incomplete|address not found|user unknown/i.test(source)) return "bounced";
