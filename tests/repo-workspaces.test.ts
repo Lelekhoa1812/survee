@@ -124,6 +124,7 @@ function cursor(rows: any[]) {
 
 import {
   acceptWorkspaceInvitation,
+  changeWorkspaceMemberRole,
   createInvitedAccount,
   createWorkspaceInvitation,
   getWorkspaceInvitation,
@@ -283,6 +284,29 @@ describe("workspace membership and invitations", () => {
     await expect(transferWorkspaceOwnership({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: new ObjectId("000000000000000000000003").toHexString() }))
       .resolves.toEqual({ ok: false, reason: "not_found" });
     await expect(transferWorkspaceOwnership({ tenantId: "workspace-suspended", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "forbidden" });
+    expect(store.events).toHaveLength(0);
+  });
+
+  it("lets an owner promote or demote a non-owner and audits each real change", async () => {
+    addMembership("axion", inviteeId, "member");
+    await expect(changeWorkspaceMemberRole({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), role: "admin" }))
+      .resolves.toEqual({ ok: true, previousRole: "member", role: "admin" });
+    await expect(changeWorkspaceMemberRole({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), role: "member" }))
+      .resolves.toEqual({ ok: true, previousRole: "admin", role: "member" });
+    expect(store.memberships.find((item) => item.tenantId === "axion" && item.userId.equals(inviteeId))?.role).toBe("member");
+    expect(store.tenants[0].membershipEpoch).toBe(2);
+    expect(store.events.map((event) => event.type)).toEqual(["workspace_member_role_changed", "workspace_member_role_changed"]);
+    expect(store.events[0].meta).toMatchObject({ actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), previousRole: "member", role: "admin" });
+  });
+
+  it("keeps owner transfer separate from ordinary role changes", async () => {
+    addMembership("axion", inviteeId, "owner");
+    const adminId = new ObjectId("000000000000000000000003");
+    addMembership("axion", adminId, "member");
+    await expect(changeWorkspaceMemberRole({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString(), role: "member" }))
+      .resolves.toEqual({ ok: false, reason: "owner_transfer_required" });
+    await expect(changeWorkspaceMemberRole({ tenantId: "axion", actorUserId: adminId.toHexString(), targetUserId: ownerId.toHexString(), role: "member" }))
       .resolves.toEqual({ ok: false, reason: "forbidden" });
     expect(store.events).toHaveLength(0);
   });

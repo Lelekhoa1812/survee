@@ -179,6 +179,56 @@ export type TransferWorkspaceOwnershipResult =
   | { ok: true; previousOwnerUserId: string; newOwnerUserId: string }
   | { ok: false; reason: "invalid" | "forbidden" | "not_found" };
 
+export type ChangeWorkspaceMemberRoleResult =
+  | { ok: true; previousRole: "admin" | "member"; role: "admin" | "member" }
+  | { ok: false; reason: "invalid" | "forbidden" | "not_found" | "owner_transfer_required" };
+
+/** Change an existing non-owner's workspace role without revoking their membership. */
+export async function changeWorkspaceMemberRole(input: {
+  tenantId: string;
+  actorUserId: string;
+  targetUserId: string;
+  role: "admin" | "member";
+}): Promise<ChangeWorkspaceMemberRoleResult> {
+  const actorId = objectId(input.actorUserId);
+  const targetId = objectId(input.targetUserId);
+  if (!input.tenantId || input.tenantId.length > 80 || !actorId || !targetId || (input.role !== "admin" && input.role !== "member")) return { ok: false, reason: "invalid" };
+
+  return withMongoTransaction(async (session) => {
+    const tenants = await col.tenants();
+    const tenant = await tenants.findOne({ _id: input.tenantId, status: "active" }, { session, projection: { _id: 1 } });
+    if (!tenant) return { ok: false, reason: "forbidden" };
+    const memberships = await col.memberships();
+    const actor = await memberships.findOne({ tenantId: input.tenantId, userId: actorId, role: "owner" }, { session });
+    if (!actor) return { ok: false, reason: "forbidden" };
+    const target = await memberships.findOne({ tenantId: input.tenantId, userId: targetId }, { session });
+    if (!target) return { ok: false, reason: "not_found" };
+    if (target.role === "owner") return { ok: false, reason: "owner_transfer_required" };
+    if (target.role !== "admin" && target.role !== "member") return { ok: false, reason: "not_found" };
+    if (target.role === input.role) return { ok: true, previousRole: target.role, role: input.role };
+    const previousRole = target.role;
+
+    // Serialize role edits with transfers/removals and their auth-state changes.
+    const fenced = await tenants.updateOne(
+      { _id: input.tenantId, status: "active" },
+      { $inc: { membershipEpoch: 1 }, $set: { updatedAt: new Date() } },
+      { session },
+    );
+    if (fenced.matchedCount !== 1) return { ok: false, reason: "forbidden" };
+    const changed = await memberships.updateOne(
+      { _id: target._id, tenantId: input.tenantId, userId: targetId, role: previousRole },
+      { $set: { role: input.role } },
+      { session },
+    );
+    if (changed.matchedCount !== 1) return { ok: false, reason: "not_found" };
+    await (await col.events()).insertOne({
+      _id: new ObjectId(), tenantId: input.tenantId, type: "workspace_member_role_changed", at: new Date(),
+      meta: { actorUserId: actorId.toHexString(), targetUserId: targetId.toHexString(), previousRole, role: input.role },
+    }, { session });
+    return { ok: true, previousRole, role: input.role };
+  });
+}
+
 /** Promote an existing member and leave the transferring owner as an admin. */
 export async function transferWorkspaceOwnership(input: {
   tenantId: string;

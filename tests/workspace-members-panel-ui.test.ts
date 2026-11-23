@@ -54,4 +54,18 @@ describe("workspace owner transfer UI", () => {
     });
     expect(state.refresh).toHaveBeenCalledOnce();
   });
+
+  it("confirms and saves a non-owner role change", async () => {
+    await click("Change role");
+    expect(host.textContent).toContain("Change member@example.test's workspace role?");
+    const select = host.querySelector('[role="dialog"] select') as HTMLSelectElement;
+    await act(async () => {
+      select.value = "admin";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click("Save role");
+    expect(state.api).toHaveBeenCalledWith("/api/admin/workspace-members/000000000000000000000002", {
+      method: "PATCH", body: { role: "admin" },
+    });
+  });
 });

@@ -16,6 +16,8 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
   const [ownerCount, setOwnerCount] = useState(0);
   const [removing, setRemoving] = useState<WorkspaceMember | null>(null);
   const [transferring, setTransferring] = useState<WorkspaceMember | null>(null);
+  const [roleEditing, setRoleEditing] = useState<WorkspaceMember | null>(null);
+  const [nextRole, setNextRole] = useState<"admin" | "member">("member");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member">("member");
   const [loading, setLoading] = useState(true);
@@ -116,6 +118,22 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
     router.refresh();
   }
 
+  async function changeRole(member: WorkspaceMember) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const result = await api(`/api/admin/workspace-members/${encodeURIComponent(member.userId)}`, { method: "PATCH", body: { role: nextRole } });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.data.error ?? "Workspace access could not be changed.");
+      setRoleEditing(null);
+      return;
+    }
+    setRoleEditing(null);
+    toast(`${member.email} is now a workspace ${nextRole}.`);
+    await load();
+  }
+
   const canManageOwners = workspaceRole === "owner";
 
   return (
@@ -136,7 +154,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
                 const canRemove = member.userId !== userId && (member.role !== "owner" || (canManageOwners && ownerCount > 1));
                 return <li key={member.userId} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}>
                   <span>{member.email}{member.userId === userId && <small className="muted"> · You</small>}</span>
-                  <span className="row wrap" style={{ justifyContent: "flex-end" }}><span className="muted">{member.role}</span>{canManageOwners && member.userId !== userId && <button className="btn sm" type="button" disabled={busy} onClick={() => setTransferring(member)}>Make owner</button>}{canRemove
+                  <span className="row wrap" style={{ justifyContent: "flex-end" }}><span className="muted">{member.role}</span>{canManageOwners && member.userId !== userId && member.role !== "owner" && <button className="btn sm" type="button" disabled={busy} onClick={() => { setRoleEditing(member); setNextRole(member.role === "admin" ? "admin" : "member"); }}>Change role</button>}{canManageOwners && member.userId !== userId && <button className="btn sm" type="button" disabled={busy} onClick={() => setTransferring(member)}>Make owner</button>}{canRemove
                     ? <button className="btn sm danger" type="button" disabled={busy} onClick={() => setRemoving(member)}>Remove access</button>
                     : member.role === "owner" && ownerCount <= 1
                       ? <small className="muted">Last owner</small>
@@ -174,6 +192,17 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
         </>}
       >
         <p>{transferring.email} will become an owner of this workspace. Your role will change to admin, so you will keep access but no longer manage ownership.</p>
+      </Modal>}
+      {roleEditing && <Modal
+        title={`Change ${roleEditing.email}'s workspace role?`}
+        onClose={() => { if (!busy) setRoleEditing(null); }}
+        actions={<>
+          <button className="btn ghost" type="button" disabled={busy} onClick={() => setRoleEditing(null)}>Cancel</button>
+          <button className="btn primary" type="button" disabled={busy || nextRole === roleEditing.role} onClick={() => void changeRole(roleEditing)}>{busy ? <Spinner /> : null} Save role</button>
+        </>}
+      >
+        <label className="field"><span>Workspace role</span><select className="select" value={nextRole} onChange={(event) => setNextRole(event.target.value === "admin" ? "admin" : "member")}><option value="member">Member</option><option value="admin">Admin</option></select></label>
+        <p>Only workspace owners can change roles. Ownership uses the separate handoff action.</p>
       </Modal>}
     </section>
   );

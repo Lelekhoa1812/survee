@@ -226,7 +226,7 @@ export interface EventDoc {
   /** Absent only for an agent call that is not about one interview. */
   interviewId?: ObjectId;
   participantId?: ObjectId;
-  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed" | "workspace_owner_transferred";
+  type: "open" | "save" | "submit" | "reopen" | "created" | "version" | "status" | "export" | "invite" | "mcp" | "update" | "workspace_member_removed" | "workspace_owner_transferred" | "workspace_member_role_changed";
   at: Date;
   meta?: Record<string, unknown>;
 }
