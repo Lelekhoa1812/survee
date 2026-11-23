@@ -100,6 +100,23 @@ afterEach(() => {
 });
 
 describe("host questionnaire version preview", () => {
+  it("downloads the currently published source file without changing the live version", async () => {
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:questionnaire-source");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    let downloadedFile = "";
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloadedFile = this.download; });
+    state.api.mockResolvedValue({ ok: true, data: { html: "<html>live</html>", fileName: "live.html" } });
+    await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {} })));
+
+    await click("Download source file");
+
+    expect(state.api).toHaveBeenCalledWith("/api/admin/interviews/interview-1/versions?action=restore&restoreVersion=2");
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(anchorClick).toHaveBeenCalledOnce();
+    expect(downloadedFile).toBe("live.html");
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+  });
+
   it("restores a stored version into the candidate preview flow", async () => {
     state.api.mockImplementation(async (_url: string, options?: { method?: string; body?: Record<string, unknown> }) => options?.method === undefined
       ? { ok: true, data: { html: "<html>previous</html>", fileName: "previous.html" } }

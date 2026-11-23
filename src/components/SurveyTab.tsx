@@ -61,6 +61,26 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
   const canPreview = upload.ok && upload.settled && !busy;
   const canPublish = !!preview && reviewedCandidate && (!preview.compatibilityImpact || ackCompatibility) && !busy;
 
+  async function downloadCurrentSource() {
+    if (!current || busy) return;
+    setBusy(true);
+    const res = await api<{ html: string; fileName: string }>(`${endpoint}?action=restore&restoreVersion=${current.version}`);
+    setBusy(false);
+    if (!res.ok || typeof res.data.html !== "string") {
+      toast(res.data.error ?? "Could not download the current questionnaire file.", "err");
+      return;
+    }
+    const fileName = res.data.fileName.replace(/[\\/\u0000-\u001f\u007f]/g, "-").slice(0, 200) || `version-${current.version}.html`;
+    const url = URL.createObjectURL(new Blob([res.data.html], { type: "text/html;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   const onUploadChange = useCallback((next: UploadState) => {
     uploadRevision.current += 1;
     setUpload(next);
@@ -170,6 +190,7 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
           <h2>Current file</h2>
           <Badge kind="ok">Version {data.interview.currentVersion}</Badge>
           <span className="right" />
+          {canManage && current && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => void downloadCurrentSource()}><Icon name="download" size={15} /> Download source file</button>}
           {canManage && !replacing && <button type="button" className="btn sm" onClick={() => setReplacing(true)}><Icon name="upload" size={15} /> Upload a new version</button>}
         </div>
         <div className="card-pad row wrap" style={{ gap: 28 }}>
