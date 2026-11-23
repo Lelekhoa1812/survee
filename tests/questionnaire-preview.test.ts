@@ -20,6 +20,8 @@ afterEach(() => {
 
 describe("questionnaire preview tokens", () => {
   it("signs the reviewed candidate and accepts its exact bindings", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-15T00:00:00.000Z"));
     const signed = createQuestionnairePreviewToken(bindings.tenantId, {
       interviewId: bindings.interviewId,
       expectedVersion: bindings.expectedVersion,
