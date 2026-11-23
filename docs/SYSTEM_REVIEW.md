@@ -55,7 +55,7 @@ The following changes are pushed to `main` and deployed:
 
 ## Validation evidence
 
-- Full automated suite: **960 tests passed across 139 files**; TypeScript check and optimized Next.js production build passed.
+- Full automated suite: **961 tests passed across 140 files**; TypeScript check and optimized Next.js production build passed. The answer-pagination interaction also has a DOM test that exercises loading and appending an older page.
 - Live MCP boundary checks covered missing/wrong credentials, hostile origin, content type, Accept, and method handling. A disposable interview was created, read, listed, deleted, and verified absent; no respondent data or email was used.
 - Production release `1bc002f` reached **READY**. Runtime error review found no errors in the 15 minutes after deployment. The homepage returns HTTP 200, an unknown frame token returns 404, and unauthenticated MCP POST returns 401. A live rate-limit probe against a fabricated nonexistent respondent token returned 180 expected 404s followed by 429 on request 181. Public accessibility audit covered five public routes at four viewport widths (20 samples): zero automated violations, six axe contrast needs-review results, and no authenticated host or respondent fixture coverage. An authenticated MCP `initialize` and `tools/list` audit returned 200 with 40 tools; disposable interviews were created, read, listed, deleted, and confirmed absent; no respondent data or email was used.
 
