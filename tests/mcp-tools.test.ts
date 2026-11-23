@@ -169,7 +169,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 });
 
 import { handleMcp } from "../src/lib/mcp/http";
-import { listToolDefs } from "../src/lib/mcp/tools";
+import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
 import { addParticipants, createAnalyticsRun, createInterview, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
@@ -197,6 +197,12 @@ beforeEach(() => {
 });
 
 describe("MCP tools", () => {
+  it("counts JSON string bytes exactly without serializing escaped copies", () => {
+    for (const value of ["plain", 'quotes " and \\', "\u0000\b\t\n\f\r\u001f", "é漢😀", "\ud800", "\udc00", "x\ud800y"]) {
+      expect(jsonStringByteLength(value)).toBe(Buffer.byteLength(JSON.stringify(value), "utf8"));
+    }
+  });
+
   it("reports progress using repeat records and their dependent questions", async () => {
     const manifest = { ...analyticsManifest, questions: [
       { id: "assets", type: "repeat", label: "Assets", maxRows: 2, fields: [{ id: "name", label: "Name", type: "text" }] },

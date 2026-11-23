@@ -134,6 +134,40 @@ const questionnaireBlockOperations = {
 function ok(data: Record<string, unknown>, text?: string): ToolResult {
   return { content: [{ type: "text", text: text ?? JSON.stringify(data) }], structuredContent: data, isError: false };
 }
+
+/** Count the UTF-8 byte length of JSON.stringify(value) without creating its escaped copy. */
+export function jsonStringByteLength(value: string): number {
+  let bytes = 2; // surrounding quotes
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code === 0x22 || code === 0x5c || code < 0x20) {
+      bytes += code < 0x20 && code !== 0x08 && code !== 0x09 && code !== 0x0a && code !== 0x0c && code !== 0x0d ? 6 : 2;
+    } else if (code < 0x80) {
+      bytes++;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = i + 1 < value.length ? value.charCodeAt(i + 1) : 0;
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i++;
+      } else {
+        bytes += 6; // JSON.stringify escapes lone UTF-16 surrogates.
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      bytes += 6;
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
+
+function exportEnvelopeBytes(data: Record<string, unknown>, text: string, bodyBytes: number): number {
+  const template = ok({ ...data, body: "" }, text);
+  return Buffer.byteLength(JSON.stringify(template), "utf8") + bodyBytes - 2;
+}
+
 function err(error: string, code?: string, details?: Record<string, unknown>): ToolResult {
   return { content: [{ type: "text", text: error }], structuredContent: { ok: false, error, ...(code ? { code } : {}), ...(details ?? {}) }, isError: true };
 }
@@ -1006,19 +1040,20 @@ const TOOLS: ToolDef[] = [
         format,
       );
       if (!await snapshotIsCurrent()) return stale();
-      const binary = typeof file.body !== "string";
-      const body = typeof file.body === "string" ? file.body : file.body.toString("base64");
-      const textBody = !binary && Buffer.byteLength(body, "utf8") <= 64 * 1024
-        ? body
+      const textFileBody = typeof file.body === "string" ? file.body : undefined;
+      const binary = textFileBody === undefined;
+      const textBody = textFileBody !== undefined && Buffer.byteLength(textFileBody, "utf8") <= 64 * 1024
+        ? textFileBody
         : `Exported ${file.filename}. The complete file is in structuredContent.`;
-      const result = ok(
-        { ok: true, filename: file.filename, contentType: file.contentType, encoding: binary ? "base64" : "utf8", body },
-        textBody,
-      );
-      // Bound the fully encoded MCP result as well as the file bytes: base64
-      // and JSON string escaping can expand the payload substantially.
-      if (Buffer.byteLength(JSON.stringify(result), "utf8") > MAX_EXPORT_OUTPUT_BYTES) throw new ExportOutputSizeLimitError();
-      return result;
+      const fileBodyBytes = binary
+        ? Math.ceil(file.body.length / 3) * 4 + 2
+        : jsonStringByteLength(textFileBody!);
+      const data = { ok: true, filename: file.filename, contentType: file.contentType, encoding: binary ? "base64" : "utf8", body: "" };
+      // Count the exact JSON envelope before making base64 or serialized copies
+      // of the export. For text files, account for escaping without allocating it.
+      if (exportEnvelopeBytes(data, textBody, fileBodyBytes) > MAX_EXPORT_OUTPUT_BYTES) throw new ExportOutputSizeLimitError();
+      const encodedBody = binary ? file.body.toString("base64") : textFileBody!;
+      return ok({ ...data, body: encodedBody }, textBody);
     },
   },
   {
