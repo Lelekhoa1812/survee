@@ -35,6 +35,7 @@ vi.mock("../src/lib/db", () => ({
         store.memberships.push(doc);
         return { insertedId: doc._id };
       },
+      updateOne: async (filter: any, update: any) => updateOne(store.memberships, filter, update),
       deleteOne: async (filter: any) => {
         const index = store.memberships.findIndex((item) => matches(item, filter));
         if (index < 0) return { deletedCount: 0 };
@@ -132,6 +133,7 @@ import {
   removeWorkspaceMember,
   revokeWorkspaceInvitation,
   revokeWorkspaceInvitationByToken,
+  transferWorkspaceOwnership,
 } from "../src/lib/repo/workspaces";
 
 const ownerId = new ObjectId("000000000000000000000001");
@@ -255,6 +257,34 @@ describe("workspace membership and invitations", () => {
       .resolves.toEqual({ ok: true, role: "owner" });
     expect(store.tenants[0].membershipEpoch).toBe(1);
     expect(store.memberships.filter((item) => item.tenantId === "axion" && item.role === "owner")).toHaveLength(1);
+  });
+
+  it("transfers ownership transactionally and keeps the former owner as an admin", async () => {
+    addMembership("axion", inviteeId, "member");
+
+    await expect(transferWorkspaceOwnership({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: true, previousOwnerUserId: ownerId.toHexString(), newOwnerUserId: inviteeId.toHexString() });
+    expect(store.memberships.find((item) => item.tenantId === "axion" && item.userId.equals(ownerId))?.role).toBe("admin");
+    expect(store.memberships.find((item) => item.tenantId === "axion" && item.userId.equals(inviteeId))?.role).toBe("owner");
+    expect(store.memberships.filter((item) => item.tenantId === "axion" && item.role === "owner")).toHaveLength(1);
+    expect(store.tenants[0].membershipEpoch).toBe(1);
+    expect(store.events).toMatchObject([{ type: "workspace_owner_transferred", meta: {
+      previousOwnerUserId: ownerId.toHexString(), newOwnerUserId: inviteeId.toHexString(),
+    } }]);
+    expect(JSON.stringify(store.events)).not.toContain("member@example.test");
+  });
+
+  it("requires a distinct existing workspace member and an active owner", async () => {
+    addMembership("axion", inviteeId, "admin");
+    await expect(transferWorkspaceOwnership({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: ownerId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "invalid" });
+    await expect(transferWorkspaceOwnership({ tenantId: "axion", actorUserId: inviteeId.toHexString(), targetUserId: ownerId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "forbidden" });
+    await expect(transferWorkspaceOwnership({ tenantId: "axion", actorUserId: ownerId.toHexString(), targetUserId: new ObjectId("000000000000000000000003").toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "not_found" });
+    await expect(transferWorkspaceOwnership({ tenantId: "workspace-suspended", actorUserId: ownerId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: false, reason: "forbidden" });
+    expect(store.events).toHaveLength(0);
   });
 
   it("blocks non-admin inviters, duplicate members, revoked links, and cross-tenant revoke attempts", async () => {

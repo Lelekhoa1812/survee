@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, Icon, Modal, Spinner, useToast } from "./ui";
 
 interface WorkspaceMember { userId: string; email: string; role: string; createdAt: string }
@@ -9,10 +10,12 @@ interface AccessList { members?: WorkspaceMember[]; invitations?: PendingInvitat
 
 export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: string; userId: string }) {
   const toast = useToast();
+  const router = useRouter();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [ownerCount, setOwnerCount] = useState(0);
   const [removing, setRemoving] = useState<WorkspaceMember | null>(null);
+  const [transferring, setTransferring] = useState<WorkspaceMember | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member">("member");
   const [loading, setLoading] = useState(true);
@@ -97,6 +100,22 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
     await load();
   }
 
+  async function transferOwnership(member: WorkspaceMember) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const result = await api("/api/admin/workspaces/transfer-ownership", { method: "POST", body: { targetUserId: member.userId } });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.data.error ?? "Workspace ownership could not be changed.");
+      setTransferring(null);
+      return;
+    }
+    setTransferring(null);
+    toast(`Ownership transferred to ${member.email}. Your role is now admin.`);
+    router.refresh();
+  }
+
   const canManageOwners = workspaceRole === "owner";
 
   return (
@@ -117,7 +136,7 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
                 const canRemove = member.userId !== userId && (member.role !== "owner" || (canManageOwners && ownerCount > 1));
                 return <li key={member.userId} className="row wrap" style={{ justifyContent: "space-between", borderBottom: "1px solid var(--line)", padding: "8px 0" }}>
                   <span>{member.email}{member.userId === userId && <small className="muted"> · You</small>}</span>
-                  <span className="row wrap" style={{ justifyContent: "flex-end" }}><span className="muted">{member.role}</span>{canRemove
+                  <span className="row wrap" style={{ justifyContent: "flex-end" }}><span className="muted">{member.role}</span>{canManageOwners && member.userId !== userId && <button className="btn sm" type="button" disabled={busy} onClick={() => setTransferring(member)}>Make owner</button>}{canRemove
                     ? <button className="btn sm danger" type="button" disabled={busy} onClick={() => setRemoving(member)}>Remove access</button>
                     : member.role === "owner" && ownerCount <= 1
                       ? <small className="muted">Last owner</small>
@@ -145,6 +164,16 @@ export function WorkspaceMembersPanel({ role: workspaceRole, userId }: { role: s
       >
         <p>This ends their access to this workspace, including OAuth connections linked to their membership. Their survee account and access to other workspaces will remain.</p>
         {removing.role === "owner" && <p className="callout warn">The workspace must keep at least one owner. Only an owner can remove another owner.</p>}
+      </Modal>}
+      {transferring && <Modal
+        title={`Transfer workspace ownership to ${transferring.email}?`}
+        onClose={() => { if (!busy) setTransferring(null); }}
+        actions={<>
+          <button className="btn ghost" type="button" disabled={busy} onClick={() => setTransferring(null)}>Cancel</button>
+          <button className="btn primary" type="button" disabled={busy} onClick={() => void transferOwnership(transferring)}>{busy ? <Spinner /> : null} Transfer ownership</button>
+        </>}
+      >
+        <p>{transferring.email} will become an owner of this workspace. Your role will change to admin, so you will keep access but no longer manage ownership.</p>
       </Modal>}
     </section>
   );

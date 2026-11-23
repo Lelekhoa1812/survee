@@ -1,0 +1,57 @@
+// @vitest-environment jsdom
+import { act, createElement, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WorkspaceMembersPanel } from "../src/components/WorkspaceMembersPanel";
+
+const state = vi.hoisted(() => ({ api: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: state.refresh }) }));
+vi.mock("../src/components/ui", () => ({
+  api: state.api,
+  Icon: () => null,
+  Spinner: () => null,
+  useToast: () => vi.fn(),
+  Modal: ({ title, children, actions }: { title: string; children: ReactNode; actions: ReactNode }) => createElement("div", { role: "dialog" }, createElement("h2", null, title), children, actions),
+}));
+
+let host: HTMLDivElement;
+let root: Root;
+async function click(label: string) {
+  const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes(label));
+  if (!button) throw new Error(`Button not found: ${label}`);
+  await act(async () => { button.click(); });
+}
+
+beforeEach(async () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  state.refresh.mockReset();
+  state.api.mockReset().mockImplementation(async (url: string) => url === "/api/admin/workspace-invitations"
+    ? { ok: true, data: { ownerCount: 1, members: [
+      { userId: "000000000000000000000001", email: "owner@example.test", role: "owner", createdAt: "2026-11-01T00:00:00.000Z" },
+      { userId: "000000000000000000000002", email: "member@example.test", role: "member", createdAt: "2026-11-02T00:00:00.000Z" },
+    ], invitations: [] } }
+    : { ok: true, data: {} });
+  await act(async () => root.render(createElement(WorkspaceMembersPanel, { role: "owner", userId: "000000000000000000000001" })));
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+});
+
+describe("workspace owner transfer UI", () => {
+  it("requires explicit confirmation and refreshes access after the transactional transfer", async () => {
+    await click("Make owner");
+    expect(host.textContent).toContain("Transfer workspace ownership to member@example.test?");
+    expect(host.textContent).toContain("Your role will change to admin");
+
+    await click("Transfer ownership");
+    expect(state.api).toHaveBeenCalledWith("/api/admin/workspaces/transfer-ownership", {
+      method: "POST", body: { targetUserId: "000000000000000000000002" },
+    });
+    expect(state.refresh).toHaveBeenCalledOnce();
+  });
+});

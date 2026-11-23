@@ -175,6 +175,61 @@ export type RemoveWorkspaceMemberResult =
   | { ok: true; role: TenantRole }
   | { ok: false; reason: "invalid" | "forbidden" | "not_found" | "last_owner" };
 
+export type TransferWorkspaceOwnershipResult =
+  | { ok: true; previousOwnerUserId: string; newOwnerUserId: string }
+  | { ok: false; reason: "invalid" | "forbidden" | "not_found" };
+
+/** Promote an existing member and leave the transferring owner as an admin. */
+export async function transferWorkspaceOwnership(input: {
+  tenantId: string;
+  actorUserId: string;
+  targetUserId: string;
+}): Promise<TransferWorkspaceOwnershipResult> {
+  const actorId = objectId(input.actorUserId);
+  const targetId = objectId(input.targetUserId);
+  if (!input.tenantId || input.tenantId.length > 80 || !actorId || !targetId || actorId.equals(targetId)) return { ok: false, reason: "invalid" };
+
+  return withMongoTransaction(async (session) => {
+    const tenants = await col.tenants();
+    const tenant = await tenants.findOne({ _id: input.tenantId, status: "active" }, { session, projection: { _id: 1 } });
+    if (!tenant) return { ok: false, reason: "forbidden" };
+    const memberships = await col.memberships();
+    const actor = await memberships.findOne({ tenantId: input.tenantId, userId: actorId, role: "owner" }, { session });
+    if (!actor) return { ok: false, reason: "forbidden" };
+    const target = await memberships.findOne({ tenantId: input.tenantId, userId: targetId }, { session });
+    if (!target) return { ok: false, reason: "not_found" };
+
+    // This tenant write serializes transfers with owner removals and other
+    // transfers, whose transactions update the same epoch before changing roles.
+    const fenced = await tenants.updateOne(
+      { _id: input.tenantId, status: "active" },
+      { $inc: { membershipEpoch: 1 }, $set: { updatedAt: new Date() } },
+      { session },
+    );
+    if (fenced.matchedCount !== 1) return { ok: false, reason: "forbidden" };
+    const promoted = await memberships.updateOne(
+      { _id: target._id, tenantId: input.tenantId, userId: targetId },
+      { $set: { role: "owner" } },
+      { session },
+    );
+    if (promoted.matchedCount !== 1) return { ok: false, reason: "not_found" };
+    const demoted = await memberships.updateOne(
+      { _id: actor._id, tenantId: input.tenantId, userId: actorId, role: "owner" },
+      { $set: { role: "admin" } },
+      { session },
+    );
+    if (demoted.matchedCount !== 1) throw new Error("Workspace ownership changed during transfer.");
+    await (await col.events()).insertOne({
+      _id: new ObjectId(),
+      tenantId: input.tenantId,
+      type: "workspace_owner_transferred",
+      at: new Date(),
+      meta: { previousOwnerUserId: actorId.toHexString(), newOwnerUserId: targetId.toHexString() },
+    }, { session });
+    return { ok: true, previousOwnerUserId: actorId.toHexString(), newOwnerUserId: targetId.toHexString() };
+  });
+}
+
 /** Remove one membership in the current tenant; the account and other workspace memberships remain. */
 export async function removeWorkspaceMember(input: {
   tenantId: string;
