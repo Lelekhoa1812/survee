@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { generateBasicQuestionnaireHtml, type BasicQuestion, type BasicQuestionSection, type BasicQuestionType, type BasicQuestionnaire } from "@/lib/builder/basic-questionnaire";
+import type { Condition } from "@/lib/format/schema";
 
 const questionTypes: Array<{ value: BasicQuestionType; label: string }> = [
   { value: "single", label: "Single choice" }, { value: "multi", label: "Checkboxes" }, { value: "select", label: "Dropdown" }, { value: "rank", label: "Full-order ranking" },
@@ -13,6 +14,10 @@ function freshQuestion(index: number): BasicQuestion {
   return { id: `question-${index + 1}`, type: "single", label: "Your question", help: "", required: false, options: [{ value: "option-1", label: "Option 1" }, { value: "option-2", label: "Option 2" }] };
 }
 
+function routeCondition(question: BasicQuestion): Condition | undefined {
+  return question.when?.all?.[0];
+}
+
 export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => void }) {
   const [data, setData] = useState<BasicQuestionnaire>({ title: "New questionnaire", description: "", questions: [freshQuestion(0)] });
   const [error, setError] = useState("");
@@ -22,7 +27,41 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
   }, [data]);
 
   function updateQuestion(index: number, patch: Partial<BasicQuestion>) {
-    setData((current) => ({ ...current, questions: current.questions.map((question, item) => item === index ? { ...question, ...patch } : question) }));
+    setData((current) => {
+      const previousId = current.questions[index]?.id;
+      const nextId = patch.id;
+      return {
+        ...current,
+        questions: current.questions.map((question, item) => {
+          if (item === index) return { ...question, ...patch };
+          if (!previousId || !nextId || previousId === nextId || !question.when) return question;
+          const replace = (condition: Condition): Condition => condition.question === previousId ? { ...condition, question: nextId } : condition;
+          return { ...question, when: { ...question.when, ...(question.when.all ? { all: question.when.all.map(replace) } : {}) } };
+        }),
+      };
+    });
+  }
+
+  function selectRouteSource(index: number, sourceId: string) {
+    const source = data.questions.slice(0, index).find((question) => question.id === sourceId);
+    if (!source) return updateQuestion(index, { when: undefined });
+    const choice = ["single", "multi", "select"].includes(source.type);
+    const condition = choice
+      ? { question: source.id, operator: source.type === "multi" ? "contains" as const : "equals" as const, value: source.options[0]?.value ?? "" }
+      : { question: source.id, operator: "answered" as const };
+    updateQuestion(index, { when: { all: [condition] } });
+  }
+
+  function selectRouteOperator(index: number, sourceId: string, operator: string) {
+    const source = data.questions.slice(0, index).find((question) => question.id === sourceId);
+    if (!source) return;
+    if (operator === "answered" || operator === "notAnswered") {
+      updateQuestion(index, { when: { all: [{ question: source.id, operator }] } });
+      return;
+    }
+    const currentCondition = routeCondition(data.questions[index]);
+    const value = currentCondition && "value" in currentCondition ? currentCondition.value : undefined;
+    updateQuestion(index, { when: { all: [{ question: source.id, operator: operator as "equals" | "notEquals" | "contains" | "notContains", value: typeof value === "string" ? value : source.options[0]?.value ?? "" }] } });
   }
 
   function addSection() {
@@ -133,6 +172,22 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         <div className="field"><label htmlFor={`builder-id-${index}`}>Stable question ID</label><input id={`builder-id-${index}`} className="input mono" maxLength={64} pattern="[a-z0-9][a-z0-9_-]{0,63}" value={question.id} onChange={(event) => updateQuestion(index, { id: event.target.value })} /><span className="hint">Lowercase letters, numbers, hyphens and underscores. Keep this ID if you revise the file after collecting answers.</span></div>
         <div className="field"><label htmlFor={`builder-type-${index}`}>Answer type</label><select id={`builder-type-${index}`} className="select" value={question.type} onChange={(event) => changeType(index, event.target.value as BasicQuestionType)}>{questionTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
         {(data.sections?.length ?? 0) > 0 && <div className="field"><label htmlFor={`builder-section-${index}`}>Section</label><select id={`builder-section-${index}`} className="select" value={question.section ?? ""} onChange={(event) => updateQuestion(index, { section: event.target.value || undefined })}><option value="">No section</option>{data.sections?.map((section) => <option key={section.id} value={section.id}>{section.title || section.id}</option>)}</select></div>}
+        {index > 0 && <div className="stack" style={{ marginTop: 12 }}><div className="field"><label htmlFor={`builder-route-source-${index}`}>Show this question when</label><select id={`builder-route-source-${index}`} className="select" value={question.when?.all?.[0]?.question ?? ""} onChange={(event) => selectRouteSource(index, event.target.value)}><option value="">It is always shown</option>{data.questions.slice(0, index).map((source) => <option key={source.id} value={source.id}>{source.label || source.id}</option>)}</select><span className="hint">Only earlier questions can control this question. Inactive answers remain saved.</span></div>
+          {question.when?.all?.[0] && (() => {
+            const condition = routeCondition(question)!;
+            const source = data.questions.slice(0, index).find((item) => item.id === condition.question);
+            if (!source) return <p className="hint">Choose a valid earlier question to continue this rule.</p>;
+            const hasChoices = ["single", "multi", "select"].includes(source.type);
+            const operators = hasChoices
+              ? [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }, ...(source.type === "multi" ? [{ value: "contains", label: "contains this choice" }, { value: "notContains", label: "does not contain this choice" }] : [{ value: "equals", label: "equals this choice" }, { value: "notEquals", label: "does not equal this choice" }])]
+              : [{ value: "answered", label: "has an answer" }, { value: "notAnswered", label: "has no answer" }];
+            const value = "value" in condition ? condition.value : "";
+            const choiceRule = ["equals", "notEquals", "contains", "notContains"].includes(condition.operator);
+            return <div className="row wrap"><label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Rule</span><select className="select" value={condition.operator} onChange={(event) => selectRouteOperator(index, source.id, event.target.value)}>{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select></label>
+              {hasChoices && choiceRule && <label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Choice</span><select className="select" value={typeof value === "string" ? value : ""} onChange={(event) => updateQuestion(index, { when: { all: [{ question: source.id, operator: condition.operator as "equals" | "notEquals" | "contains" | "notContains", value: event.target.value }] } })}>{source.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+            </div>;
+          })()}
+        </div>}
         <div className="field"><label htmlFor={`builder-label-${index}`}>Question text</label><input id={`builder-label-${index}`} className="input" maxLength={300} value={question.label} onChange={(event) => updateQuestion(index, { label: event.target.value })} /></div>
         <div className="field"><label htmlFor={`builder-help-${index}`}>Help text <span className="muted">(optional)</span></label><textarea id={`builder-help-${index}`} className="textarea" rows={2} maxLength={1000} value={question.help} onChange={(event) => updateQuestion(index, { help: event.target.value })} /></div>
         <label className="choice"><input type="checkbox" checked={question.required} onChange={(event) => updateQuestion(index, { required: event.target.checked })} /><span>Required to submit</span></label>

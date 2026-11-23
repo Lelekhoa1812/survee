@@ -1,4 +1,4 @@
-import { LIMITS, manifestSchema, type QuestionType } from "@/lib/format/schema";
+import { LIMITS, manifestSchema, type Condition, type QuestionType } from "@/lib/format/schema";
 
 export type BasicQuestionType = Extract<QuestionType, "single" | "multi" | "select" | "rank" | "text" | "longtext" | "number" | "scale" | "date">;
 
@@ -9,6 +9,7 @@ export type BasicQuestion = {
   help: string;
   required: boolean;
   section?: string;
+  when?: { all?: Condition[] };
   options: Array<{ value: string; label: string }>;
   min?: number;
   max?: number;
@@ -66,7 +67,7 @@ function control(question: BasicQuestion, index: number): string {
   return `<section class="question" data-kqa-question-id="${id}"><div class="question-head"><span class="number" aria-hidden="true">${index + 1}</span><label for="field-${id}">${label}</label>${required}</div>${help}${field}</section>`;
 }
 
-/** Generate a portable, script-free questionnaire for the common native question types. */
+/** Generate bounded, portable, script-free HTML for the native question types supported by the composer. */
 export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): string {
   const manifest = {
     format: "kqa/1",
@@ -78,6 +79,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
       type: question.type,
       label: question.label,
       ...(question.section ? { section: question.section } : {}),
+      ...(question.when ? { when: question.when } : {}),
       ...(question.help ? { help: question.help } : {}),
       ...(question.required ? { required: true } : {}),
       ...(["single", "multi", "select", "rank"].includes(question.type) ? { options: question.options } : {}),

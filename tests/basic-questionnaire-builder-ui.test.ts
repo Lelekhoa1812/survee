@@ -97,4 +97,20 @@ describe("basic questionnaire builder UI", () => {
     expect(report.ok).toBe(true);
     expect(report.diagnostics).toEqual([]);
   });
+
+  it("routes a later question from an earlier single-choice answer", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await click("Add question");
+    await change("#builder-route-source-1", "question-1");
+    await change("#builder-id-0", "customer-type");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"question": "customer-type"');
+    expect(html).toContain('"operator": "equals"');
+    expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
+  });
 });

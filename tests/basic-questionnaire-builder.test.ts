@@ -54,6 +54,21 @@ describe("basic questionnaire HTML generator", () => {
     expect(html).toContain("Focus &amp; progress");
   });
 
+  it("generates a bounded route from an earlier choice without changing answer semantics", () => {
+    const html = generateBasicQuestionnaireHtml({
+      title: "Routed questionnaire", description: "", questions: [
+        { id: "audience", type: "single", label: "Who is this for?", help: "", required: false, options: [{ value: "team", label: "A team" }, { value: "self", label: "Myself" }] },
+        { id: "team-size", type: "number", label: "How many people?", help: "", required: false, options: [], when: { all: [{ question: "audience", operator: "equals", value: "team" }] } },
+      ],
+    });
+    const report = checkHtml(html, { fileName: "generated.html" });
+    expect(report.ok).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+    expect(html).toContain('"when": {\n        "all": [');
+    expect(html).toContain('"question": "audience"');
+    expect(html).toContain('"value": "team"');
+  });
+
   it("rejects invalid identifiers, duplicate ids, and malformed choice sets", () => {
     const base = { title: "Questionnaire", description: "", questions: [{ id: "invalid ID", type: "text" as const, label: "Question", help: "", required: false, options: [] }] };
     expect(() => generateBasicQuestionnaireHtml(base)).toThrow(/questions\.0\.id/);
