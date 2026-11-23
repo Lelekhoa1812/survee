@@ -1326,4 +1326,42 @@ export async function recentEvents(interviewId: string, limit = 30) {
   return docs.map((e) => ({ id: e._id.toHexString(), type: e.type, at: e.at.toISOString(), participantId: e.participantId?.toHexString(), meta: e.meta }));
 }
 
+export interface EventPage {
+  events: { id: string; type: string; at: string; participantId?: string; meta?: Record<string, unknown> }[];
+  nextCursor: string | null;
+}
+
+function decodeEventCursor(cursor: string): { at: Date; id: ObjectId } {
+  try {
+    if (cursor.length > 512) throw new Error();
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { at?: unknown; id?: unknown };
+    if (typeof parsed.at !== "string" || typeof parsed.id !== "string" || !/^[0-9a-f]{24}$/i.test(parsed.id)) throw new Error();
+    const at = new Date(parsed.at);
+    if (!Number.isFinite(at.getTime()) || at.toISOString() !== parsed.at) throw new Error();
+    return { at, id: new ObjectId(parsed.id) };
+  } catch { throw new Error("Invalid event cursor."); }
+}
+
+/** Read an audit-history page in stable newest-first order, including ties at the same timestamp. */
+export async function listEventPage(interviewId: string, cursor: string | null, limit = 25): Promise<EventPage> {
+  const oid = toOid(interviewId);
+  if (!oid) return { events: [], nextCursor: null };
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error("Invalid event page limit.");
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { events: [], nextCursor: null };
+  const anchor = cursor ? decodeEventCursor(cursor) : null;
+  const filter = tenantFilter(tenantId, {
+    interviewId: oid,
+    ...(anchor ? { $or: [{ at: { $lt: anchor.at } }, { at: anchor.at, _id: { $lt: anchor.id } }] } : {}),
+  });
+  const docs = await (await col.events()).find(filter).sort({ at: -1, _id: -1 }).limit(limit + 1).toArray();
+  const hasMore = docs.length > limit;
+  const page = docs.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    events: page.map((event) => ({ id: event._id.toHexString(), type: event.type, at: event.at.toISOString(), participantId: event.participantId?.toHexString(), meta: event.meta })),
+    nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ at: last.at.toISOString(), id: last._id.toHexString() })).toString("base64url") : null,
+  };
+}
+
 export { getQuestionnaireReviewDraft, saveQuestionnaireReviewDraft } from "./questionnaire-reviews";

@@ -38,12 +38,39 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
   const origin = useOrigin();
   const [tab, setTab] = useState<Tab>(initialTab as Tab);
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({});
-  const { interview, people, versions, events } = data;
+  const { interview, people, versions } = data;
+  const [events, setEvents] = useState(data.events);
+  const [eventsNextCursor, setEventsNextCursor] = useState(data.eventsNextCursor ?? null);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const refresh = () => router.refresh();
   const tabFocusStorageKey = `kqa:interview:${interview.id}:tab-focus`;
+
+  useEffect(() => {
+    setEvents(data.events);
+    setEventsNextCursor(data.eventsNextCursor ?? null);
+  }, [data.events, data.eventsNextCursor]);
+
+  async function loadOlderEvents() {
+    if (!eventsNextCursor || eventsLoading) return;
+    setEventsLoading(true);
+    try {
+      const query = new URLSearchParams({ limit: "25", cursor: eventsNextCursor });
+      const response = await api<{ events: InterviewData["events"]; nextCursor: string | null }>(`/api/admin/interviews/${interview.id}/events?${query}`);
+      if (!response.ok) throw new Error(response.data.error ?? "Could not load older activity.");
+      setEvents((current) => {
+        const known = new Set(current.map((event) => event.id));
+        return [...current, ...response.data.events.filter((event) => !known.has(event.id))];
+      });
+      setEventsNextCursor(response.data.nextCursor);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not load older activity.", "err");
+    } finally {
+      setEventsLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (window.sessionStorage.getItem(tabFocusStorageKey) === tab) {
@@ -174,12 +201,13 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
               <div className="list">
                 {events.map((e) => (
                   <div key={e.id} className="list-row" style={{ gridTemplateColumns: "1fr auto", padding: "11px 20px" }}>
-                    <span>{e.person && ["open", "save", "submit", "reopen", "invite"].includes(e.type) ? <><b>{e.person}</b> {e.type === "invite" && e.meta?.result === "failed" ? "could not be emailed a link" : EVENT_TEXT[e.type]}</> : e.type === "mcp" ? <>MCP {typeof e.meta?.tool === "string" ? e.meta.tool : "tool"} via {mcpActorLabel(e.meta) ?? "an unidentified credential"}</> : (EVENT_TEXT[e.type] ?? e.type)}{e.type === "version" && e.meta?.version ? ` (version ${String(e.meta.version)})` : ""}</span>
+                    <span>{(e.person ?? people.find((person) => person.id === e.participantId)?.name) && ["open", "save", "submit", "reopen", "invite"].includes(e.type) ? <><b>{e.person ?? people.find((person) => person.id === e.participantId)?.name}</b> {e.type === "invite" && e.meta?.result === "failed" ? "could not be emailed a link" : EVENT_TEXT[e.type]}</> : e.type === "mcp" ? <>MCP {typeof e.meta?.tool === "string" ? e.meta.tool : "tool"} via {mcpActorLabel(e.meta) ?? "an unidentified credential"}</> : (EVENT_TEXT[e.type] ?? e.type)}{e.type === "version" && e.meta?.version ? ` (version ${String(e.meta.version)})` : ""}</span>
                     <span className="muted nowrap" style={{ fontSize: 13 }}>{relTime(e.at)}</span>
                   </div>
                 ))}
               </div>
             )}
+            {eventsNextCursor && <div className="card-pad"><button className="btn" type="button" disabled={eventsLoading} onClick={() => void loadOlderEvents()}>{eventsLoading ? <><Spinner /> Loading activity…</> : "Load older activity"}</button></div>}
           </section>}
 
           {canManage && <section className="card" style={{ borderColor: "var(--danger-line)" }}>

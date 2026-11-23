@@ -47,6 +47,7 @@ export interface EventRow {
   type: string;
   at: string;
   person?: string;
+  participantId?: string;
   meta?: Record<string, unknown>;
 }
 
@@ -61,6 +62,7 @@ export interface InterviewData {
   peopleNextCursor?: string | null;
   versions: VersionRow[];
   events: EventRow[];
+  eventsNextCursor?: string | null;
   manifest: Manifest;
   /** Public origin used inside invite emails. Null when KQA_PUBLIC_URL is unset. */
   publicOrigin: string | null;

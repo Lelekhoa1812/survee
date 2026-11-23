@@ -1,5 +1,5 @@
 import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
-import { deleteInterview, getInterview, getVersion, listParticipantPage, listVersions, recentEvents, updateInterview } from "@/lib/repo";
+import { deleteInterview, getInterview, getVersion, listEventPage, listParticipantPage, listVersions, updateInterview } from "@/lib/repo";
 import { participantRows } from "@/lib/host/participant-rows";
 import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
 
@@ -17,14 +17,14 @@ export const GET = withServerErrors("admin/interviews/[id]", async function GET(
   const [peoplePage, versions, events, current] = await Promise.all([
     canManage ? listParticipantPage(id, null, undefined, false, false) : Promise.resolve({ people: [], nextCursor: null }),
     listVersions(interview._id),
-    canManage ? recentEvents(id) : Promise.resolve([]),
+    canManage ? listEventPage(id, null, 30) : Promise.resolve({ events: [], nextCursor: null }),
     getVersion(interview._id, interview.currentVersion),
   ]);
   const mailRows = canManage ? await listCurrentMailByParticipants(interview._id, peoplePage.people) : [];
   return json({
     ok: true, interview: { ...interview, _id: id },
     people: current ? participantRows(current.manifest, peoplePage.people, mailRows.map(mailRecord), false) : [],
-    nextCursor: peoplePage.nextCursor, versions, events,
+    nextCursor: peoplePage.nextCursor, versions, events: events.events, eventsNextCursor: events.nextCursor,
   });
 });
 

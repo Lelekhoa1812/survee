@@ -5,7 +5,7 @@ import { publicBaseUrl } from "@/lib/env";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
 import { summarizeQuestionCohorts, withCurrentEligibility } from "@/lib/analytics/summary";
 import { getCachedHostSummary } from "@/lib/analytics/host-summary-cache";
-import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listParticipantPage, listVersions, recentEvents } from "@/lib/repo";
+import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyticsParticipants, listEventPage, listParticipantPage, listVersions } from "@/lib/repo";
 import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
 import { participantRows } from "@/lib/host/participant-rows";
 import { adminSession } from "@/lib/http";
@@ -28,12 +28,12 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   if (!interview) notFound();
   const analysisOnly = tab === "analysis";
   const answersIncluded = canManage && tab === "answers";
-  const [current, counts, peoplePage, versions, events] = await Promise.all([
+  const [current, counts, peoplePage, versions, eventPage] = await Promise.all([
     getVersion(interview._id, interview.currentVersion),
     getInterviewParticipantCounts(id),
     !canManage || analysisOnly ? Promise.resolve({ people: [], nextCursor: null }) : listParticipantPage(id, null, undefined, false, answersIncluded),
     analysisOnly ? Promise.resolve([]) : listVersions(interview._id),
-    !canManage || analysisOnly ? Promise.resolve([]) : recentEvents(id, 25),
+    !canManage || analysisOnly ? Promise.resolve({ events: [], nextCursor: null }) : listEventPage(id, null, 25),
   ]);
   if (!current) notFound();
   const mailRows = !canManage || analysisOnly ? [] : await listCurrentMailByParticipants(interview._id, peoplePage.people);
@@ -60,7 +60,8 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     answersIncluded,
     peopleNextCursor: peoplePage.nextCursor,
     versions: versions.map((v) => ({ version: v.version, fileName: v.fileName, bytes: v.bytes, createdAt: v.createdAt.toISOString(), check: { errors: v.check.errors, warnings: v.check.warnings, info: v.check.info }, questions: v.manifest.questions.length })),
-    events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? people.find((person) => person.id === e.participantId)?.name : undefined, meta: e.meta })),
+    events: eventPage.events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? people.find((person) => person.id === e.participantId)?.name : undefined, meta: e.meta })),
+    eventsNextCursor: eventPage.nextCursor,
   };
   const allowedTabs = canManage ? ["overview", "people", "answers", "analysis", "survey", "export"] : ["overview", "analysis", "survey"];
   const initial = allowedTabs.includes(tab ?? "") ? (tab as string) : "overview";

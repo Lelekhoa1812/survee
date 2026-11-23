@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
   getInterviewParticipantCounts: vi.fn(async () => ({ people: 1, invited: 0, inProgress: 0, submitted: 1 })),
   listParticipantPage: vi.fn(async () => ({ people: [], nextCursor: null as string | null })),
   listVersions: vi.fn(async () => [{ version: 1, html: "<html></html>" }]),
-  recentEvents: vi.fn(async () => [{ id: "event-1", type: "submit", participantId: "person-1", meta: { email: "private@example.test" } }]),
+  listEventPage: vi.fn(async () => ({ events: [{ id: "event-1", type: "submit", participantId: "person-1", meta: { email: "private@example.test" } }], nextCursor: null })),
   updateInterview: vi.fn(async () => ({ _id: "interview-1" })),
   deleteParticipant: vi.fn(async () => true as boolean | "invite_pending"),
   deleteInterview: vi.fn(async () => true as boolean | "invite_pending"),
@@ -42,7 +42,7 @@ vi.mock("../src/lib/repo", () => ({
   ParticipantReadLimitError: state.ParticipantReadLimitError,
   ParticipantExportSizeLimitError: state.ParticipantExportSizeLimitError,
   listVersions: state.listVersions,
-  recentEvents: state.recentEvents,
+  listEventPage: state.listEventPage,
   updateInterview: state.updateInterview,
   deleteInterview: state.deleteInterview,
   deleteParticipant: state.deleteParticipant,
@@ -200,7 +200,7 @@ describe("workspace member access boundary", () => {
     expect(detailResponse.status).toBe(200);
     await expect(detailResponse.json()).resolves.toMatchObject({ people: [], events: [], versions: [{ version: 1 }] });
     expect(state.listParticipants).not.toHaveBeenCalled();
-    expect(state.recentEvents).not.toHaveBeenCalled();
+    expect(state.listEventPage).not.toHaveBeenCalled();
   });
 
   it("blocks members from respondent data, invitations, publication, and saved changes", async () => {

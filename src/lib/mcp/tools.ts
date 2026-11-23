@@ -30,6 +30,7 @@ import {
   iterateAnalyticsParticipants,
   listInterviews,
   listInterviewPage,
+  listEventPage,
   InterviewPageCursorError,
   listParticipantPage,
   listParticipants,
@@ -39,7 +40,6 @@ import {
   listVersions,
   noteMcp,
   publishVersionIfCurrent,
-  recentEvents,
   regenerateToken,
   reopenParticipant,
   saveQuestionnaireReviewDraft,
@@ -989,23 +989,27 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "list_events",
-    description: "Recent audit events for an interview.",
-    inputSchema: obj({ interviewId: str, limit: { type: "integer", minimum: 1, maximum: 50 } }, ["interviewId"]),
+    description: "Read audit events for an interview in newest-first cursor pages.",
+    inputSchema: obj({ interviewId: str, limit: { type: "integer", minimum: 1, maximum: 50 }, cursor: { type: "string", maxLength: 512 } }, ["interviewId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       if (!(await getInterview(id))) return err("Interview not found.", "not_found");
+      const cursor: string | null = args.cursor === undefined ? null : asString(args.cursor, 512) ?? null;
+      if (args.cursor !== undefined && !cursor) return err("cursor must be a valid event page cursor.", "invalid_cursor");
       let limit = 30;
       if (args.limit !== undefined) {
         if (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1) return err("limit must be an integer of at least 1.");
         limit = Math.min(50, args.limit);
       }
-      const events = await recentEvents(id, limit);
-      return ok({ events: events.map((event) => {
+      let page;
+      try { page = await listEventPage(id, cursor, limit); }
+      catch { return err("cursor must be a valid event page cursor.", "invalid_cursor"); }
+      return ok({ events: page.events.map((event) => {
         const meta = event.meta ? { ...event.meta } : undefined;
         if (meta) delete meta.actor;
         return { ...event, ...(meta ? { meta } : {}) };
-      }) });
+      }), nextCursor: page.nextCursor });
     },
   },
   {

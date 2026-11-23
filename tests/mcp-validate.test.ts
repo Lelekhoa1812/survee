@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { noteMcp, listInterviews, recentEvents } = vi.hoisted(() => ({
+const { noteMcp, listInterviews, listEventPage } = vi.hoisted(() => ({
   noteMcp: vi.fn(async () => {}),
   listInterviews: vi.fn(async () => []),
-  recentEvents: vi.fn(async () => []),
+  listEventPage: vi.fn(async () => ({ events: [], nextCursor: null })),
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -14,7 +14,7 @@ vi.mock("../src/lib/db", () => ({
 vi.mock("../src/lib/repo", () => ({
   noteMcp,
   listInterviews,
-  recentEvents,
+  listEventPage,
   getInterview: vi.fn(async () => ({ _id: { toHexString: () => "a".repeat(24) }, currentVersion: 2, name: "Probe", description: "", mode: "multi", status: "open", createdAt: new Date(), updatedAt: new Date() })),
   getVersion: vi.fn(async (_id: unknown, version: number) => (version === 2 ? { version: 2, fileName: "a.html", html: "<p></p>", manifest: { questions: [] } } : null)),
 }));
@@ -27,7 +27,7 @@ describe("tool argument schema", () => {
   beforeEach(() => {
     noteMcp.mockClear();
     listInterviews.mockClear();
-    recentEvents.mockClear();
+    listEventPage.mockClear();
   });
 
   it("rejects unknown fields, a string version, and a limit below 1", async () => {
@@ -40,7 +40,7 @@ describe("tool argument schema", () => {
     expect(version.structuredContent.error).toMatch(/integer/);
     expect(zero.structuredContent.error).toMatch(/at least 1/);
     expect(listInterviews).not.toHaveBeenCalled();
-    expect(recentEvents).not.toHaveBeenCalled();
+    expect(listEventPage).not.toHaveBeenCalled();
     expect(noteMcp).toHaveBeenCalledTimes(4);
   });
 
@@ -50,7 +50,7 @@ describe("tool argument schema", () => {
     expect(html.isError).toBe(false);
     expect(html.structuredContent.version).toBe(2);
     expect(events.isError).toBe(false);
-    expect(recentEvents).toHaveBeenCalledWith("a".repeat(24), 30);
+    expect(listEventPage).toHaveBeenCalledWith("a".repeat(24), null, 30);
   });
 
   it("reports a missing required field from the schema", () => {

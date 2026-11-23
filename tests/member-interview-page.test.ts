@@ -4,7 +4,7 @@ const state = vi.hoisted(() => ({
   role: "member" as "owner" | "admin" | "member",
   listParticipantPage: vi.fn(async () => ({ people: [{ id: "person-1", interviewId: "interview-1", token: "private-link", name: "Respondent", email: "private@example.test", answers: { answer: { value: "private response" } }, status: "submitted" as const, createdAt: "2026-11-16T00:00:00.000Z", updatedAt: "2026-11-16T00:00:00.000Z", revision: 1 }], nextCursor: null as string | null })),
   listCurrentMailByParticipants: vi.fn(async () => [{ participantId: { toHexString: () => "person-1" } }]),
-  recentEvents: vi.fn(async () => [{ id: "event-1", participantId: "person-1", type: "submit", at: "2026-11-16T00:00:00.000Z" }]),
+  listEventPage: vi.fn(async () => ({ events: [{ id: "event-1", participantId: "person-1", type: "submit", at: "2026-11-16T00:00:00.000Z" }], nextCursor: "next-events" })),
   hostSummaryCache: vi.fn(async (_key: unknown, compute: () => Promise<unknown>) => compute()),
 }));
 
@@ -24,7 +24,7 @@ vi.mock("@/lib/repo", () => ({
   iterateAnalyticsParticipants: async function* () { yield { status: "submitted", answers: {} }; },
   listParticipantPage: state.listParticipantPage,
   listVersions: async () => [{ version: 1, fileName: "study.html", bytes: 10, createdAt: new Date("2026-11-16T00:00:00.000Z"), check: { errors: 0, warnings: 0, info: 0 }, manifest: { questions: [] } }],
-  recentEvents: state.recentEvents,
+  listEventPage: state.listEventPage,
 }));
 
 import InterviewPage from "../src/app/admin/(shell)/interviews/[id]/page";
@@ -44,7 +44,7 @@ describe("member interview server page", () => {
     expect(element.props.data.counts).toEqual({ people: 1, invited: 0, inProgress: 0, submitted: 1 });
     expect(state.listParticipantPage).not.toHaveBeenCalled();
     expect(state.listCurrentMailByParticipants).not.toHaveBeenCalled();
-    expect(state.recentEvents).not.toHaveBeenCalled();
+    expect(state.listEventPage).not.toHaveBeenCalled();
   });
 
   it("supplies aggregate analysis for member access without respondent records", async () => {
@@ -65,5 +65,6 @@ describe("member interview server page", () => {
     expect(element.props.data.people[0]).toMatchObject({ name: "Respondent", email: "private@example.test", token: "private-link" });
     expect(state.listParticipantPage).toHaveBeenCalledOnce();
     expect(element.props.data.peopleNextCursor).toBeNull();
+    expect(element.props.data.eventsNextCursor).toBe("next-events");
   });
 });

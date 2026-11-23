@@ -139,12 +139,12 @@ vi.mock("../src/lib/repo", async () => {
       return run ? { result: run.result, surveyVersion: 1, expiresAt: run.expiresAt } : null;
     }),
     publishVersionIfCurrent: vi.fn(async () => ({ version: 2 })),
-    recentEvents: vi.fn(async () => [{
+    listEventPage: vi.fn(async () => ({ events: [{
       id: "event-id",
       type: "mcp",
       at: "2026-11-13T00:00:00.000Z",
       meta: { tool: "get_design_guidance", ok: true, actor: { kind: "api_key", id: "0123456789abcdef01234567", name: "Reporting agent" } },
-    }]),
+    }], nextCursor: "older-events" })),
     listParticipants: vi.fn(async () => [
       { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } } },
       { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "low", updatedAt: "2026-11-13T00:00:00.000Z" } } },
@@ -482,8 +482,11 @@ describe("MCP tools", () => {
 
   it("omits credential identities from MCP event listings", async () => {
     const res = await call("list_events", { interviewId });
-    const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[] } } };
+    const body = await res.json() as { result: { structuredContent: { events: { meta: Record<string, unknown> }[]; nextCursor: string } } };
     expect(body.result.structuredContent.events[0].meta).toEqual({ tool: "get_design_guidance", ok: true });
+    expect(body.result.structuredContent.nextCursor).toBe("older-events");
+    const paged = await call("list_events", { interviewId, cursor: "older-events", limit: 10 });
+    expect(paged.status).toBe(200);
   });
 
   it("returns questionnaire diagnostics with a successful create result", async () => {
@@ -564,6 +567,7 @@ describe("MCP tools", () => {
     expect(addPeopleProperties.people).toMatchObject({ minItems: 1, maxItems: 100 });
     const listEventsProperties = tools.find((tool) => tool.name === "list_events")!.inputSchema.properties as Record<string, unknown>;
     expect(listEventsProperties.limit).toMatchObject({ minimum: 1, maximum: 50 });
+    expect(listEventsProperties.cursor).toMatchObject({ type: "string", maxLength: 512 });
   });
 
   it("publishes the preview token as required for questionnaire patch application", async () => {
