@@ -30,7 +30,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     if (counts.people > 100) {
       let firstPage;
       try {
-        firstPage = await listParticipantPage(id, null, 10, false, true, MAX_EXPORT_SOURCE_BYTES);
+        firstPage = await listParticipantPage(id, null, 10, false, false, MAX_EXPORT_SOURCE_BYTES);
       } catch (error) {
         if (error instanceof ParticipantExportSizeLimitError) return fail(413, error.message, { code: "export_page_limit", limitBytes: error.limitBytes });
         return fail(503, "The export could not be started. Try again in a moment.", { code: "export_stream_unavailable" });
@@ -83,7 +83,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
                 return;
               }
               cursor = page.nextCursor;
-              page = await listParticipantPage(id, cursor, 10, false, true, MAX_EXPORT_SOURCE_BYTES);
+              page = await listParticipantPage(id, cursor, 10, false, false, MAX_EXPORT_SOURCE_BYTES);
               personIndex = 0;
             }
           } catch (error) {
