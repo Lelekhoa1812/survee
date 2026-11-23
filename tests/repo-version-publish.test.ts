@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   inserted: [] as Record<string, unknown>[],
   insertOptions: [] as Record<string, unknown>[],
   deleted: [] as Record<string, unknown>[],
+  operations: [] as Record<string, any>[],
   assetUpdates: [] as Record<string, unknown>[],
   assetMatchedCount: 1,
   events: [] as Record<string, unknown>[],
@@ -47,11 +48,24 @@ vi.mock("../src/lib/db", () => ({
       insertOne: async (row: Record<string, unknown>, options: Record<string, unknown>) => { mocks.inserted.push(row); mocks.insertOptions.push(options); },
       deleteOne: async (filter: Record<string, unknown>) => { mocks.deleted.push(filter); },
     }),
+    mcpOperations: async () => ({
+      findOne: async (filter: Record<string, unknown>) => mocks.operations.find((row) => Object.entries(filter).every(([key, value]) => row[key] === value)) ?? null,
+      deleteOne: async (filter: { _id: unknown }) => {
+        const index = mocks.operations.findIndex((row) => row._id === filter._id);
+        if (index >= 0) mocks.operations.splice(index, 1);
+        return { deletedCount: index >= 0 ? 1 : 0 };
+      },
+      insertOne: async (row: Record<string, unknown>) => {
+        if (mocks.operations.some((current) => ["tenantId", "tool", "credentialIdHash", "operationIdHash"].every((key) => current[key] === row[key]))) throw Object.assign(new Error("duplicate key"), { code: 11000 });
+        mocks.operations.push(row);
+        return { insertedId: row._id };
+      },
+    }),
     events: async () => ({ insertOne: async (row: Record<string, unknown>, options: Record<string, unknown>) => { mocks.events.push(row); mocks.eventOptions.push(options); if (mocks.failEventInsert) throw new Error("event insert failed"); return {}; } }),
   },
 }));
 
-import { publishVersionIfCurrent } from "../src/lib/repo";
+import { getQuestionnairePublishOperation, publishVersionIfCurrent } from "../src/lib/repo";
 import { tenantFilter, withTenantPrincipal } from "../src/lib/tenant-context";
 
 const interviewId = new ObjectId().toHexString();
@@ -72,6 +86,7 @@ beforeEach(() => {
   mocks.assetUpdates.length = 0;
   mocks.assetMatchedCount = 1;
   mocks.events.length = 0;
+  mocks.operations.length = 0;
   mocks.eventOptions.length = 0;
   mocks.failEventInsert = false;
   mocks.updateOne.mockReset().mockImplementation(async () => ({ modifiedCount: mocks.modifiedCount }));
@@ -83,6 +98,28 @@ beforeEach(() => {
 });
 
 describe("publishVersionIfCurrent", () => {
+  it("commits a publication result with the version and replays the exact result", async () => {
+    const operation = { operationId: "publish-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", result: { ok: true, interviewId, version: 5, diagnostics: [] } };
+    const first = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey, "mcp_patch", 8, { tool: "apply_questionnaire_version_patch", details: operation }));
+    const replay = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey, "mcp_patch", 8, { tool: "apply_questionnaire_version_patch", details: operation }));
+    expect(first).toEqual({ version: 5 });
+    expect(replay).toEqual({ replayed: true, result: operation.result });
+    expect(mocks.inserted).toHaveLength(1);
+    expect(mocks.operations).toHaveLength(1);
+    const stored = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => getQuestionnairePublishOperation("apply_questionnaire_version_patch", operation));
+    expect(stored).toEqual({ kind: "replayed", result: operation.result });
+  });
+
+  it("rejects mismatched publication retries and replaces expired rows before TTL cleanup", async () => {
+    const operation = { operationId: "publish-2", credentialId: "api_key:key-a", argumentDigest: "digest-a", result: { ok: true, interviewId, version: 5 } };
+    const run = (details: typeof operation) => withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey, "mcp_patch", 8, { tool: "apply_questionnaire_version_patch", details }));
+    await run(operation);
+    expect(await run({ ...operation, argumentDigest: "digest-b" })).toEqual({ operationConflict: true });
+    mocks.operations[0].expiresAt = new Date(0);
+    expect(await run(operation)).toEqual({ version: 5 });
+    expect(mocks.operations).toHaveLength(1);
+  });
+
   it("adds the next immutable version and advances the head in one transaction", async () => {
     const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey));
     expect(result).toEqual({ version: 5 });

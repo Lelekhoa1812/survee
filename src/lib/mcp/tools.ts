@@ -44,6 +44,7 @@ import {
   listVersions,
   noteMcp,
   publishVersionIfCurrent,
+  getQuestionnairePublishOperation,
   regenerateToken,
   regenerateTokenWithOperation,
   getRegenerateLinkOperation,
@@ -111,6 +112,46 @@ function stableMcpCredentialId(): string | null {
   const principal = currentPrincipal();
   if (!principal) return null;
   return principal.auditActor ? `${principal.auditActor.kind}:${principal.auditActor.id}` : `${principal.source}:${principal.tenantId}`;
+}
+
+function questionnairePublishOperation(args: Record<string, unknown>, tool: string): { operation?: { operationId: string; credentialId: string; argumentDigest: string }; error?: ToolResult } {
+  if (args.operationId === undefined) return {};
+  if (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId)) {
+    return { error: err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args") };
+  }
+  const credentialId = stableMcpCredentialId();
+  if (!credentialId) return { error: err("operationId requires an authenticated MCP credential.", "invalid_args") };
+  return {
+    operation: {
+      operationId: args.operationId,
+      credentialId,
+      argumentDigest: createHash("sha256").update(canonicalJson(args)).digest("hex"),
+    },
+  };
+}
+
+async function replayQuestionnairePublish(tool: string, operation?: { operationId: string; credentialId: string; argumentDigest: string }): Promise<ToolResult | null> {
+  if (!operation) return null;
+  const existing = await getQuestionnairePublishOperation(tool, operation);
+  if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to publish a new version.", "operation_result_unavailable");
+  if (existing?.kind === "conflict") return err("operationId was already used with different questionnaire publication arguments.", "operation_id_conflict");
+  return existing?.kind === "replayed" ? ok(existing.result) : null;
+}
+
+function publishQuestionnaireVersion(
+  id: string,
+  expectedVersion: number,
+  expectedBaseHash: string,
+  survey: Parameters<typeof publishVersionIfCurrent>[3],
+  source: "mcp_patch" | "mcp_upload",
+  expectedRespondentRevision: number | undefined,
+  operation?: { tool: string; details: { operationId: string; credentialId: string; argumentDigest: string; result: Record<string, unknown> } },
+) {
+  if (operation) return publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, survey, source, expectedRespondentRevision, operation);
+  if (expectedRespondentRevision !== undefined) return publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, survey, source, expectedRespondentRevision);
+  return source === "mcp_upload"
+    ? publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, survey, source)
+    : publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, survey);
 }
 
 const DEFAULT_INTERVIEW_PAGE_SIZE = 25;
@@ -1408,7 +1449,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "apply_questionnaire_version_patch",
-    description: "Publish a new immutable questionnaire version from complete HTML after preview. Requires the signed, short-lived previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
+    description: "Publish a new immutable questionnaire version from complete HTML after preview. Requires the signed, short-lived previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it. Optional operationId replays a successful publish for seven days.",
     inputSchema: obj({
       interviewId: str,
       html: str,
@@ -1419,12 +1460,17 @@ const TOOLS: ToolDef[] = [
       previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
+      operationId: { type: "string", minLength: 1, maxLength: 128 },
     }, ["interviewId", "html", "expectedVersion", "baseHash", "candidateHash", "previewToken"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       const principal = currentPrincipal();
       if (!principal?.tenantId) return err("A tenant-bound MCP request is required to apply questionnaire changes.", "tenant_context_required");
+      const retry = questionnairePublishOperation(args, "apply_questionnaire_version_patch");
+      if (retry.error) return retry.error;
+      const replay = await replayQuestionnairePublish("apply_questionnaire_version_patch", retry.operation);
+      if (replay) return replay;
       const fileName = asString(args.fileName, 200);
       const expectedVersion = args.expectedVersion as number;
       const preview = verifyPatchPreviewToken(asString(args.previewToken, 1000), {
@@ -1459,18 +1505,21 @@ const TOOLS: ToolDef[] = [
         return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics, compatibilityHash } };
       }
       if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
-      const published = prepared.compatibilityRevision === undefined
-        ? await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey)
-        : await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey, "mcp_patch", prepared.compatibilityRevision);
+      const responseData = { ok: true, interviewId: id, version: expectedVersion + 1, previousVersion: expectedVersion, candidateHash, diagnostics: prepared.report.diagnostics };
+      const operation = retry.operation ? { tool: "apply_questionnaire_version_patch", details: { ...retry.operation, result: responseData } } : undefined;
+      const published = await publishQuestionnaireVersion(id, expectedVersion, current.htmlSha256, prepared.survey, "mcp_patch", prepared.compatibilityRevision, operation);
       if (!published) return err("Interview not found.", "not_found");
+      if ("operationDeleted" in published) return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to publish a new version.", "operation_result_unavailable");
+      if ("operationConflict" in published) return err("operationId was already used with different questionnaire publication arguments.", "operation_id_conflict");
+      if ("replayed" in published) return ok(published.result);
       if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
       if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
-      return ok({ ok: true, interviewId: id, version: published.version, previousVersion: expectedVersion, candidateHash, diagnostics: prepared.report.diagnostics });
+      return ok(responseData);
     },
   },
   {
     name: "apply_questionnaire_required_patch",
-    description: "Publish a previewed batch of required/optional changes by stable question ID. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
+    description: "Publish a previewed batch of required/optional changes by stable question ID. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it. Optional operationId replays a successful publish for seven days.",
     inputSchema: obj({
       interviewId: str,
       changes: requiredChanges,
@@ -1480,12 +1529,17 @@ const TOOLS: ToolDef[] = [
       previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
+      operationId: { type: "string", minLength: 1, maxLength: 128 },
     }, ["interviewId", "changes", "expectedVersion", "baseHash", "candidateHash", "previewToken"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       const principal = currentPrincipal();
       if (!principal?.tenantId) return err("A tenant-bound MCP request is required to apply questionnaire changes.", "tenant_context_required");
+      const retry = questionnairePublishOperation(args, "apply_questionnaire_required_patch");
+      if (retry.error) return retry.error;
+      const replay = await replayQuestionnairePublish("apply_questionnaire_required_patch", retry.operation);
+      if (replay) return replay;
       const expectedVersion = args.expectedVersion as number;
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
@@ -1519,21 +1573,17 @@ const TOOLS: ToolDef[] = [
         return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics, compatibilityHash } };
       }
       if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
-      const published = prepared.compatibilityRevision === undefined
-        ? await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey)
-        : await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey, "mcp_patch", prepared.compatibilityRevision);
+      const changes = patched.changes.map((change) => ({ questionId: change.questionId, beforeRequired: change.beforeRequired, afterRequired: change.required }));
+      const responseData = { ok: true, interviewId: id, version: expectedVersion + 1, previousVersion: expectedVersion, candidateHash, changes, diagnostics: prepared.report.diagnostics };
+      const operation = retry.operation ? { tool: "apply_questionnaire_required_patch", details: { ...retry.operation, result: responseData } } : undefined;
+      const published = await publishQuestionnaireVersion(id, expectedVersion, current.htmlSha256, prepared.survey, "mcp_patch", prepared.compatibilityRevision, operation);
       if (!published) return err("Interview not found.", "not_found");
+      if ("operationDeleted" in published) return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to publish a new version.", "operation_result_unavailable");
+      if ("operationConflict" in published) return err("operationId was already used with different questionnaire publication arguments.", "operation_id_conflict");
+      if ("replayed" in published) return ok(published.result);
       if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
       if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
-      return ok({
-        ok: true,
-        interviewId: id,
-        version: published.version,
-        previousVersion: expectedVersion,
-        candidateHash,
-        changes: patched.changes.map((change) => ({ questionId: change.questionId, beforeRequired: change.beforeRequired, afterRequired: change.required })),
-        diagnostics: prepared.report.diagnostics,
-      });
+      return ok(responseData);
     },
   },
   {
@@ -1624,7 +1674,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "apply_questionnaire_block_patch",
-    description: "Publish a previewed batch of ordinary question block edits, including question moves and positioned additions. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it.",
+    description: "Publish a previewed batch of ordinary question block edits, including question moves and positioned additions. Requires the signed previewToken and matching version/hash fields; acknowledge compatibility impact when preview reports it. Optional operationId replays a successful publish for seven days.",
     inputSchema: obj({
       interviewId: str,
       operations: questionnaireBlockOperations,
@@ -1634,12 +1684,17 @@ const TOOLS: ToolDef[] = [
       previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
+      operationId: { type: "string", minLength: 1, maxLength: 128 },
     }, ["interviewId", "operations", "expectedVersion", "baseHash", "candidateHash", "previewToken"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
       const principal = currentPrincipal();
       if (!principal?.tenantId) return err("A tenant-bound MCP request is required to apply questionnaire changes.", "tenant_context_required");
+      const retry = questionnairePublishOperation(args, "apply_questionnaire_block_patch");
+      if (retry.error) return retry.error;
+      const replay = await replayQuestionnairePublish("apply_questionnaire_block_patch", retry.operation);
+      if (replay) return replay;
       const expectedVersion = args.expectedVersion as number;
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
@@ -1673,26 +1728,29 @@ const TOOLS: ToolDef[] = [
         return { ...err("Compatibility impact must be acknowledged before publishing.", "acknowledgement_required"), structuredContent: { ok: false, error: "Compatibility impact must be acknowledged before publishing.", code: "acknowledgement_required", diagnostics: prepared.report.diagnostics, compatibilityHash } };
       }
       if (impact && args.compatibilityHash === undefined) return err("A compatibilityHash from the reviewed preview is required to acknowledge these findings.", "preview_required");
-      const published = prepared.compatibilityRevision === undefined
-        ? await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey)
-        : await publishVersionIfCurrent(id, expectedVersion, current.htmlSha256, prepared.survey, "mcp_patch", prepared.compatibilityRevision);
-      if (!published) return err("Interview not found.", "not_found");
-      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
-      if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
-      return ok({
+      const responseData = {
         ok: true,
         interviewId: id,
-        version: published.version,
+        version: expectedVersion + 1,
         previousVersion: expectedVersion,
         candidateHash,
         operationChanges: patched.changes,
         diagnostics: prepared.report.diagnostics,
-      });
+      };
+      const operation = retry.operation ? { tool: "apply_questionnaire_block_patch", details: { ...retry.operation, result: responseData } } : undefined;
+      const published = await publishQuestionnaireVersion(id, expectedVersion, current.htmlSha256, prepared.survey, "mcp_patch", prepared.compatibilityRevision, operation);
+      if (!published) return err("Interview not found.", "not_found");
+      if ("operationDeleted" in published) return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to publish a new version.", "operation_result_unavailable");
+      if ("operationConflict" in published) return err("operationId was already used with different questionnaire publication arguments.", "operation_id_conflict");
+      if ("replayed" in published) return ok(published.result);
+      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
+      if ("conflict" in published) return err("The questionnaire changed while applying. Preview again before applying.", "stale_preview");
+      return ok(responseData);
     },
   },
   {
     name: "upload_survey_version",
-    description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned findings and retry with its short-lived previewToken, matching hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes.",
+    description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned findings and retry with its short-lived previewToken, matching hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes. Optional operationId replays a successful upload for seven days.",
     inputSchema: obj({
       interviewId: str,
       html: str,
@@ -1703,10 +1761,15 @@ const TOOLS: ToolDef[] = [
       previewToken: str,
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
+      operationId: { type: "string", minLength: 1, maxLength: 128 },
     }, ["interviewId", "html"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      const retry = questionnairePublishOperation(args, "upload_survey_version");
+      if (retry.error) return retry.error;
+      const replay = await replayQuestionnairePublish("upload_survey_version", retry.operation);
+      if (replay) return replay;
       const fileName = asString(args.fileName, 200);
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
@@ -1808,21 +1871,24 @@ const TOOLS: ToolDef[] = [
       }
       const expectedVersion = hasPreview ? args.expectedVersion as number : interview.currentVersion;
       const expectedBaseHash = hasPreview ? args.baseHash as string : current.htmlSha256;
-      const published = prepared.compatibilityRevision === undefined
-        ? await publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, prepared.survey, "mcp_upload")
-        : await publishVersionIfCurrent(id, expectedVersion, expectedBaseHash, prepared.survey, "mcp_upload", prepared.compatibilityRevision);
-      if (!published) return err("Interview not found.", "not_found");
-      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
-      if ("conflict" in published) return err("The questionnaire changed while uploading. Preview again before uploading.", "stale_preview");
-      return ok({
+      const responseData = {
         ok: true,
-        version: published.version,
+        version: expectedVersion + 1,
         previousVersion: expectedVersion,
         interviewId: id,
         candidateHash,
         compatibilityImpact,
         report: { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics },
-      });
+      };
+      const operation = retry.operation ? { tool: "upload_survey_version", details: { ...retry.operation, result: responseData } } : undefined;
+      const published = await publishQuestionnaireVersion(id, expectedVersion, expectedBaseHash, prepared.survey, "mcp_upload", prepared.compatibilityRevision, operation);
+      if (!published) return err("Interview not found.", "not_found");
+      if ("operationDeleted" in published) return err("This operation's retained result was cleared because its interview was deleted. Use a new operationId to upload a new version.", "operation_result_unavailable");
+      if ("operationConflict" in published) return err("operationId was already used with different questionnaire publication arguments.", "operation_id_conflict");
+      if ("replayed" in published) return ok(published.result);
+      if ("assetUnavailable" in published) return err("A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview again.", "asset_unavailable");
+      if ("conflict" in published) return err("The questionnaire changed while uploading. Preview again before uploading.", "stale_preview");
+      return ok(responseData);
     },
   },
   {

@@ -436,7 +436,50 @@ export async function addVersion(id: string, survey: NewSurvey): Promise<number 
   return published && !("conflict" in published) && !("assetUnavailable" in published) ? published.version : null;
 }
 
+export type QuestionnairePublishOperation = {
+  operationId: string;
+  credentialId: string;
+  argumentDigest: string;
+  result: Record<string, unknown>;
+};
+
+export type QuestionnairePublishOperationResult =
+  | { kind: "replayed"; result: Record<string, unknown> }
+  | { kind: "conflict" }
+  | { kind: "deleted" };
+
+export async function getQuestionnairePublishOperation(tool: string, operation: Omit<QuestionnairePublishOperation, "result">): Promise<QuestionnairePublishOperationResult | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, tool, operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", result: existing.result }
+    : { kind: "conflict" };
+}
+
 /** Publish only if the interview still points at the version that was reviewed. */
+type PublishVersionBasicResult = { version: number } | { conflict: true } | { assetUnavailable: true } | null;
+type PublishVersionOperationResult = { version: number } | { conflict: true } | { assetUnavailable: true } | { operationConflict: true } | { operationDeleted: true } | { replayed: true; result: Record<string, unknown> } | null;
+
+export function publishVersionIfCurrent(
+  id: string,
+  expectedVersion: number,
+  expectedBaseHash: string,
+  survey: NewSurvey,
+  source?: "mcp_patch" | "mcp_upload" | "host_patch",
+  expectedRespondentRevision?: number,
+): Promise<PublishVersionBasicResult>;
+export function publishVersionIfCurrent(
+  id: string,
+  expectedVersion: number,
+  expectedBaseHash: string,
+  survey: NewSurvey,
+  source: "mcp_patch" | "mcp_upload" | "host_patch",
+  expectedRespondentRevision: number | undefined,
+  operation: { tool: string; details: QuestionnairePublishOperation },
+): Promise<PublishVersionOperationResult>;
 export async function publishVersionIfCurrent(
   id: string,
   expectedVersion: number,
@@ -444,11 +487,14 @@ export async function publishVersionIfCurrent(
   survey: NewSurvey,
   source: "mcp_patch" | "mcp_upload" | "host_patch" = "mcp_patch",
   expectedRespondentRevision?: number,
-): Promise<{ version: number } | { conflict: true } | { assetUnavailable: true } | null> {
+  operation?: { tool: string; details: QuestionnairePublishOperation },
+): Promise<{ version: number } | { conflict: true } | { assetUnavailable: true } | { operationConflict: true } | { operationDeleted: true } | { replayed: true; result: Record<string, unknown> } | null> {
   const oid = toOid(id);
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
+  const operations = operation ? await col.mcpOperations() : null;
+  const operationScope = operation ? mcpOperationScope(tenantId, operation.tool, operation.details) : null;
   const version = expectedVersion + 1;
   const publishFilter: Record<string, unknown> = {
     _id: oid,
@@ -459,6 +505,16 @@ export async function publishVersionIfCurrent(
   };
   try {
     const result = await withMongoTransaction(async (session) => {
+      if (operation && operations && operationScope) {
+        const existing = await operations.findOne(operationScope, { session });
+        if (existing && existing.expiresAt > new Date()) {
+          if (existing.deletedAt) return { operationDeleted: true as const };
+          return existing.argumentDigest === operation.details.argumentDigest
+            ? { replayed: true as const, result: existing.result }
+            : { operationConflict: true as const };
+        }
+        if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+      }
       const interviews = await col.interviews();
       const versions = await col.versions();
       const interview = await interviews.findOne(tenantFilter(tenantId, publishFilter), { session });
@@ -488,6 +544,13 @@ export async function publishVersionIfCurrent(
       }
       await versions.insertOne(versionDoc(tenantId, oid, version, survey), { session });
       await insertEvent(tenantId, oid, "version", undefined, session, { version, source });
+      if (operation && operations && operationScope) {
+        const createdAt = new Date();
+        await operations.insertOne({
+          _id: new ObjectId(), ...operationScope, interviewId: oid, argumentDigest: operation.details.argumentDigest,
+          result: operation.details.result, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+        }, { session });
+      }
       return { version };
     });
     if ("conflict" in result) return result;
@@ -495,7 +558,18 @@ export async function publishVersionIfCurrent(
   } catch (error) {
     if (error instanceof MissingImageAssetReferenceError) return { assetUnavailable: true };
     // A concurrent publisher may already have claimed this version number.
-    if (error && typeof error === "object" && "code" in error && error.code === 11000) return { conflict: true };
+    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+      if (operation && operations && operationScope) {
+        const committed = await operations.findOne(operationScope);
+        if (committed && committed.expiresAt > new Date()) {
+          if (committed.deletedAt) return { operationDeleted: true };
+          return committed.argumentDigest === operation.details.argumentDigest
+            ? { replayed: true, result: committed.result }
+            : { operationConflict: true };
+        }
+      }
+      return { conflict: true };
+    }
     throw error;
   }
 }

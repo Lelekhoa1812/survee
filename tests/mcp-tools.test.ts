@@ -114,6 +114,7 @@ vi.mock("../src/lib/repo", async () => {
     getAddPeopleOperation: vi.fn(async () => null),
     regenerateTokenWithOperation: vi.fn(async () => ({ kind: "rotated" as const, token: "rotated-token", interviewId })),
     getRegenerateLinkOperation: vi.fn(async () => null),
+    getQuestionnairePublishOperation: vi.fn(async () => null),
     updateInterview: vi.fn(async () => ({ _id: new ObjectId(interviewId) })),
     updateInterviewWithOperation: vi.fn(async (id: string) => ({ kind: "updated" as const, interviewId: id })),
     getUpdateInterviewOperation: vi.fn(async () => null),
@@ -184,7 +185,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -634,6 +635,9 @@ describe("MCP tools", () => {
     const listEventsProperties = tools.find((tool) => tool.name === "list_events")!.inputSchema.properties as Record<string, unknown>;
     expect(listEventsProperties.limit).toMatchObject({ minimum: 1, maximum: 50 });
     expect(listEventsProperties.cursor).toMatchObject({ type: "string", maxLength: 512 });
+    for (const name of ["apply_questionnaire_version_patch", "apply_questionnaire_required_patch", "apply_questionnaire_block_patch", "upload_survey_version"]) {
+      expect(tools.find((tool) => tool.name === name)?.inputSchema.properties).toMatchObject({ operationId: { type: "string", minLength: 1, maxLength: 128 } });
+    }
   });
 
   it("publishes the preview token as required for questionnaire patch application", async () => {
@@ -695,13 +699,32 @@ describe("MCP tools", () => {
       baseHash: previewBody.result.structuredContent.baseHash,
       candidateHash: previewBody.result.structuredContent.candidateHash,
       previewToken: previewBody.result.structuredContent.previewToken,
+      operationId: "required-publish-1",
     });
     const applyBody = await applyResponse.json() as { result: { isError?: boolean; structuredContent: { version?: number; changes?: unknown[] } } };
     expect(applyBody.result.isError).toBeFalsy();
     expect(applyBody.result.structuredContent).toMatchObject({ version: 2, changes: [{ questionId: optionalQuestion.id, beforeRequired: false, afterRequired: true }] });
     expect(vi.mocked(publishVersionIfCurrent)).toHaveBeenCalledWith(interviewId, 1, current.htmlSha256, expect.objectContaining({
       html: expect.stringContaining('"required": true'),
-    }), "mcp_patch", 0);
+    }), "mcp_patch", 0, expect.objectContaining({
+      tool: "apply_questionnaire_required_patch",
+      details: expect.objectContaining({ operationId: "required-publish-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/), result: expect.objectContaining({ version: 2, previousVersion: 1 }) }),
+    }));
+
+    const replayData = applyBody.result.structuredContent as unknown as Record<string, unknown>;
+    vi.mocked(getQuestionnairePublishOperation).mockResolvedValueOnce({ kind: "replayed", result: replayData });
+    const replayResponse = await call("apply_questionnaire_required_patch", {
+      interviewId,
+      changes,
+      expectedVersion: 1,
+      baseHash: previewBody.result.structuredContent.baseHash,
+      candidateHash: previewBody.result.structuredContent.candidateHash,
+      previewToken: previewBody.result.structuredContent.previewToken,
+      operationId: "required-publish-1",
+    });
+    const replayBody = await replayResponse.json() as { result: { structuredContent: Record<string, unknown> } };
+    expect(replayBody.result.structuredContent).toEqual(replayData);
+    expect(publishVersionIfCurrent).toHaveBeenCalledOnce();
   });
 
   it("surfaces a missing workspace image when an MCP questionnaire publish is blocked", async () => {
