@@ -485,6 +485,35 @@ describe("MCP tools", () => {
     }));
   });
 
+  it("surfaces a missing workspace image when an MCP questionnaire publish is blocked", async () => {
+    const optionalQuestion = patchTestManifest.questions.find((question) => question.required !== true);
+    expect(optionalQuestion).toBeDefined();
+    if (!optionalQuestion) return;
+    const current = {
+      _id: new ObjectId(), tenantId: "axion", interviewId: new ObjectId(interviewId), version: 1,
+      fileName: "starter.kqa.html", html: patchTestHtml,
+      htmlSha256: createHash("sha256").update(patchTestHtml).digest("hex"),
+      bytes: Buffer.byteLength(patchTestHtml, "utf8"), manifest: patchTestManifest,
+      check: { errors: 0, warnings: 0, info: 0, checkedAt: new Date().toISOString(), checkerVersion: "test" },
+      createdAt: new Date(),
+    };
+    vi.mocked(getVersion).mockResolvedValueOnce(current as never).mockResolvedValueOnce(current as never);
+    const changes = [{ questionId: optionalQuestion.id, required: true }];
+    const previewResponse = await call("preview_questionnaire_required_patch", { interviewId, changes });
+    const previewBody = await previewResponse.json() as { result: { structuredContent: { baseHash: string; candidateHash: string; previewToken: string } } };
+    vi.mocked(publishVersionIfCurrent).mockResolvedValueOnce({ assetUnavailable: true } as never);
+
+    const applyResponse = await call("apply_questionnaire_required_patch", {
+      interviewId, changes, expectedVersion: 1,
+      baseHash: previewBody.result.structuredContent.baseHash,
+      candidateHash: previewBody.result.structuredContent.candidateHash,
+      previewToken: previewBody.result.structuredContent.previewToken,
+    });
+    const applyBody = await applyResponse.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(applyBody.result.isError).toBe(true);
+    expect(applyBody.result.structuredContent.code).toBe("asset_unavailable");
+  });
+
   it("returns sourced design guidance for the requested product surface", async () => {
     const res = await call("get_design_guidance", { surface: "questionnaire" });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: {

@@ -200,6 +200,7 @@ A failed tool call returns `isError: true` with `structuredContent` shaped as `{
 | `invalid_patch` | A patch names a question or operation that does not exist in the current version. |
 | `confirmation_mismatch` | A destructive action's confirm name does not match exactly. |
 | `in_use` / `asset_in_use` | The image or asset is still referenced. Remove the references first. |
+| `asset_unavailable` | A questionnaire candidate references an image missing from this workspace. Upload it again or remove the asset URL, then preview the candidate again. |
 | `invalid_image` | The upload is not an accepted image type. |
 | `analysis_run_invalid` / `analysis_run_expired` | The analysis run id is unknown or has expired. Start a new run. |
 | `participant_read_limit` | The interview has more than 100 people for a full-record read. The result is not truncated; use aggregate tools or a narrower workflow. |
