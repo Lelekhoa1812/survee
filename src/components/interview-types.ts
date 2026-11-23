@@ -55,6 +55,8 @@ export interface InterviewData {
   /** Aggregate-only counts; available to workspace members without exposing respondent records. */
   counts: { people: number; invited: number; inProgress: number; submitted: number };
   people: PersonRow[];
+  /** Whether the bounded participant page contains raw answers and order-assignment history. */
+  answersIncluded?: boolean;
   /** Opaque cursor for fetching the next bounded host participant page. */
   peopleNextCursor?: string | null;
   versions: VersionRow[];

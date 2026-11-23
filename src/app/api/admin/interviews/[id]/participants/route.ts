@@ -24,9 +24,9 @@ export const GET = withServerErrors("admin/interviews/[id]/participants", async 
   }
 
   try {
-    const page = await listParticipantPage(id, cursor, limit);
+    const page = await listParticipantPage(id, cursor, limit, false, false);
     const mail = await listCurrentMailByParticipants(interview._id, page.people);
-    return json({ ok: true, people: participantRows(version.manifest, page.people, mail.map(mailRecord)), nextCursor: page.nextCursor });
+    return json({ ok: true, people: participantRows(version.manifest, page.people, mail.map(mailRecord), false), nextCursor: page.nextCursor });
   } catch (error) {
     if (error instanceof ParticipantCursorError) return fail(400, error.message, { code: "participant_cursor_invalid" });
     throw error;

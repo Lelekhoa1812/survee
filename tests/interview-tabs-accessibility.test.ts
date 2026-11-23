@@ -30,6 +30,7 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  routerState.push.mockClear();
   routerState.refresh.mockClear();
   window.sessionStorage.clear();
   host = document.createElement("div");
@@ -52,8 +53,8 @@ const data = {
   publicOrigin: null,
 } as unknown as InterviewData;
 
-function renderInterview(initialTab = "overview", analysisOnly = false, canManage = true) {
-  act(() => root.render(createElement(InterviewView, { key: initialTab, data, initialTab, analysisOnly, canManage })));
+function renderInterview(initialTab = "overview", analysisOnly = false, canManage = true, answersIncluded = false) {
+  act(() => root.render(createElement(InterviewView, { key: initialTab, data: { ...data, answersIncluded }, initialTab, analysisOnly, canManage })));
 }
 
 function tab(name: string) {
@@ -65,6 +66,21 @@ function press(button: HTMLButtonElement, key: string) {
 }
 
 describe("interview section tabs", () => {
+  it("loads the Answers tab with answer data only after selection", () => {
+    renderInterview();
+    act(() => tab("Answers").click());
+
+    expect(routerState.push).toHaveBeenCalledWith(expect.stringContaining("tab=answers"));
+  });
+
+  it("switches directly when answer details are already loaded", () => {
+    renderInterview("overview", false, true, true);
+    act(() => tab("Answers").click());
+
+    expect(routerState.push).not.toHaveBeenCalled();
+    expect(tab("Answers").getAttribute("aria-selected")).toBe("true");
+  });
+
   it("uses roving focus, arrow/Home/End navigation, and a linked tab panel", () => {
     renderInterview();
 

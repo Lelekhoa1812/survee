@@ -26,16 +26,17 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   const interview = await getInterview(id);
   if (!interview) notFound();
   const analysisOnly = tab === "analysis";
+  const answersIncluded = canManage && tab === "answers";
   const [current, counts, peoplePage, versions, events] = await Promise.all([
     getVersion(interview._id, interview.currentVersion),
     getInterviewParticipantCounts(id),
-    !canManage || analysisOnly ? Promise.resolve({ people: [], nextCursor: null }) : listParticipantPage(id),
+    !canManage || analysisOnly ? Promise.resolve({ people: [], nextCursor: null }) : listParticipantPage(id, null, undefined, false, answersIncluded),
     analysisOnly ? Promise.resolve([]) : listVersions(interview._id),
     !canManage || analysisOnly ? Promise.resolve([]) : recentEvents(id, 25),
   ]);
   if (!current) notFound();
   const mailRows = !canManage || analysisOnly ? [] : await listCurrentMailByParticipants(interview._id, peoplePage.people);
-  const people = participantRows(current.manifest, peoplePage.people, mailRows.map(mailRecord));
+  const people = participantRows(current.manifest, peoplePage.people, mailRows.map(mailRecord), answersIncluded);
   let analysis: InterviewData["analysis"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
@@ -50,6 +51,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
     publicOrigin: base.ok ? base.origin : null,
     ...(analysis ? { analysis } : {}),
     people,
+    answersIncluded,
     peopleNextCursor: peoplePage.nextCursor,
     versions: versions.map((v) => ({ version: v.version, fileName: v.fileName, bytes: v.bytes, createdAt: v.createdAt.toISOString(), check: { errors: v.check.errors, warnings: v.check.warnings, info: v.check.info }, questions: v.manifest.questions.length })),
     events: events.map((e) => ({ id: e.id, type: e.type, at: e.at, person: e.participantId ? people.find((person) => person.id === e.participantId)?.name : undefined, meta: e.meta })),

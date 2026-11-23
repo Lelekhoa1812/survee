@@ -1,5 +1,7 @@
 import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
-import { deleteInterview, getInterview, listParticipantPage, listVersions, recentEvents, updateInterview } from "@/lib/repo";
+import { deleteInterview, getInterview, getVersion, listParticipantPage, listVersions, recentEvents, updateInterview } from "@/lib/repo";
+import { participantRows } from "@/lib/host/participant-rows";
+import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,12 +14,18 @@ export const GET = withServerErrors("admin/interviews/[id]", async function GET(
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
   const canManage = session.role === "owner" || session.role === "admin";
-  const [peoplePage, versions, events] = await Promise.all([
-    canManage ? listParticipantPage(id) : Promise.resolve({ people: [], nextCursor: null }),
+  const [peoplePage, versions, events, current] = await Promise.all([
+    canManage ? listParticipantPage(id, null, undefined, false, false) : Promise.resolve({ people: [], nextCursor: null }),
     listVersions(interview._id),
     canManage ? recentEvents(id) : Promise.resolve([]),
+    getVersion(interview._id, interview.currentVersion),
   ]);
-  return json({ ok: true, interview: { ...interview, _id: id }, people: peoplePage.people, nextCursor: peoplePage.nextCursor, versions, events });
+  const mailRows = canManage ? await listCurrentMailByParticipants(interview._id, peoplePage.people) : [];
+  return json({
+    ok: true, interview: { ...interview, _id: id },
+    people: current ? participantRows(current.manifest, peoplePage.people, mailRows.map(mailRecord), false) : [],
+    nextCursor: peoplePage.nextCursor, versions, events,
+  });
 });
 
 export const PATCH = withServerErrors("admin/interviews/[id]", async function PATCH(req: Request, { params }: Ctx) {

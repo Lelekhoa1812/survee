@@ -105,4 +105,12 @@ describe("cursor participant pages", () => {
     expect(page.people.map((row) => row.status)).toEqual(["submitted"]);
     expect((mocks.filters[0].$and as Record<string, unknown>[])[1].status).toBe("submitted");
   });
+
+  it("skips order-assignment history when a caller only needs participant progress", async () => {
+    mocks.pageDocs = [[person("000000000000000000000005", "2026-01-05T00:00:00.000Z")]];
+
+    await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 10, false, false));
+
+    expect(mocks.assignmentQueries).toBe(0);
+  });
 });

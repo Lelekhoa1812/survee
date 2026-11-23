@@ -55,7 +55,7 @@ export function InterviewView({ data, initialTab, analysisOnly, canManage = true
   function select(t: Tab) {
     const url = new URL(window.location.href);
     url.searchParams.set("tab", t);
-    if (t === "analysis" || analysisOnly) {
+    if (t === "analysis" || analysisOnly || (t === "answers" && !data.answersIncluded)) {
       router.push(`${url.pathname}${url.search}`);
       return;
     }

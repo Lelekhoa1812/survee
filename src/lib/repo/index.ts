@@ -297,6 +297,7 @@ export async function listParticipantPage(
   cursor: string | null = null,
   requestedLimit = DEFAULT_PARTICIPANT_PAGE_SIZE,
   submittedOnly = false,
+  includeOrderAssignments = true,
 ): Promise<{ people: ParticipantView[]; nextCursor: string | null }> {
   const oid = toOid(interviewId);
   if (!oid) return { people: [], nextCursor: null };
@@ -316,15 +317,17 @@ export async function listParticipantPage(
   const hasMore = docs.length > limit;
   const pageDocs = hasMore ? docs.slice(0, limit) : docs;
   if (!pageDocs.length) return { people: [], nextCursor: null };
-  const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, {
-    interviewId: oid, participantId: { $in: pageDocs.map((doc) => doc._id) },
-  })).sort({ surveyVersion: 1 }).toArray();
   const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
-  for (const assignment of assignments) {
-    const id = assignment.participantId.toHexString();
-    const rows = byParticipant.get(id) ?? [];
-    rows.push({ surveyVersion: assignment.surveyVersion, algorithmVersion: assignment.algorithmVersion, groups: assignment.groups, assignedAt: assignment.assignedAt.toISOString() });
-    byParticipant.set(id, rows);
+  if (includeOrderAssignments) {
+    const assignments = await (await col.questionOrderAssignments()).find(tenantFilter(tenantId, {
+      interviewId: oid, participantId: { $in: pageDocs.map((doc) => doc._id) },
+    })).sort({ surveyVersion: 1 }).toArray();
+    for (const assignment of assignments) {
+      const id = assignment.participantId.toHexString();
+      const rows = byParticipant.get(id) ?? [];
+      rows.push({ surveyVersion: assignment.surveyVersion, algorithmVersion: assignment.algorithmVersion, groups: assignment.groups, assignedAt: assignment.assignedAt.toISOString() });
+      byParticipant.set(id, rows);
+    }
   }
   const people = pageDocs.map((doc) => ({
     ...participantView(doc),

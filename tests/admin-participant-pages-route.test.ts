@@ -45,7 +45,7 @@ describe("admin participant cursor pages", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, people: [{ progress: true }], nextCursor: "next-page" });
-    expect(state.listParticipantPage).toHaveBeenCalledWith("interview-id", "opaque+cursor", 40);
+    expect(state.listParticipantPage).toHaveBeenCalledWith("interview-id", "opaque+cursor", 40, false, false);
   });
 
   it("rejects an oversized page before loading respondent data", async () => {
