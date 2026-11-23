@@ -541,9 +541,10 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   const cohortLabel = cohort.label;
   const statusCounts = data.analysis?.statusCounts ?? { invited: 0, in_progress: 0, submitted: 0 };
   const cohortCount = cohort.statuses.reduce((count, status) => count + statusCounts[status], 0);
+  const hasRepeatQuestions = data.manifest.questions.some((question) => question.type === "repeat");
   const questions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
-    return data.manifest.questions.filter((question) => {
+    return data.manifest.questions.filter((question) => question.type !== "repeat").filter((question) => {
       const matchesType = typeFilter === "all" || question.type === typeFilter;
       const matchesSearch = !normalizedSearch || `${question.id} ${question.label}`.toLocaleLowerCase().includes(normalizedSearch);
       return matchesType && matchesSearch;
@@ -761,6 +762,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
           <Badge kind="info" plain>Version {data.interview.currentVersion}</Badge>
         </div>
         <p className="analysis-caveat">Choose one status cohort or compare invited, in-progress, and submitted groups side by side. Each question&apos;s cohort denominator includes everyone in that status group. Eligibility and inactivity are inferred from current routing rules and saved answers; they are not historical records that a question was displayed. No-answer counts include eligible people only, with inactive people reported separately. Checkbox percentages can total more than 100%. Text and note content are excluded. Singleton signals flag counts of one, but do not assess identification from combinations of attributes or guarantee anonymity. These summaries describe the selected interview cohort; nonresponse or self-selection can shape results. They do not establish population representativeness, statistical significance, or causal effects.</p>
+        {hasRepeatQuestions && <p className="muted" role="note">Repeated records are retained in the Answers and export views; they are not included in scalar question summaries.</p>}
         {data.analysis?.asOf && <p className="analysis-freshness" role="status">Analytics read completed {fullTime(data.analysis.asOf)}. Status groups share one live scan; updates during that scan may be observed.</p>}
       </section>
 
@@ -784,7 +786,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
             <label htmlFor="analysis-type">Question type</label>
             <select id="analysis-type" className="select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as QuestionType | "all")}>
               <option value="all">All types</option>
-              {Object.entries(TYPE_LABELS).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
+              {Object.entries(TYPE_LABELS).filter(([type]) => type !== "repeat").map(([type, label]) => <option key={type} value={type}>{label}</option>)}
             </select>
           </div>
         </div>

@@ -40,4 +40,24 @@ describe("analytics distribution chart", () => {
     expect(html).toContain('<span class="analysis-bar-label" title="No">No</span>');
     expect(html.match(/<span class="analysis-bar-value">0 <span class="muted">\(—\)<\/span><\/span>/g)).toHaveLength(2);
   });
+
+  it("keeps repeat groups out of scalar summaries and explains where to review them", () => {
+    const choice: Question = { id: "choice", type: "single", label: "Choice", options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] };
+    const repeated: Question = { id: "assets", type: "repeat", label: "Assets", fields: [{ id: "name", label: "Name", type: "text" }], maxRows: 5 };
+    const summary = summarizeQuestion(choice, []);
+    const summaries = Object.fromEntries(ANALYTICS_COHORTS.map((cohort) => [cohort.key, { choice: summary }])) as unknown as NonNullable<InterviewData["analysis"]>["summaries"];
+    const data = {
+      interview: { id: "interview-1", name: "Research interview", mode: "multi", status: "open", currentVersion: 1, createdAt: "2026-01-01T00:00:00.000Z" },
+      counts: { people: 0, invited: 0, inProgress: 0, submitted: 0 }, people: [], versions: [], events: [],
+      manifest: { format: "kqa/1", title: "Research interview", questions: [choice, repeated], sections: [] },
+      publicOrigin: null,
+      analysis: { asOf: "2026-11-15T00:00:00.000Z", statusCounts: { invited: 0, in_progress: 0, submitted: 0 }, summaries },
+    } as InterviewData;
+
+    const html = renderToStaticMarkup(createElement(AnalyticsTab, { data }));
+
+    expect(html).toContain("Repeated records are retained in the Answers and export views; they are not included in scalar question summaries.");
+    expect(html).toContain("Choice");
+    expect(html).not.toContain("Assets");
+  });
 });
