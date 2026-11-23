@@ -29,6 +29,7 @@ function harness(context: InviteContext | null, extra: Partial<SendInviteDeps> =
     send,
     begin: async (row) => { recorded.push(row); return "attempt-1"; },
     finish: async (id, patch) => { recorded.push({ id, ...patch }); return true; },
+    log: async () => {},
     linkFor: () => ({ ok: true, link: `https://kqa.example/${TOKEN}` }),
     smtpReady: () => ({ ok: true, from: "host@example.com" }),
     rateLimit,
@@ -80,6 +81,24 @@ describe("sendInvite", () => {
     expect(recorded[0]).not.toHaveProperty("text");
     expect(recorded[0]).not.toHaveProperty("html");
     expect(recorded[1]).toMatchObject({ id: "attempt-1", status: "sent", messageId: "<sent-id@example.com>" });
+  });
+
+  it("waits for the success audit before returning a successful send", async () => {
+    let resolveLog!: () => void;
+    const logGate = new Promise<void>((resolve) => { resolveLog = resolve; });
+    let logged = false;
+    let logStarted = false;
+    const { deps } = harness(ctx({ email: "ada@example.com" }), {
+      log: async () => { logStarted = true; await logGate; logged = true; },
+    });
+    let settled = false;
+    const result = sendInvite({ personId, triggeredBy: "admin" }, deps).finally(() => { settled = true; });
+
+    await vi.waitFor(() => expect(logStarted).toBe(true));
+    expect(settled).toBe(false);
+    resolveLog();
+    expect(await result).toMatchObject({ ok: true, result: "sent" });
+    expect(logged).toBe(true);
   });
 
   it("does not send again until resend is asked", async () => {

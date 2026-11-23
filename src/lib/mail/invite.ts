@@ -29,6 +29,7 @@ export interface SendInviteDeps {
   send?: (message: OutboundMail) => Promise<{ messageId: string }>;
   begin?: (row: Parameters<typeof insertMail>[0]) => Promise<string>;
   finish?: (id: string, patch: { status: "sent"; messageId: string }) => Promise<boolean>;
+  log?: (interviewId: string, participantId: string, result: "sent" | "failed", domain: string) => Promise<void>;
   linkFor?: (token: string) => { ok: true; link: string } | { ok: false; error: string };
   smtpReady?: () => { ok: true; from: string } | { ok: false; error: string };
   rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
@@ -54,9 +55,11 @@ async function logInvite(interviewId: string, participantId: string, result: "se
   if (!interviewOid) return;
   const tenantId = await currentTenantId();
   if (!tenantId) return;
-  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } })).catch(() => {
+  try {
+    await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, interviewId: interviewOid, participantId: personOid ?? undefined, type: "invite", at: new Date(), meta: { result, domain } });
+  } catch {
     console.error("[audit] invite event persistence failed");
-  });
+  }
 }
 
 /** One durable mail attempt is recorded before SMTP. Refusals never create an attempt. */
@@ -134,6 +137,6 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   } catch {
     return { ok: false, code: "outcome_unknown", error: "The invite outcome is unconfirmed. Check mail status; sending again may deliver a duplicate.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }
-  if (!deps.begin && !deps.finish) void logInvite(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
+  await (deps.log ?? logInvite)(ctx.interview.id, ctx.person.id, "sent", domainOf(parsed.email));
   return { ok: true, result: "sent", to: parsed.email, sentAt: base.sentAt.toISOString(), messageId: sent.messageId, interviewId: ctx.interview.id, personId: ctx.person.id };
 }
