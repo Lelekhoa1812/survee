@@ -137,6 +137,28 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "multiple-rules.html" }).ok).toBe(true);
   });
 
+  it("supports any-match routing across earlier answers", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-type-0", "single");
+    await click("Add question");
+    await change("#builder-type-1", "number");
+    await click("Add question");
+    await change("#builder-route-mode-2", "any");
+    await click("Add routing rule to question 3");
+    await change("#builder-route-source-2-0", "question-2");
+    await click("Add routing rule to question 3");
+    await change("#builder-route-source-2-1", "question-1");
+    await click("Use questionnaire");
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('"any": [');
+    expect(html).not.toContain('"all": [');
+    expect(checkHtml(html, { fileName: "any-match-rules.html" }).ok).toBe(true);
+  });
+
   it("routes a later question using a numeric comparison", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");
