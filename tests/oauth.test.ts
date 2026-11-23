@@ -16,11 +16,17 @@ const keys: Key[] = [];
 let axionActive = true;
 let memberActive = true;
 let membershipRole: "owner" | "admin" | "member" = "owner";
+let tenantEpoch = 0;
 
 vi.mock("../src/lib/db", () => ({
   col: {
     tenants: async () => ({
       findOne: async (query: { _id: string; status: string }) => axionActive && query._id === "axion" && query.status === "active" ? { _id: "axion" } : null,
+      updateOne: async (query: { _id: string; status: string }) => {
+        if (!axionActive || query._id !== "axion" || query.status !== "active") return { matchedCount: 0 };
+        tenantEpoch++;
+        return { matchedCount: 1 };
+      },
     }),
     oauthClients: async () => ({
       insertOne: async (doc: Client) => { clients.push(doc); },
@@ -28,7 +34,7 @@ vi.mock("../src/lib/db", () => ({
     }),
     oauthCodes: async () => ({
       insertOne: async (doc: Code) => { codes.push(doc); },
-      findOne: async (query: { hash: string }) => codes.find((item) => item.hash === query.hash) ?? null,
+      findOne: async (query: { hash: string; expiresAt?: { $gt: Date } }) => codes.find((item) => item.hash === query.hash && (!query.expiresAt || item.expiresAt > query.expiresAt.$gt)) ?? null,
       deleteOne: async (query: { _id: { toHexString(): string }; hash: string; expiresAt: { $gt: Date } }) => {
         const index = codes.findIndex((item) => item._id.toHexString() === query._id.toHexString()
           && item.hash === query.hash
@@ -68,6 +74,7 @@ vi.mock("../src/lib/db", () => ({
       },
     }),
   },
+  withMongoTransaction: async (work: (session: object) => Promise<unknown>) => work({}),
 }));
 
 import { allowedRedirect, authorizationServerMetadata, exchangeCode, issueCode, OAUTH_SCOPE, protectedResourceMetadata, registerClient, s256, tokenResponse, wwwAuthenticate } from "../src/lib/mcp/oauth";
@@ -87,6 +94,7 @@ describe("OAuth discovery and PKCE", () => {
     axionActive = true;
     memberActive = true;
     membershipRole = "owner";
+    tenantEpoch = 0;
   });
 
   it("publishes the documents ChatGPT looks up", () => {
@@ -215,6 +223,22 @@ describe("OAuth discovery and PKCE", () => {
     memberActive = true;
     expect(await authenticateApiKeyAccess(exchanged.access)).toBeNull();
     expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
+  });
+
+  it("burns an outstanding authorization code when the user is no longer a member", async () => {
+    const registered = await registerClient({ name: "Removed before exchange", redirectUris: ["https://chatgpt.com/callback"] });
+    if (!registered.ok) throw new Error("Client registration failed.");
+    const verifier = "removed-before-exchange-verifier-value-123456";
+    const code = await issueReadOnlyCode({ clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", challenge: s256(verifier), email: "admin@axiob.local", tenantId: "axion", userId: "000000000000000000000001" });
+
+    memberActive = false;
+    expect(await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier })).toEqual({ ok: false, error: "invalid_grant" });
+    expect(keys).toHaveLength(0);
+    expect(codes).toHaveLength(0);
+
+    memberActive = true;
+    expect(await exchangeCode({ code, clientId: registered.clientId, redirectUri: "https://chatgpt.com/callback", verifier })).toEqual({ ok: false, error: "invalid_grant" });
+    expect(keys).toHaveLength(0);
   });
 
   it("rejects OAuth access and refresh when the tenant is suspended", async () => {

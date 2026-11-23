@@ -1,7 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
-import { col } from "../db";
-import { createApiKey, generateKeySecret, hashKey } from "../repo/keys";
+import { col, withMongoTransaction } from "../db";
+import { AXION_TENANT_ID } from "../env";
+import { generateKeySecret, hashKey, splitSecret } from "../repo/keys";
+import type { ApiKeyDoc } from "../repo/types";
 import { DEFAULT_MCP_CAPABILITIES, parseMcpCapabilities, type McpCapability } from "./capabilities";
 
 export const OAUTH_SCOPE = "host";
@@ -122,36 +124,60 @@ export async function issueCode(input: { clientId: string; redirectUri: string; 
 export async function exchangeCode(input: { code: string; clientId: string; redirectUri: string; verifier: string }): Promise<{ ok: true; access: string; refresh: string; expiresIn: number } | { ok: false; error: string }> {
   const codes = await col.oauthCodes();
   const codeHash = hashKey(input.code);
-  const doc = await codes.findOne({ hash: codeHash });
-  if (!doc) return { ok: false, error: "invalid_grant" };
-  // Claim the code atomically. A read followed by an unconditional delete lets
-  // two simultaneous token requests both exchange the same authorization code.
-  const claimed = await codes.deleteOne({ _id: doc._id, hash: codeHash, expiresAt: { $gt: new Date() } });
-  if (claimed.deletedCount !== 1) return { ok: false, error: "invalid_grant" };
-  if (doc.clientId !== input.clientId || doc.redirectUri !== input.redirectUri) return { ok: false, error: "invalid_grant" };
-  if (!challengesMatch(s256(input.verifier), doc.challenge)) return { ok: false, error: "invalid_grant" };
-  const capabilities = doc.capabilities === undefined
-    ? [...DEFAULT_MCP_CAPABILITIES]
-    : parseMcpCapabilities(doc.capabilities);
-  if (!capabilities) return { ok: false, error: "invalid_grant" };
-  const client = await findClient(doc.clientId);
-  const access = generateKeySecret();
-  const refresh = generateKeySecret();
-  const created = await createApiKey({
-    name: client?.name || "OAuth client",
-    note: "Signed in through ChatGPT or another OAuth app. Revoke this key to disconnect it.",
-    secret: access,
-    refreshSecret: refresh,
-    expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-    createdBy: doc.email,
-    tenantId: doc.tenantId ?? "axion",
-    oauthClientId: doc.clientId,
-    oauthUserId: doc.userId,
-    // Keep the protocol-level `host` scope stable; tool permissions come from KQA consent.
-    capabilities,
+  return withMongoTransaction(async (session) => {
+    const now = new Date();
+    const doc = await codes.findOne({ hash: codeHash, expiresAt: { $gt: now } }, { session });
+    if (!doc) return { ok: false, error: "invalid_grant" };
+    // Claim and key creation share a transaction. A read followed by an
+    // unconditional delete lets two simultaneous token requests exchange the
+    // same code; transactions also let member removal serialize on the tenant.
+    const claimed = await codes.deleteOne({ _id: doc._id, hash: codeHash, expiresAt: { $gt: now } }, { session });
+    if (claimed.deletedCount !== 1) return { ok: false, error: "invalid_grant" };
+    if (doc.clientId !== input.clientId || doc.redirectUri !== input.redirectUri) return { ok: false, error: "invalid_grant" };
+    if (!challengesMatch(s256(input.verifier), doc.challenge)) return { ok: false, error: "invalid_grant" };
+    const capabilities = doc.capabilities === undefined
+      ? [...DEFAULT_MCP_CAPABILITIES]
+      : parseMcpCapabilities(doc.capabilities);
+    if (!capabilities || !doc.userId) return { ok: false, error: "invalid_grant" };
+
+    const tenantId = doc.tenantId ?? AXION_TENANT_ID;
+    // Member removal increments the same epoch. Whichever transaction wins is
+    // authoritative: removal after exchange revokes the new key; exchange after
+    // removal observes the missing membership and burns the code.
+    const fenced = await (await col.tenants()).updateOne(
+      { _id: tenantId, status: "active" },
+      { $inc: { membershipEpoch: 1 } },
+      { session },
+    );
+    if (fenced.matchedCount !== 1) return { ok: false, error: "invalid_grant" };
+    const membership = await (await col.memberships()).findOne({ tenantId, userId: doc.userId }, { session, projection: { _id: 1 } });
+    if (!membership) return { ok: false, error: "invalid_grant" };
+
+    const client = await findClient(doc.clientId);
+    const access = generateKeySecret();
+    const refresh = generateKeySecret();
+    const { prefix, suffix } = splitSecret(access);
+    const expiresAt = new Date(now.getTime() + TOKEN_TTL_MS);
+    const key: ApiKeyDoc = {
+      _id: new ObjectId(),
+      tenantId,
+      name: client?.name || "OAuth client",
+      note: "Signed in through ChatGPT or another OAuth app. Revoke this key to disconnect it.",
+      prefix,
+      suffix,
+      hash: hashKey(access),
+      refreshHash: hashKey(refresh),
+      createdAt: now,
+      createdBy: doc.email,
+      expiresAt,
+      oauthClientId: doc.clientId,
+      oauthUserId: doc.userId,
+      // Keep the protocol-level `host` scope stable; tool permissions come from KQA consent.
+      capabilities,
+    };
+    await (await col.apiKeys()).insertOne(key, { session });
+    return { ok: true, access, refresh, expiresIn: Math.floor(TOKEN_TTL_MS / 1000) };
   });
-  if (!created.ok) return { ok: false, error: "server_error" };
-  return { ok: true, access, refresh, expiresIn: Math.floor(TOKEN_TTL_MS / 1000) };
 }
 
 export function tokenResponse(access: string, refresh: string, expiresIn: number) {

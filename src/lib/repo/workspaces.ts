@@ -315,15 +315,17 @@ export async function removeWorkspaceMember(input: {
       if (actor.role !== "owner") return { ok: false, reason: "forbidden" };
       const owners = await memberships.find({ tenantId: input.tenantId, role: "owner" }, { session, projection: { _id: 1 } }).toArray();
       if (owners.length <= 1) return { ok: false, reason: "last_owner" };
-      // Competing owner-removal transactions write this tenant row. Mongo retries
-      // a write-conflicted transaction against a fresh snapshot before rechecking.
-      const fenced = await (await col.tenants()).updateOne(
-        { _id: input.tenantId, status: "active" },
-        { $inc: { membershipEpoch: 1 }, $set: { updatedAt: new Date() } },
-        { session },
-      );
-      if (fenced.matchedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "forbidden" });
     }
+    // All removals share this tenant write with OAuth code exchange. That makes
+    // an in-flight consent exchange serialize before removal (then its new key
+    // is revoked below) or after removal (then its membership check fails).
+    const fenced = await (await col.tenants()).updateOne(
+      { _id: input.tenantId, status: "active" },
+      { $inc: { membershipEpoch: 1 }, $set: { updatedAt: new Date() } },
+      { session },
+    );
+    if (fenced.matchedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "forbidden" });
+    await (await col.oauthCodes()).deleteMany({ tenantId: input.tenantId, userId: targetId }, { session });
     // OAuth credentials belong to the membership that consented to them. Revoke
     // them in this transaction so a later re-invitation cannot revive old grants.
     const targetUser = await (await col.users()).findOne({ _id: targetId }, { session, projection: { email: 1 } });

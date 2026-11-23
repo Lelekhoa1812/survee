@@ -7,6 +7,7 @@ const store = vi.hoisted(() => ({
   tenants: [] as any[],
   memberships: [] as any[],
   invitations: [] as any[],
+  oauthCodes: [] as any[],
   apiKeys: [] as any[],
   events: [] as any[],
   failInvitationClaim: false,
@@ -64,6 +65,13 @@ vi.mock("../src/lib/db", () => ({
         return { matchedCount: matched.length, modifiedCount: matched.length };
       },
     }),
+    oauthCodes: async () => ({
+      deleteMany: async (filter: any) => {
+        const matching = store.oauthCodes.filter((item) => matches(item, filter));
+        for (const item of matching) store.oauthCodes.splice(store.oauthCodes.indexOf(item), 1);
+        return { deletedCount: matching.length };
+      },
+    }),
     workspaceInvitations: async () => ({
       findOne: async (filter: any) => store.invitations.find((item) => matches(item, filter)) ?? null,
       find: (filter: any) => cursor(store.invitations.filter((item) => matches(item, filter))),
@@ -90,7 +98,7 @@ vi.mock("../src/lib/db", () => ({
     events: async () => ({ insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; } }),
   },
   withMongoTransaction: async (work: (session: object) => Promise<unknown>) => {
-    const snapshot = Object.fromEntries(["users", "tenants", "memberships", "invitations", "apiKeys", "events"].map((key) => [key, (store as any)[key].map((doc: any) => ({ ...doc }))]));
+    const snapshot = Object.fromEntries(["users", "tenants", "memberships", "invitations", "oauthCodes", "apiKeys", "events"].map((key) => [key, (store as any)[key].map((doc: any) => ({ ...doc }))]));
     try {
       const result = await work({});
       if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
@@ -191,6 +199,7 @@ beforeEach(() => {
   store.tenants.splice(0);
   store.memberships.splice(0);
   store.invitations.splice(0);
+  store.oauthCodes.splice(0);
   store.apiKeys.splice(0);
   store.events.splice(0);
   store.failInvitationClaim = false;
@@ -218,12 +227,19 @@ describe("workspace membership and invitations", () => {
       { _id: new ObjectId(), tenantId: "workspace-b", oauthClientId: "client", oauthUserId: inviteeId },
       { _id: new ObjectId(), tenantId: "axion", oauthClientId: "client", oauthUserId: ownerId },
     );
+    store.oauthCodes.push(
+      { _id: new ObjectId(), tenantId: "axion", userId: inviteeId, hash: "pending-code" },
+      { _id: new ObjectId(), tenantId: "workspace-b", userId: inviteeId, hash: "other-workspace-code" },
+      { _id: new ObjectId(), tenantId: "axion", userId: ownerId, hash: "other-user-code" },
+    );
     addMembership("axion", inviteeId, "member");
 
     await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: adminId.toHexString(), targetUserId: inviteeId.toHexString() }))
       .resolves.toEqual({ ok: true, role: "member" });
 
     expect(store.apiKeys.map(({ revokedAt }) => Boolean(revokedAt))).toEqual([true, true, true, false, false, false]);
+    expect(store.oauthCodes.map(({ hash }) => hash)).toEqual(["other-workspace-code", "other-user-code"]);
+    expect(store.tenants.find(({ _id }) => _id === "axion")?.membershipEpoch).toBe(1);
   });
 
   it("does not let a superseded mail attempt update a replacement invitation", async () => {
