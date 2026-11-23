@@ -34,6 +34,12 @@ export async function db(): Promise<Db> {
   return d;
 }
 
+/** Check database connectivity without running index setup or migrations. */
+export async function pingDatabase(): Promise<void> {
+  const c = await client();
+  await c.db(dbName()).command({ ping: 1 }, { timeoutMS: 5_000 });
+}
+
 /** Run a unit of work that must commit atomically across MongoDB collections. */
 export async function withMongoTransaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
   // Ensure collections and indexes are ready before opening a transaction.

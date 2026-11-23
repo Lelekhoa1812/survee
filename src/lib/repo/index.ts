@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { BSON, ObjectId, type ClientSession } from "mongodb";
 import { col, withMongoTransaction } from "../db";
 import { parseEmail } from "../mail/address";
-import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer, validateRepeatFieldValue, type RepeatAnswerIssue } from "../format/answers";
+import { evaluateEligibility, exclusiveConflictCount, progress, validateAnswer, validateRepeatFieldValue, type AnswerIssueCode, type RepeatAnswerIssue } from "../format/answers";
 import { orderOptions } from "../format/option-order";
 import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question, type RepeatRecordMap, type RepeatRecordOperation } from "../format/schema";
 import { newToken } from "../tokens";
@@ -1149,7 +1149,7 @@ export async function saveAnswers(token: string, expectedVersion: number, patch:
   return result;
 }
 
-export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; invalidAnswers?: { id: string; code: string }[]; repeatErrors?: RepeatRecordIssue[] };
+export type SubmitResult = { ok: true; submittedAt: string } | { ok: false; status: 403 | 404 | 409 | 422; error: string; code?: string; missing?: { id: string; label: string }[]; invalidSelections?: { id: string; selected: number; maximum: number }[]; invalidMinimumSelections?: { id: string; selected: number; minimum: number }[]; invalidExclusiveSelections?: { id: string }[]; invalidRankSelections?: { id: string }[]; invalidAnswers?: { id: string; code: AnswerIssueCode }[]; repeatErrors?: RepeatRecordIssue[] };
 
 export async function submitAnswers(token: string, expectedVersion: number, expectedWriteEpoch?: number): Promise<SubmitResult> {
   const ctx = await loadByToken(token);
