@@ -32,6 +32,14 @@ describe("participant host rows", () => {
     expect(row.questionOrderAssignments).toHaveLength(1);
   });
 
+  it("keeps old-token ambiguous attempts reachable after a host rotates the link", () => {
+    const [row] = participantRows(manifest, [person], [{
+      id: "attempt-old", participantId: person.id, to: "old@example.test", token: "old-token", status: "pending",
+      sentAt: "2026-11-23T00:00:00.000Z", delivery: "unknown", pendingAttemptCount: 1,
+    }]);
+    expect(row.mail).toMatchObject({ state: "unsent", pendingAttemptCount: 1, pendingAttempts: [{ attemptId: "attempt-old", email: "old@example.test" }] });
+  });
+
   it("marks a repeat question incomplete when a retained row fails required-field validation", () => {
     const repeatManifest = {
       format: "kqa/1", title: "Records", questions: [{

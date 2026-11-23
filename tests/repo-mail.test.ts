@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   matchedCount: 1,
   currentDelivery: undefined as { delivery?: "delivered" | "bounced" | "unknown" } | undefined,
   calls: [] as { collection: string; args: unknown[] }[],
+  aggregates: [] as Record<string, unknown>[][],
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work(mocks.session)),
 }));
 
@@ -19,11 +20,12 @@ vi.mock("../src/lib/db", () => ({
       insertOne: async (...args: unknown[]) => { mocks.calls.push({ collection: "mail", args }); return { insertedId: (args[0] as { _id: ObjectId })._id }; },
       updateOne: async (...args: unknown[]) => { mocks.calls.push({ collection: "mail.update", args }); return { matchedCount: mocks.matchedCount }; },
       findOne: async (...args: unknown[]) => { mocks.calls.push({ collection: "mail.find", args }); return mocks.currentDelivery; },
+      aggregate: (pipeline: Record<string, unknown>[]) => { mocks.aggregates.push(pipeline); return { toArray: async () => [] }; },
     }),
   },
 }));
 
-import { insertMail, updateMailDelivery } from "../src/lib/repo/mail";
+import { insertMail, listCurrentMailByParticipants, updateMailDelivery } from "../src/lib/repo/mail";
 import { withTenantPrincipal } from "../src/lib/tenant-context";
 
 const tenant = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, work);
@@ -32,6 +34,7 @@ beforeEach(() => {
   mocks.matchedCount = 1;
   mocks.currentDelivery = undefined;
   mocks.calls.length = 0;
+  mocks.aggregates.length = 0;
   mocks.withMongoTransaction.mockClear();
 });
 
@@ -82,5 +85,18 @@ describe("insertMail", () => {
 
     expect(row).toBeNull();
     expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participants"]);
+  });
+});
+
+describe("listCurrentMailByParticipants", () => {
+  it("returns bounded pending history and computes the full count for each participant", async () => {
+    const interviewId = new ObjectId();
+    const participantId = new ObjectId();
+    await tenant(() => listCurrentMailByParticipants(interviewId, [{ id: participantId.toHexString(), token: "private-token" }]));
+
+    const unresolvedPipeline = mocks.aggregates[0];
+    expect(unresolvedPipeline[0]).toMatchObject({ $match: { $and: [{ $or: [{ tenantId: "axion" }, { tenantId: { $exists: false } }] }, { interviewId, participantId: { $in: [participantId] }, status: "pending", delivery: { $nin: ["delivered", "bounced"] } }] } });
+    expect(unresolvedPipeline[1]).toEqual({ $setWindowFields: { partitionBy: "$participantId", sortBy: { _id: -1 }, output: { pageRow: { $documentNumber: {} }, pendingAttemptCount: { $count: {}, window: { documents: ["unbounded", "unbounded"] } } } } });
+    expect(unresolvedPipeline[2]).toEqual({ $match: { pageRow: { $lte: 50 } } });
   });
 });

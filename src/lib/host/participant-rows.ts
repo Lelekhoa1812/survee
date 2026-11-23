@@ -7,10 +7,16 @@ import type { PersonRow } from "../../components/interview-types";
 /** Shape bounded participant pages consistently for the host people and answer surfaces. */
 export function participantRows(manifest: Manifest, people: ParticipantView[], mailRows: MailRecord[], includeAnswerData = true): PersonRow[] {
   const mailByToken = new Map<string, MailRecord[]>();
+  const unresolvedByParticipant = new Map<string, MailRecord[]>();
   for (const row of mailRows) {
     const rows = mailByToken.get(row.token) ?? [];
     rows.push(row);
     mailByToken.set(row.token, rows);
+    if (row.participantId) {
+      const pending = unresolvedByParticipant.get(row.participantId) ?? [];
+      if (row.status === "pending" && row.delivery !== "delivered" && row.delivery !== "bounced") pending.push(row);
+      unresolvedByParticipant.set(row.participantId, pending);
+    }
   }
   return people.map((person) => {
     const result = progress(manifest, person.answers, person.recordGroups);
@@ -24,7 +30,11 @@ export function participantRows(manifest: Manifest, people: ParticipantView[], m
         ...(person.recordGroups ? { recordGroups: person.recordGroups } : {}),
         ...(person.questionOrderAssignments ? { questionOrderAssignments: person.questionOrderAssignments } : {}),
       } : {}),
-      mail: { state: mail.state, sentAt: mail.sentAt, error: mail.error, delivery: mail.state === "sent" ? mail.delivery : "unknown", deliveryCheckedAt: mail.deliveryCheckedAt, deliveryDetail: mail.deliveryDetail },
+      mail: {
+        state: mail.state, sentAt: mail.sentAt, error: mail.error, delivery: mail.state === "sent" ? mail.delivery : "unknown", deliveryCheckedAt: mail.deliveryCheckedAt, deliveryDetail: mail.deliveryDetail, attemptId: mail.attemptId, resolution: mail.resolution,
+        pendingAttempts: (unresolvedByParticipant.get(person.id) ?? []).filter((row) => row.id !== mail.attemptId).map((row) => ({ attemptId: row.id, email: row.to, sentAt: row.sentAt, resolution: row.resolution })),
+        pendingAttemptCount: Math.max(0, (unresolvedByParticipant.get(person.id) ?? []).find((row) => row.pendingAttemptCount !== undefined)?.pendingAttemptCount ?? unresolvedByParticipant.get(person.id)?.length ?? 0),
+      },
     };
   });
 }

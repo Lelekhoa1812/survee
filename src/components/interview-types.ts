@@ -10,6 +10,10 @@ export interface PersonMail {
   delivery: "delivered" | "bounced" | "unknown";
   deliveryCheckedAt?: string;
   deliveryDetail?: string;
+  attemptId?: string;
+  resolution?: { purpose: "email_change" | "token_rotation"; acknowledgedAt: string; acknowledgedBy: string; reason: string };
+  pendingAttempts?: { attemptId: string; email: string; sentAt: string; resolution?: { purpose: "email_change" | "token_rotation"; acknowledgedAt: string; acknowledgedBy: string; reason: string } }[];
+  pendingAttemptCount?: number;
 }
 
 export interface PersonRow {

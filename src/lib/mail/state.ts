@@ -3,6 +3,7 @@ import type { MailDelivery, MailStatus } from "../repo/types";
 /** Locked: current "sent" is the latest row for this exact address and this exact token. */
 export interface MailRecord {
   id: string;
+  participantId?: string;
   to: string;
   token: string;
   status: MailStatus;
@@ -12,6 +13,8 @@ export interface MailRecord {
   delivery?: MailDelivery;
   deliveryCheckedAt?: string;
   deliveryDetail?: string;
+  resolution?: { purpose: "email_change" | "token_rotation"; acknowledgedAt: string; acknowledgedBy: string; reason: string };
+  pendingAttemptCount?: number;
 }
 
 export interface MailView {
@@ -22,6 +25,8 @@ export interface MailView {
   delivery: MailDelivery;
   deliveryCheckedAt?: string;
   deliveryDetail?: string;
+  attemptId?: string;
+  resolution?: MailRecord["resolution"];
 }
 
 export function currentMail(person: { email?: string | null; token: string }, rows: MailRecord[]): MailView {
@@ -41,6 +46,7 @@ export function currentMail(person: { email?: string | null; token: string }, ro
     return {
       state: "pending", sentAt: latest.sentAt, messageId: latest.messageId,
       delivery: latest.delivery ?? "unknown", deliveryCheckedAt: latest.deliveryCheckedAt, deliveryDetail: latest.deliveryDetail,
+      attemptId: latest.id, resolution: latest.resolution,
     };
   }
   if (latest.status === "failed") {
@@ -53,5 +59,6 @@ export function currentMail(person: { email?: string | null; token: string }, ro
     delivery: latest.delivery ?? "unknown",
     deliveryCheckedAt: latest.deliveryCheckedAt,
     deliveryDetail: latest.deliveryDetail,
+    attemptId: latest.id, resolution: latest.resolution,
   };
 }

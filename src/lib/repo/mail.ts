@@ -7,6 +7,7 @@ import { currentTenantId, tenantFilter } from "../tenant-context";
 export function mailRecord(doc: MailMessageDoc): MailRecord {
   return {
     id: doc._id.toHexString(),
+    participantId: doc.participantId.toHexString(),
     to: doc.to,
     token: doc.token,
     status: doc.status,
@@ -16,6 +17,8 @@ export function mailRecord(doc: MailMessageDoc): MailRecord {
     delivery: doc.delivery,
     deliveryCheckedAt: doc.deliveryCheckedAt?.toISOString(),
     deliveryDetail: doc.deliveryDetail,
+    resolution: doc.resolution ? { ...doc.resolution, acknowledgedAt: doc.resolution.acknowledgedAt.toISOString() } : undefined,
+    pendingAttemptCount: doc.pendingAttemptCount,
   };
 }
 
@@ -65,19 +68,61 @@ export async function listCurrentMailByParticipants(interviewId: ObjectId, peopl
     const participantId = /^[0-9a-f]{24}$/i.test(person.id) ? new ObjectId(person.id) : null;
     return participantId ? [{ participantId, to: person.email.trim().toLowerCase(), token: person.token }] : [];
   });
-  if (!filters.length) return [];
-  return (await col.mail()).aggregate<MailMessageDoc>([
+  const participantIds = people.flatMap((person) => {
+    const participantId = /^[0-9a-f]{24}$/i.test(person.id) ? new ObjectId(person.id) : null;
+    return participantId ? [participantId] : [];
+  });
+  if (!participantIds.length) return [];
+  const mail = await col.mail();
+  const current = filters.length ? await mail.aggregate<MailMessageDoc>([
     { $match: tenantFilter(tenantId, { interviewId, $or: filters }) },
     { $sort: { sentAt: -1, _id: -1 } },
     { $group: { _id: { participantId: "$participantId", to: "$to", token: "$token" }, latest: { $first: "$$ROOT" } } },
     { $replaceRoot: { newRoot: "$latest" } },
+  ]).toArray() : [];
+  const unresolved = await mail.aggregate<MailMessageDoc>([
+    { $match: tenantFilter(tenantId, { interviewId, participantId: { $in: participantIds }, status: "pending", delivery: { $nin: ["delivered", "bounced"] } }) },
+    {
+      $setWindowFields: {
+        partitionBy: "$participantId",
+        sortBy: { _id: -1 },
+        output: {
+          pageRow: { $documentNumber: {} },
+          pendingAttemptCount: { $count: {}, window: { documents: ["unbounded", "unbounded"] } },
+        },
+      },
+    },
+    { $match: { pageRow: { $lte: 50 } } },
+    { $unset: "pageRow" },
   ]).toArray();
+  const found = new Set(current.map((row) => row._id.toHexString()));
+  return [...current, ...unresolved.filter((row) => !found.has(row._id.toHexString()))];
+}
+
+export async function listPendingMailByPerson(participantId: ObjectId, beforeId?: ObjectId, limit = 50): Promise<{ rows: MailMessageDoc[]; nextCursor: string | null; total: number }> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { rows: [], nextCursor: null, total: 0 };
+  const mail = await col.mail();
+  const base = { participantId, status: "pending", delivery: { $nin: ["delivered", "bounced"] } };
+  const [total, rows] = await Promise.all([
+    mail.countDocuments(tenantFilter(tenantId, base)),
+    mail.find(tenantFilter(tenantId, { ...base, ...(beforeId ? { _id: { $lt: beforeId } } : {}) })).sort({ _id: -1 }).limit(Math.max(1, Math.min(limit, 50))).toArray(),
+  ]);
+  const nextCursor = rows.length === Math.min(limit, 50) && rows.length && rows.at(-1)?._id ? rows.at(-1)!._id.toHexString() : null;
+  return { rows, nextCursor, total };
 }
 
 export async function listMailByPerson(participantId: ObjectId): Promise<MailMessageDoc[]> {
   const tenantId = await currentTenantId();
   if (!tenantId) return [];
   return (await col.mail()).find(tenantFilter(tenantId, { participantId })).sort({ sentAt: -1 }).limit(50).toArray();
+}
+
+/** Load one exact attempt only when it belongs to this tenant-scoped participant. */
+export async function getMailAttemptForPerson(participantId: ObjectId, attemptId: ObjectId): Promise<MailMessageDoc | null> {
+  const tenantId = await currentTenantId();
+  if (!tenantId) return null;
+  return (await col.mail()).findOne(tenantFilter(tenantId, { participantId, _id: attemptId }));
 }
 
 export async function updateMailDelivery(id: ObjectId, patch: Pick<MailMessageDoc, "delivery" | "deliveryCheckedAt" | "deliveryDetail">): Promise<MailRecord["delivery"] | undefined> {

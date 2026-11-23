@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PeopleTab } from "../src/components/PeopleTab";
+import { PersonEmailEditor } from "../src/components/InviteActions";
 import type { InterviewData, PersonRow } from "../src/components/interview-types";
 
 let host: HTMLDivElement;
@@ -50,6 +51,48 @@ afterEach(() => {
 });
 
 describe("host invite batches", () => {
+  it("keeps the email-change acknowledgement action available for an unresolved invite", async () => {
+    const row = person("pending-person", "Ada Lovelace", "pending");
+    row.mail = { state: "pending", delivery: "unknown", attemptId: "cccccccccccccccccccccccc" };
+    await act(async () => root.render(createElement(PersonEmailEditor, { person: row, refresh: () => {} })));
+    const email = host.querySelector<HTMLInputElement>("#email-pending-person")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(email, "new@example.com");
+      email.dispatchEvent(new InputEvent("input", { bubbles: true, data: "new@example.com", inputType: "insertText" }));
+    });
+    expect([...host.querySelectorAll<HTMLButtonElement>("button")].some((button) => button.textContent?.includes("Acknowledge uncertainty and save email"))).toBe(true);
+    expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')).not.toBeNull();
+  });
+
+  it("requires acknowledgement and a reason before rotating a link with an unresolved invite", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const data = batchData();
+    data.people[2].mail = { state: "pending", delivery: "unknown", attemptId: "cccccccccccccccccccccccc" };
+    await act(async () => root.render(createElement(PeopleTab, { data, origin: "https://kqa.example", refresh: () => {} })));
+    await act(async () => host.querySelector<HTMLElement>('summary[aria-label="More actions for Katherine Johnson"]')!.click());
+    const katherineActions = host.querySelector<HTMLElement>('[aria-label="Actions for Katherine Johnson"]')!;
+    await act(async () => [...katherineActions.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Replace private link"))!.click());
+    expect(host.textContent).toContain("The old address may still receive this invite");
+    expect(host.textContent).toContain("prior private link may have been exposed");
+    const submit = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Acknowledge and replace link"))!;
+    expect(submit.disabled).toBe(true);
+    const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
+    await act(async () => {
+      dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+      const reason = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
+      Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(reason, "Correcting a suspected address error");
+      reason.dispatchEvent(new InputEvent("input", { bubbles: true, data: "Correcting a suspected address error", inputType: "insertText" }));
+    });
+    const enabledSubmit = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Acknowledge and replace link"))!;
+    expect(enabledSubmit.disabled).toBe(false);
+    await act(async () => enabledSubmit.click());
+    expect(calls).toEqual(["/api/admin/people/p3/invite-resolution", "/api/admin/people/p3/token"]);
+  });
+
   it("only attempts selected eligible people serially after confirmation and shows each outcome", async () => {
     const calls: string[] = [];
     let active = 0;

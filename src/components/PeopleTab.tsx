@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { parseEmail, parsePersonLine } from "@/lib/mail/address";
 import type { InterviewData, PersonRow } from "./interview-types";
-import { InviteActions } from "./InviteActions";
+import { acknowledgeInvite, InviteActions } from "./InviteActions";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
 import { MAX_INVITES_PER_BATCH, MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
@@ -16,6 +16,9 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [removing, setRemoving] = useState<PersonRow | null>(null);
+  const [tokenResolution, setTokenResolution] = useState<PersonRow | null>(null);
+  const [tokenReason, setTokenReason] = useState("");
+  const [tokenAcknowledged, setTokenAcknowledged] = useState(false);
   const [working, setWorking] = useState<string>("");
   const [participants, setParticipants] = useState(data.people);
   const [nextCursor, setNextCursor] = useState(data.peopleNextCursor ?? null);
@@ -94,11 +97,36 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
   }
 
   async function act(p: PersonRow, action: "reopen" | "token") {
+    if (action === "token" && p.mail.state === "pending" && p.mail.attemptId && !p.mail.resolution) {
+      setTokenResolution(p);
+      setTokenReason("");
+      setTokenAcknowledged(false);
+      return;
+    }
     setWorking(p.id + action);
     const res = await api(`/api/admin/people/${p.id}/${action}`, { method: "POST", body: {} });
     setWorking("");
     if (res.ok) { toast(action === "reopen" ? `${p.name} can edit again.` : "New link created. The old one no longer works. Send the new link if you already emailed it."); refresh(); }
     else toast(res.data.error ?? "That did not work.", "err");
+  }
+
+  async function acknowledgeAndRotate() {
+    const attemptId = tokenResolution?.mail.attemptId;
+    if (!tokenResolution || !attemptId || !tokenReason.trim()) return;
+    const p = tokenResolution;
+    setWorking(p.id + "token");
+    const resolution = await acknowledgeInvite(p.id, attemptId, "token_rotation", tokenReason);
+    if (!resolution.ok) {
+      setWorking("");
+      toast(resolution.data.error ?? "The invitation outcome could not be acknowledged.", "err");
+      return;
+    }
+    refresh();
+    setTokenResolution(null);
+    const res = await api(`/api/admin/people/${p.id}/token`, { method: "POST", body: {} });
+    setWorking("");
+    if (res.ok) { toast("New link created. The earlier invitation may still arrive, but its old link no longer works."); refresh(); }
+    else toast(res.data.error ?? "Could not replace the link.", "err");
   }
 
   return (
@@ -190,7 +218,12 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
       {nextCursor && <div className="row" style={{ justifyContent: "center" }}><button className="btn" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? <><Spinner /> Loading…</> : `Load more people (${Math.max(0, data.counts.people - participants.length)} remaining)`}</button></div>}
 
       {adding && <AddPeople interviewId={data.interview.id} switchesToMulti={!multi} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
-      {editing && <EditPerson person={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); refresh(); }} />}
+      {editing && <EditPerson person={editing} onClose={() => setEditing(null)} onRefresh={refresh} onDone={() => { setEditing(null); refresh(); }} />}
+      {tokenResolution && <Modal title="Replace private link with an unconfirmed invite" onClose={() => setTokenResolution(null)} actions={<><button className="btn" type="button" onClick={() => setTokenResolution(null)}>Cancel</button><button className="btn primary" type="button" disabled={!tokenAcknowledged || !tokenReason.trim() || Boolean(working)} onClick={() => void acknowledgeAndRotate()}>{working === tokenResolution.id + "token" && <Spinner />} Acknowledge and replace link</button></>}>
+        <p className="field-error">The old address may still receive this invite, and the prior private link may have been exposed. Replacing the link invalidates that earlier link.</p>
+        <label className="check-row"><input type="checkbox" autoFocus checked={tokenAcknowledged} onChange={(event) => setTokenAcknowledged(event.target.checked)} /> I understand the invitation outcome is still unknown.</label>
+        <label className="field">Reason for replacing the link<textarea className="textarea" rows={3} maxLength={500} value={tokenReason} onChange={(event) => setTokenReason(event.target.value)} /><span className="hint">Keep this operational; avoid entering respondent details.</span></label>
+      </Modal>}
       {removing && (
         <Modal title={`Remove ${removing.name}?`} onClose={() => setRemoving(null)} actions={<>
           <button className="btn" onClick={() => setRemoving(null)}>Keep</button>
@@ -275,28 +308,47 @@ function AddPeople({ interviewId, switchesToMulti, onClose, onDone }: { intervie
   );
 }
 
-function EditPerson({ person, onClose, onDone }: { person: PersonRow; onClose: () => void; onDone: () => void }) {
+function EditPerson({ person, onClose, onDone, onRefresh }: { person: PersonRow; onClose: () => void; onDone: () => void; onRefresh: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(person.name);
   const [email, setEmail] = useState(person.email ?? "");
   const [note, setNote] = useState(person.note ?? "");
   const [busy, setBusy] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [reason, setReason] = useState("");
+  const [resolutionRecorded, setResolutionRecorded] = useState(false);
   const parsed = parseEmail(email);
+  const nextEmail = parsed.ok ? parsed.email ?? "" : "";
+  const emailChanged = nextEmail !== (person.email ?? "");
+  const requiresEmailAck = Boolean(person.mail.state === "pending" && person.mail.attemptId && !resolutionRecorded && !person.mail.resolution && emailChanged);
   async function save() {
     if (!parsed.ok) return;
     setBusy(true);
+    if (requiresEmailAck && person.mail.attemptId) {
+      const resolution = await acknowledgeInvite(person.id, person.mail.attemptId, "email_change", reason);
+      if (!resolution.ok) { setBusy(false); toast(resolution.data.error ?? "The invitation outcome could not be acknowledged.", "err"); return; }
+      setResolutionRecorded(true);
+      onRefresh();
+    }
     const res = await api(`/api/admin/people/${person.id}`, { method: "PATCH", body: { name, email, note } });
     setBusy(false);
-    if (res.ok) { toast("Saved"); onDone(); } else toast(res.data.error ?? "Could not save.", "err");
+    if (res.ok) { toast("Saved"); onDone(); } else { toast(res.data.error ?? "Could not save.", "err"); if (resolutionRecorded) onRefresh(); }
   }
   return (
-    <Modal title="Edit person" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || !name.trim() || !parsed.ok} onClick={() => void save()}>{busy && <Spinner />} Save</button></>}>
+    <Modal title="Edit person" onClose={onClose} actions={<><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || !name.trim() || !parsed.ok || (requiresEmailAck && (!acknowledged || !reason.trim()))} onClick={() => void save()}>{busy && <Spinner />} {requiresEmailAck ? "Acknowledge uncertainty and save" : "Save"}</button></>}>
       <div className="field"><label htmlFor="pn">Name</label><input id="pn" className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} /></div>
       <div className="field">
         <label htmlFor="pe">Email <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
         <input id="pe" className={`input${!parsed.ok ? " error" : ""}`} type="text" inputMode="email" autoComplete="off" spellCheck={false} value={email} maxLength={254} aria-invalid={!parsed.ok} aria-describedby="pe-note" onChange={(e) => setEmail(e.target.value)} onBlur={() => { if (parsed.ok) setEmail(parsed.email ?? ""); }} />
         {!parsed.ok ? <span id="pe-note" className="field-error">{parsed.error}</span> : <span id="pe-note" className="hint">Leave blank if you will copy the link. Changing it means the last email no longer counts as sent.</span>}
       </div>
+      {requiresEmailAck && <div className="field">
+        <p className="field-error">The old address may still receive this invite, and the earlier private link may have been exposed.</p>
+        <label className="check-row"><input type="checkbox" autoFocus checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /> I understand the invitation outcome is still unknown.</label>
+        <label htmlFor="invite-resolution-reason">Reason for changing the email</label>
+        <input id="invite-resolution-reason" className="input" maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} />
+        <span className="hint">Keep this operational; avoid entering respondent details.</span>
+      </div>}
       <div className="field"><label htmlFor="pt">Note</label><textarea id="pt" className="textarea" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} /><span className="hint">Only you see this.</span></div>
     </Modal>
   );

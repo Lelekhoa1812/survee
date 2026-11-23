@@ -64,6 +64,18 @@ describe("invite delivery check throttling", () => {
     }])).toMatchObject({ state: "sent", delivery: "delivered" });
   });
 
+  it("checks one exact historical attempt after the participant email and link have changed", async () => {
+    const historical = { id: "mail-old", participantId: "person-1", to: "old@example.com", token: "old-token", status: "pending" as const, sentAt: "2026-01-01T00:00:00.000Z", messageId };
+    const pendingContext = { ...context, person: { ...context.person, email: "new@example.com", token: "new-token" }, rows: [] };
+    const save = vi.fn(async () => undefined);
+    const check = vi.fn(async () => new Map([[messageId, { status: "bounced" as const, detail: "Recipient server rejected the message." }]]));
+    const { deps } = harness({ load: async () => pendingContext, loadAttempt: async () => historical, check, save });
+
+    expect(await checkInviteDelivery("person-1", deps, "aaaaaaaaaaaaaaaaaaaaaaaa")).toMatchObject({ ok: true, delivery: "bounced" });
+    expect(check).toHaveBeenCalledWith([messageId]);
+    expect(save).toHaveBeenCalledWith("mail-old", expect.objectContaining({ delivery: "bounced" }));
+  });
+
   it("reports the stored confirmation when a later provider check is inconclusive", async () => {
     const confirmedContext = {
       ...context,

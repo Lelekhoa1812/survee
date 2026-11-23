@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   current: true,
   pending: false,
+  resolutionPurpose: null as string | null,
   calls: [] as { collection: string; filter: unknown; update?: unknown; options: unknown }[],
   session: { transaction: true },
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work(mocks.session)),
@@ -25,7 +26,10 @@ vi.mock("../src/lib/db", () => ({
     mail: async () => ({
       findOne: async (filter: unknown, options: unknown) => {
         mocks.calls.push({ collection: "mail.findOne", filter, options });
-        return mocks.pending ? { _id: new ObjectId() } : null;
+        const clauses = ((filter as Record<string, unknown>).$and as Record<string, unknown>[] | undefined);
+        const guard = clauses?.find((clause) => "resolution" in clause) ?? filter as Record<string, unknown>;
+        const allowsResolved = (guard.resolution as { $exists?: boolean } | undefined)?.$exists === false;
+        return mocks.pending && !(allowsResolved && Boolean(mocks.resolutionPurpose)) ? { _id: new ObjectId() } : null;
       },
     }),
   },
@@ -40,6 +44,7 @@ const asTenant = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: 
 beforeEach(() => {
   mocks.current = true;
   mocks.pending = false;
+  mocks.resolutionPurpose = null;
   mocks.calls.length = 0;
   mocks.withMongoTransaction.mockClear();
 });
@@ -53,7 +58,7 @@ describe("regenerateToken", () => {
     expect(result).toBe("invite_pending");
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.calls.map((call) => call.collection)).toEqual(["participants.findOne", "mail.findOne"]);
-    expect(mocks.calls[1].filter).toEqual({ participantId, status: "pending", delivery: { $nin: ["delivered", "bounced"] } });
+    expect(mocks.calls[1].filter).toEqual(tenantFilter("workspace-1", { participantId, status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false } }));
     expect(mocks.calls.every((call) => (call.options as { session?: unknown }).session === mocks.session)).toBe(true);
   });
 
@@ -69,6 +74,21 @@ describe("regenerateToken", () => {
       update: { $set: { token: result, updatedAt: expect.any(Date) }, $inc: { inviteAttemptRevision: 1 } },
       options: { session: mocks.session },
     });
+  });
+
+  it("allows link rotation only after a token-rotation disposition", async () => {
+    mocks.pending = true;
+    mocks.resolutionPurpose = "token_rotation";
+    const result = await asTenant(() => regenerateToken(participantId.toHexString()));
+    expect(result).toMatch(/^[A-Za-z0-9_-]{22,32}$/);
+    expect(mocks.calls[1].filter).toEqual(tenantFilter("workspace-1", { participantId, status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false } }));
+  });
+
+  it("allows a later link rotation after an email-change acknowledgement", async () => {
+    mocks.pending = true;
+    mocks.resolutionPurpose = "email_change";
+    const result = await asTenant(() => regenerateToken(participantId.toHexString()));
+    expect(result).toMatch(/^[A-Za-z0-9_-]{22,32}$/);
   });
 
   it("returns null when the tenant-scoped participant no longer exists", async () => {

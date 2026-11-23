@@ -9,6 +9,7 @@ export type MailStatus = "pending" | "sent" | "failed";
 export type MailDelivery = "delivered" | "bounced" | "unknown";
 export type MailTrigger = "admin" | "mcp";
 export type TenantRole = "owner" | "admin" | "member";
+export type MailResolutionPurpose = "email_change" | "token_rotation";
 
 /** collection: tenants */
 export interface TenantDoc {
@@ -286,6 +287,15 @@ export interface MailMessageDoc {
   delivery?: MailDelivery;
   deliveryCheckedAt?: Date;
   deliveryDetail?: string;
+  /** Host acknowledgement of an ambiguous attempt; this never changes send or delivery truth. */
+  resolution?: {
+    purpose: MailResolutionPurpose;
+    acknowledgedAt: Date;
+    acknowledgedBy: string;
+    reason: string;
+  };
+  /** Computed only for bounded host pages; never persisted. */
+  pendingAttemptCount?: number;
 }
 
 /** collection: login_attempts. Expires after 30 minutes. */

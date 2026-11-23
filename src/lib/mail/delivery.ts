@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getParticipant } from "../repo";
-import { listMailByPerson, mailRecord, updateMailDelivery } from "../repo/mail";
+import { getMailAttemptForPerson, listMailByPerson, mailRecord, updateMailDelivery } from "../repo/mail";
 import { parseEmail } from "./address";
 import { checkMessageIds, type DeliveryCheck } from "./imap";
 import { currentMail, type MailRecord } from "./state";
@@ -14,6 +14,7 @@ export type DeliveryResult =
 
 export interface DeliveryDeps {
   load?: (personId: string) => Promise<{ person: { id: string; interviewId: string; email?: string; token: string }; rows: MailRecord[] } | null>;
+  loadAttempt?: (personId: string, attemptId: string) => Promise<MailRecord | null>;
   check?: (messageIds: string[]) => Promise<Map<string, DeliveryCheck>>;
   save?: (id: string, patch: { delivery: MailDelivery; deliveryCheckedAt: Date; deliveryDetail?: string }) => Promise<MailDelivery | undefined>;
   rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
@@ -28,14 +29,30 @@ async function loadFromDb(personId: string) {
 }
 
 /** On-demand check of the message id we stored for the current address and token. Disconnects when finished. */
-export async function checkInviteDelivery(personId: string, deps: DeliveryDeps = {}): Promise<DeliveryResult> {
+export async function checkInviteDelivery(personId: string, deps: DeliveryDeps = {}, attemptId?: string): Promise<DeliveryResult> {
   const ctx = await (deps.load ?? loadFromDb)(personId);
   if (!ctx) return { ok: false, code: "not_found", error: "Person not found." };
   const parsed = parseEmail(ctx.person.email ?? "");
   const email = parsed.ok ? parsed.email : null;
-  const current = currentMail({ email, token: ctx.person.token }, ctx.rows);
-  if ((current.state !== "sent" && current.state !== "pending") || !current.messageId) {
-    return { ok: false, code: "not_sent", error: "There is no stored invite attempt to check." };
+  let selectedMessageId: string | undefined;
+  let row: MailRecord | undefined;
+  if (attemptId) {
+    const attemptOid = /^[0-9a-f]{24}$/i.test(attemptId) ? new ObjectId(attemptId) : null;
+    const personOid = /^[0-9a-f]{24}$/i.test(ctx.person.id) ? new ObjectId(ctx.person.id) : null;
+    const attempt = deps.loadAttempt
+      ? await deps.loadAttempt(ctx.person.id, attemptId)
+      : attemptOid && personOid ? await getMailAttemptForPerson(personOid, attemptOid).then((value) => value ? mailRecord(value) : null) : null;
+    if (!attempt || attempt.participantId && attempt.participantId !== ctx.person.id) return { ok: false, code: "not_sent", error: "There is no stored invite attempt to check." };
+    row = attempt;
+    selectedMessageId = row.messageId;
+    if ((row.status !== "pending" && row.status !== "sent") || !selectedMessageId) return { ok: false, code: "not_sent", error: "There is no stored invite attempt to check." };
+  } else {
+    const current = currentMail({ email, token: ctx.person.token }, ctx.rows);
+    if ((current.state !== "sent" && current.state !== "pending") || !current.messageId) {
+      return { ok: false, code: "not_sent", error: "There is no stored invite attempt to check." };
+    }
+    selectedMessageId = current.messageId;
+    row = ctx.rows.find((item) => item.messageId === current.messageId && item.to === email && item.token === ctx.person.token);
   }
   const tenantId = await currentTenantId();
   if (!tenantId && !deps.rateLimit) return { ok: false, code: "rate_limit_unavailable", error: "Delivery checks are temporarily unavailable. Try again." };
@@ -48,9 +65,8 @@ export async function checkInviteDelivery(personId: string, deps: DeliveryDeps =
   } catch {
     return { ok: false, code: "rate_limit_unavailable", error: "Delivery checks are temporarily unavailable. Try again." };
   }
-  const row = ctx.rows.find((item) => item.messageId === current.messageId && item.to === email && item.token === ctx.person.token);
-  const checked = await (deps.check ?? checkMessageIds)([current.messageId]);
-  const result = checked.get(current.messageId) ?? { status: "unknown" as const, detail: "Not confirmed yet." };
+  const checked = await (deps.check ?? checkMessageIds)([selectedMessageId]);
+  const result = checked.get(selectedMessageId) ?? { status: "unknown" as const, detail: "Not confirmed yet." };
   const checkedAt = new Date();
   let effectiveDelivery = result.status;
   if (row) {

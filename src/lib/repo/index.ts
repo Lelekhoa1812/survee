@@ -8,7 +8,7 @@ import { ID_RE, LIMITS, noteConfig, type AnswerMap, type Manifest, type Question
 import { newToken } from "../tokens";
 import { deleteMailForInterview, deleteMailForPerson } from "./mail";
 import { imageAssetPublicIds } from "../image-assets";
-import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
+import type { AnalyticsRunDoc, InterviewDoc, InterviewMode, InterviewStatus, InterviewSummary, MailResolutionPurpose, ParticipantDoc, ParticipantStatus, ParticipantView, QuestionOrderAssignmentDoc, QuestionOrderAssignmentView, SurveyVersionDoc } from "./types";
 import { currentPrincipal, currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
 import { DEFAULT_PARTICIPANT_PAGE_SIZE, MAX_EXPORT_SOURCE_BYTES, MAX_PARTICIPANT_PAGE_SIZE, MAX_PARTICIPANTS_PER_READ } from "../participant-limits";
@@ -796,7 +796,7 @@ export async function updateParticipant(id: string, patch: { name?: string; note
     const currentEmail = typeof current.email === "string" ? current.email.trim().toLowerCase() : null;
     if (nextEmail !== undefined && currentEmail !== nextEmail) {
       const pendingInvite = await (await col.mail()).findOne(
-        { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } },
+        tenantFilter(tenantId, { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false } }),
         { session, projection: { _id: 1 } },
       );
       if (pendingInvite) return "invite_pending";
@@ -860,7 +860,7 @@ export async function regenerateToken(id: string): Promise<string | null | "invi
     const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1 } });
     if (!current) return null;
     const pendingInvite = await (await col.mail()).findOne(
-      { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } },
+      tenantFilter(tenantId, { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false } }),
       { session, projection: { _id: 1 } },
     );
     if (pendingInvite) return "invite_pending";
@@ -870,6 +870,64 @@ export async function regenerateToken(id: string): Promise<string | null | "invi
       { session },
     );
     return res.matchedCount ? token : null;
+  });
+}
+
+export type InviteResolutionResult = "resolved" | "not_found" | "stale" | "already_resolved";
+
+/** Record a host's bounded acknowledgement for one exact ambiguous attempt without changing delivery truth. */
+export async function resolveInviteAttempt(input: {
+  participantId: string;
+  attemptId: string;
+  purpose: MailResolutionPurpose;
+  reason: string;
+  actorId: string;
+}): Promise<InviteResolutionResult> {
+  const participantOid = toOid(input.participantId);
+  const attemptOid = toOid(input.attemptId);
+  const tenantId = await currentTenantId();
+  const reason = input.reason.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (!participantOid || !attemptOid || !tenantId || !reason || !input.actorId) return "not_found";
+  return withMongoTransaction(async (session) => {
+    const participants = await col.participants();
+    const participant = await participants.findOne(tenantFilter(tenantId, { _id: participantOid }), {
+      session, projection: { interviewId: 1 },
+    });
+    if (!participant) return "not_found";
+    // This write serializes acknowledgement with invite reservation and the participant mutations it can unblock.
+    const touched = await participants.updateOne(
+      tenantFilter(tenantId, { _id: participantOid, interviewId: participant.interviewId }),
+      { $inc: { inviteAttemptRevision: 1 } }, { session },
+    );
+    if (touched.matchedCount !== 1) return "not_found";
+    const mail = await col.mail();
+    const baseFilter = tenantFilter(tenantId, {
+      _id: attemptOid, participantId: participantOid, interviewId: participant.interviewId,
+    });
+    const attempt = await mail.findOne(baseFilter, { session, projection: { status: 1, delivery: 1, resolution: 1, to: 1, token: 1 } });
+    if (!attempt) return "not_found";
+    if (attempt.resolution) return "already_resolved";
+    if (attempt.status !== "pending" || attempt.delivery === "delivered" || attempt.delivery === "bounced") return "stale";
+    const acknowledgedAt = new Date();
+    const update = await mail.updateOne(
+      tenantFilter(tenantId, {
+        _id: attemptOid, participantId: participantOid, interviewId: participant.interviewId,
+        status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false },
+      }),
+      { $set: { resolution: { purpose: input.purpose, acknowledgedAt, acknowledgedBy: input.actorId, reason } } },
+      { session },
+    );
+    if (update.matchedCount !== 1) {
+      const latest = await mail.findOne(baseFilter, { session, projection: { status: 1, delivery: 1, resolution: 1 } });
+      if (!latest) return "not_found";
+      if (latest.resolution) return "already_resolved";
+      return "stale";
+    }
+    await insertEvent(tenantId, participant.interviewId, "invite", participantOid, session, {
+      action: "ambiguous_outcome_acknowledged", attemptId: attemptOid.toHexString(), purpose: input.purpose,
+      delivery: "unknown", acknowledgedBy: input.actorId, reason,
+    });
+    return "resolved";
   });
 }
 
