@@ -11,7 +11,11 @@ vi.mock("../src/lib/db", () => ({
   withMongoTransaction: mocks.withMongoTransaction,
   col: {
     participants: async () => ({
-      findOne: async () => ({ _id: new ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa"), interviewId: new ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb"), email: "person@example.com" }),
+      findOne: async () => ({
+        _id: new ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa"), interviewId: new ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb"),
+        tenantId: "workspace-1", token: "token", name: "Existing name", note: "Existing note", email: "person@example.com",
+        status: "invited", answers: {}, revision: 0, writeEpoch: 0, createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-02"),
+      }),
       findOneAndUpdate: async (...args: unknown[]) => { mocks.participantUpdates.push(args); return {
         _id: new ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa"),
         interviewId: new ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb"),
@@ -58,6 +62,14 @@ describe("updateParticipant", () => {
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.eventOptions[0]).toEqual({ session: { transaction: true } });
     expect(mocks.revisionUpdates).toHaveLength(1);
+  });
+
+  it("does not revise or emit duplicate events when every requested profile value is unchanged", async () => {
+    const updated = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "session" }, () => updateParticipant("aaaaaaaaaaaaaaaaaaaaaaaa", { name: "Existing name", note: "Existing note", email: "person@example.com" }));
+    expect(updated).not.toBeNull();
+    expect(mocks.participantUpdates).toHaveLength(0);
+    expect(mocks.revisionUpdates).toHaveLength(0);
+    expect(mocks.insertedEvents).toHaveLength(0);
   });
 
   it("refuses to change or clear an email while an invite outcome is unresolved", async () => {

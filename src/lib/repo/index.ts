@@ -1093,13 +1093,18 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   if (!oid) return null;
   const tenantId = await currentTenantId();
   if (!tenantId) return null;
-  const set: Partial<ParticipantDoc> = { updatedAt: new Date() };
+  const set: Partial<ParticipantDoc> = {};
   const unset: Record<string, ""> = {};
+  const fields: string[] = [];
   let nextEmail: string | null | undefined;
-  if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120) || "Respondent";
+  if (patch.name !== undefined) {
+    const name = patch.name.trim().slice(0, 120) || "Respondent";
+    set.name = name;
+    fields.push("name");
+  }
   if (patch.note !== undefined) {
-    if (patch.note === null || patch.note.trim() === "") unset.note = "";
-    else set.note = patch.note.trim().slice(0, 1000);
+    if (patch.note === null || patch.note.trim() === "") { unset.note = ""; fields.push("note"); }
+    else { set.note = patch.note.trim().slice(0, 1000); fields.push("note"); }
   }
   if (patch.email !== undefined) {
     if (patch.email === null || patch.email.trim() === "") {
@@ -1117,7 +1122,7 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   if (Object.keys(unset).length) update.$unset = unset;
   return withMongoTransaction(async (session) => {
     const participants = await col.participants();
-    const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { email: 1, interviewId: 1 } });
+    const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!current) return null;
     const currentEmail = typeof current.email === "string" ? current.email.trim().toLowerCase() : null;
     if (nextEmail !== undefined && currentEmail !== nextEmail) {
@@ -1127,6 +1132,14 @@ export async function updateParticipant(id: string, patch: { name?: string; note
       );
       if (pendingInvite) return "invite_pending";
     }
+    const changedFields = fields.filter((field) => {
+      if (field === "name") return set.name !== current.name;
+      if (field === "note") return unset.note !== undefined ? current.note !== undefined : set.note !== current.note;
+      return false;
+    });
+    if (patch.email !== undefined && (typeof current.email === "string" ? current.email : undefined) !== (nextEmail ?? undefined)) changedFields.push("email");
+    if (!changedFields.length) return participantView(current);
+    set.updatedAt = new Date();
     const res = await participants.findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
     if (!res) return null;
     const touched = await (await col.interviews()).updateOne(
@@ -1135,7 +1148,7 @@ export async function updateParticipant(id: string, patch: { name?: string; note
       { session },
     );
     if (!touched.matchedCount) throw new Error("Could not update respondent revision for interview.");
-    await insertEvent(tenantId, res.interviewId, "update", res._id, session, { fields: Object.keys(patch).sort() });
+    await insertEvent(tenantId, res.interviewId, "update", res._id, session, { fields: changedFields.sort() });
     return participantView(res);
   });
 }
