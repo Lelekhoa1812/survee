@@ -35,6 +35,24 @@ function tokenError(code: "preview_required" | "preview_expired" | "invalid_prev
   return fail(400, "This preview does not match the current workspace, interview, or candidate. Preview again.", { code });
 }
 
+/** Return a stored questionnaire as a local candidate; it does not change the live version. */
+export const GET = withServerErrors("admin/interviews/[id]/versions", async function GET(req: Request, { params }: Ctx) {
+  const denied = await guardAdmin();
+  if (denied) return denied;
+  const session = await adminSession();
+  if (!session) return fail(401, "Sign in to continue.");
+  const { id } = await params;
+  const url = new URL(req.url);
+  const versionNumber = Number(url.searchParams.get("restoreVersion"));
+  if (url.searchParams.get("action") !== "restore" || !Number.isSafeInteger(versionNumber) || versionNumber < 1) return fail(400, "Choose a valid questionnaire version to restore.", { code: "invalid_args" });
+  const interview = await getInterview(id);
+  if (!interview) return fail(404, "Interview not found.");
+  const version = await getVersion(interview._id, versionNumber);
+  if (!version) return fail(404, "That questionnaire version does not exist.");
+  if (Buffer.byteLength(version.html, "utf8") > LIMITS.maxFileBytes) return fail(413, "That stored questionnaire is too large to restore as a candidate.");
+  return json({ html: version.html, fileName: version.fileName ?? `version-${version.version}.html`, version: version.version });
+});
+
 /** Preview and apply are deliberately separate. There is no one-call publish path. */
 export const POST = withServerErrors("admin/interviews/[id]/versions", async function POST(req: Request, { params }: Ctx) {
   const denied = await guardAdmin({ mutating: true });

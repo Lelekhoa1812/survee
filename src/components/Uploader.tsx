@@ -19,8 +19,8 @@ export interface UploadState {
   ok: boolean;
 }
 
-export function Uploader({ interviewId, onChange, compact, disabled = false }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean }) {
-  const [state, setState] = useState<UploadState>({ settled: false, ok: false });
+export function Uploader({ interviewId, onChange, compact, disabled = false, initialState }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean; initialState?: UploadState }) {
+  const [state, setState] = useState<UploadState>(initialState ?? { settled: false, ok: false });
   const [phase, setPhase] = useState<"idle" | "static" | "live">("idle");
   const [error, setError] = useState("");
   const [over, setOver] = useState(false);

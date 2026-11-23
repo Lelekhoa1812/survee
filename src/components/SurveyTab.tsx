@@ -128,6 +128,23 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
     }
   }
 
+  async function restoreAsCandidate(version: number) {
+    setBusy(true);
+    const res = await api<{ html: string; fileName: string }>(`${endpoint}?action=restore&restoreVersion=${version}`);
+    setBusy(false);
+    if (!res.ok || typeof res.data.html !== "string") {
+      toast(res.data.error ?? "Could not load that questionnaire version.", "err");
+      return;
+    }
+    setUpload({ fileName: res.data.fileName, html: res.data.html, settled: true, ok: true });
+    setUploaderKey((key) => key + 1);
+    setPreview(null);
+    setAckCompatibility(false);
+    setReviewedCandidate(false);
+    setReplacing(true);
+    toast(`Version ${version} loaded as a candidate. Preview it before publishing.`);
+  }
+
   function cancelReplacement() {
     uploadRevision.current += 1;
     setReplacing(false);
@@ -167,7 +184,7 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
           <div className="card-head"><h2>Review a new version</h2><span className="right" /><button type="button" className="btn ghost sm" disabled={busy} onClick={cancelReplacement}>Cancel</button></div>
           <div className="card-pad stack">
             <div className="callout"><Icon name="info" /><div>The candidate is checked and previewed before it can go live. Publishing replaces the questionnaire for everyone; saved answers remain attached to matching question IDs.{answeredOnLoadedPage}</div></div>
-            <Uploader key={uploaderKey} interviewId={data.interview.id} onChange={onUploadChange} compact disabled={busy} />
+            <Uploader key={uploaderKey} interviewId={data.interview.id} onChange={onUploadChange} compact disabled={busy} initialState={upload} />
             {!preview && (
               <div className="row" style={{ justifyContent: "flex-end" }}>
                 <button type="button" className="btn accent" disabled={!canPreview} onClick={() => void previewCandidate()}>
@@ -322,7 +339,12 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
                   <td>{version.questions}</td>
                   <td className="muted nowrap">{fullTime(version.createdAt)}</td>
                   <td className="muted">{version.check.errors} errors · {version.check.warnings} warnings</td>
-                  <td>{version.version === data.interview.currentVersion ? <Badge kind="ok">Live</Badge> : <a className="btn sm" href={`/api/admin/frame?interview=${data.interview.id}&version=${version.version}`} target="_blank" rel="noreferrer">View</a>}</td>
+                  <td>
+                    {version.version === data.interview.currentVersion ? <Badge kind="ok">Live</Badge> : <div className="row wrap">
+                      <a className="btn sm" href={`/api/admin/frame?interview=${data.interview.id}&version=${version.version}`} target="_blank" rel="noreferrer">View</a>
+                      {canManage && <button type="button" className="btn sm" disabled={busy} onClick={() => void restoreAsCandidate(version.version)}>Restore as candidate</button>}
+                    </div>}
+                  </td>
                 </tr>
               ))}
             </tbody>

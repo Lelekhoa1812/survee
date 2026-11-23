@@ -32,7 +32,10 @@ vi.mock("@/lib/http", () => ({
 vi.mock("@/lib/repo", () => ({
   getInterview: async () => ({ _id: "interview-object-id", currentVersion: state.currentVersion }),
   getVersion: async () => ({
+    version: 1,
     htmlSha256: state.baseHash,
+    html: candidate,
+    fileName: "previous.html",
     manifest: state.currentManifest,
   }),
   publishVersionIfCurrent: state.publish,
@@ -53,7 +56,7 @@ vi.mock("@/lib/survey", () => ({
   },
 }));
 
-import { POST } from "../src/app/api/admin/interviews/[id]/versions/route";
+import { GET, POST } from "../src/app/api/admin/interviews/[id]/versions/route";
 
 function request() {
   return new Request("https://kqa.local/api/admin/interviews/0123456789abcdef01234567/versions", { method: "POST" });
@@ -97,6 +100,14 @@ beforeEach(() => {
 });
 
 describe("host questionnaire version preview and apply", () => {
+  it("loads a stored version as a candidate without publishing it", async () => {
+    const response = await GET(new Request(`https://kqa.local/api/admin/interviews/${interviewId}/versions?action=restore&restoreVersion=1`), { params: Promise.resolve({ id: interviewId }) });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ html: candidate, fileName: "previous.html", version: 1 });
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
   it("rejects the former one-call publish request", async () => {
     state.body = { html: candidate, fileName: "updated.html" };
     const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });

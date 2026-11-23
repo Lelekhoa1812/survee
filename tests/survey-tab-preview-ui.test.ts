@@ -100,6 +100,21 @@ afterEach(() => {
 });
 
 describe("host questionnaire version preview", () => {
+  it("restores a stored version into the candidate preview flow", async () => {
+    state.api.mockImplementation(async (_url: string, options?: { method?: string; body?: Record<string, unknown> }) => options?.method === undefined
+      ? { ok: true, data: { html: "<html>previous</html>", fileName: "previous.html" } }
+      : { ok: true, data: preview });
+    const withHistory = { ...data, versions: [data.versions[0], { ...data.versions[0], version: 1, fileName: "previous.html" }] } as unknown as InterviewData;
+    await act(async () => root.render(createElement(SurveyTab, { data: withHistory, refresh: () => {} })));
+
+    await click("Restore as candidate");
+    expect(host.textContent).toContain("previous.html");
+    await click("Preview candidate changes");
+
+    expect(state.api).toHaveBeenLastCalledWith("/api/admin/interviews/interview-1/versions", { method: "POST", body: { action: "preview", html: "<html>previous</html>", fileName: "previous.html" } });
+    expect(host.textContent).toContain("Make this version live");
+  });
+
   it("keeps the survey visible to members without exposing publishing controls", async () => {
     await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {}, canManage: false })));
 
