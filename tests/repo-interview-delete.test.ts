@@ -100,7 +100,8 @@ describe("deleteParticipant", () => {
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
     expect(mocks.calls.map(({ collection }) => collection)).toEqual(["participantLookup", "participants", "questionOrderAssignments", "events", "mail", "analyticsRuns"]);
     expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
-    expect(mocks.calls[3].filter).toEqual(tenantFilter("axion", { participantId: new ObjectId(interviewId) }));
+    expect(mocks.calls[3].filter).toEqual({ participantId: new ObjectId(interviewId) });
+    expect(mocks.calls[4].filter).toEqual({ participantId: new ObjectId(interviewId) });
     expect(mocks.calls[5].filter).toEqual(tenantFilter("axion", { interviewId: new ObjectId(interviewId) }));
   });
 

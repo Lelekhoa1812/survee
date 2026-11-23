@@ -81,7 +81,7 @@ export async function deleteMailForInterview(interviewId: ObjectId, session?: Cl
 }
 
 export async function deleteMailForPerson(participantId: ObjectId, session?: ClientSession): Promise<void> {
-  const tenantId = await currentTenantId();
-  if (!tenantId) return;
-  await (await col.mail()).deleteMany(tenantFilter(tenantId, { participantId }), { session });
+  // participantId is a globally unique participant _id. Match only this exact
+  // foreign key so legacy rows without tenantId are erased too.
+  await (await col.mail()).deleteMany({ participantId }, { session });
 }

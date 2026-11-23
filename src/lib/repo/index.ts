@@ -579,7 +579,9 @@ export async function deleteParticipant(id: string): Promise<boolean> {
     const res = await participants.deleteOne(tenantFilter(tenantId, { _id: oid }), { session });
     if (!res.deletedCount) return false;
     await (await col.questionOrderAssignments()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
-    await (await col.events()).deleteMany(tenantFilter(tenantId, { participantId: oid }), { session });
+    // Mongo _id values are globally unique, so this exact relationship also
+    // removes legacy event rows that predate tenantId without crossing tenants.
+    await (await col.events()).deleteMany({ participantId: oid }, { session });
     await deleteMailForPerson(oid, session);
     await (await col.analyticsRuns()).deleteMany(tenantFilter(tenantId, { interviewId: participant.interviewId }), { session });
     return true;
