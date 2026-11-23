@@ -627,6 +627,12 @@ const TOOLS: ToolDef[] = [
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
+      for (const key of ["questionId", "segmentBy", "crossTabWith"] as const) {
+        const selector = args[key];
+        if (selector !== undefined && (typeof selector !== "string" || !selector.trim() || selector.trim().length > 64)) {
+          return err(`${key} must be a non-empty question ID of at most 64 characters.`, "invalid_args");
+        }
+      }
       if (args.runId !== undefined) {
         const runId = asString(args.runId, 40);
         if (!runId || !oid(runId)) return err("runId must be an analysisRunId returned by analyze_answers.");
@@ -672,8 +678,8 @@ const TOOLS: ToolDef[] = [
         if (!segmentById) return err("questionIds can only be used with segmentBy.");
         if (questionId) return err("Use either questionId or questionIds, not both.");
         if (!Array.isArray(requestedQuestionIds) || requestedQuestionIds.length < 1 || requestedQuestionIds.length > 20) return err("questionIds must contain between 1 and 20 outcome question IDs.");
-        const selectedIds = requestedQuestionIds.map((value) => asString(value, 64));
-        if (selectedIds.some((value) => !value)) return err("Each questionIds entry must be a non-empty question ID.");
+        const selectedIds = requestedQuestionIds.map((value) => typeof value === "string" ? value.trim() : "");
+        if (selectedIds.some((value) => !value || value.length > 64)) return err("Each questionIds entry must be a non-empty question ID of at most 64 characters.", "invalid_args");
         if (new Set(selectedIds).size !== selectedIds.length) return err("questionIds must not contain duplicates.");
         if (selectedIds.includes(segmentById)) return err("Choose outcome questions other than the segmentation question.");
         const selectedQuestions = selectedIds.map((selectedId) => questions.find((item) => item.id === selectedId));

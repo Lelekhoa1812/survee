@@ -90,10 +90,12 @@ describe("questionnaire preview tokens", () => {
   it("hashes only compatibility findings and detects answer-mapping impact", () => {
     const findings: { code: string; message: string }[] = [
       { code: "KQA700", message: "One" },
+      { code: "KQA709", message: "Repeat row contract changed" },
       { code: "KQA001", message: "Static checker detail" },
     ];
     const changedFinding: { code: string; message: string }[] = [{ code: "KQA700", message: "Changed" }];
     expect(hasCompatibilityImpact(findings)).toBe(true);
+    expect(hasCompatibilityImpact(["KQA707", "KQA708", "KQA709", "KQA710"].map((code) => ({ code })))).toBe(true);
     expect(hasCompatibilityImpact([{ code: "KQA999" }])).toBe(false);
     expect(hashCompatibilityFindings(findings)).toBe(hashCompatibilityFindings([...findings].reverse()));
     expect(hashCompatibilityFindings(findings)).not.toBe(hashCompatibilityFindings(changedFinding));

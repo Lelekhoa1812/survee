@@ -828,6 +828,22 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.methodology?.join(" ")).toContain("multi-select");
   });
 
+  it("rejects blank or oversized analytics selectors before scanning respondents", async () => {
+    const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
+    for (const args of [
+      { interviewId, questionId: " " },
+      { interviewId, segmentBy: "\t" },
+      { interviewId, crossTabWith: "x".repeat(65) },
+      { interviewId, segmentBy: "fit", questionIds: ["x".repeat(65)] },
+    ]) {
+      const response = await call("analyze_answers", args);
+      const result = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+      expect(result.result.isError).toBe(true);
+      expect(result.result.structuredContent.code).toBe("invalid_args");
+    }
+    expect(vi.mocked(iterateAnalyticsParticipants).mock.calls).toHaveLength(callsBefore);
+  });
+
   it("compares a selected outcome across answer segments in one scan", async () => {
     const callsBefore = vi.mocked(iterateAnalyticsParticipants).mock.calls.length;
     const res = await call("analyze_answers", { interviewId, segmentBy: "fit", questionId: "budget", compareStatuses: true });

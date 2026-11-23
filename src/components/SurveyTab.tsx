@@ -54,6 +54,7 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
     : "";
   const endpoint = `/api/admin/interviews/${data.interview.id}/versions`;
   const compatibilityFindings = preview?.diagnostics.filter((diagnostic) => diagnostic.category === "compat") ?? [];
+  const checkerFindings = preview?.diagnostics.filter((diagnostic) => diagnostic.category !== "compat") ?? [];
   const changes = preview?.changes.questionChanges ?? null;
   const sectionChanges = preview?.changes.sectionChanges ?? null;
   const hasSectionChanges = !!sectionChanges && (sectionChanges.added.length + sectionChanges.removed.length + sectionChanges.updated.length + sectionChanges.moved.length > 0);
@@ -282,6 +283,18 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
                   )}
                   <p className="muted">{preview.changes.questionCountBefore} questions before · {preview.changes.questionCountAfter} after · {preview.counts.warning} checker warnings · {preview.counts.info} notes</p>
                 </div>
+                {checkerFindings.length > 0 && (
+                  <section className="callout warn candidate-compatibility" aria-labelledby="candidate-checker-findings-title">
+                    <div>
+                      <strong id="candidate-checker-findings-title">Review checker findings before publishing</strong>
+                      <ul>{checkerFindings.map((finding, index) => (
+                        <li key={`${finding.code}-${finding.questionId ?? ""}-${index}`}>
+                          <b>{finding.code} · {finding.title}:</b> {finding.message} <span className="muted">Suggested fix: {finding.fix}</span>
+                        </li>
+                      ))}</ul>
+                    </div>
+                  </section>
+                )}
                 {compatibilityFindings.length > 0 && (
                   <div className="callout warn candidate-compatibility" role="alert">
                     <div>
@@ -342,7 +355,7 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
                   <td>
                     {version.version === data.interview.currentVersion ? <Badge kind="ok">Live</Badge> : <div className="row wrap">
                       <a className="btn sm" href={`/api/admin/frame?interview=${data.interview.id}&version=${version.version}`} target="_blank" rel="noreferrer">View</a>
-                      {canManage && <button type="button" className="btn sm" disabled={busy} onClick={() => void restoreAsCandidate(version.version)}>Restore as candidate</button>}
+                      {canManage && <button type="button" className="btn sm" disabled={busy || replacing || upload.ok} title={replacing || upload.ok ? "Cancel the current candidate before restoring a prior version." : undefined} onClick={() => void restoreAsCandidate(version.version)}>Restore as candidate</button>}
                     </div>}
                   </td>
                 </tr>

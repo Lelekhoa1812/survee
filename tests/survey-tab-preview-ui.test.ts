@@ -115,6 +115,41 @@ describe("host questionnaire version preview", () => {
     expect(host.textContent).toContain("Make this version live");
   });
 
+  it("shows checker warning details in the candidate review", async () => {
+    state.api.mockResolvedValueOnce({ ok: true, data: {
+      ...preview,
+      diagnostics: [{ code: "KQA608", severity: "warning", category: "runtime", title: "Custom control did not react", message: "Saved values may appear blank when respondents return.", fix: "Update the control to repaint from KQA.get()." }],
+      counts: { error: 0, warning: 1, info: 0 },
+    } });
+    await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {} })));
+    await click("Upload a new version");
+    await click("Simulate ready upload");
+    await click("Preview candidate changes");
+
+    expect(host.textContent).toContain("Review checker findings before publishing");
+    expect(host.textContent).toContain("Saved values may appear blank when respondents return.");
+    expect(host.textContent).toContain("Update the control to repaint from KQA.get().");
+  });
+
+  it("preserves an active candidate until the host cancels before restoring history", async () => {
+    state.api.mockImplementation(async (_url: string, options?: { method?: string; body?: Record<string, unknown> }) => options?.method === undefined
+      ? { ok: true, data: { html: "<html>previous</html>", fileName: "previous.html" } }
+      : { ok: true, data: preview });
+    const withHistory = { ...data, versions: [data.versions[0], { ...data.versions[0], version: 1, fileName: "previous.html" }] } as unknown as InterviewData;
+    await act(async () => root.render(createElement(SurveyTab, { data: withHistory, refresh: () => {} })));
+    await click("Upload a new version");
+    await click("Simulate ready upload");
+
+    const restore = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("Restore as candidate"));
+    expect(restore?.disabled).toBe(true);
+    expect(restore?.getAttribute("title")).toContain("Cancel the current candidate");
+    expect(state.api).not.toHaveBeenCalled();
+
+    await click("Cancel");
+    await click("Restore as candidate");
+    expect(host.textContent).toContain("previous.html");
+  });
+
   it("keeps the survey visible to members without exposing publishing controls", async () => {
     await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {}, canManage: false })));
 
