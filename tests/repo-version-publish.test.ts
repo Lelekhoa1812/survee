@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   deleted: [] as Record<string, unknown>[],
   assetUpdates: [] as Record<string, unknown>[],
   assetMatchedCount: 1,
+  events: [] as Record<string, unknown>[],
+  eventOptions: [] as Record<string, unknown>[],
+  failEventInsert: false,
   updateOne: vi.fn(async () => ({ modifiedCount: 1 })),
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work({ transaction: true })),
 }));
@@ -36,7 +39,7 @@ vi.mock("../src/lib/db", () => ({
       insertOne: async (row: Record<string, unknown>, options: Record<string, unknown>) => { mocks.inserted.push(row); mocks.insertOptions.push(options); },
       deleteOne: async (filter: Record<string, unknown>) => { mocks.deleted.push(filter); },
     }),
-    events: async () => ({ insertOne: async () => ({}) }),
+    events: async () => ({ insertOne: async (row: Record<string, unknown>, options: Record<string, unknown>) => { mocks.events.push(row); mocks.eventOptions.push(options); if (mocks.failEventInsert) throw new Error("event insert failed"); return {}; } }),
   },
 }));
 
@@ -59,6 +62,9 @@ beforeEach(() => {
   mocks.deleted.length = 0;
   mocks.assetUpdates.length = 0;
   mocks.assetMatchedCount = 1;
+  mocks.events.length = 0;
+  mocks.eventOptions.length = 0;
+  mocks.failEventInsert = false;
   mocks.updateOne.mockReset().mockImplementation(async () => ({ modifiedCount: mocks.modifiedCount }));
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => work({ transaction: true }));
 });
@@ -70,6 +76,8 @@ describe("publishVersionIfCurrent", () => {
     expect(mocks.inserted).toHaveLength(1);
     expect(mocks.inserted[0]).toMatchObject({ version: 5, html: survey.html, htmlSha256: expect.any(String) });
     expect(mocks.insertOptions).toEqual([{ session: { transaction: true } }]);
+    expect(mocks.events[0]).toMatchObject({ type: "version", tenantId: "axion", interviewId: expect.any(ObjectId), meta: { version: 5, source: "mcp_patch" } });
+    expect(mocks.eventOptions).toEqual([{ session: { transaction: true } }]);
     expect(mocks.updateOne).toHaveBeenCalledWith(
       tenantFilter("axion", { _id: expect.any(ObjectId), currentVersion: 4 }),
       { $set: { currentVersion: 5, updatedAt: expect.any(Date) }, $inc: { respondentWriteRevision: 1 } },
@@ -112,5 +120,12 @@ describe("publishVersionIfCurrent", () => {
     expect(result).toEqual({ assetUnavailable: true });
     expect(mocks.assetUpdates[0].filter).toEqual(tenantFilter("axion", { publicId: "b".repeat(43) }));
     expect(mocks.inserted).toHaveLength(0);
+  });
+
+  it("does not report a published version when its audit event cannot be stored", async () => {
+    mocks.failEventInsert = true;
+    await expect(withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token" }, () => publishVersionIfCurrent(interviewId, 4, mocks.baseHash, survey))).rejects.toThrow("event insert failed");
+    expect(mocks.insertOptions).toEqual([{ session: { transaction: true } }]);
+    expect(mocks.eventOptions).toEqual([{ session: { transaction: true } }]);
   });
 });

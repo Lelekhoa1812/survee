@@ -1,7 +1,7 @@
 import { parseEmail } from "@/lib/mail/address";
 import { fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
-import { addParticipants, getInterview, promoteToMultiUser } from "@/lib/repo";
+import { addParticipants, getInterview } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -30,7 +30,6 @@ export const POST = withServerErrors("admin/interviews/[id]/people", async funct
     }
   }
   if (!people.length) return fail(400, "Add at least one person with a name.");
-  // Validation is done; only now does a One-person interview become Multi-user.
-  if (interview.mode !== "multi") await promoteToMultiUser(id);
+  // Adding people and promoting a one-person interview are committed together.
   return json({ ok: true, people: await addParticipants(id, people) }, 201);
 });

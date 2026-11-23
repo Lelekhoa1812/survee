@@ -34,14 +34,7 @@ function visibleRecordGroups(groups: RepeatRecordMap): RepeatRecordMap {
   return Object.fromEntries(Object.entries(groups).map(([questionId, rows]) => [questionId, rows.filter((row) => !row.deletedAt)]));
 }
 
-function logEvent(tenantId: string, interviewId: ObjectId, type: string, participantId?: ObjectId, meta?: Record<string, unknown>) {
-  // Fire and forget: the audit trail must never slow down or break an answer being saved.
-  void col.events().then((c) => c.insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta })).catch(() => {
-    console.error("[audit] interview event persistence failed");
-  });
-}
-
-async function insertEvent(tenantId: string, interviewId: ObjectId, type: string, participantId: ObjectId, session: ClientSession, meta?: Record<string, unknown>) {
+async function insertEvent(tenantId: string, interviewId: ObjectId, type: string, participantId: ObjectId | undefined, session: ClientSession, meta?: Record<string, unknown>) {
   await (await col.events()).insertOne({ _id: new ObjectId(), tenantId, interviewId, participantId, type: type as never, at: new Date(), meta }, { session });
 }
 
@@ -129,13 +122,17 @@ export async function createInterview(input: { name: string; description?: strin
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
   const now = new Date();
-  const doc: InterviewDoc = { _id: new ObjectId(), tenantId, name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1, createdAt: now, updatedAt: now };
+  const doc: InterviewDoc = { _id: new ObjectId(), tenantId, name: input.name, description: input.description, mode: input.mode, status: "open", currentVersion: 1, ...(input.mode === "single" ? { respondentWriteRevision: 1 } : {}), createdAt: now, updatedAt: now };
+  const initialParticipant: ParticipantDoc | undefined = input.mode === "single" ? {
+    _id: new ObjectId(), tenantId, interviewId: doc._id, token: newToken(), name: "Respondent", status: "invited", answers: {}, revision: 0,
+    createdAt: now, updatedAt: now,
+  } : undefined;
   await withMongoTransaction(async (session) => {
     await (await col.interviews()).insertOne(doc, { session });
     await (await col.versions()).insertOne(versionDoc(tenantId, doc._id, 1, input.survey), { session });
+    if (initialParticipant) await (await col.participants()).insertOne(initialParticipant, { session });
+    await insertEvent(tenantId, doc._id, "created", undefined, session);
   });
-  if (input.mode === "single") await addParticipants(doc._id.toHexString(), [{ name: "Respondent" }]);
-  logEvent(tenantId, doc._id, "created");
   return doc;
 }
 
@@ -154,21 +151,14 @@ export async function updateInterview(id: string, patch: { name?: string; descri
   if (patch.status !== undefined) set.status = patch.status;
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
-  const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { returnDocument: "after" });
-  if (res && patch.status) logEvent(tenantId, oid, "status", undefined, { status: patch.status });
   const changed = [patch.name !== undefined && "name", patch.description !== undefined && "description"].filter((f): f is string => Boolean(f));
-  if (res && changed.length) logEvent(tenantId, oid, "update", undefined, { fields: changed });
-  return res;
-}
-
-/** Adding people turns a One-person interview into a Multi-user one, so the label and links stay accurate. */
-export async function promoteToMultiUser(id: string): Promise<void> {
-  const oid = toOid(id);
-  if (!oid) return;
-  const tenantId = await currentTenantId();
-  if (!tenantId) return;
-  const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid, mode: "single" }), { $set: { mode: "multi", updatedAt: new Date() } }, { returnDocument: "after" });
-  if (res) logEvent(tenantId, oid, "update", undefined, { fields: ["mode"] });
+  return withMongoTransaction(async (session) => {
+    const res = await (await col.interviews()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
+    if (!res) return null;
+    if (patch.status) await insertEvent(tenantId, oid, "status", undefined, session, { status: patch.status });
+    if (changed.length) await insertEvent(tenantId, oid, "update", undefined, session, { fields: changed });
+    return res;
+  });
 }
 
 export async function addVersion(id: string, survey: NewSurvey): Promise<number | null> {
@@ -227,10 +217,10 @@ export async function publishVersionIfCurrent(
         if (!touched.matchedCount) throw new MissingImageAssetReferenceError();
       }
       await versions.insertOne(versionDoc(tenantId, oid, version, survey), { session });
+      await insertEvent(tenantId, oid, "version", undefined, session, { version, source });
       return { version };
     });
     if ("conflict" in result) return result;
-    logEvent(tenantId, oid, "version", undefined, { version, source });
     return result;
   } catch (error) {
     if (error instanceof MissingImageAssetReferenceError) return { assetUnavailable: true };
@@ -615,6 +605,11 @@ export async function addParticipants(interviewId: string, people: { name: strin
   });
   const added = await withMongoTransaction(async (session) => {
     const interviews = await col.interviews();
+    const promoted = await interviews.updateOne(
+      tenantFilter(tenantId, { _id: oid, mode: "single" }),
+      { $set: { mode: "multi" } },
+      { session },
+    );
     const touched = await interviews.updateOne(
       tenantFilter(tenantId, { _id: oid }),
       { $set: { updatedAt: now }, $inc: { respondentWriteRevision: 1 } },
@@ -622,6 +617,7 @@ export async function addParticipants(interviewId: string, people: { name: strin
     );
     if (!touched.matchedCount) return false;
     await (await col.participants()).insertMany(docs, { session });
+    if (promoted.modifiedCount) await insertEvent(tenantId, oid, "update", undefined, session, { fields: ["mode"] });
     return true;
   });
   if (!added) return [];
@@ -659,9 +655,12 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   }
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
-  const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { returnDocument: "after" });
-  if (res) logEvent(tenantId, res.interviewId, "update", res._id, { fields: Object.keys(patch).sort() });
-  return res ? participantView(res) : null;
+  return withMongoTransaction(async (session) => {
+    const res = await (await col.participants()).findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
+    if (!res) return null;
+    await insertEvent(tenantId, res.interviewId, "update", res._id, session, { fields: Object.keys(patch).sort() });
+    return participantView(res);
+  });
 }
 
 export async function deleteParticipant(id: string): Promise<boolean> {

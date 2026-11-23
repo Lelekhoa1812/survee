@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   aggregatePipelines: [] as unknown[][],
   calls: [] as { collection: string; filter: Record<string, unknown>; options: Record<string, unknown> }[],
   participantAfterUpdate: null as Record<string, unknown> | null,
+  failParticipantInsert: false,
+  failEventInsert: false,
   withMongoTransaction: vi.fn(async (work: (session: unknown) => Promise<unknown>) => work(mocks.session)),
 }));
 
@@ -21,7 +23,7 @@ vi.mock("../src/lib/db", () => ({
       },
       updateOne: async (filter: Record<string, unknown>, _update: unknown, options: Record<string, unknown>) => {
         mocks.calls.push({ collection: "interviews", filter, options });
-        return { matchedCount: 1 };
+        return { matchedCount: 1, modifiedCount: 1 };
       },
     }),
     versions: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "versions", filter, options }); } }),
@@ -36,6 +38,7 @@ vi.mock("../src/lib/db", () => ({
       },
       insertMany: async (docs: unknown[], options: Record<string, unknown>) => {
         mocks.calls.push({ collection: "participants.insertMany", filter: { count: docs.length }, options });
+        if (mocks.failParticipantInsert) throw new Error("participant insert failed");
       },
       deleteOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); return { deletedCount: mocks.deletedCount }; },
       deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "participants", filter, options }); },
@@ -46,7 +49,7 @@ vi.mock("../src/lib/db", () => ({
     }),
     questionOrderAssignments: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "questionOrderAssignments", filter, options }); } }),
     events: async () => ({
-      insertOne: async (_event: unknown, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events.insert", filter: {}, options }); },
+      insertOne: async (_event: unknown, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events.insert", filter: {}, options }); if (mocks.failEventInsert) throw new Error("event insert failed"); },
       deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "events", filter, options }); },
     }),
     analyticsRuns: async () => ({ deleteMany: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "analyticsRuns", filter, options }); } }),
@@ -68,6 +71,8 @@ beforeEach(() => {
   mocks.aggregateRows = [];
   mocks.aggregatePipelines.length = 0;
   mocks.participantAfterUpdate = null;
+  mocks.failParticipantInsert = false;
+  mocks.failEventInsert = false;
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work) => work(session));
 });
 
@@ -115,12 +120,22 @@ describe("respondent revision writes", () => {
 
     expect(added).toHaveLength(1);
     expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
-    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviews", "participants.insertMany"]);
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviews", "interviews", "participants.insertMany", "events.insert"]);
     expect(mocks.calls[0]).toMatchObject({
-      filter: tenantFilter("axion", { _id: new ObjectId(interviewId) }),
+      filter: tenantFilter("axion", { _id: new ObjectId(interviewId), mode: "single" }),
       options: { session },
     });
     expect(mocks.calls[1].options).toEqual({ session });
+    expect(mocks.calls[2].options).toEqual({ session });
+    expect(mocks.calls[3].options).toEqual({ session });
+  });
+
+  it("rolls mode promotion back with the batch when participant insertion fails", async () => {
+    mocks.failParticipantInsert = true;
+    await expect(asAxion(() => addParticipants(interviewId, [{ name: "Ada" }]))).rejects.toThrow("participant insert failed");
+    expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviews", "interviews", "participants.insertMany"]);
+    expect(mocks.calls.every(({ options }) => options.session === session)).toBe(true);
   });
 
   it("bumps the analysis revision atomically when reopening a submitted response", async () => {

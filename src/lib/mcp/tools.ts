@@ -39,7 +39,6 @@ import {
   recentEvents,
   regenerateToken,
   reopenParticipant,
-  promoteToMultiUser,
   saveQuestionnaireReviewDraft,
   updateInterview,
   updateParticipant,
@@ -1690,7 +1689,6 @@ const TOOLS: ToolDef[] = [
         people.push({ name, email, note: asString(item.note, 1000) });
       }
       if (!people.length) return err("Add at least one person with a name.", "invalid_args");
-      if (interview.mode !== "multi") await promoteToMultiUser(id);
       const created = await addParticipants(id, people);
       const views = created.map((person) => shapePerson(person, null, []));
       return ok({ people: views });

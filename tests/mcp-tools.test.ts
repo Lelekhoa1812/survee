@@ -95,7 +95,6 @@ vi.mock("../src/lib/repo", async () => {
     consumeRateLimit: vi.fn(async () => true),
     noteMcp: vi.fn(async () => {}),
     reopenParticipant: vi.fn(async () => null),
-    promoteToMultiUser: vi.fn(async () => {}),
     createInterview: vi.fn(async () => ({ _id: new ObjectId(interviewId) })),
     addParticipants: vi.fn(async (_interviewId: string, people: { name: string }[]) => people.map((p) => ({ id: new ObjectId().toHexString(), interviewId, token: "new-token", name: p.name, status: "invited", answers: {}, revision: 0, createdAt: "2026-11-20T00:00:00.000Z" }))),
     getParticipant: vi.fn(async () => ({
@@ -164,7 +163,7 @@ vi.mock("../src/lib/repo/mail", async () => {
 import { handleMcp } from "../src/lib/mcp/http";
 import { listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { addParticipants, createAnalyticsRun, createInterview, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, promoteToMultiUser, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
+import { addParticipants, createAnalyticsRun, createInterview, deleteInterview, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -728,21 +727,19 @@ describe("MCP tools", () => {
     expect(unsubmittedBody.result.structuredContent).toMatchObject({ code: "not_submitted" });
   });
 
-  it("switches a One-person interview to Multi-user when people are added", async () => {
+  it("delegates single-mode promotion to the atomic add-people repository write", async () => {
     vi.mocked(getInterview).mockResolvedValueOnce({ _id: new ObjectId(interviewId), name: "Solo", mode: "single", currentVersion: 1 } as never);
     const response = await call("add_people", { interviewId, people: [{ name: "Grace" }] });
     const body = await response.json() as { result: { isError?: boolean } };
     expect(body.result.isError).toBeFalsy();
-    expect(vi.mocked(promoteToMultiUser)).toHaveBeenCalledWith(interviewId);
+    expect(vi.mocked(addParticipants)).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: undefined }]);
   });
 
   it("does not switch the mode when the people list is refused", async () => {
     vi.mocked(getInterview).mockResolvedValueOnce({ _id: new ObjectId(interviewId), name: "Solo", mode: "single", currentVersion: 1 } as never);
-    vi.mocked(promoteToMultiUser).mockClear();
     const response = await call("add_people", { interviewId, people: [] });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
     expect(body.result.structuredContent.code).toBe("invalid_args");
-    expect(vi.mocked(promoteToMultiUser)).not.toHaveBeenCalled();
   });
 
   it("rejects an oversized add_people batch instead of truncating it", async () => {
