@@ -7,6 +7,7 @@ const store = vi.hoisted(() => ({
   tenants: [] as any[],
   memberships: [] as any[],
   invitations: [] as any[],
+  apiKeys: [] as any[],
   events: [] as any[],
   failInvitationClaim: false,
   failMembershipMutation: false,
@@ -56,6 +57,13 @@ vi.mock("../src/lib/db", () => ({
         return { deletedCount: 1 };
       },
     }),
+    apiKeys: async () => ({
+      updateMany: async (filter: any, update: any) => {
+        const matched = store.apiKeys.filter((item) => matches(item, filter));
+        for (const item of matched) Object.assign(item, update.$set ?? {});
+        return { matchedCount: matched.length, modifiedCount: matched.length };
+      },
+    }),
     workspaceInvitations: async () => ({
       findOne: async (filter: any) => store.invitations.find((item) => matches(item, filter)) ?? null,
       find: (filter: any) => cursor(store.invitations.filter((item) => matches(item, filter))),
@@ -82,7 +90,7 @@ vi.mock("../src/lib/db", () => ({
     events: async () => ({ insertOne: async (doc: any) => { store.events.push(doc); return { insertedId: doc._id }; } }),
   },
   withMongoTransaction: async (work: (session: object) => Promise<unknown>) => {
-    const snapshot = Object.fromEntries(["users", "tenants", "memberships", "invitations", "events"].map((key) => [key, (store as any)[key].map((doc: any) => ({ ...doc }))]));
+    const snapshot = Object.fromEntries(["users", "tenants", "memberships", "invitations", "apiKeys", "events"].map((key) => [key, (store as any)[key].map((doc: any) => ({ ...doc }))]));
     try {
       const result = await work({});
       if (result === undefined) throw new Error("MongoDB transaction completed without a result.");
@@ -105,8 +113,9 @@ function matches(doc: any, filter: any): boolean {
   return Object.entries(filter ?? {}).every(([key, expected]: [string, any]) => {
     const actual = doc[key];
     if (key === "$or") return expected.some((branch: any) => matches(doc, branch));
+    if (key === "$and") return expected.every((branch: any) => matches(doc, branch));
     if (expected && typeof expected === "object" && !(expected instanceof Date) && !(expected instanceof ObjectId)) {
-      if ("$in" in expected) return expected.$in.some((value: any) => same(actual, value));
+      if ("$in" in expected) return expected.$in.some((value: any) => same(actual, value) || (value === null && actual === undefined));
       if ("$exists" in expected) return (actual !== undefined) === expected.$exists;
       if ("$gt" in expected) return actual instanceof Date ? actual > expected.$gt : actual > expected.$gt;
       if ("$lte" in expected) return actual instanceof Date ? actual <= expected.$lte : actual <= expected.$lte;
@@ -182,6 +191,7 @@ beforeEach(() => {
   store.tenants.splice(0);
   store.memberships.splice(0);
   store.invitations.splice(0);
+  store.apiKeys.splice(0);
   store.events.splice(0);
   store.failInvitationClaim = false;
   store.failMembershipMutation = false;
@@ -197,6 +207,25 @@ beforeEach(() => {
 });
 
 describe("workspace membership and invitations", () => {
+  it("revokes a removed member's OAuth credentials before any later re-invitation", async () => {
+    const adminId = new ObjectId("000000000000000000000003");
+    addMembership("axion", adminId, "admin");
+    store.apiKeys.push(
+      { _id: new ObjectId(), tenantId: "axion", oauthClientId: "client", oauthUserId: inviteeId },
+      { _id: new ObjectId(), oauthClientId: "legacy-axion-client", oauthUserId: inviteeId },
+      { _id: new ObjectId(), tenantId: "axion", oauthClientId: "legacy-client", createdBy: "member@example.test" },
+      { _id: new ObjectId(), tenantId: "axion", oauthUserId: inviteeId },
+      { _id: new ObjectId(), tenantId: "workspace-b", oauthClientId: "client", oauthUserId: inviteeId },
+      { _id: new ObjectId(), tenantId: "axion", oauthClientId: "client", oauthUserId: ownerId },
+    );
+    addMembership("axion", inviteeId, "member");
+
+    await expect(removeWorkspaceMember({ tenantId: "axion", actorUserId: adminId.toHexString(), targetUserId: inviteeId.toHexString() }))
+      .resolves.toEqual({ ok: true, role: "member" });
+
+    expect(store.apiKeys.map(({ revokedAt }) => Boolean(revokedAt))).toEqual([true, true, true, false, false, false]);
+  });
+
   it("does not let a superseded mail attempt update a replacement invitation", async () => {
     const id = new ObjectId();
     const currentMessageId = "<replacement-message@example.test>";

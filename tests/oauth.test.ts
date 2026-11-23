@@ -197,7 +197,7 @@ describe("OAuth discovery and PKCE", () => {
     expect(await rotateOAuthKey(exchanged.refresh)).not.toBeNull();
   });
 
-  it("disables an OAuth connection after its user leaves the workspace", async () => {
+  it("permanently disables an OAuth connection when its user leaves and later rejoins", async () => {
     const registered = await registerClient({ name: "Removed member", redirectUris: ["https://chatgpt.com/callback"] });
     if (!registered.ok) throw new Error("Client registration failed.");
     const verifier = "removed-member-oauth-verifier-value-123456";
@@ -206,6 +206,13 @@ describe("OAuth discovery and PKCE", () => {
     if (!exchanged.ok) throw new Error("Authorization code exchange failed.");
 
     memberActive = false;
+    expect(await authenticateApiKeyAccess(exchanged.access)).toBeNull();
+    expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
+
+    // Membership checks alone would allow these credentials to revive. Member
+    // removal now also sets revokedAt transactionally, which survives rejoining.
+    keys[0].revokedAt = new Date();
+    memberActive = true;
     expect(await authenticateApiKeyAccess(exchanged.access)).toBeNull();
     expect(await rotateOAuthKey(exchanged.refresh)).toBeNull();
   });

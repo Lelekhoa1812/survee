@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { col, withMongoTransaction } from "../db";
+import { AXION_TENANT_ID } from "../env";
 import { hashPassword } from "./accounts";
 import type { MembershipDoc, TenantRole, UserDoc, WorkspaceInvitationDoc } from "./types";
 
@@ -323,6 +324,21 @@ export async function removeWorkspaceMember(input: {
       );
       if (fenced.matchedCount !== 1) throw new WorkspaceMutationAbort({ ok: false, reason: "forbidden" });
     }
+    // OAuth credentials belong to the membership that consented to them. Revoke
+    // them in this transaction so a later re-invitation cannot revive old grants.
+    const targetUser = await (await col.users()).findOne({ _id: targetId }, { session, projection: { email: 1 } });
+    await (await col.apiKeys()).updateMany({
+      $and: [
+        // Older Axion OAuth rows omit tenantId and authenticate against Axion.
+        { $or: [{ tenantId: input.tenantId }, ...(input.tenantId === AXION_TENANT_ID ? [{ tenantId: { $exists: false } }] : [])] },
+        { oauthClientId: { $exists: true } },
+        { revokedAt: { $exists: false } },
+        { $or: [
+          { oauthUserId: targetId },
+          ...(targetUser?.email ? [{ oauthUserId: { $exists: false }, createdBy: targetUser.email }] : []),
+        ] },
+      ],
+    }, { $set: { revokedAt: new Date() } }, { session });
     const deleted = await memberships.deleteOne(
       { _id: target._id, tenantId: input.tenantId, userId: targetId },
       { session },
