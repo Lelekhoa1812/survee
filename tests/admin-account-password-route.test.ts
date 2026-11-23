@@ -24,7 +24,7 @@ vi.mock("@/lib/http", async () => {
   };
 });
 vi.mock("@/lib/repo/accounts", () => ({ changeAccountPassword: state.change }));
-vi.mock("@/lib/repo", () => ({ consumeRateLimit: state.consume, clearRateLimit: state.clear }));
+vi.mock("@/lib/repo", () => ({ consumeRateLimit: state.consume, clearRateLimit: state.clear, registerUserSession: async () => {} }));
 vi.mock("@/lib/auth", () => ({ createSession: () => ({ value: "fresh-session", maxAge: 3600 }), SESSION_COOKIE: "kqa_admin" }));
 
 import { POST } from "../src/app/api/admin/account/password/route";

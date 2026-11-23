@@ -5,7 +5,7 @@ import type { TenantDoc } from "./repo/types";
 
 const OWNED = ["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes", "analytics_runs"] as const;
 const OWNED_SET = new Set<string>(OWNED);
-const INSTANCE_WIDE = ["oauth_clients", "login_attempts", "revoked_sessions"] as const;
+const INSTANCE_WIDE = ["oauth_clients", "login_attempts", "revoked_sessions", "user_sessions"] as const;
 const MIGRATION_LEASE_MS = 5 * 60 * 1000;
 
 export class TenantMigrationInProgressError extends Error {

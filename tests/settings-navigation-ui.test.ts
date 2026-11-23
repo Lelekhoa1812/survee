@@ -75,4 +75,12 @@ describe("settings section navigation", () => {
     expect(html).toContain("KQA_AXION_LEGACY_TENANT_FALLBACK=false");
     expect(html).toContain("zero-unscoped audit");
   });
+
+  it("includes account session inventory and revoke-other-sessions controls", () => {
+    const html = renderSettings(true);
+
+    expect(html).toContain("Signed-in sessions");
+    expect(html).toContain("Sign out other sessions");
+    expect(html).toContain("invalidates sessions issued before this list was introduced");
+  });
 });

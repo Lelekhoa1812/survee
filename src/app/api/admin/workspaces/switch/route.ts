@@ -2,6 +2,7 @@ import { createSession, SESSION_COOKIE } from "@/lib/auth";
 import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { loadAccountPrincipal } from "@/lib/repo/accounts";
 import { rememberWorkspace } from "@/lib/repo/workspaces";
+import { registerUserSession } from "@/lib/repo";
 
 export const POST = withServerErrors("admin/workspaces/switch", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
@@ -18,6 +19,7 @@ export const POST = withServerErrors("admin/workspaces/switch", async function P
     const session = createSession(principal);
     if (!session) return fail(503, "Workspace switching is temporarily unavailable.");
     if (!(await rememberWorkspace(current.userId, tenantId))) return fail(404, "That workspace is not available to this account.");
+    await registerUserSession({ sid: session.sid, userId: principal.userId, tenantId: principal.tenantId, authVersion: principal.authVersion, exp: Math.floor(Date.now() / 1000) + session.maxAge }).catch(() => {});
     const response = json({ ok: true, tenantId, tenantName: principal.tenantName });
     response.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
     return response;

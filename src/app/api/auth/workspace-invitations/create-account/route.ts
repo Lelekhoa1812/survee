@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
 import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
-import { consumeRateLimit } from "@/lib/repo";
+import { consumeRateLimit, registerUserSession } from "@/lib/repo";
 import { createInvitedAccount } from "@/lib/repo/workspaces";
 import { loadAccountPrincipal } from "@/lib/repo/accounts";
 
@@ -34,6 +34,8 @@ export const POST = withServerErrors("auth/workspace-invitations/create-account"
     if (!principal) return fail(503, "The new workspace account could not be loaded. Sign in again.");
     const session = createSession(principal);
     if (!session) return fail(503, "Account sign-in is temporarily unavailable.");
+    // Account and membership creation have committed; inventory is display metadata and must not make the one-time action appear to fail.
+    await registerUserSession({ sid: session.sid, userId: principal.userId, tenantId: principal.tenantId, authVersion: principal.authVersion, exp: Math.floor(Date.now() / 1000) + session.maxAge }).catch(() => {});
     const response = json({ ok: true, tenantName: principal.tenantName });
     response.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
     return response;

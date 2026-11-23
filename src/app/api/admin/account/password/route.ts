@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { fail, guardAdmin, json, readJson, sameOrigin, withServerErrors } from "@/lib/http";
 import { adminSession } from "@/lib/http";
 import { changeAccountPassword } from "@/lib/repo/accounts";
-import { clearRateLimit, consumeRateLimit } from "@/lib/repo";
+import { clearRateLimit, consumeRateLimit, registerUserSession } from "@/lib/repo";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
 
 export const POST = withServerErrors("admin/account/password", async function POST(req: Request) {
@@ -28,6 +28,7 @@ export const POST = withServerErrors("admin/account/password", async function PO
     await clearRateLimit(rateKey).catch(() => {});
     const nextSession = createSession({ ...session, authVersion });
     if (!nextSession) return fail(503, "The password was updated. Sign in again to continue.");
+    await registerUserSession({ sid: nextSession.sid, userId: session.userId, tenantId: session.tenantId, authVersion, exp: Math.floor(Date.now() / 1000) + nextSession.maxAge }).catch(() => {});
     const res = json({ ok: true });
     res.cookies.set(SESSION_COOKIE, nextSession.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: nextSession.maxAge });
     return res;

@@ -329,6 +329,17 @@ export interface RevokedSessionDoc {
   expireAt: Date;
 }
 
+/** collection: user_sessions. Inventory metadata only; no IP address or user-agent is retained. */
+export interface UserSessionDoc {
+  _id: ObjectId;
+  sid: string;
+  userId: ObjectId;
+  tenantId: string;
+  authVersion: number;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
 /** collection: oauth_clients. A public OAuth client registered by ChatGPT or another MCP app. */
 export interface OAuthClientDoc {
   _id: ObjectId;

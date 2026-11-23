@@ -1625,6 +1625,41 @@ export async function revokeSession(sid: string, exp: number): Promise<void> {
 export async function isSessionRevoked(sid: string): Promise<boolean> {
   return !!(await (await col.revoked()).findOne({ sid }, { projection: { _id: 1 } }));
 }
+
+export async function registerUserSession(input: { sid: string; userId: string; tenantId: string; authVersion: number; exp: number }): Promise<void> {
+  const userId = toOid(input.userId);
+  if (!userId || !input.sid || !input.tenantId || !Number.isInteger(input.authVersion) || !Number.isSafeInteger(input.exp)) throw new Error("Invalid user session.");
+  const now = new Date();
+  await (await col.userSessions()).updateOne(
+    { sid: input.sid },
+    { $setOnInsert: { _id: new ObjectId(), sid: input.sid, userId, tenantId: input.tenantId, authVersion: input.authVersion, createdAt: now, expiresAt: new Date(input.exp * 1000) } },
+    { upsert: true },
+  );
+}
+
+export async function listUserSessions(input: { userId: string; authVersion: number; currentSid: string }): Promise<Array<{ current: boolean; createdAt: string; expiresAt: string }>> {
+  const userId = toOid(input.userId);
+  if (!userId) return [];
+  const now = new Date();
+  const records = await (await col.userSessions()).find(
+    { userId, authVersion: input.authVersion, expiresAt: { $gt: now } },
+    { projection: { sid: 1, createdAt: 1, expiresAt: 1 } },
+  ).sort({ createdAt: -1 }).limit(50).toArray();
+  const current = await (await col.userSessions()).findOne(
+    { sid: input.currentSid, userId, authVersion: input.authVersion, expiresAt: { $gt: now } },
+    { projection: { sid: 1, createdAt: 1, expiresAt: 1 } },
+  );
+  const candidates = current ? [current, ...records.filter((record) => record.sid !== current.sid).slice(0, 49)] : records;
+  if (!candidates.length) return [];
+  const revoked = await (await col.revoked()).find({ sid: { $in: candidates.map((record) => record.sid) } }, { projection: { sid: 1 } }).toArray();
+  const revokedIds = new Set(revoked.map((record) => record.sid));
+  return candidates.filter((record) => !revokedIds.has(record.sid)).map((record) => ({
+    current: record.sid === input.currentSid,
+    createdAt: record.createdAt.toISOString(),
+    expiresAt: record.expiresAt.toISOString(),
+  }));
+}
+
 export async function recordLoginFailure(key: string): Promise<void> {
   await (await col.logins()).insertOne({ _id: new ObjectId(), key, at: new Date() });
 }

@@ -2,6 +2,7 @@ import { createSession, SESSION_COOKIE } from "@/lib/auth";
 import { adminSession, fail, guardAdmin, json, readJson, str, withServerErrors } from "@/lib/http";
 import { loadAccountPrincipal } from "@/lib/repo/accounts";
 import { acceptWorkspaceInvitation } from "@/lib/repo/workspaces";
+import { registerUserSession } from "@/lib/repo";
 
 export const POST = withServerErrors("auth/workspace-invitations/accept", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true });
@@ -21,6 +22,8 @@ export const POST = withServerErrors("auth/workspace-invitations/accept", async 
     if (!principal) return fail(503, "The workspace membership could not be loaded. Sign in again.");
     const session = createSession(principal);
     if (!session) return fail(503, "Workspace sign-in is temporarily unavailable.");
+    // Membership acceptance has committed; inventory is display metadata and must not make the one-time action appear to fail.
+    await registerUserSession({ sid: session.sid, userId: principal.userId, tenantId: principal.tenantId, authVersion: principal.authVersion, exp: Math.floor(Date.now() / 1000) + session.maxAge }).catch(() => {});
     const response = json({ ok: true, tenantName: principal.tenantName });
     response.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
     return response;

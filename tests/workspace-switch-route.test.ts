@@ -30,6 +30,8 @@ vi.mock("@/lib/auth", () => ({
   SESSION_COOKIE: "kqa_session",
 }));
 
+vi.mock("@/lib/repo", () => ({ registerUserSession: async () => {} }));
+
 vi.mock("@/lib/repo/accounts", () => ({
   loadAccountPrincipal: async (_userId: string, tenantId: string) => tenantId === state.principal?.tenantId ? state.principal : null,
 }));

@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { createSession, SESSION_COOKIE } from "@/lib/auth";
 import { sessionSecret } from "@/lib/env";
 import { fail, json, readJson, sameOrigin, str, withServerErrors } from "@/lib/http";
-import { consumeRateLimit } from "@/lib/repo";
+import { consumeRateLimit, registerUserSession } from "@/lib/repo";
 import { authenticateAccount, bootstrapLegacyAxionOwner } from "@/lib/repo/accounts";
 import { headers } from "next/headers";
 
@@ -44,6 +44,11 @@ export const POST = withServerErrors("admin/login", async function POST(req: Req
   }
   const session = createSession(principal);
   if (!session) return fail(503, GENERIC_UNAVAILABLE);
+  try {
+    await registerUserSession({ sid: session.sid, userId: principal.userId, tenantId: principal.tenantId, authVersion: principal.authVersion, exp: Math.floor(Date.now() / 1000) + session.maxAge }).catch(() => {});
+  } catch {
+    return fail(503, GENERIC_UNAVAILABLE);
+  }
   const res = json({ ok: true });
   res.cookies.set(SESSION_COOKIE, session.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: session.maxAge });
   return res;

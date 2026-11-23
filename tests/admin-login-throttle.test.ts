@@ -36,6 +36,7 @@ vi.mock("@/lib/repo", () => ({
     return !state.blocked.has(key) && count <= maximum;
   },
   clearRateLimit: async (key: string) => { state.cleared.push(key); state.counts.delete(key); },
+  registerUserSession: async () => {},
 }));
 vi.mock("@/lib/repo/accounts", () => ({
   authenticateAccount: async () => state.principal,

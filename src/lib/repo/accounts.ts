@@ -367,6 +367,18 @@ export async function changeAccountPassword(userId: string, currentPassword: str
   return nextVersion;
 }
 
+/** Invalidate every session for an account; the caller may then establish one fresh current session. */
+export async function invalidateAccountSessions(userId: string): Promise<number | null> {
+  const oid = /^[0-9a-f]{24}$/i.test(userId) ? new ObjectId(userId) : null;
+  if (!oid) return null;
+  const user = await (await col.users()).findOneAndUpdate(
+    { _id: oid },
+    { $inc: { authVersion: 1 }, $set: { updatedAt: new Date() } },
+    { returnDocument: "after", projection: { authVersion: 1 } },
+  );
+  return user ? user.authVersion ?? 1 : null;
+}
+
 /** Create a one-time password reset link without indicating whether an address has an account. */
 export async function createPendingPasswordReset(input: { email: string; token: string }): Promise<ObjectId | null> {
   const email = normalizeEmail(input.email);

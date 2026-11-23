@@ -1,6 +1,6 @@
 import { MongoClient, ObjectId, type ClientSession, type Collection, type Db } from "mongodb";
 import { dbName, mongoUri } from "./env";
-import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, McpOperationDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, QuestionOrderAssignmentDoc, RateLimitBucketDoc, RevokedSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc, WorkspaceInvitationDoc } from "./repo/types";
+import type { AnalyticsRunDoc, ApiKeyDoc, EventDoc, InterviewDoc, LoginAttemptDoc, MailMessageDoc, MembershipDoc, McpOperationDoc, OAuthClientDoc, OAuthCodeDoc, ParticipantDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, QuestionnaireReviewDraftDoc, QuestionOrderAssignmentDoc, RateLimitBucketDoc, RevokedSessionDoc, UserSessionDoc, SurveyVersionDoc, TenantDoc, UserDoc, ImageAssetDoc, WorkspaceInvitationDoc } from "./repo/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -191,6 +191,9 @@ async function ensureIndexes(d: Db) {
     d.collection("mcp_operations").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "mcp_operation_ttl" }),
     d.collection("revoked_sessions").createIndex({ sid: 1 }, { unique: true, name: "sid_unique" }),
     d.collection("revoked_sessions").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0, name: "ttl_expiry" }),
+    d.collection("user_sessions").createIndex({ sid: 1 }, { unique: true, name: "user_session_sid_unique" }),
+    d.collection("user_sessions").createIndex({ userId: 1, authVersion: 1, createdAt: -1 }, { name: "user_sessions_by_user" }),
+    d.collection("user_sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "user_sessions_ttl" }),
     d.collection("mail_messages").createIndex({ participantId: 1, sentAt: -1 }, { name: "by_participant" }),
     d.collection("mail_messages").createIndex({ interviewId: 1, sentAt: -1 }, { name: "by_interview" }),
     d.collection("api_keys").createIndex({ hash: 1 }, { unique: true, name: "hash_unique" }),
@@ -222,6 +225,7 @@ export const col = {
   rateLimits: async (): Promise<Collection<RateLimitBucketDoc>> => (await db()).collection<RateLimitBucketDoc>("rate_limits"),
   mcpOperations: async (): Promise<Collection<McpOperationDoc>> => (await db()).collection<McpOperationDoc>("mcp_operations"),
   revoked: async (): Promise<Collection<RevokedSessionDoc>> => (await db()).collection<RevokedSessionDoc>("revoked_sessions"),
+  userSessions: async (): Promise<Collection<UserSessionDoc>> => (await db()).collection<UserSessionDoc>("user_sessions"),
   mail: async (): Promise<Collection<MailMessageDoc>> => (await db()).collection<MailMessageDoc>("mail_messages"),
   apiKeys: async (): Promise<Collection<ApiKeyDoc>> => (await db()).collection<ApiKeyDoc>("api_keys"),
   oauthClients: async (): Promise<Collection<OAuthClientDoc>> => (await db()).collection<OAuthClientDoc>("oauth_clients"),

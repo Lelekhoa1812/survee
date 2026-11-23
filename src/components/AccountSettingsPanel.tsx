@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, Badge, Icon, PasswordInput, Spinner, useToast } from "./ui";
 
 interface AccountSettings {
@@ -25,6 +25,24 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const [sessions, setSessions] = useState<Array<{ current: boolean; createdAt: string; expiresAt: string }>>([]);
+  const [sessionsBusy, setSessionsBusy] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState("");
+
+  async function loadSessions() {
+    setSessionsLoading(true);
+    const result = await api<{ sessions: Array<{ current: boolean; createdAt: string; expiresAt: string }> }>("/api/admin/account/sessions");
+    setSessionsLoading(false);
+    if (!result.ok) {
+      setSessionsError(result.data.error ?? "Sessions could not be loaded.");
+      return;
+    }
+    setSessionsError("");
+    setSessions(result.data.sessions ?? []);
+  }
+
+  useEffect(() => { void loadSessions(); }, []);
 
   async function renameWorkspace(event: React.FormEvent) {
     event.preventDefault();
@@ -93,6 +111,18 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
     toast("Password updated.");
   }
 
+  async function signOutOtherSessions() {
+    if (sessionsBusy) return;
+    setSessionsBusy(true);
+    const result = await api("/api/admin/account/sessions", { method: "POST" });
+    setSessionsBusy(false);
+    if (!result.ok) {
+      toast(result.data.error ?? "Other sessions could not be signed out.", "err");
+      return;
+    }
+    window.location.reload();
+  }
+
   return (
     <section className="card" style={{ marginBottom: 16 }}>
       <div className="card-head">
@@ -147,6 +177,25 @@ export function AccountSettingsPanel({ account }: { account: AccountSettings }) 
           {passwordError && <p className="field-error" role="alert">{passwordError}</p>}
           <button className="btn" disabled={passwordBusy || !password || newPassword.length < 8 || !confirmPassword}>{passwordBusy ? <Spinner /> : null} Update password</button>
         </form>
+      </div>
+      <div className="card-pad stack" style={{ borderTop: "1px solid var(--line)" }}>
+        <div className="row between wrap">
+          <div>
+            <h3 style={{ fontSize: 15 }}>Signed-in sessions</h3>
+            <p className="hint">Sign out other browsers and devices. This action also invalidates sessions issued before this list was introduced.</p>
+          </div>
+          <button className="btn" type="button" onClick={() => void signOutOtherSessions()} disabled={sessionsBusy}>
+            {sessionsBusy ? <Spinner /> : null} Sign out other sessions
+          </button>
+        </div>
+        {sessionsLoading ? <p className="muted">Loading sessions…</p> : sessionsError ? <p className="field-error" role="alert">{sessionsError}</p> : sessions.length === 0 ? <p className="muted">No active sessions are listed.</p> : (
+          <ul className="stack" style={{ paddingLeft: 20 }}>
+            {sessions.map((session, index) => <li key={index}>
+              <strong>{session.current ? "This session" : "Another session"}</strong>
+              <span className="muted"> · Signed in {new Date(session.createdAt).toLocaleString()} · Expires {new Date(session.expiresAt).toLocaleString()}</span>
+            </li>)}
+          </ul>
+        )}
       </div>
     </section>
   );
