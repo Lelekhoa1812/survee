@@ -87,6 +87,27 @@ describe("basic questionnaire builder UI", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it("sets language and direction and reorders choices in the generated rank", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(BasicQuestionnaireBuilder, { onUse: useHtml })));
+    await change("#builder-language", "ar");
+    await change("#builder-direction", "rtl");
+    await change("#builder-type-0", "rank");
+    const moveDown = host.querySelector<HTMLButtonElement>('button[aria-label="Move choice 1 down in question 1"]');
+    expect(moveDown).toBeTruthy();
+    await act(async () => { moveDown!.click(); });
+    await click("Use questionnaire");
+
+    const html = useHtml.mock.calls[0][0] as string;
+    expect(html).toContain('<html lang="ar" dir="rtl">');
+    expect(html).toContain('"options": [\n        {\n          "value": "option-2"');
+    expect(html).toContain('<ol class="rank" data-kqa="question-1" aria-labelledby="heading-question-1"><li data-value="option-2">Option 2</li>');
+    expect(checkHtml(html, { fileName: "localized-rank.html" }).ok).toBe(true);
+  });
+
   it("adds a section, assigns the current question, and emits a checked manifest", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement("div");

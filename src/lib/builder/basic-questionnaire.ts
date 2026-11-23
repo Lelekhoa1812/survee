@@ -33,6 +33,8 @@ export type BasicQuestionSection = { id: string; title: string; description: str
 export type BasicQuestionnaire = {
   title: string;
   description: string;
+  language?: string;
+  direction?: "ltr" | "rtl" | "auto";
   presentation?: "all" | "guided" | "guided-question";
   sections?: BasicQuestionSection[];
   questions: BasicQuestion[];
@@ -117,6 +119,15 @@ function control(question: BasicQuestion, index: number): string {
 
 /** Generate bounded, portable, script-free HTML for the native question types supported by the composer. */
 export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): string {
+  const language = input.language?.trim() || "en-AU";
+  let languageTag: string;
+  try {
+    languageTag = Intl.getCanonicalLocales(language)[0] ?? "";
+  } catch {
+    languageTag = "";
+  }
+  if (!languageTag) throw new Error("Enter a valid BCP 47 language tag, such as en-AU or ar.");
+  const direction = input.direction ?? "ltr";
   const manifest = {
     format: "kqa/1",
     title: input.title,
@@ -166,7 +177,7 @@ export function generateBasicQuestionnaireHtml(input: BasicQuestionnaire): strin
       ].join("\n\n")
     : input.questions.map(control).join("\n\n");
   const html = `<!doctype html>
-<html lang="en-AU">
+<html lang="${escapeHtml(languageTag)}" dir="${direction}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

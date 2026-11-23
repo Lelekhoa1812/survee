@@ -276,6 +276,14 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     updateQuestion(index, { options: [...options, { value: `option-${valueIndex}`, label: `Option ${valueIndex}` }] });
   }
 
+  function moveOption(questionIndex: number, optionIndex: number, delta: -1 | 1) {
+    const options = [...(data.questions[questionIndex]?.options ?? [])];
+    const target = optionIndex + delta;
+    if (target < 0 || target >= options.length) return;
+    [options[optionIndex], options[target]] = [options[target], options[optionIndex]];
+    updateQuestion(questionIndex, { options });
+  }
+
   function download() {
     if (!built.html) return;
     const url = URL.createObjectURL(new Blob([built.html], { type: "text/html;charset=utf-8" }));
@@ -291,6 +299,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
     <div className="card-pad stack">
       <div className="field"><label htmlFor="builder-title">Questionnaire title</label><input id="builder-title" className="input" maxLength={120} value={data.title} onChange={(event) => setData((current) => ({ ...current, title: event.target.value }))} /></div>
       <div className="field"><label htmlFor="builder-description">Description <span className="muted">(optional)</span></label><textarea id="builder-description" className="textarea" rows={2} maxLength={500} value={data.description} onChange={(event) => setData((current) => ({ ...current, description: event.target.value }))} /></div>
+      <div className="row wrap"><label className="field" style={{ flex: "2 1 220px", margin: 0 }}><span>Questionnaire language</span><input id="builder-language" className="input" maxLength={64} value={data.language ?? "en-AU"} placeholder="en-AU" onChange={(event) => setData((current) => ({ ...current, language: event.target.value }))} /><span className="hint">Use a BCP 47 tag such as en-AU, vi, es, or ar. This describes the authored questionnaire; it does not translate it.</span></label><label className="field" style={{ flex: "1 1 180px", margin: 0 }}><span>Text direction</span><select id="builder-direction" className="select" value={data.direction ?? "ltr"} onChange={(event) => setData((current) => ({ ...current, direction: event.target.value as NonNullable<BasicQuestionnaire["direction"]> }))}><option value="ltr">Left to right</option><option value="rtl">Right to left</option><option value="auto">Automatic</option></select><span className="hint">Set this to match the questionnaire content. The respondent shell language is separate.</span></label></div>
       <div className="field"><label htmlFor="builder-presentation">Respondent flow</label><select id="builder-presentation" className="select" value={data.presentation ?? "all"} onChange={(event) => changePresentation(event.target.value as NonNullable<BasicQuestionnaire["presentation"]>)}><option value="all">All questions on one page</option><option value="guided">One section at a time</option><option value="guided-question">One question at a time</option></select><span className="hint">Respondents can switch back to all questions. Their answers are retained when routing hides a question.</span></div>
       <div className="stack"><div className="row wrap" style={{ justifyContent: "space-between" }}><div><strong>Sections <span className="muted">(optional)</span></strong><div className="hint">Organize questions for the respondent contents list.</div></div><button className="btn sm" type="button" disabled={(data.sections?.length ?? 0) >= 30} onClick={addSection}>Add section</button></div>
         {(data.sections ?? []).map((section, index) => <fieldset className="card" key={section.id} style={{ padding: 16, margin: 0 }}><legend className="sr-only">Section {index + 1}</legend>
@@ -322,6 +331,7 @@ export function BasicQuestionnaireBuilder({ onUse }: { onUse: (html: string) => 
         {["single", "multi", "select", "rank"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}><strong>{question.type === "rank" ? "Ranked options" : "Answer choices"}</strong>{(question.options ?? []).map((option, optionIndex) => <div className="row wrap" key={optionIndex}>
           <label className="field" style={{ flex: "1 1 130px", margin: 0 }}><span>Stored value</span><input className="input mono" maxLength={64} value={option.value} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, value: event.target.value } : item) })} /></label>
           <label className="field" style={{ flex: "2 1 180px", margin: 0 }}><span>Displayed label</span><input className="input" maxLength={300} value={option.label} onChange={(event) => updateQuestion(index, { options: (question.options ?? []).map((item, i) => i === optionIndex ? { ...item, label: event.target.value } : item) })} /></label>
+          <button className="btn sm" type="button" aria-label={`Move choice ${optionIndex + 1} up in question ${index + 1}`} disabled={optionIndex === 0} onClick={() => moveOption(index, optionIndex, -1)}>Move up</button><button className="btn sm" type="button" aria-label={`Move choice ${optionIndex + 1} down in question ${index + 1}`} disabled={optionIndex === (question.options?.length ?? 0) - 1} onClick={() => moveOption(index, optionIndex, 1)}>Move down</button>
           <button className="btn danger sm" type="button" disabled={(question.options?.length ?? 0) <= 2} aria-label={`Remove choice ${optionIndex + 1} from question ${index + 1}`} onClick={() => updateQuestion(index, { options: (question.options ?? []).filter((_, i) => i !== optionIndex) })}>Remove choice</button>
         </div>)}<button className="btn sm" type="button" disabled={(question.options?.length ?? 0) >= (question.type === "rank" ? 8 : 50)} onClick={() => addOption(index)}>Add choice</button>{question.type === "rank" && <span className="hint">Respondents order all 2–8 options; KQA stores the full permutation without scoring responses.</span>}</div>}
         {["single", "multi", "select"].includes(question.type) && <div className="stack" style={{ marginTop: 14 }}>

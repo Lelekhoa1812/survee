@@ -42,6 +42,26 @@ describe("basic questionnaire HTML generator", () => {
     expect(checkHtml(html, { fileName: "generated.html" }).ok).toBe(true);
   });
 
+  it.each([
+    ["vi", "vi", "ltr"],
+    ["es", "es", "ltr"],
+    ["ar", "ar", "rtl"],
+  ] as const)("sets authored document language %s and direction %s", (language, languageTag, direction) => {
+    const html = generateBasicQuestionnaireHtml({
+      title: "Localized questionnaire", description: "", language, direction,
+      questions: [{ id: "reply", type: "text", label: "Your response", help: "", required: false }],
+    });
+
+    expect(html).toContain(`<html lang="${languageTag}" dir="${direction}">`);
+    expect(checkHtml(html, { fileName: "localized.html" }).ok).toBe(true);
+  });
+
+  it("canonicalizes BCP 47 tags and rejects malformed language values", () => {
+    const input: BasicQuestionnaire = { title: "Language", description: "", language: "EN-au", questions: [{ id: "reply", type: "text", label: "Reply", help: "", required: false }] };
+    expect(generateBasicQuestionnaireHtml(input)).toContain('<html lang="en-AU" dir="ltr">');
+    expect(() => generateBasicQuestionnaireHtml({ ...input, language: "en_US" })).toThrow(/valid BCP 47 language tag/i);
+  });
+
   it("groups assigned questions into checker-valid section lists and escapes section content", () => {
     const html = generateBasicQuestionnaireHtml({
       title: "Sectioned questionnaire", description: "A description", sections: [{ id: "work", title: "Work <now>", description: "Focus & progress" }],
