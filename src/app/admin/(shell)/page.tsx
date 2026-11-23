@@ -73,7 +73,7 @@ export default async function Dashboard({ searchParams = Promise.resolve({}) }: 
                 <span className="first-run-number" aria-hidden="true">1</span>
                 <h3>Get a questionnaire</h3>
               </div>
-              <p>Already have a survee HTML file? Check it in the next step. To make one, use the starter template or give the Format guide bundle to an AI agent.</p>
+              <p>Already have a survee HTML file? Check it in the next step. To make one, build a basic questionnaire in the create flow, start from the template, or give the Format guide bundle to an AI agent.</p>
               <div className="first-run-links">
                 <Link href="/admin/docs" className="btn sm first-run-action">Format guide and AI agent bundle</Link>
                 <a className="first-run-text-link" href="/api/docs/template/starter.kqa.html" download>Download starter template</a>

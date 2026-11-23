@@ -16,6 +16,7 @@ describe("empty dashboard quickstart", () => {
     const html = renderToStaticMarkup(await Dashboard());
 
     expect(html).toContain("Start with a questionnaire file");
+    expect(html).toContain("build a basic questionnaire in the create flow");
     expect(html).toContain("href=\"/admin/docs\" class=\"btn sm first-run-action\">Format guide and AI agent bundle</a>");
     expect(html).toMatch(/<a class=\"first-run-text-link\" href=\"\/api\/docs\/template\/starter\.kqa\.html\" download(?:=\"\")?>Download starter template<\/a>/);
     expect(html).toContain("href=\"/admin/check\" class=\"btn sm first-run-action\">Check a file</a>");

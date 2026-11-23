@@ -49,6 +49,7 @@ The entries below summarize work completed during this review. The validation ev
 - Scalar answer values and notes now carry independent revisions. A stale tab cannot overwrite the same field; clearing the last visible answer keeps a small revision tombstone, and an identical retry after a lost response is idempotent. Stale edits are retained in the respondent draft-recovery view.
 - Analysis now filters repeat-record questions from scalar summaries and CSV inputs, avoiding a render/export crash when a questionnaire includes repeat groups. The Analysis tab points hosts to Answers and exports for those records.
 - Host Overview activity, interview detail reads, and MCP `list_events` now expose newest-first cursor pages ordered by `{at, _id}`; the host Activity panel can load older rows without duplicating events at tied timestamps.
+- The empty-dashboard quickstart now calls out the in-app basic questionnaire builder alongside the starter template and authoring guide.
 - Public accessibility auditing now checks for an `h1` in each questionnaire document while allowing the respondent shell to identify its embedded questionnaire through the iframe title.
 - Public respondent load, frame, save, and submit APIs now have separate hashed per-link and per-Vercel-IP rate limits; an unavailable shared limiter fails closed with 503.
 - Host Overview and People pages now retain progress counts but omit answer, repeat-record, and order-history payloads; assignment history is not queried until the Answers tab loads.
