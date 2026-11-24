@@ -17,6 +17,7 @@ The docs are part of survee's authoring and operating interface. Keep the source
 | Repeatable-record format example | [`examples/repeated-assets.kqa.html`](examples/repeated-assets.kqa.html) | Technical example of bounded typed rows and `KQA.records`; not a validated instrument |
 | Per-question purpose, interpretation and test plan | [QUESTION_BLUEPRINT.md](QUESTION_BLUEPRINT.md) | author review record and cognitive pretest plan |
 | MCP connection, access, tools and live operations | [MCP.md](MCP.md) | `src/app/api/mcp/route.ts`, `src/lib/mcp/` |
+| Release, backup/restore, migration and incident recovery procedures | [OPERATIONS.md](OPERATIONS.md) | `src/lib/db.ts`, `.github/workflows/ci.yml`, Vercel and MongoDB provider configuration |
 | Static checker findings | [DIAGNOSTICS.md](DIAGNOSTICS.md) | `src/lib/diagnostics/catalog.ts`, `src/lib/diagnostics/static.ts` |
 | Questionnaire authoring review evaluation | [Benchmark](evals/QUESTIONNAIRE_AUTHORING_BENCHMARK.md) | `tests/questionnaire-author-eval.test.ts`, `scripts/eval-questionnaire-author.mjs` |
 | Package selection development evaluation | [Benchmark](evals/PACKAGE_SELECTION_BENCHMARK.md) | `docs/evals/package-selection-cases.json`, `tests/package-selection-eval.test.ts`, `scripts/eval-package-selection.mjs` |
