@@ -90,6 +90,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
       let cursor: string | null = null;
       let headerSent = false;
       let emittedBytes = 0;
+      let cancelled = false;
       const stream = new ReadableStream<Uint8Array>({
         async pull(controller) {
           const enqueue = (value: string) => {
@@ -102,6 +103,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
             ? [wideParticipantRow(version.manifest, version.version, person)]
             : longParticipantRows(version.manifest, person);
           try {
+            if (cancelled) return;
             if (!headerSent) {
               headerSent = true;
               enqueue("\uFEFF" + encodeCsvRow(headers));
@@ -125,19 +127,27 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
               }
               if (!page.nextCursor) {
                 await assertExportSnapshot(id, snapshot.version, snapshot.revision);
+                if (cancelled) return;
                 await auditExport(id, format);
+                if (cancelled) return;
                 controller.close();
                 return;
               }
               cursor = page.nextCursor;
               await assertExportSnapshot(id, snapshot.version, snapshot.revision);
+              if (cancelled) return;
               page = await csvPage(id, cursor);
+              if (cancelled) return;
               await assertExportSnapshot(id, snapshot.version, snapshot.revision);
+              if (cancelled) return;
               personIndex = 0;
             }
           } catch (error) {
-            controller.error(error instanceof Error ? error : new Error("CSV export stream failed"));
+            if (!cancelled) controller.error(error instanceof Error ? error : new Error("CSV export stream failed"));
           }
+        },
+        cancel() {
+          cancelled = true;
         },
       });
       return new NextResponse(stream, {

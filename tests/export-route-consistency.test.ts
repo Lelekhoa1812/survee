@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   mutateOnInterviewRead: 0,
   pageReads: 0,
   singlePage: false,
+  pageGate: null as Promise<void> | null,
+  pageGateStarted: null as (() => void) | null,
   manifest: null as Record<string, any> | null,
   assignment: null as Record<string, any> | null,
   denied: null as Response | null,
@@ -35,6 +37,10 @@ vi.mock("@/lib/repo", () => ({
   listParticipants: async () => [state.participant],
   listParticipantPage: async (_id: string, _cursor: string | null, _limit: number, _submittedOnly: boolean, includeOrderAssignments: boolean) => {
     state.pageReads += 1;
+    if (state.pageReads === 2 && state.pageGate) {
+      state.pageGateStarted?.();
+      await state.pageGate;
+    }
     const participant = includeOrderAssignments && state.assignment
       ? { ...state.participant, questionOrderAssignments: [state.assignment] }
       : state.participant;
@@ -60,6 +66,8 @@ beforeEach(() => {
   state.mutateOnInterviewRead = 0;
   state.pageReads = 0;
   state.singlePage = false;
+  state.pageGate = null;
+  state.pageGateStarted = null;
   state.manifest = null;
   state.assignment = null;
   state.denied = null;
@@ -85,6 +93,29 @@ describe("export revision checks", () => {
     expect(response.status).toBe(200);
     await expect(response.text()).rejects.toThrow("Interview data changed while the export was being created");
     expect(state.pageReads).toBe(1);
+    expect(state.exportEvents).toEqual([]);
+  });
+
+  it("stops fetching pages and skips the completion audit when the client cancels", async () => {
+    let releasePage!: () => void;
+    let signalPageStarted!: () => void;
+    state.pageGate = new Promise<void>((resolve) => { releasePage = resolve; });
+    const pageStarted = new Promise<void>((resolve) => { signalPageStarted = resolve; });
+    state.pageGateStarted = signalPageStarted;
+
+    const response = await GET(request(), params);
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    await reader.read(); // CSV header.
+    const nextChunk = reader.read();
+    await pageStarted;
+
+    const cancellation = reader.cancel();
+    releasePage();
+    await cancellation;
+    await nextChunk;
+
+    expect(state.pageReads).toBe(2);
     expect(state.exportEvents).toEqual([]);
   });
 
