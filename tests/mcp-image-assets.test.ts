@@ -65,10 +65,17 @@ describe("MCP image asset tools", () => {
   });
 
   it("accepts base64 image bytes and returns a directly usable questionnaire snippet", async () => {
-    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", name: "Logo & mark", dataBase64: `data:image/png;base64,${png.toString("base64")}` });
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token", auditActor: { kind: "service_token", id: "axion-service-token", name: "test" } }, () => dispatchTool("upload_image_asset", { fileName: "logo.png", name: "Logo & mark", dataBase64: `data:image/png;base64,${png.toString("base64")}`, operationId: "asset-first" }));
     expect(result.isError).toBe(false);
-    expect(mocks.addImageAsset).toHaveBeenCalledWith(expect.objectContaining({ fileName: "logo.png", name: "Logo & mark", data: png }));
+    expect(mocks.addImageAssetWithOperation).toHaveBeenCalledWith(expect.objectContaining({ fileName: "logo.png", name: "Logo & mark", data: png }), expect.objectContaining({ operationId: "asset-first" }));
     expect(result.structuredContent).toMatchObject({ asset: { ...asset, name: "Logo & mark" }, htmlExample: `<img src="${asset.url}" alt="Logo &amp; mark">` });
+  });
+
+  it("requires an operation ID before an image upload can write", async () => {
+    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: png.toString("base64") });
+    expect(result).toMatchObject({ isError: true, structuredContent: { code: "invalid_args" } });
+    expect(mocks.addImageAsset).not.toHaveBeenCalled();
+    expect(mocks.addImageAssetWithOperation).not.toHaveBeenCalled();
   });
 
   it("accepts upload operation IDs and replays the original asset without another write", async () => {
@@ -82,15 +89,15 @@ describe("MCP image asset tools", () => {
   });
 
   it("rejects malformed image data before writing an asset", async () => {
-    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: "%%%" });
+    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: "%%%", operationId: "asset-invalid" });
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ error: "dataBase64 must be valid base64 image data within the 2 MB size limit." });
     expect(mocks.addImageAsset).not.toHaveBeenCalled();
   });
 
   it("reports workspace image quota exhaustion as a typed tool error", async () => {
-    mocks.addImageAsset.mockRejectedValueOnce(Object.assign(new mocks.ImageAssetQuotaError("limit"), { usedBytes: 99 }));
-    const result = await dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: png.toString("base64") });
+    mocks.addImageAssetWithOperation.mockRejectedValueOnce(Object.assign(new mocks.ImageAssetQuotaError("limit"), { usedBytes: 99 }));
+    const result = await withTenantPrincipal({ tenantId: "axion", role: "service", source: "service_token", auditActor: { kind: "service_token", id: "axion-service-token", name: "test" } }, () => dispatchTool("upload_image_asset", { fileName: "logo.png", dataBase64: png.toString("base64"), operationId: "asset-quota" }));
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ code: "workspace_image_quota_exceeded" });
   });

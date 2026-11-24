@@ -552,8 +552,8 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "upload_image_asset",
-    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB and each workspace has 100 MiB total image storage. The returned URL can be used in questionnaire HTML as <img src> or in CSS url(). Optional operationId makes uncertain retries return the original asset for seven days.",
-    inputSchema: obj({ name: str, fileName: str, dataBase64: { type: "string", minLength: 1, maxLength: MAX_IMAGE_BASE64_CHARS + 64 }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["fileName", "dataBase64"]),
+    description: "Save a PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, or SVG image in the workspace image library. Send raw base64 or a base64 data URI; each image can be up to 2 MB and each workspace has 100 MiB total image storage. The returned URL can be used in questionnaire HTML as <img src> or in CSS url(). Required operationId makes uncertain retries return the original asset for seven days.",
+    inputSchema: obj({ name: str, fileName: str, dataBase64: { type: "string", minLength: 1, maxLength: MAX_IMAGE_BASE64_CHARS + 64 }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["fileName", "dataBase64", "operationId"]),
     async run(args) {
       if (typeof args.fileName !== "string" || !args.fileName.trim()) return err("fileName is required.");
       if (typeof args.dataBase64 !== "string") return err("dataBase64 is required.");
@@ -1220,8 +1220,8 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "create_interview",
-    description: "Create and immediately open a live version-1 interview from a questionnaire file after a static check. This is a persistent workspace mutation, not a draft or preview; single mode also creates a default Respondent. Use check_questionnaire first and only call after the accountable host has approved fielding. Optional operationId makes retries return the original result for seven days.",
-    inputSchema: obj({ name: str, description: str, mode: { type: "string", enum: ["single", "multi"] }, html: str, fileName: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["name", "mode", "html"]),
+    description: "Create and immediately open a live version-1 interview from a questionnaire file after a static check. This is a persistent workspace mutation, not a draft or preview; single mode also creates a default Respondent. Use check_questionnaire first and only call after the accountable host has approved fielding. Required operationId makes uncertain retries return the original result for seven days.",
+    inputSchema: obj({ name: str, description: str, mode: { type: "string", enum: ["single", "multi"] }, html: str, fileName: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["name", "mode", "html", "operationId"]),
     async run(args) {
       const name = asString(args.name, 120);
       if (!name) return err("Give the interview a name.");
@@ -1955,8 +1955,8 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "add_people",
-    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user. Optional operationId makes uncertain retries return the original people for seven days.`,
-    inputSchema: obj({ interviewId: str, people: { type: "array", minItems: 1, maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["interviewId", "people"]),
+    description: `Add up to ${MAX_PEOPLE_PER_BATCH} people per request. Email is optional. Adding people to a One-person interview switches it to Multi-user. Required operationId makes uncertain retries return the original people for seven days.`,
+    inputSchema: obj({ interviewId: str, people: { type: "array", minItems: 1, maxItems: MAX_PEOPLE_PER_BATCH, items: obj({ name: str, email: str, note: str }, ["name"]) }, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["interviewId", "people", "operationId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");

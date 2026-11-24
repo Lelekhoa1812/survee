@@ -536,11 +536,30 @@ describe("MCP tools", () => {
   });
 
   it("returns questionnaire diagnostics with a successful create result", async () => {
-    const response = await call("create_interview", { name: "Disposable fixture", mode: "multi", html: patchTestHtml });
+    const response = await call("create_interview", { name: "Disposable fixture", mode: "multi", html: patchTestHtml, operationId: "create-diagnostic-test" });
     const body = await response.json() as { result: { structuredContent: { report: { counts: Record<string, number>; diagnostics: unknown[] } } } };
-    expect(createInterview).toHaveBeenCalledOnce();
+    expect(createInterviewWithOperation).toHaveBeenCalledOnce();
     expect(body.result.structuredContent.report.counts).toMatchObject({ error: 0 });
     expect(body.result.structuredContent.report.diagnostics).toEqual(expect.any(Array));
+  });
+
+  it("requires replay keys on interview and respondent creation", async () => {
+    const createTool = listToolDefs().find(({ name }) => name === "create_interview")!;
+    const peopleTool = listToolDefs().find(({ name }) => name === "add_people")!;
+    expect(createTool.inputSchema.required).toContain("operationId");
+    expect(peopleTool.inputSchema.required).toContain("operationId");
+
+    const create = await call("create_interview", { name: "Unkeyed fixture", mode: "multi", html: patchTestHtml });
+    const createBody = await create.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(createBody.result).toMatchObject({ isError: true, structuredContent: { code: "invalid_args" } });
+    expect(createInterview).not.toHaveBeenCalled();
+    expect(createInterviewWithOperation).not.toHaveBeenCalled();
+
+    const people = await call("add_people", { interviewId, people: [{ name: "Grace" }] });
+    const peopleBody = await people.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(peopleBody.result).toMatchObject({ isError: true, structuredContent: { code: "invalid_args" } });
+    expect(addParticipants).not.toHaveBeenCalled();
+    expect(addParticipantsWithOperation).not.toHaveBeenCalled();
   });
 
   it("supports replay-safe update_interview operation IDs", async () => {
@@ -987,11 +1006,11 @@ describe("MCP tools", () => {
   it("delegates single-mode promotion to the atomic add-people repository write", async () => {
     vi.mocked(getInterview).mockResolvedValueOnce({ _id: new ObjectId(interviewId), name: "Solo", mode: "single", currentVersion: 1 } as never);
     vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest: { format: "kqa/1", title: "One question", questions: [{ id: "q", type: "text", label: "Question" }] } } as never);
-    const response = await call("add_people", { interviewId, people: [{ name: "Grace" }] });
+    const response = await call("add_people", { interviewId, people: [{ name: "Grace" }], operationId: "promote-1" });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { people: Array<{ answered: number; total: number }> } } };
     expect(body.result.isError).toBeFalsy();
     expect(body.result.structuredContent.people[0]).toMatchObject({ answered: 0, total: 1 });
-    expect(vi.mocked(addParticipants)).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: undefined }]);
+    expect(addParticipantsWithOperation).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: undefined }], expect.objectContaining({ operationId: "promote-1" }));
   });
 
   it("accepts add_people operationId and binds retries to the normalized people batch", async () => {
@@ -1033,13 +1052,13 @@ describe("MCP tools", () => {
 
   it("does not switch the mode when the people list is refused", async () => {
     vi.mocked(getInterview).mockResolvedValueOnce({ _id: new ObjectId(interviewId), name: "Solo", mode: "single", currentVersion: 1 } as never);
-    const response = await call("add_people", { interviewId, people: [] });
+    const response = await call("add_people", { interviewId, people: [], operationId: "empty-1" });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
     expect(body.result.structuredContent.code).toBe("invalid_args");
   });
 
   it("rejects an oversized add_people batch instead of truncating it", async () => {
-    const response = await call("add_people", { interviewId, people: Array.from({ length: 101 }, (_, i) => ({ name: `Person ${i + 1}` })) });
+    const response = await call("add_people", { interviewId, people: Array.from({ length: 101 }, (_, i) => ({ name: `Person ${i + 1}` })), operationId: "oversized-1" });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.code).toBe("invalid_args");
@@ -1048,7 +1067,7 @@ describe("MCP tools", () => {
   });
 
   it("gives add_people refusals an error code", async () => {
-    const response = await call("add_people", { interviewId, people: "not a list" });
+    const response = await call("add_people", { interviewId, people: "not a list", operationId: "invalid-1" });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { code?: string; error?: string } } };
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.code).toMatch(/^(invalid_args|invalid_state)$/);
