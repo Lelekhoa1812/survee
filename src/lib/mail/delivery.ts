@@ -15,7 +15,7 @@ export type DeliveryResult =
 export interface DeliveryDeps {
   load?: (personId: string) => Promise<{ person: { id: string; interviewId: string; email?: string; token: string }; rows: MailRecord[] } | null>;
   loadAttempt?: (personId: string, attemptId: string) => Promise<MailRecord | null>;
-  check?: (messageIds: string[]) => Promise<Map<string, DeliveryCheck>>;
+  check?: (messageIds: string[], recipients?: Map<string, string>) => Promise<Map<string, DeliveryCheck>>;
   save?: (id: string, patch: { delivery: MailDelivery; deliveryCheckedAt: Date; deliveryDetail?: string }) => Promise<MailDelivery | undefined>;
   rateLimit?: (key: string, maxAttempts: number, windowMinutes: number) => Promise<boolean>;
 }
@@ -65,7 +65,8 @@ export async function checkInviteDelivery(personId: string, deps: DeliveryDeps =
   } catch {
     return { ok: false, code: "rate_limit_unavailable", error: "Delivery checks are temporarily unavailable. Try again." };
   }
-  const checked = await (deps.check ?? checkMessageIds)([selectedMessageId]);
+  const trackedRecipient = row?.to ?? email ?? "";
+  const checked = await (deps.check ?? checkMessageIds)([selectedMessageId], new Map([[selectedMessageId, trackedRecipient]]));
   const result = checked.get(selectedMessageId) ?? { status: "unknown" as const, detail: "Not confirmed yet." };
   const checkedAt = new Date();
   let effectiveDelivery = result.status;

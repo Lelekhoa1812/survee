@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   logout: vi.fn<() => Promise<void>>(),
   close: vi.fn<() => void>(),
   search: vi.fn<(query: unknown, options: { uid: true }) => Promise<number[]>>(),
+  fetch: vi.fn<(range: number[], query: { source: true; envelope: true }, options: { uid: true }) => AsyncIterable<{ source?: Uint8Array | Buffer }>>(),
   release: vi.fn<() => void>(),
 }));
 
@@ -15,7 +16,7 @@ vi.mock("imapflow", () => ({
     this.close = state.close;
     this.getMailboxLock = vi.fn(async () => ({ release: state.release }));
     this.search = state.search;
-    this.fetch = vi.fn(() => (async function* () {})());
+    this.fetch = state.fetch;
   }),
 }));
 
@@ -34,6 +35,7 @@ describe("IMAP operation and cleanup deadlines", () => {
     state.connect.mockResolvedValue(undefined);
     state.logout.mockResolvedValue(undefined);
     state.search.mockResolvedValue([]);
+    state.fetch.mockImplementation(() => (async function* () {})());
   });
 
   it("closes the client when the operation deadline wins and preserves unknown status", async () => {
@@ -69,5 +71,39 @@ describe("IMAP operation and cleanup deadlines", () => {
     expect(result.get(messageId)).toEqual({ status: "unknown", detail: "Not confirmed yet." });
     expect(state.release).toHaveBeenCalledTimes(1);
     expect(state.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps fetched candidates and classifies only a report for the tracked recipient", async () => {
+    const report = [
+      "From: Mail Delivery Subsystem <mailer-daemon@example.net>",
+      "Message-ID: <report@example.net>",
+      "Content-Type: multipart/report; report-type=delivery-status; boundary=\"test-dsn\"",
+      "",
+      "--test-dsn",
+      "Content-Type: text/plain",
+      "",
+      "Delivery report.",
+      "--test-dsn",
+      "Content-Type: message/delivery-status",
+      "",
+      `Original-Envelope-ID: ${messageId}`,
+      "Reporting-MTA: dns; mx.example.net",
+      "",
+      "Final-Recipient: rfc822; respondent@example.com",
+      "Action: delivered",
+      "Status: 2.0.0",
+      "--test-dsn--",
+      "",
+    ].join("\r\n");
+    state.search.mockResolvedValue([1, 2, 3, 4, 5, 6]);
+    state.fetch.mockImplementation(() => (async function* () {
+      yield { source: Buffer.from(`Subject: Action: failed for ${messageId}\r\n\r\nQuoted content only.`) };
+      yield { source: Buffer.from(report) };
+    })());
+
+    const result = await checkMessageIds([messageId], new Map([[messageId, "respondent@example.com"]]));
+
+    expect(result.get(messageId)).toMatchObject({ status: "delivered" });
+    expect(state.fetch).toHaveBeenCalledWith([1, 2, 3, 4, 5], { source: true, envelope: true }, { uid: true });
   });
 });

@@ -8,7 +8,7 @@ export type WorkspaceDeliveryResult =
 
 export interface WorkspaceDeliveryDeps {
   load?: typeof getWorkspaceInvitationMail;
-  check?: (messageIds: string[]) => Promise<Map<string, DeliveryCheck>>;
+  check?: (messageIds: string[], recipients?: Map<string, string>) => Promise<Map<string, DeliveryCheck>>;
   save?: typeof updateWorkspaceInvitationMail;
   rateLimit?: typeof consumeRateLimit;
 }
@@ -32,7 +32,7 @@ export async function checkWorkspaceInvitationDelivery(
   } catch {
     return { ok: false, code: "rate_limit_unavailable", error: "Delivery checks are temporarily unavailable. Try again." };
   }
-  const checked = await (deps.check ?? checkMessageIds)([invitation.messageId]);
+  const checked = await (deps.check ?? checkMessageIds)([invitation.messageId], new Map([[invitation.messageId, invitation.email]]));
   const result = checked.get(invitation.messageId) ?? { status: "unknown" as const, detail: "Not confirmed yet." };
   const checkedAt = new Date();
   const saved = await (deps.save ?? updateWorkspaceInvitationMail)(tenantId, invitation.id, invitation.messageId, {

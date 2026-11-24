@@ -155,11 +155,11 @@ export async function updateWorkspaceInvitationMail(tenantId: string, invitation
   return result.matchedCount === 1;
 }
 
-export async function getWorkspaceInvitationMail(tenantId: string, invitationId: string): Promise<{ id: string; messageId?: string; mailStatus?: "pending" | "sent" } | null> {
+export async function getWorkspaceInvitationMail(tenantId: string, invitationId: string): Promise<{ id: string; email: string; messageId?: string; mailStatus?: "pending" | "sent" } | null> {
   const id = objectId(invitationId);
   if (!id || !tenantId) return null;
-  const invitation = await (await col.workspaceInvitations()).findOne({ _id: id, tenantId }, { projection: { _id: 1, messageId: 1, mailStatus: 1 } });
-  return invitation ? { id: invitation._id.toHexString(), messageId: invitation.messageId, mailStatus: invitation.mailStatus } : null;
+  const invitation = await (await col.workspaceInvitations()).findOne({ _id: id, tenantId }, { projection: { _id: 1, email: 1, messageId: 1, mailStatus: 1 } });
+  return invitation ? { id: invitation._id.toHexString(), email: invitation.email, messageId: invitation.messageId, mailStatus: invitation.mailStatus } : null;
 }
 
 export async function revokeWorkspaceInvitation(tenantId: string, invitationId: string, actorUserId: string): Promise<boolean> {

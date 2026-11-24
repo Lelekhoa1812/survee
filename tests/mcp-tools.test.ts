@@ -48,7 +48,27 @@ vi.mock("imapflow", () => ({
       return [7];
     });
     this.fetch = vi.fn(() => (async function* () {
-      yield { source: Buffer.from("Message-ID: <bounce@example.com>\r\nAction: delivered\r\n") };
+      yield { source: Buffer.from([
+        "From: Mail Delivery Subsystem <mailer-daemon@example.net>",
+        "Message-ID: <report@example.net>",
+        "Content-Type: multipart/report; report-type=delivery-status; boundary=\"mcp-dsn\"",
+        "",
+        "--mcp-dsn",
+        "Content-Type: text/plain",
+        "",
+        "Delivered.",
+        "--mcp-dsn",
+        "Content-Type: message/delivery-status",
+        "",
+        "Original-Envelope-ID: <mcp-sent@example.com>",
+        "Reporting-MTA: dns; mx.example.net",
+        "",
+        "Final-Recipient: rfc822; ada@example.com",
+        "Action: delivered",
+        "Status: 2.0.0",
+        "--mcp-dsn--",
+        "",
+      ].join("\r\n")) };
     })());
   }),
 }));

@@ -53,14 +53,14 @@ async function disconnect(client: ImapFlow, timeoutMs: number): Promise<void> {
   }
 }
 
-async function classifyInbox(client: Fetchable, messageId: string): Promise<DeliveryStatus> {
+async function classifyInbox(client: Fetchable, messageId: string, recipient: string): Promise<DeliveryStatus> {
   const found = await client.search(deliverySearchQuery(messageId), { uid: true });
   const uids = Array.isArray(found) ? found.slice(0, 5) : [];
   if (!uids.length) return "unknown";
   let best: DeliveryKind = "unknown";
   for await (const msg of client.fetch(uids, { source: true, envelope: true }, { uid: true })) {
     const source = Buffer.from(msg.source ?? []).toString("utf8");
-    const kind = classifyDeliverySource(source, messageId);
+    const kind = classifyDeliverySource(source, messageId, recipient);
     if (rank(kind) > rank(best)) best = kind;
     if (best === "bounced") break;
   }
@@ -69,7 +69,7 @@ async function classifyInbox(client: Fetchable, messageId: string): Promise<Deli
 }
 
 /** Connect, search only the message ids we stored, disconnect. No other mailbox search is possible. */
-export async function checkMessageIds(messageIds: string[]): Promise<Map<string, DeliveryCheck>> {
+export async function checkMessageIds(messageIds: string[], recipients: Map<string, string> = new Map()): Promise<Map<string, DeliveryCheck>> {
   const ids = [...new Set(messageIds.filter(looksLikeMessageId))].slice(0, 5);
   const out = new Map<string, DeliveryCheck>();
   for (const id of messageIds) out.set(id, { status: "unknown" });
@@ -95,7 +95,7 @@ export async function checkMessageIds(messageIds: string[]): Promise<Map<string,
     lock = await client.getMailboxLock("INBOX");
     for (const id of ids) {
       try {
-        const status = await classifyInbox(client as Fetchable, id);
+        const status = await classifyInbox(client as Fetchable, id, recipients.get(id) ?? "");
         out.set(id, { status, detail: status === "unknown" ? "Not confirmed yet." : undefined });
       } catch (err) {
         out.set(id, { status: "unknown", detail: publicImapFailure(err, cfg.password) });

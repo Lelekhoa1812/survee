@@ -221,6 +221,36 @@ describe("sendInvite", () => {
 
 describe("delivery classification", () => {
   const id = "<abc123@example.com>";
+  const recipient = "ada@example.com";
+
+  function report(action: string, options: { envelope?: string | null; to?: string; originalTo?: string; originalMessageId?: string; extraBlocks?: string; references?: string } = {}): string {
+    const boundary = "dsn-boundary";
+    return [
+      "From: Mail Delivery Subsystem <mailer-daemon@example.net>",
+      "Message-ID: <report@example.net>",
+      ...(options.references ? [`References: ${options.references}`] : []),
+      `Content-Type: multipart/report; report-type=delivery-status; boundary=\"${boundary}\"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "Delivery report.",
+      `--${boundary}`,
+      "Content-Type: message/delivery-status",
+      "",
+      ...(options.envelope === null ? [] : [`Original-Envelope-ID: ${options.envelope ?? id}`]),
+      "Reporting-MTA: dns; mx.example.net",
+      "",
+      ...(options.originalTo ? [`Original-Recipient: rfc822; ${options.originalTo}`] : []),
+      `Final-Recipient: rfc822; ${options.to ?? recipient}`,
+      `Action: ${action}`,
+      `Status: ${action === "delivered" ? "2.0.0" : action === "failed" ? "5.1.1" : "4.0.0"}`,
+      ...(options.extraBlocks ? ["", options.extraBlocks] : []),
+      ...(options.originalMessageId ? [`--${boundary}`, "Content-Type: message/rfc822", "", `Message-ID: ${options.originalMessageId}`, "From: ada@example.com", "", "Original invitation."] : []),
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+  }
 
   it("searches only that message id", () => {
     const query = JSON.stringify(deliverySearchQuery(id));
@@ -229,12 +259,42 @@ describe("delivery classification", () => {
     expect(query).not.toContain("ALL");
   });
 
-  it("reads a bounce, a delivery, and ignores the message we sent", () => {
-    expect(classifyDeliverySource("Message-ID: <bounce@x>\r\nAction: failed\r\n", id)).toBe("bounced");
-    expect(classifyDeliverySource("Message-ID: <ok@x>\r\nAction: delivered\r\n", id)).toBe("delivered");
-    expect(classifyDeliverySource("Message-ID: <relay@x>\r\nAction: relayed\r\n", id)).toBe("unknown");
-    expect(classifyDeliverySource("Message-ID: <expanded@x>\r\nAction: expanded\r\n", id)).toBe("unknown");
-    expect(classifyDeliverySource(`Message-ID: ${id}\r\nSubject: hello\r\n`, id)).toBe("ignore");
-    expect(classifyDeliverySource("Message-ID: <other@x>\r\nSubject: newsletter\r\n", id)).toBe("unknown");
+  it("classifies correlated single-recipient RFC 3464 reports", () => {
+    expect(classifyDeliverySource(report("failed"), id, recipient)).toBe("bounced");
+    expect(classifyDeliverySource(report("delivered"), id, recipient)).toBe("delivered");
+    const folded = report("failed").replace(`Final-Recipient: rfc822; ${recipient}`, `Final-Recipient: rfc822;\r\n\t${recipient}`);
+    expect(classifyDeliverySource(folded, id, recipient)).toBe("bounced");
+    const forwarded = report("delivered").replace(
+      `Final-Recipient: rfc822; ${recipient}`,
+      `Original-Recipient: rfc822; ${recipient}\r\nFinal-Recipient: rfc822; forwarded@example.net`,
+    );
+    expect(classifyDeliverySource(forwarded, id, recipient)).toBe("delivered");
+    const xtextRecipient = "ada+2Btag@example.com";
+    const xtextReport = report("delivered", { envelope: null, originalTo: xtextRecipient, to: "forwarded@example.net", references: id });
+    expect(classifyDeliverySource(xtextReport, id, "ada+tag@example.com")).toBe("delivered");
+    expect(classifyDeliverySource(xtextReport.replace(`Final-Recipient: rfc822; forwarded@example.net\r\nAction: delivered`, "Action: delivered"), id, "ada+tag@example.com")).toBe("unknown");
+    const attachedOriginal = report("failed", { envelope: null, originalMessageId: id });
+    expect(classifyDeliverySource(attachedOriginal, id, recipient)).toBe("bounced");
+    expect(classifyDeliverySource(report("relayed"), id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("expanded"), id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("delivered").replace("Status: 2.0.0", "Status: 5.1.1"), id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("failed").replace("Status: 5.1.1", "Status: 2.0.0"), id, recipient)).toBe("unknown");
+  });
+
+  it("fails closed on quoted prose, unstructured headers, and mismatched correlation", () => {
+    expect(classifyDeliverySource(`Message-ID: <report@example.net>\r\nSubject: Action: failed for ${id}`, id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(`Message-ID: ${id}\r\nSubject: hello\r\n`, id, recipient)).toBe("ignore");
+    expect(classifyDeliverySource(report("failed", { envelope: "<other@example.com>" }), id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("failed", { to: "someone-else@example.com" }), id, recipient)).toBe("unknown");
+    const unsupportedAddressType = report("delivered").replace(`Final-Recipient: rfc822; ${recipient}`, `Final-Recipient: x400; ${recipient}`);
+    expect(classifyDeliverySource(unsupportedAddressType, id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("failed", { envelope: null, references: "<abc123@example.com>" }), id, recipient)).toBe("bounced");
+  });
+
+  it("keeps multi-recipient and malformed reports unknown", () => {
+    expect(classifyDeliverySource(report("failed", { extraBlocks: "Final-Recipient: rfc822; other@example.com\r\nAction: delivered\r\nStatus: 2.0.0" }), id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource("Content-Type: multipart/report; report-type=delivery-status; boundary=x\r\n\r\n--x\r\nContent-Type: message/delivery-status\r\n\r\nAction: failed", id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("failed").replace("--dsn-boundary--\r\n", ""), id, recipient)).toBe("unknown");
+    expect(classifyDeliverySource(report("failed").replace("Reporting-MTA: dns; mx.example.net\r\n", ""), id, recipient)).toBe("unknown");
   });
 });

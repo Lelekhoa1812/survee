@@ -175,6 +175,7 @@ import {
   changeWorkspaceMemberRole,
   createInvitedAccount,
   createWorkspaceInvitation,
+  getWorkspaceInvitationMail,
   getWorkspaceInvitation,
   listAccountWorkspaces,
   listWorkspaceAccess,
@@ -254,6 +255,15 @@ describe("workspace membership and invitations", () => {
     await expect(updateWorkspaceInvitationMail("axion", id.toHexString(), "<old-message@example.test>", { mailStatus: "sent" })).resolves.toBe(false);
     expect(store.invitations[0]).toMatchObject({ messageId: currentMessageId, mailStatus: "pending" });
     expect(store.invitations[0].delivery).toBeUndefined();
+  });
+
+  it("returns the private invitation recipient for correlated delivery checks", async () => {
+    const id = new ObjectId();
+    store.invitations.push({ _id: id, tenantId: "axion", email: "person@example.test", messageId: "<tracked@example.test>", mailStatus: "pending" });
+
+    await expect(getWorkspaceInvitationMail("axion", id.toHexString())).resolves.toEqual({
+      id: id.toHexString(), email: "person@example.test", messageId: "<tracked@example.test>", mailStatus: "pending",
+    });
   });
 
   it("lists only active workspaces for the account and remembers only an actual membership", async () => {

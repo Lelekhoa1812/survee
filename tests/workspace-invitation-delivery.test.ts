@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { checkWorkspaceInvitationDelivery, type WorkspaceDeliveryDeps } from "../src/lib/mail/workspace-delivery";
 
-const invitation = { id: "invite-1", messageId: "<invite-1@example.test>", mailStatus: "pending" as const };
+const invitation = { id: "invite-1", email: "invitee@example.test", messageId: "<invite-1@example.test>", mailStatus: "pending" as const };
 
 function deps(overrides: Partial<WorkspaceDeliveryDeps> = {}): WorkspaceDeliveryDeps & { check: NonNullable<WorkspaceDeliveryDeps["check"]>; rateLimit: NonNullable<WorkspaceDeliveryDeps["rateLimit"]>; save: NonNullable<WorkspaceDeliveryDeps["save"]> } {
   return {
@@ -19,14 +19,14 @@ describe("workspace invitation delivery checks", () => {
     const result = await checkWorkspaceInvitationDelivery("tenant-a", "invite-1", d);
 
     expect(result).toMatchObject({ ok: true, delivery: "unknown" });
-    expect(d.check).toHaveBeenCalledWith([invitation.messageId]);
+    expect(d.check).toHaveBeenCalledWith([invitation.messageId], new Map([[invitation.messageId, invitation.email]]));
     expect(d.save).toHaveBeenCalledWith("tenant-a", "invite-1", invitation.messageId, expect.objectContaining({ delivery: "unknown", deliveryDetail: "Not confirmed yet." }));
     expect(d.rateLimit).toHaveBeenNthCalledWith(1, "workspace-invite-delivery:tenant-a:invite-1", 3, 60);
     expect(d.rateLimit).toHaveBeenNthCalledWith(2, "workspace-invite-delivery-tenant:tenant-a", 100, 60);
   });
 
   it("does not query IMAP when the invitation has no persisted send attempt", async () => {
-    const d = deps({ load: vi.fn(async () => ({ id: "invite-1" })) });
+    const d = deps({ load: vi.fn(async () => ({ id: "invite-1", email: "invitee@example.test" })) });
 
     expect(await checkWorkspaceInvitationDelivery("tenant-a", "invite-1", d)).toMatchObject({ ok: false, code: "not_sent" });
     expect(d.check).not.toHaveBeenCalled();

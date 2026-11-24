@@ -44,7 +44,7 @@ describe("invite delivery check throttling", () => {
     expect(await checkInviteDelivery("person-1", deps)).toMatchObject({ ok: true, delivery: "unknown" });
     expect(rateLimit).toHaveBeenNthCalledWith(1, "delivery-person:test-scope:person-1", 3, 60);
     expect(rateLimit).toHaveBeenNthCalledWith(2, "delivery-workspace:test-scope", 100, 60);
-    expect(check).toHaveBeenCalledWith([messageId]);
+    expect(check).toHaveBeenCalledWith([messageId], new Map([[messageId, "person@example.com"]]));
   });
 
   it("checks the exact stored id for a pending attempt and resolves it when a DSN confirms delivery", async () => {
@@ -57,7 +57,7 @@ describe("invite delivery check throttling", () => {
     const { deps } = harness({ load: async () => pendingContext, check, save });
 
     expect(await checkInviteDelivery("person-1", deps)).toMatchObject({ ok: true, delivery: "delivered" });
-    expect(check).toHaveBeenCalledWith([messageId]);
+    expect(check).toHaveBeenCalledWith([messageId], new Map([[messageId, "person@example.com"]]));
     expect(save).toHaveBeenCalledWith("mail-1", expect.objectContaining({ delivery: "delivered" }));
     expect(currentMail(pendingContext.person, [{
       ...pendingContext.rows[0], id: "mail-1", sentAt: "2026-01-01T00:00:00.000Z", delivery: "delivered",
@@ -72,7 +72,7 @@ describe("invite delivery check throttling", () => {
     const { deps } = harness({ load: async () => pendingContext, loadAttempt: async () => historical, check, save });
 
     expect(await checkInviteDelivery("person-1", deps, "aaaaaaaaaaaaaaaaaaaaaaaa")).toMatchObject({ ok: true, delivery: "bounced" });
-    expect(check).toHaveBeenCalledWith([messageId]);
+    expect(check).toHaveBeenCalledWith([messageId], new Map([[messageId, "old@example.com"]]));
     expect(save).toHaveBeenCalledWith("mail-old", expect.objectContaining({ delivery: "bounced" }));
   });
 
