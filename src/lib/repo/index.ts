@@ -1389,8 +1389,11 @@ async function deleteParticipantInternal(
     if (operation && scope) {
       const createdAt = new Date();
       await operations.insertOne({
-        _id: new ObjectId(), ...scope, interviewId: participant.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest,
-        result: { ok: true }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
+        // Keep only the opaque operation scope needed to replay the delete.
+        // The participant and interview identifiers are erased with the record;
+        // the retry tombstone must not reintroduce that relationship.
+        _id: new ObjectId(), ...scope, argumentDigest: operation.argumentDigest,
+        result: { removed: true }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS),
       }, { session });
       return { kind: "removed" as const };
     }

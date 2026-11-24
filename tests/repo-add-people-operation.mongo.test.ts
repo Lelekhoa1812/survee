@@ -559,11 +559,13 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     const removeOperation = await database.collection("mcp_operations").findOne({
       tenantId: "integration-workspace", tool: "remove_person", credentialIdHash, operationIdHash,
     });
-    expect(removeOperation).toMatchObject({
-      result: { ok: true }, interviewId, participantIds: [participantId], argumentDigest: operation.argumentDigest,
-    });
+    expect(removeOperation).toMatchObject({ result: { removed: true } });
+    expect(removeOperation).not.toHaveProperty("interviewId");
+    expect(removeOperation).not.toHaveProperty("participantIds");
+    expect(JSON.stringify(removeOperation)).not.toContain(participantId.toHexString());
+    expect(JSON.stringify(removeOperation)).not.toContain(interviewId.toHexString());
     expect(Object.keys(removeOperation ?? {}).sort()).toEqual([
-      "_id", "argumentDigest", "createdAt", "credentialIdHash", "expiresAt", "interviewId", "operationIdHash", "participantIds", "result", "tenantId", "tool",
+      "_id", "argumentDigest", "createdAt", "credentialIdHash", "expiresAt", "operationIdHash", "result", "tenantId", "tool",
     ]);
     expect(JSON.stringify(removeOperation)).not.toContain(operation.credentialId);
     expect(JSON.stringify(removeOperation)).not.toContain(participant.email);

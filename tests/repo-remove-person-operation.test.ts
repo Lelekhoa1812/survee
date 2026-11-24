@@ -83,7 +83,10 @@ describe("deleteParticipantWithOperation", () => {
     expect(await remove()).toEqual({ kind: "replayed" });
     expect(mocks.participant).toBeNull();
     expect(mocks.operations).toHaveLength(1);
-    expect(mocks.operations[0]).toMatchObject({ tool: "remove_person", participantIds: [new ObjectId(personId)], result: { ok: true }, expiresAt: expect.any(Date) });
+    expect(mocks.operations[0]).toMatchObject({ tool: "remove_person", result: { removed: true }, expiresAt: expect.any(Date) });
+    expect(mocks.operations[0]).not.toHaveProperty("participantIds");
+    expect(mocks.operations[0]).not.toHaveProperty("interviewId");
+    expect(JSON.stringify(mocks.operations[0])).not.toContain(personId);
     expect(await getRemovePersonOperation(operation)).toEqual({ kind: "replayed" });
   });
 
