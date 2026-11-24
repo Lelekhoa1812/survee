@@ -496,10 +496,13 @@ export async function completeEmailChange(token: string): Promise<{ ok: true; em
   if (!owner) return { ok: false, error: "This account could not be verified." };
   const duplicate = await users.findOne({ email: pending.email }, { projection: { _id: 1 } });
   if (duplicate && !duplicate._id.equals(owner._id)) return { ok: false, error: "That address is already in use. Request a different one." };
+  // Fence any password-reset request that was issued to the previous verified address.
+  // The version predicate also makes a concurrent password reset or email change win once.
+  const versionFilter = owner.authVersion === undefined ? { authVersion: { $exists: false } } : { authVersion: owner.authVersion };
   try {
     const updated = await users.updateOne(
-      { _id: owner._id, email: owner.email },
-      { $set: { email: pending.email, emailVerifiedAt: new Date(), updatedAt: new Date() }, $unset: { legacyBootstrap: "" } },
+      { _id: owner._id, email: owner.email, ...versionFilter },
+      { $set: { email: pending.email, emailVerifiedAt: new Date(), authVersion: (owner.authVersion ?? 0) + 1, updatedAt: new Date() }, $unset: { legacyBootstrap: "" } },
     );
     if (updated.matchedCount !== 1) return { ok: false, error: "This account changed while verifying the address. Request a new link." };
   } catch (error) {

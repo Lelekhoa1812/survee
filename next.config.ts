@@ -23,11 +23,11 @@ const config: NextConfig = {
     const common = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "no-referrer" },
-      { key: "X-Robots-Tag", value: "noindex, nofollow" },
     ];
     return [
       // Pages and APIs may not be embedded anywhere. Questionnaire frame routes set their own policy.
       { source: "/((?!api/frame|api/admin/frame|api/admin/previews/|api/docs).*)", headers: [...common, { key: "X-Frame-Options", value: "DENY" }, { key: "Content-Security-Policy", value: "frame-ancestors 'none'" }] },
+      { source: "/api/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
     ];
   },
 };

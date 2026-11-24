@@ -16,7 +16,10 @@ vi.mock("../src/lib/db", () => ({
         if (store.updateError) throw new Error("account write failed");
         if (store.unmatchedUpdate) return { matchedCount: 0 };
         const user = store.users.find((item) => item._id.toHexString() === query._id.toHexString()
-          && (!query.email || item.email === query.email));
+          && (!query.email || item.email === query.email)
+          && (query.authVersion?.$exists === false
+            ? item.authVersion === undefined
+            : query.authVersion === undefined || item.authVersion === query.authVersion));
         if (!user) return { matchedCount: 0 };
         Object.assign(user, update.$set);
         for (const key of Object.keys(update.$unset ?? {})) delete user[key];
@@ -67,6 +70,7 @@ describe("email verification links", () => {
     await expect(completeEmailChange(token)).resolves.toMatchObject({ ok: false });
     expect(store.users[0].email).toBe("owner@new.example");
     expect(store.users[0].emailVerifiedAt).toBeInstanceOf(Date);
+    expect(store.users[0].authVersion).toBe(1);
     expect(store.changes).toHaveLength(0);
   });
 

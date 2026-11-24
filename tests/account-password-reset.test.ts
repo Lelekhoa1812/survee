@@ -87,6 +87,22 @@ describe("password reset", () => {
     expect(JSON.stringify(store.resets)).not.toContain("reset-secret");
   });
 
+  it("rejects a reset issued before the account version changed", async () => {
+    const userId = new ObjectId();
+    const oldHash = await hashPassword("previous password long enough");
+    const token = "reset-before-email-change";
+    store.users.push({ _id: userId, email: "owner@new.example", passwordHash: oldHash, emailVerifiedAt: new Date(), authVersion: 5 });
+    store.resets.push({
+      _id: new ObjectId(), userId, tokenHash: createHash("sha256").update(token).digest("hex"),
+      authVersion: 4, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await expect(completePasswordReset(token, "new password long enough 123")).resolves.toEqual({ ok: false });
+    expect(store.users[0].passwordHash).toBe(oldHash);
+    expect(store.users[0].authVersion).toBe(5);
+    expect(store.resets).toHaveLength(0);
+  });
+
   it("does not create a reset for the unverified legacy Axion address", async () => {
     store.users.push({ _id: new ObjectId(), email: "admin@axiob.local", passwordHash: "legacy", legacyBootstrap: true });
 

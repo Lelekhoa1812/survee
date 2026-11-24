@@ -3,6 +3,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { adminSession } from "@/lib/http";
 import { listAccountWorkspaces } from "@/lib/repo/workspaces";
 
+export const metadata = { robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 export default async function ShellLayout({ children }: { children: React.ReactNode }) {

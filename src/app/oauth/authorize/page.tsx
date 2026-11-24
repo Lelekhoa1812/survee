@@ -5,7 +5,7 @@ import { adminSession } from "@/lib/http";
 import { allowedMcpCapabilitiesForRole, canGrantMcpCapabilitiesForRole, DEFAULT_MCP_CAPABILITIES, MCP_CAPABILITY_INFO, parseMcpCapabilities } from "@/lib/mcp/capabilities";
 import { authorizeError, findClient, issueCode, requestOrigin } from "@/lib/mcp/oauth";
 
-export const metadata = { title: "Connect an app" };
+export const metadata = { title: "Connect an app", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 function one(value: string | string[] | undefined): string {

@@ -59,7 +59,7 @@ export interface UserDoc {
   emailVerifiedAt?: Date;
   /** Existing Axion owner authenticated through the pre-account host credential during one-time bootstrap. */
   legacyBootstrap?: boolean;
-  /** Bumped on password reset/change to expire previously issued sessions. */
+  /** Bumped on password reset/change and verified email change to expire stale sessions and reset links. */
   authVersion?: number;
   /** Preferred tenant for the next sign-in; membership is still checked independently. */
   lastTenantId?: string;

@@ -4,7 +4,7 @@ import { AuthModalRoute } from "@/components/AuthModalRoute";
 import { LandingSurface } from "@/components/LandingSurface";
 import { adminSession } from "@/lib/http";
 
-export const metadata = { title: "Host sign in" };
+export const metadata = { title: "Host sign in", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 function safeNext(next?: string): string {

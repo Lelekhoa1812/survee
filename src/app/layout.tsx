@@ -7,6 +7,7 @@ const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], 
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-plex-mono", display: "swap" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://kqa-bay.vercel.app"),
   title: { default: "survee", template: "%s · survee" },
   description: "Private interviews. Every answer is saved as you go.",
   robots: { index: false, follow: false },
