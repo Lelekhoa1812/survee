@@ -194,6 +194,14 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
   const attempts = useRef(0);
   const localeMeta = RESPONDENT_LOCALE_META[locale];
   const t = useCallback((key: RespondentMessage, values: Record<string, string | number> = {}) => respondentMessage(locale, key, values), [locale]);
+  const questionnaireLanguageLabel = (() => {
+    if (!questionnaireLanguage || questionnaireLanguage.toLowerCase() === localeMeta.lang.toLowerCase()) return undefined;
+    let languageName = questionnaireLanguage;
+    try {
+      languageName = new Intl.DisplayNames([localeMeta.lang], { type: "language" }).of(questionnaireLanguage) ?? questionnaireLanguage;
+    } catch { /* Unknown language tags remain identifiable by their authored tag. */ }
+    return t("questionnaireLanguage", { language: languageName });
+  })();
   const submitted = data?.participant.status === "submitted";
 
   useEffect(() => {
@@ -1036,7 +1044,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       <div className="rs-bar">
         <div className="rs-bar-in">
           <BrandMark />
-          <div className="rs-title"><b><bdi lang={questionnaireLanguage} dir="auto">{data.title}</bdi></b><span>{t("answerAs", { name: "" }).trim()} <bdi dir="auto">{data.participant.name}</bdi></span></div>
+          <div className="rs-title"><b><bdi lang={questionnaireLanguage} dir="auto">{data.title}</bdi></b>{questionnaireLanguageLabel && <small className="rs-questionnaire-language" data-questionnaire-language={questionnaireLanguage}>{questionnaireLanguageLabel}</small>}<span>{t("answerAs", { name: "" }).trim()} <bdi dir="auto">{data.participant.name}</bdi></span></div>
           <div className="right rs-bar-actions">
             <LocalePicker locale={locale} label={t("language")} onChange={changeLocale} />
             <div

@@ -637,6 +637,7 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .rs-title { min-width: 0; display: grid; line-height: 1.25; }
 .rs-title b { font-weight: 600; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rs-title span { color: var(--muted); font-size: 12.5px; }
+.rs-title .rs-questionnaire-language { color: var(--muted); font-size: 11px; line-height: 1.2; }
 .rs-bar-actions { display: flex; align-items: center; gap: 18px; }
 .rs-progress { display: grid; gap: 4px; width: 150px; }
 .rs-progress small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }

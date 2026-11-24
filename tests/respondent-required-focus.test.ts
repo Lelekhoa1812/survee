@@ -229,6 +229,13 @@ describe("respondent required-answer recovery", () => {
     expect(init.messages.rankConfirm).toBe("استخدام هذا الترتيب");
     expect(init.messages.lengthCount).toContain("{count}");
     expect(shell.getAttribute("lang")).toBe("ar");
+    const questionnaireLanguage = host.querySelector<HTMLElement>(".rs-questionnaire-language");
+    expect(questionnaireLanguage?.dataset.questionnaireLanguage).toBe("fr-CA");
+    expect(questionnaireLanguage?.textContent).toContain("لغة الاستبيان");
+    await act(async () => window.dispatchEvent(new MessageEvent("message", {
+      data: { kqa: 1, type: "hello", lang: "ar", dir: "rtl" }, origin: "null", source: frame.contentWindow,
+    })));
+    expect(host.querySelector(".rs-questionnaire-language")).toBeNull();
   });
 
   it("renders respondent navigation in each supported shell locale", async () => {

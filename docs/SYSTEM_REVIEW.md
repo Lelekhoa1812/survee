@@ -223,16 +223,18 @@ The entries below summarize work completed during this review. The validation ev
 
 - Campaign composition now autosaves one private draft per owner/admin and workspace, restores it on return, detects concurrent edits with revision checks, and supports explicit discard. The stored draft has no interview, respondent, or token references; removing a file clears the saved questionnaire HTML. Discard cancels pending writes, while interview creation clears the corresponding draft and reports cleanup failures. This does not create an interview or respondent until the existing checker and create flow succeed. Local validation: 1,275 tests passed, 9 skipped; the dedicated Mongo replica-set suite passed 9/9, including the unique actor/workspace slot and revision/deletion checks; typecheck, optimized build, and `git diff --check` passed. UI regressions cover autosave, discarding unsaved edits, and restore/discard of a saved revision. Production deployment `dpl_FiPLQ5C1DDsV7Brem9dXbeLojHFT` is READY, and public health routes passed with the admin draft route rejecting unauthenticated access.
 - Local black-box security checks against Next.js dev passed: sign-in and authenticated reads worked, logout invalidated a copied session cookie, unauthenticated admin access was rejected, cross-origin mutation was refused, and an oversized login body returned 413. The optional high-volume login-throttle test was not run because it intentionally locks the local account for up to 15 minutes.
+- Respondent language selection now identifies the questionnaire's authored language when it differs from the shell language, with localized labels in English, Vietnamese, Spanish, and Arabic. This clarifies that the shell selector changes navigation and helper copy but does not translate authored questions. Matching language tags hide the cue. Focused locale/focus tests passed (45/45); the full suite passed (1,276 passed, 11 skipped), as did typecheck, optimized build, and `git diff --check`.
 
 Some repository evaluation scripts require provider-generated result JSON and were not run without those inputs. The authenticated host console still needs a dedicated browser audit. Respondent E2E coverage now includes offline recovery, validation, stale-tab fencing, guided navigation, repeat-row persistence, answer review, and submission locking.
 
 ## Next review order
 
 1. Extend operation replay to other non-idempotent writes; locate the hosted KQA app's schema source and bring its wrapper into parity with server `tools/list`.
-2. Consider immutable export artifacts for durable point-in-time snapshots, and streaming XLSX generation for larger workbooks.
+2. Consider immutable export artifacts for durable point-in-time snapshots, streaming XLSX generation for larger workbooks, and explicit completion metadata for streaming CSV failures.
 3. Decide whether workspace image capacity needs tenant-specific plan settings.
 5. Reconcile mail attempts without delivery-status notices through provider signals, and define retention-aware deletion behavior for permanently ambiguous attempts.
 6. Move cold-start pending-signup cleanup into a bounded, resumable migration and review the serverless Mongo connection budget.
 7. Extend the starter builder into stable-ID editing of existing interview versions, then scope scheduled campaign automation with explicit host controls.
 8. Confirm whether public search engines should index the marketing homepage; current production root metadata explicitly sends `noindex, nofollow`.
+9. Assess tombstone-first, resumable interview purge; current cascading deletion is a single transaction and may exceed transaction limits for high-cardinality interviews. Technical retention remains indefinite for interview/version/participant data until deletion; no workspace legal-retention policy is configured by product direction.
 
