@@ -127,6 +127,7 @@ function matches(doc: any, filter: any): boolean {
     if (key === "$and") return expected.every((branch: any) => matches(doc, branch));
     if (expected && typeof expected === "object" && !(expected instanceof Date) && !(expected instanceof ObjectId)) {
       if ("$in" in expected) return expected.$in.some((value: any) => same(actual, value) || (value === null && actual === undefined));
+      if ("$nin" in expected) return !expected.$nin.some((value: any) => same(actual, value));
       if ("$exists" in expected) return (actual !== undefined) === expected.$exists;
       if ("$gt" in expected) return actual instanceof Date ? actual > expected.$gt : actual > expected.$gt;
       if ("$lte" in expected) return actual instanceof Date ? actual <= expected.$lte : actual <= expected.$lte;
@@ -255,6 +256,14 @@ describe("workspace membership and invitations", () => {
     await expect(updateWorkspaceInvitationMail("axion", id.toHexString(), "<old-message@example.test>", { mailStatus: "sent" })).resolves.toBe(false);
     expect(store.invitations[0]).toMatchObject({ messageId: currentMessageId, mailStatus: "pending" });
     expect(store.invitations[0].delivery).toBeUndefined();
+  });
+
+  it("does not downgrade a confirmed workspace invitation result to unknown", async () => {
+    const id = new ObjectId();
+    store.invitations.push({ _id: id, tenantId: "axion", email: "person@example.test", messageId: "<confirmed@example.test>", mailStatus: "sent", delivery: "delivered" });
+
+    await expect(updateWorkspaceInvitationMail("axion", id.toHexString(), "<confirmed@example.test>", { delivery: "unknown", deliveryDetail: "not visible on this mailbox check" })).resolves.toBe("delivered");
+    expect(store.invitations[0].delivery).toBe("delivered");
   });
 
   it("returns the private invitation recipient for correlated delivery checks", async () => {

@@ -41,5 +41,6 @@ export async function checkWorkspaceInvitationDelivery(
     deliveryDetail: result.detail,
   });
   if (!saved) return { ok: false, code: "superseded", error: "This invitation changed while delivery was being checked. Reload the pending invitations and check the current message." };
-  return { ok: true, delivery: result.status, checkedAt: checkedAt.toISOString(), detail: result.detail };
+  const delivery = typeof saved === "string" ? saved : invitation.delivery === "delivered" || invitation.delivery === "bounced" ? invitation.delivery : result.status;
+  return { ok: true, delivery, checkedAt: checkedAt.toISOString(), detail: delivery === result.status ? result.detail : undefined };
 }

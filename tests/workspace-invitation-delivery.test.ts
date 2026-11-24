@@ -41,6 +41,15 @@ describe("workspace invitation delivery checks", () => {
     expect(d.save).toHaveBeenCalledWith("tenant-a", "invite-1", invitation.messageId, expect.any(Object));
   });
 
+  it("returns a previously confirmed status when a later mailbox check is inconclusive", async () => {
+    const d = deps({
+      check: vi.fn(async () => new Map([[invitation.messageId, { status: "unknown" as const, detail: "Not confirmed yet." }]])),
+      save: vi.fn(async () => "delivered" as const),
+    });
+
+    await expect(checkWorkspaceInvitationDelivery("tenant-a", "invite-1", d)).resolves.toMatchObject({ ok: true, delivery: "delivered" });
+  });
+
   it("honors rate limits before searching the mailbox", async () => {
     const d = deps({ rateLimit: vi.fn(async () => false) });
 

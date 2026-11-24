@@ -145,21 +145,27 @@ export async function updateWorkspaceInvitationMail(tenantId: string, invitation
   delivery?: "delivered" | "bounced" | "unknown";
   deliveryCheckedAt?: Date;
   deliveryDetail?: string;
-}): Promise<boolean> {
+}): Promise<boolean | "delivered" | "bounced" | "unknown"> {
   const id = objectId(invitationId);
   if (!id || !tenantId) return false;
   const result = await (await col.workspaceInvitations()).updateOne(
-    { _id: id, tenantId, messageId: expectedMessageId },
+    { _id: id, tenantId, messageId: expectedMessageId, ...(patch.delivery === "unknown" ? { delivery: { $nin: ["delivered", "bounced"] } } : {}) },
     { $set: patch },
   );
-  return result.matchedCount === 1;
+  if (result.matchedCount === 1) return patch.delivery ?? true;
+  if (patch.delivery) {
+    const current = await (await col.workspaceInvitations()).findOne({ _id: id, tenantId, messageId: expectedMessageId }, { projection: { delivery: 1 } });
+    if (!current) return false;
+    return current.delivery ?? "unknown";
+  }
+  return false;
 }
 
-export async function getWorkspaceInvitationMail(tenantId: string, invitationId: string): Promise<{ id: string; email: string; messageId?: string; mailStatus?: "pending" | "sent" } | null> {
+export async function getWorkspaceInvitationMail(tenantId: string, invitationId: string): Promise<{ id: string; email: string; messageId?: string; mailStatus?: "pending" | "sent"; delivery?: "delivered" | "bounced" | "unknown" } | null> {
   const id = objectId(invitationId);
   if (!id || !tenantId) return null;
-  const invitation = await (await col.workspaceInvitations()).findOne({ _id: id, tenantId }, { projection: { _id: 1, email: 1, messageId: 1, mailStatus: 1 } });
-  return invitation ? { id: invitation._id.toHexString(), email: invitation.email, messageId: invitation.messageId, mailStatus: invitation.mailStatus } : null;
+  const invitation = await (await col.workspaceInvitations()).findOne({ _id: id, tenantId }, { projection: { _id: 1, email: 1, messageId: 1, mailStatus: 1, delivery: 1 } });
+  return invitation ? { id: invitation._id.toHexString(), email: invitation.email, messageId: invitation.messageId, mailStatus: invitation.mailStatus, ...(invitation.delivery ? { delivery: invitation.delivery } : {}) } : null;
 }
 
 export async function revokeWorkspaceInvitation(tenantId: string, invitationId: string, actorUserId: string): Promise<boolean> {

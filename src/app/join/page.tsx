@@ -8,12 +8,20 @@ export const dynamic = "force-dynamic";
 
 export default async function JoinWorkspacePage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const token = (await searchParams).token?.slice(0, 128) ?? "";
-  const invitation = await getWorkspaceInvitation(token).catch(() => null);
+  let invitation: Awaited<ReturnType<typeof getWorkspaceInvitation>> = null;
+  let invitationLookupFailed = false;
+  try {
+    invitation = await getWorkspaceInvitation(token);
+  } catch {
+    invitationLookupFailed = true;
+  }
   const session = await adminSession();
   return (
     <main className="page narrow" style={{ paddingTop: "8vh" }}>
       {!invitation ? (
-        <section className="card auth-card"><h1>Invitation unavailable</h1><p className="muted">This workspace invitation is invalid, expired, revoked, or already used.</p><Link className="btn" href="/admin/login">Sign in</Link></section>
+        invitationLookupFailed
+          ? <section className="card auth-card"><h1>We couldn’t check this invitation</h1><p className="muted">The workspace service is temporarily unavailable. Try again in a moment.</p><Link className="btn" href={`/join${token ? `?token=${encodeURIComponent(token)}` : ""}`}>Try again</Link></section>
+          : <section className="card auth-card"><h1>Invitation unavailable</h1><p className="muted">This workspace invitation is invalid, expired, revoked, or already used.</p><Link className="btn" href="/admin/login">Sign in</Link></section>
       ) : (
         <JoinWorkspacePanel
           token={token}
