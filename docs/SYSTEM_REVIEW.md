@@ -253,7 +253,7 @@ Some repository evaluation scripts require provider-generated result JSON and we
 2. Consider immutable export artifacts for durable point-in-time snapshots, streaming XLSX generation for larger workbooks, and explicit completion metadata for streaming CSV failures.
 3. Decide whether workspace image capacity needs tenant-specific plan settings.
 4. Parse and correlate RFC 3464 delivery reports against the original recipient and envelope ID; then improve aging/status visibility for attempts without notices without automatically resending or releasing private links.
-5. Move cold-start pending-signup cleanup into a leased, bounded, resumable migration and review the serverless Mongo connection budget.
+5. Reduce repeated full pending-signup scans across cold isolates. Existing writers already canonicalize email and duplicate-key index races rescan, so a one-deploy index rollout is plausible; a lease alone is not resumability. Before changing the migration, test interleaved writers/index creation, independent initializers, TTL delay, and JavaScript versus Mongo `$toLower` for non-ASCII addresses, then choose a durable checkpoint strategy if collection size warrants it.
 6. Extend the starter builder into stable-ID editing of existing interview versions, then scope scheduled campaign automation with explicit host controls.
 7. Run authenticated keyboard and contrast audits with a test account; the local environment has no disposable host credentials.
 8. Confirm whether public search engines should index the marketing homepage; current production root metadata explicitly sends `noindex, nofollow`.
