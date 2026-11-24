@@ -1148,11 +1148,32 @@ export async function getParticipant(id: string): Promise<ParticipantView | null
   return doc ? participantView(doc) : null;
 }
 
-export async function updateParticipant(id: string, patch: { name?: string; note?: string | null; email?: string | null }): Promise<ParticipantView | null | "invite_pending"> {
-  const oid = toOid(id);
-  if (!oid) return null;
+export type UpdatePersonOperationResult =
+  | { kind: "updated" | "replayed"; person: ParticipantView }
+  | { kind: "conflict" | "deleted" | "not_found" | "invite_pending" };
+
+export async function getUpdatePersonOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<UpdatePersonOperationResult | null> {
   const tenantId = await currentTenantId();
-  if (!tenantId) return null;
+  if (!tenantId) throw new Error("An authenticated tenant is required.");
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "update_person", operation));
+  if (!existing || existing.expiresAt <= new Date()) return null;
+  if (existing.deletedAt) return { kind: "deleted" };
+  return existing.argumentDigest === operation.argumentDigest
+    ? { kind: "replayed", person: existing.result.person as ParticipantView }
+    : { kind: "conflict" };
+}
+
+async function updateParticipantInternal(
+  id: string,
+  patch: { name?: string; note?: string | null; email?: string | null },
+  operation?: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<ParticipantView | null | "invite_pending" | UpdatePersonOperationResult> {
+  const oid = toOid(id);
+  if (!oid) return operation ? { kind: "not_found" } : null;
+  const tenantId = await currentTenantId();
+  if (!tenantId) return operation ? { kind: "not_found" } : null;
+  const operations = operation ? await col.mcpOperations() : null;
+  const scope = operation ? mcpOperationScope(tenantId, "update_person", operation) : null;
   const set: Partial<ParticipantDoc> = {};
   const unset: Record<string, ""> = {};
   const fields: string[] = [];
@@ -1180,17 +1201,27 @@ export async function updateParticipant(id: string, patch: { name?: string; note
   }
   const update: Record<string, unknown> = { $set: set };
   if (Object.keys(unset).length) update.$unset = unset;
-  return withMongoTransaction(async (session) => {
+  const run = () => withMongoTransaction(async (session) => {
+    if (operation && operations && scope) {
+      const existing = await operations.findOne(scope, { session });
+      if (existing && existing.expiresAt > new Date()) {
+        if (existing.deletedAt) return { kind: "deleted" as const };
+        return existing.argumentDigest === operation.argumentDigest
+          ? { kind: "replayed" as const, person: existing.result.person as ParticipantView }
+          : { kind: "conflict" as const };
+      }
+      if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+    }
     const participants = await col.participants();
     const current = await participants.findOne(tenantFilter(tenantId, { _id: oid }), { session });
-    if (!current) return null;
+    if (!current) return operation ? { kind: "not_found" as const } : null;
     const currentEmail = typeof current.email === "string" ? current.email.trim().toLowerCase() : null;
     if (nextEmail !== undefined && currentEmail !== nextEmail) {
       const pendingInvite = await (await col.mail()).findOne(
         tenantFilter(tenantId, { participantId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] }, resolution: { $exists: false } }),
         { session, projection: { _id: 1 } },
       );
-      if (pendingInvite) return "invite_pending";
+      if (pendingInvite) return operation ? { kind: "invite_pending" as const } : "invite_pending";
     }
     const changedFields = fields.filter((field) => {
       if (field === "name") return set.name !== current.name;
@@ -1198,10 +1229,18 @@ export async function updateParticipant(id: string, patch: { name?: string; note
       return false;
     });
     if (patch.email !== undefined && (typeof current.email === "string" ? current.email : undefined) !== (nextEmail ?? undefined)) changedFields.push("email");
-    if (!changedFields.length) return participantView(current);
+    if (!changedFields.length) {
+      const person = participantView(current);
+      if (operation && operations && scope) {
+        const createdAt = new Date();
+        await operations.insertOne({ _id: new ObjectId(), ...scope, interviewId: current.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest, result: { person }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS) }, { session });
+        return { kind: "updated" as const, person };
+      }
+      return person;
+    }
     set.updatedAt = new Date();
     const res = await participants.findOneAndUpdate(tenantFilter(tenantId, { _id: oid }), update, { session, returnDocument: "after" });
-    if (!res) return null;
+    if (!res) return operation ? { kind: "not_found" as const } : null;
     const touched = await (await col.interviews()).updateOne(
       tenantFilter(tenantId, { _id: res.interviewId }),
       { $inc: { respondentWriteRevision: 1 } },
@@ -1209,8 +1248,37 @@ export async function updateParticipant(id: string, patch: { name?: string; note
     );
     if (!touched.matchedCount) throw new Error("Could not update respondent revision for interview.");
     await insertEvent(tenantId, res.interviewId, "update", res._id, session, { fields: changedFields.sort() });
-    return participantView(res);
+    const person = participantView(res);
+    if (operation && operations && scope) {
+      const createdAt = new Date();
+      await operations.insertOne({ _id: new ObjectId(), ...scope, interviewId: res.interviewId, participantIds: [oid], argumentDigest: operation.argumentDigest, result: { person }, createdAt, expiresAt: new Date(createdAt.getTime() + MCP_OPERATION_TTL_MS) }, { session });
+      return { kind: "updated" as const, person };
+    }
+    return person;
   });
+  try {
+    return await run();
+  } catch (error) {
+    if (!operation || !operations || !scope || !(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await operations.findOne(scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.deletedAt) return { kind: "deleted" };
+    return committed.argumentDigest === operation.argumentDigest
+      ? { kind: "replayed", person: committed.result.person as ParticipantView }
+      : { kind: "conflict" };
+  }
+}
+
+export async function updateParticipant(id: string, patch: { name?: string; note?: string | null; email?: string | null }): Promise<ParticipantView | null | "invite_pending"> {
+  return await updateParticipantInternal(id, patch) as ParticipantView | null | "invite_pending";
+}
+
+export async function updateParticipantWithOperation(
+  id: string,
+  patch: { name?: string; note?: string | null; email?: string | null },
+  operation: { operationId: string; credentialId: string; argumentDigest: string },
+): Promise<UpdatePersonOperationResult> {
+  return await updateParticipantInternal(id, patch, operation) as UpdatePersonOperationResult;
 }
 
 export type DeleteParticipantOperationResult =

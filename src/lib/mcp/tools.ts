@@ -61,6 +61,8 @@ import {
   updateInterviewWithOperation,
   getUpdateInterviewOperation,
   updateParticipant,
+  updateParticipantWithOperation,
+  getUpdatePersonOperation,
 } from "../repo";
 import { listCurrentMailByParticipants, listMailByPerson, mailRecord } from "../repo/mail";
 import { getWorkspaceAnalytics } from "../repo/workspace-analytics";
@@ -1988,8 +1990,8 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "update_person",
-    description: "Change a person's name, optional email, or private note. An empty email clears it and does not send.",
-    inputSchema: obj({ personId: str, name: str, email: str, note: str }, ["personId"]),
+    description: "Change a person's name, optional email, or private note. An empty email clears it and does not send. Optional operationId makes uncertain retries return the original result for seven days.",
+    inputSchema: obj({ personId: str, name: str, email: str, note: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId"]),
     async run(args) {
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
@@ -2010,6 +2012,23 @@ const TOOLS: ToolDef[] = [
       }
       if (args.note !== undefined) patch.note = args.note === null ? null : (asString(args.note, 1000) ?? null);
       if (!Object.keys(patch).length) return err("Nothing to update.");
+      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (typeof args.operationId === "string") {
+        const credentialId = stableMcpCredentialId();
+        if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+        const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ personId: id, patch })).digest("hex") };
+        const existing = await getUpdatePersonOperation(operation);
+        if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId for another update.", "operation_result_unavailable");
+        if (existing?.kind === "conflict") return err("operationId was already used with different update_person arguments.", "operation_id_conflict");
+        if (existing?.kind === "replayed") return ok({ person: shapePerson(existing.person, null, []) });
+        const updated = await updateParticipantWithOperation(id, patch, operation);
+        if (updated.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId for another update.", "operation_result_unavailable");
+        if (updated.kind === "conflict") return err("operationId was already used with different update_person arguments.", "operation_id_conflict");
+        if (updated.kind === "not_found") return err("Person not found.", "not_found");
+        if (updated.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
+        if (updated.kind !== "updated" && updated.kind !== "replayed") return err("That could not be done. Try again in a moment.", "server_error");
+        return ok({ person: shapePerson(updated.person, null, []) });
+      }
       const updated = await updateParticipant(id, patch);
       if (updated === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
       if (!updated) return err("Person not found.", "not_found");

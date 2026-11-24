@@ -248,6 +248,63 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     })).toBe(1);
   });
 
+  it("replays concurrent update_person writes and scrubs retained profile data on person and interview deletion", async () => {
+    const database = client.db(dbName);
+    const id = new mongo.ObjectId();
+    const personA = new mongo.ObjectId();
+    const personB = new mongo.ObjectId();
+    const now = new Date();
+    await database.collection("interviews").insertOne({
+      _id: id, tenantId: "integration-workspace", name: "Update person replay fixture", mode: "multi", status: "open", currentVersion: 1,
+      createdAt: now, updatedAt: now,
+    });
+    await database.collection("participants").insertMany([personA, personB].map((_id) => ({
+      _id, tenantId: "integration-workspace", interviewId: id, token: `private-${_id.toHexString()}`, name: "Before", email: "before@example.com",
+      note: "old note", status: "invited", answers: {}, revision: 0, writeEpoch: 0, createdAt: now, updatedAt: now,
+    })));
+    const operationFor = (participantId: import("mongodb").ObjectId, operationId: string) => ({
+      operationId, credentialId: "api_key:integration-key", argumentDigest: createHash("sha256").update(JSON.stringify({ participantId: participantId.toHexString(), name: "After" })).digest("hex"),
+    });
+    const operationA = `update-person-remove-${randomUUID()}`;
+    const update = (participantId: import("mongodb").ObjectId, operationId: string) => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.updateParticipantWithOperation(participantId.toHexString(), { name: "After", email: "after@example.com", note: "updated note" }, operationFor(participantId, operationId)),
+    );
+    const concurrent = await Promise.all([update(personA, operationA), update(personA, operationA)]);
+    expect(concurrent.map((result) => result.kind).sort()).toEqual(["replayed", "updated"]);
+    expect(await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.updateParticipantWithOperation(personA.toHexString(), { name: "Different" }, { ...operationFor(personA, operationA), argumentDigest: "different-arguments" }),
+    )).toEqual({ kind: "conflict" });
+    expect(await database.collection("participants").countDocuments({ _id: personA, name: "After" })).toBe(1);
+    const operationB = `update-person-interview-${randomUUID()}`;
+    expect((await update(personB, operationB)).kind).toBe("updated");
+
+    const operationHashA = createHash("sha256").update(operationA).digest("hex");
+    const operationHashB = createHash("sha256").update(operationB).digest("hex");
+    const receiptA = await database.collection("mcp_operations").findOne({ tool: "update_person", operationIdHash: operationHashA });
+    expect(receiptA?.result.person).toMatchObject({ email: "after@example.com", note: "updated note", token: `private-${personA.toHexString()}` });
+    await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.deleteParticipant(personA.toHexString()),
+    );
+    const scrubbedPersonReceipt = await database.collection("mcp_operations").findOne({ tool: "update_person", operationIdHash: operationHashA });
+    expect(scrubbedPersonReceipt).toMatchObject({ result: { deleted: true }, deletedAt: expect.any(Date) });
+    expect(JSON.stringify(scrubbedPersonReceipt)).not.toContain("after@example.com");
+    expect(await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.getUpdatePersonOperation(operationFor(personA, operationA)),
+    )).toEqual({ kind: "deleted" });
+
+    await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.deleteInterview(id.toHexString()),
+    );
+    const scrubbedInterviewReceipt = await database.collection("mcp_operations").findOne({ tool: "update_person", operationIdHash: operationHashB });
+    expect(scrubbedInterviewReceipt).toMatchObject({ result: { deleted: true }, deletedAt: expect.any(Date) });
+    expect(JSON.stringify(scrubbedInterviewReceipt)).not.toContain("after@example.com");
+  });
+
   it("erases respondent-linked records once and replays removal after a lost response", async () => {
     const database = client.db(dbName);
     const participantId = new mongo.ObjectId();
