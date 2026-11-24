@@ -134,4 +134,38 @@ describe("host invite batches", () => {
     expect(host.textContent).toContain("Rate limited.");
     expect(refresh).toHaveBeenCalledTimes(1);
   });
+
+  it("reuses the private-link operation id after a lost response and issues a new id after success", async () => {
+    const keys: string[] = [];
+    let attempt = 0;
+    localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      keys.push(new Headers(init?.headers).get("Idempotency-Key") ?? "");
+      attempt += 1;
+      const failed = attempt === 1;
+      return new Response(JSON.stringify(failed ? { ok: false, error: "The link could not be replaced." } : { ok: true, token: "new-token" }), {
+        status: failed ? 503 : 200,
+        headers: { "content-type": "application/json" },
+      });
+    }));
+    await act(async () => root.render(createElement(PeopleTab, { data: batchData(), origin: "https://kqa.example", refresh: () => {} })));
+
+    async function replaceAda() {
+      const summary = host.querySelector<HTMLElement>('summary[aria-label="More actions for Ada Lovelace"]')!;
+      if (!summary.closest("details")?.open) await act(async () => summary.click());
+      const actions = host.querySelector<HTMLElement>('[aria-label="Actions for Ada Lovelace"]')!;
+      const button = [...actions.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.includes("Replace private link"))!;
+      await act(async () => button.click());
+    }
+
+    await replaceAda();
+    await replaceAda();
+    await replaceAda();
+
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
+    const retained = [...Array(localStorage.length)].map((_, index) => localStorage.key(index) ?? "").filter((key) => key.startsWith("survee:idempotency:regenerate-link:p1"));
+    expect(retained).toEqual([]);
+  });
 });

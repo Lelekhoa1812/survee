@@ -1438,10 +1438,10 @@ export type RegenerateLinkOperationResult =
   | { kind: "invite_pending" }
   | { kind: "deleted" };
 
-export async function getRegenerateLinkOperation(operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<RegenerateLinkOperationResult | null> {
+export async function getRegenerateLinkOperation(operation: { operationId: string; credentialId: string; argumentDigest: string; tool?: string }): Promise<RegenerateLinkOperationResult | null> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
-  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "regenerate_link", operation));
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, operation.tool ?? "regenerate_link", operation));
   if (!existing || existing.expiresAt <= new Date()) return null;
   if (existing.deletedAt) return { kind: "deleted" };
   return existing.argumentDigest === operation.argumentDigest
@@ -1449,10 +1449,10 @@ export async function getRegenerateLinkOperation(operation: { operationId: strin
     : { kind: "conflict" };
 }
 
-export async function regenerateTokenWithOperation(id: string, operation: { operationId: string; credentialId: string; argumentDigest: string }): Promise<RegenerateLinkOperationResult> {
+export async function regenerateTokenWithOperation(id: string, operation: { operationId: string; credentialId: string; argumentDigest: string; tool?: string }): Promise<RegenerateLinkOperationResult> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
-  const scope = mcpOperationScope(tenantId, "regenerate_link", operation);
+  const scope = mcpOperationScope(tenantId, operation.tool ?? "regenerate_link", operation);
   const existing = await (await col.mcpOperations()).findOne(scope);
   if (existing && existing.expiresAt > new Date()) {
     if (existing.deletedAt) return { kind: "deleted" };

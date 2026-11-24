@@ -70,6 +70,18 @@ describe("regenerateToken", () => {
     expect(await asTenant(() => getRegenerateLinkOperation(operation))).toMatchObject({ kind: "replayed", interviewId: "bbbbbbbbbbbbbbbbbbbbbbbb" });
   });
 
+  it("keeps a host link replacement separate from an MCP rotation that reuses the same operation id", async () => {
+    const shared = { operationId: "rotate-1", credentialId: "host:user-1", argumentDigest: "digest-a" };
+    const host = await asTenant(() => regenerateTokenWithOperation(participantId.toHexString(), { ...shared, tool: "host_regenerate_link" }));
+    const mcp = await asTenant(() => regenerateTokenWithOperation(participantId.toHexString(), { ...shared, tool: "regenerate_link" }));
+    expect(host.kind).toBe("rotated");
+    expect(mcp.kind).toBe("rotated");
+    if (host.kind !== "rotated" || mcp.kind !== "rotated") return;
+    expect(host.token).not.toBe(mcp.token);
+    expect(mocks.operations.map((row) => row.tool).sort()).toEqual(["host_regenerate_link", "regenerate_link"]);
+    await expect(asTenant(() => getRegenerateLinkOperation({ ...shared, tool: "host_regenerate_link" }))).resolves.toMatchObject({ kind: "replayed", token: host.token });
+  });
+
   it("refuses to rotate a link while an invite attempt is unresolved", async () => {
     mocks.pending = true;
 

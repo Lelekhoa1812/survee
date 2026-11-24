@@ -97,6 +97,15 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
     setNextCursor(res.data.nextCursor ?? null);
   }
 
+  async function rotateLink(p: PersonRow) {
+    const scope = `regenerate-link:${p.id}`;
+    const payload = { personId: p.id };
+    const operation = await clientOperationId(scope, payload);
+    const res = await api(`/api/admin/people/${p.id}/token`, { method: "POST", headers: { "Idempotency-Key": operation.operationId }, body: {} });
+    if (res.ok) clearClientOperationId(scope, operation.fingerprint);
+    return res;
+  }
+
   async function act(p: PersonRow, action: "reopen" | "token") {
     if (action === "token" && p.mail.state === "pending" && p.mail.attemptId && !p.mail.resolution) {
       setTokenResolution(p);
@@ -105,7 +114,9 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
       return;
     }
     setWorking(p.id + action);
-    const res = await api(`/api/admin/people/${p.id}/${action}`, { method: "POST", body: {} });
+    const res = action === "token"
+      ? await rotateLink(p)
+      : await api(`/api/admin/people/${p.id}/${action}`, { method: "POST", body: {} });
     setWorking("");
     if (res.ok) { toast(action === "reopen" ? `${p.name} can edit again.` : "New link created. The old one no longer works. Send the new link if you already emailed it."); refresh(); }
     else toast(res.data.error ?? "That did not work.", "err");
@@ -124,7 +135,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
     }
     refresh();
     setTokenResolution(null);
-    const res = await api(`/api/admin/people/${p.id}/token`, { method: "POST", body: {} });
+    const res = await rotateLink(p);
     setWorking("");
     if (res.ok) { toast("New link created. The earlier invitation may still arrive, but its old link no longer works."); refresh(); }
     else toast(res.data.error ?? "Could not replace the link.", "err");

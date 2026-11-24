@@ -1,7 +1,8 @@
 import { checkInviteDelivery } from "@/lib/mail/delivery";
 import { sendInvite } from "@/lib/mail/invite";
-import { fail, guardAdmin, json, readJson, withServerErrors } from "@/lib/http";
-import { regenerateToken, reopenParticipant } from "@/lib/repo";
+import { adminSession, fail, guardAdmin, json, readJson, withServerErrors } from "@/lib/http";
+import { operationArgumentDigest, requestOperationId } from "@/lib/operation-id";
+import { getRegenerateLinkOperation, regenerateTokenWithOperation, reopenParticipant } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ pid: string; action: string }> };
 
@@ -17,9 +18,26 @@ export const POST = withServerErrors("admin/people/[pid]/[action]", async functi
     return p ? json({ ok: true, person: p }) : fail(409, "That person has not submitted, so there is nothing to reopen.");
   }
   if (action === "token") {
-    const token = await regenerateToken(pid);
-    if (token === "invite_pending") return fail(409, "Resolve the pending invitation before replacing this private link.", { code: "invite_pending" });
-    return token ? json({ ok: true, token }) : fail(404, "Person not found.");
+    const session = await adminSession();
+    if (!session) return fail(401, "Sign in to continue.");
+    const operationId = requestOperationId(req);
+    if (!operationId) return fail(400, "Send a valid Idempotency-Key header so an uncertain retry cannot replace the private link again.", { code: "idempotency_key_required" });
+    const operation = {
+      operationId,
+      credentialId: `host:${session.userId}`,
+      tool: "host_regenerate_link",
+      argumentDigest: operationArgumentDigest({ personId: pid }),
+    };
+    const previous = await getRegenerateLinkOperation(operation);
+    if (previous?.kind === "conflict") return fail(409, "This Idempotency-Key was already used for a different private-link replacement.", { code: "idempotency_key_conflict" });
+    if (previous?.kind === "deleted") return fail(410, "The person from this operation was deleted. Use a new Idempotency-Key to replace another link.", { code: "operation_result_unavailable" });
+    if (previous?.kind === "replayed") return json({ ok: true, token: previous.token });
+    const rotated = await regenerateTokenWithOperation(pid, operation);
+    if (rotated.kind === "conflict") return fail(409, "This Idempotency-Key was already used for a different private-link replacement.", { code: "idempotency_key_conflict" });
+    if (rotated.kind === "deleted") return fail(410, "The person from this operation was deleted. Use a new Idempotency-Key to replace another link.", { code: "operation_result_unavailable" });
+    if (rotated.kind === "invite_pending") return fail(409, "Resolve the pending invitation before replacing this private link.", { code: "invite_pending" });
+    if (rotated.kind === "not_found") return fail(404, "Person not found.");
+    return json({ ok: true, token: rotated.token });
   }
   if (action === "invite") {
     const body = await readJson<{ resend?: unknown }>(req, 4096);
