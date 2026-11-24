@@ -44,6 +44,8 @@ describe("respondent list", () => {
     expect(html).toContain("Submitted");
     expect(html).toContain("5 of 5 answered");
     expect(html).toContain("Delivered");
+    expect(html).toContain('title="Reload respondent status, progress, and save times"');
+    expect(html).toContain("Refresh progress");
     expect(html).toContain('<details class="person-more-actions">');
     expect(html).toContain("Copy private link");
     expect(html).toContain("Open as respondent");

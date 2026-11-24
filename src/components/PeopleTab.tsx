@@ -135,6 +135,7 @@ export function PeopleTab({ data, origin, refresh }: { data: InterviewData; orig
         <p className="muted" style={{ flex: 1, minWidth: 240 }}>
           {multi ? "Each person has their own private link. Add an email to send it, or copy the link." : "This interview has one link. Add their name and, if you have it, an email so you can send the link."}
         </p>
+        <button className="btn" type="button" onClick={refresh} title="Reload respondent status, progress, and save times"><Icon name="refresh" size={16} /> Refresh progress</button>
         <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add people</button>
       </div>
 
