@@ -106,6 +106,49 @@ describe("sendInvite", () => {
     expect(recorded[1]).toMatchObject({ id: "attempt-1", status: "sent", messageId: "<sent-id@example.com>" });
   });
 
+  it("replays a concurrent keyed resend after the per-person rate limit rejects its racing request", async () => {
+    let lookups = 0;
+    let releaseLookups!: () => void;
+    const lookupGate = new Promise<void>((resolve) => { releaseLookups = resolve; });
+    let reserveStarted!: () => void;
+    const reserveGate = new Promise<void>((resolve) => { reserveStarted = resolve; });
+    let attemptCreated = false;
+    let personRateCalls = 0;
+    const attempt = {
+      id: "attempt-1", participantId: personId, to: "ada@example.com", token: TOKEN,
+      status: "sent" as const, sentAt: "2026-11-24T00:00:00.000Z", messageId: "<sent-id@example.com>",
+    };
+    const { send, deps } = harness(ctx({ email: "ada@example.com" }), {
+      findOperation: async () => {
+        lookups += 1;
+        if (lookups === 2) releaseLookups();
+        await lookupGate;
+        return attemptCreated ? { kind: "replayed", attempt, interviewId } : null;
+      },
+      rateLimit: async (key) => {
+        if (!key.includes("invite-person")) return true;
+        personRateCalls += 1;
+        if (personRateCalls === 1) return true;
+        await reserveGate;
+        return false;
+      },
+      begin: async () => {
+        attemptCreated = true;
+        reserveStarted();
+        return { kind: "created", attemptId: "attempt-1" };
+      },
+    });
+    const operation = { operationId: "same-resend", credentialId: "api_key:test", argumentDigest: "digest" };
+    const input = { personId, triggeredBy: "mcp" as const, resend: true, operation };
+    const results = await Promise.all([sendInvite(input, deps), sendInvite(input, deps)]);
+
+    expect(results).toEqual([
+      expect.objectContaining({ ok: true, result: "sent", messageId: "<sent-id@example.com>" }),
+      expect.objectContaining({ ok: true, result: "sent", messageId: "<sent-id@example.com>" }),
+    ]);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("waits for the success audit before returning a successful send", async () => {
     let resolveLog!: () => void;
     const logGate = new Promise<void>((resolve) => { resolveLog = resolve; });

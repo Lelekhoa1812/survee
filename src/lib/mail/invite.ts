@@ -85,7 +85,8 @@ function replayOperationAttempt(attempt: MailRecord, interviewId: string): SendI
 }
 
 export async function sendInvite(input: { personId: string; triggeredBy: "admin" | "mcp"; resend?: boolean; operation?: InviteSendOperation }, deps: SendInviteDeps = {}): Promise<SendInviteResult> {
-  if (input.operation) {
+  const replay = async (): Promise<SendInviteResult | null> => {
+    if (!input.operation) return null;
     try {
       const existing = await (deps.findOperation ?? getInviteSendOperation)(input.operation);
       if (existing?.kind === "deleted") return { ok: false, code: "operation_result_unavailable", error: "This operation's invite attempt was erased. Use a new operationId to send another invite." };
@@ -94,7 +95,10 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     } catch {
       return { ok: false, code: "preflight_unavailable", error: "Could not verify this invite operation before sending. No message was sent." };
     }
-  }
+    return null;
+  };
+  const existingOperation = await replay();
+  if (existingOperation) return existingOperation;
   let ctx: InviteContext | null;
   try {
     ctx = await (deps.load ?? loadFromDb)(input.personId);
@@ -148,7 +152,7 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
     const allowed = await consume(`invite-person:${scope}:${ctx.person.id}`, 1, 1)
       && await consume(`invite-recipient:${scope}:${parsed.email}`, 5, 60)
       && await consume(`invite-workspace:${scope}`, 100, 60);
-    if (!allowed) return { ok: false, code: "rate_limited", error: "An invite was sent recently. Wait before sending another." };
+    if (!allowed) return (await replay()) ?? { ok: false, code: "rate_limited", error: "An invite was sent recently. Wait before sending another." };
   } catch {
     return { ok: false, code: "rate_limit_unavailable", error: "Invite sending is temporarily unavailable. Try again." };
   }
