@@ -186,14 +186,14 @@ vi.mock("../src/lib/repo/mail", async () => {
   return { ...actual, listCurrentMailByParticipants: vi.fn(async () => []) };
 });
 
-vi.mock("../src/lib/repo/workspace-policy", () => ({
-  getWorkspacePolicy: vi.fn(async () => ({ analyticsMinimumCellSize: 5, respondentPolicy: null })),
+vi.mock("../src/lib/repo/workspace-analytics", () => ({
+  getWorkspaceAnalytics: vi.fn(async () => ({ analyticsMinimumCellSize: 5 })),
 }));
 
 import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
-import { getWorkspacePolicy } from "../src/lib/repo/workspace-policy";
+import { getWorkspaceAnalytics } from "../src/lib/repo/workspace-analytics";
 import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
@@ -225,7 +225,7 @@ beforeEach(() => {
   vi.mocked(deleteInterviewWithOperation).mockReset().mockResolvedValue({ kind: "deleted" });
   vi.mocked(getDeleteInterviewOperation).mockReset().mockResolvedValue(null);
   vi.mocked(createAnalyticsRun).mockClear();
-  vi.mocked(getWorkspacePolicy).mockReset().mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
+  vi.mocked(getWorkspaceAnalytics).mockReset().mockResolvedValue({ analyticsMinimumCellSize: 5 });
 });
 
 describe("MCP tools", () => {
@@ -1216,7 +1216,7 @@ describe("MCP tools", () => {
 
   it("returns above-threshold summaries, cohorts, segments, cross-tabs, and cached pages", async () => {
     const previousImplementation = vi.mocked(iterateAnalyticsParticipants).getMockImplementation()!;
-    vi.mocked(getWorkspacePolicy).mockResolvedValue({ analyticsMinimumCellSize: 2, respondentPolicy: null });
+    vi.mocked(getWorkspaceAnalytics).mockResolvedValue({ analyticsMinimumCellSize: 2 });
     const people = Array.from({ length: 8 }, (_, index) => {
       const slot = index % 4;
       return {
@@ -1272,7 +1272,7 @@ describe("MCP tools", () => {
       expect(secondPageBody.result.structuredContent.disclosureControl?.suppressed).toBe(false);
       expect(secondPageBody.result.structuredContent).toMatchObject({ offset: 1, nextOffset: 2 });
 
-      vi.mocked(getWorkspacePolicy).mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
+      vi.mocked(getWorkspaceAnalytics).mockResolvedValue({ analyticsMinimumCellSize: 5 });
       const stricterCachedPage = await call("analyze_answers", { interviewId, runId, offset: 1, limit: 1 });
       const stricterCachedBody = await stricterCachedPage.json() as { result: { structuredContent: Record<string, unknown> } };
       expect(stricterCachedBody.result.structuredContent).toMatchObject({ suppressed: true, minimumCellSize: 5, reason: "minimum_cell_size" });

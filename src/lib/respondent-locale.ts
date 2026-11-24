@@ -9,19 +9,6 @@ export const RESPONDENT_LOCALE_META: Record<RespondentLocale, { label: string; l
   ar: { label: "العربية", lang: "ar", direction: "rtl" },
 };
 
-export type RespondentPolicyMessage = "title" | "notice" | "purpose" | "retention" | "contact" | "withdrawal";
-
-const WORKSPACE_POLICY_MESSAGES: Record<RespondentLocale, Record<RespondentPolicyMessage, string>> = {
-  "en-AU": { title: "Information from your host", notice: "Notice", purpose: "Purpose", retention: "How long answers are kept", contact: "Contact", withdrawal: "Withdrawing" },
-  vi: { title: "Thông tin từ người tổ chức", notice: "Thông báo", purpose: "Mục đích", retention: "Thời gian lưu câu trả lời", contact: "Liên hệ", withdrawal: "Rút lui" },
-  es: { title: "Información de quien te invita", notice: "Aviso", purpose: "Propósito", retention: "Cuánto tiempo se conservan las respuestas", contact: "Contacto", withdrawal: "Retirada" },
-  ar: { title: "معلومات من مضيفك", notice: "إشعار", purpose: "الغرض", retention: "مدة الاحتفاظ بالإجابات", contact: "جهة الاتصال", withdrawal: "الانسحاب" },
-};
-
-export function respondentPolicyMessage(locale: RespondentLocale, key: RespondentPolicyMessage): string {
-  return WORKSPACE_POLICY_MESSAGES[locale][key];
-}
-
 const MESSAGES = {
   "en-AU": {
     repeatRecordNumber: "Record {index}",
@@ -114,9 +101,6 @@ export function auditRespondentLocales(): string[] {
       else if (JSON.stringify(placeholders(localizedMessage)) !== JSON.stringify(placeholders(repeatEnglish[key]!))) {
         issues.push(`${locale}.${key} has different interpolation placeholders`);
       }
-    }
-    for (const key of Object.keys(WORKSPACE_POLICY_MESSAGES["en-AU"]) as RespondentPolicyMessage[]) {
-      if (!WORKSPACE_POLICY_MESSAGES[locale][key]?.trim()) issues.push(`${locale}.workspacePolicy.${key} is missing or empty`);
     }
   }
   return issues;

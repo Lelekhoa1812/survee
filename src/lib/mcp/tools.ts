@@ -63,7 +63,7 @@ import {
   updateParticipant,
 } from "../repo";
 import { listCurrentMailByParticipants, listMailByPerson, mailRecord } from "../repo/mail";
-import { getWorkspacePolicy } from "../repo/workspace-policy";
+import { getWorkspaceAnalytics } from "../repo/workspace-analytics";
 import { prepareSurvey, withCompat } from "../survey";
 import type { Manifest } from "../format/schema";
 import type { ParticipantView } from "../repo/types";
@@ -802,8 +802,8 @@ const TOOLS: ToolDef[] = [
         }
         const interview = await getInterview(id);
         if (!interview) return err("Interview not found.", "not_found");
-        const workspacePolicy = await getWorkspacePolicy(interview.tenantId ?? currentPrincipal()?.tenantId ?? "");
-        const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
+        const workspaceAnalytics = await getWorkspaceAnalytics(interview.tenantId ?? currentPrincipal()?.tenantId ?? "");
+        const minimumCellSize = workspaceAnalytics?.analyticsMinimumCellSize ?? 5;
         const run = await getAnalyticsRun(runId, id);
         if (!run) return err("This analysis run expired or is no longer available. Start a new analysis with analyze_answers.", "analysis_run_expired");
         const payload = run.result as AnalyticsRunPayload;
@@ -817,8 +817,8 @@ const TOOLS: ToolDef[] = [
       }
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
-      const workspacePolicy = await getWorkspacePolicy(interview.tenantId ?? currentPrincipal()?.tenantId ?? "");
-      const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
+      const workspaceAnalytics = await getWorkspaceAnalytics(interview.tenantId ?? currentPrincipal()?.tenantId ?? "");
+      const minimumCellSize = workspaceAnalytics?.analyticsMinimumCellSize ?? 5;
       const version = await getVersion(interview._id, interview.currentVersion);
       if (!version) return err("Survey version not found.", "not_found");
       // Repeated rows stay respondent-linked records and are not scalar outcomes or participants.

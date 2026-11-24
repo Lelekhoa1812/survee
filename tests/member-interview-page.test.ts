@@ -14,7 +14,7 @@ vi.mock("@/lib/http", () => ({ adminSession: async () => ({ role: state.role, te
 vi.mock("@/lib/env", () => ({ publicBaseUrl: () => ({ ok: true, origin: "https://kqa.test" }) }));
 vi.mock("@/lib/analytics/summary", () => ({ summarizeQuestionCohorts: async () => state.summary, withCurrentEligibility: (_manifest: unknown, respondents: unknown) => respondents }));
 vi.mock("@/lib/analytics/host-summary-cache", () => ({ getCachedHostSummary: state.hostSummaryCache }));
-vi.mock("@/lib/repo/workspace-policy", () => ({ getWorkspacePolicy: async () => ({ analyticsMinimumCellSize: 5, respondentPolicy: null }) }));
+vi.mock("@/lib/repo/workspace-analytics", () => ({ getWorkspaceAnalytics: async () => ({ analyticsMinimumCellSize: 5 }) }));
 vi.mock("@/lib/format/answers", () => ({ progress: () => ({ answered: 1, total: 1, missingRequired: [] }), eligibilityQuestionIds: (_manifest: unknown, ids: string[]) => ids }));
 vi.mock("@/lib/mail/state", () => ({ currentMail: () => ({ state: "sent", sentAt: "2026-11-16T00:00:00.000Z", delivery: "unknown" }) }));
 vi.mock("@/lib/repo/mail", () => ({ listCurrentMailByParticipants: state.listCurrentMailByParticipants, mailRecord: (row: unknown) => row }));

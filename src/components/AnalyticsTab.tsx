@@ -776,7 +776,7 @@ export function AnalyticsTab({ data }: { data: InterviewData }) {
   if (data.analysisSuppressed) return <div className="stack">
     <section className="card analysis-intro">
       <div className="analysis-intro-head"><div><h2>Response analysis</h2><p>Aggregate results are hidden because at least one cohort or cell is smaller than the workspace minimum of {data.analysisSuppressed.minimumCellSize} people.</p></div><Badge kind="info" plain>Privacy threshold</Badge></div>
-      <p className="analysis-caveat">Change the threshold in Workspace policies or collect more responses. This setting reduces small-group disclosure; it does not guarantee anonymity. Authorized person-level answers and exports remain available in their separate views.</p>
+      <p className="analysis-caveat">Change the threshold in Workspace analytics or collect more responses. This setting reduces small-group disclosure; it does not guarantee anonymity. Authorized person-level answers and exports remain available in their separate views.</p>
     </section>
   </div>;
 

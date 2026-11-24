@@ -59,7 +59,23 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     campaignDrafts = await import("../src/lib/campaign-drafts");
     ({ withTenantPrincipal } = await import("../src/lib/tenant-context"));
     client = await new mongo.MongoClient(isolated.uri, { serverSelectionTimeoutMS: 8_000 }).connect();
+    const legacyTenantId = `integration-policy-cleanup-${randomUUID()}`;
+    const tenantCollection = client.db(dbName).collection<import("../src/lib/repo/types").TenantDoc & { respondentPolicy?: Record<string, unknown> }>("tenants");
+    await tenantCollection.insertOne({
+      _id: legacyTenantId,
+      name: "Legacy respondent policy fixture",
+      slug: legacyTenantId,
+      status: "active",
+      analyticsMinimumCellSize: 9,
+      respondentPolicy: { revision: 1, notice: "legacy notice text", retention: "legacy retention text", updatedAt: new Date() },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     await dbModule.db(); // Also exercises the real index setup, including the unique operation scope index.
+    const cleanedTenant = await tenantCollection.findOne({ _id: legacyTenantId });
+    expect(cleanedTenant).not.toHaveProperty("respondentPolicy");
+    expect(cleanedTenant?.analyticsMinimumCellSize).toBe(9);
+    expect(await client.db(dbName).collection<{ _id: string }>("schema_migrations").countDocuments({ _id: "remove_respondent_policy_fields_v1" })).toBe(1);
 
     interviewId = new mongo.ObjectId();
     await (await dbModule.col.interviews()).insertOne({
@@ -93,6 +109,13 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     else process.env.MONGODB_DB = previousEnv.mongodbDb;
     if (previousEnv.axionFallback === undefined) delete process.env.KQA_AXION_LEGACY_TENANT_FALLBACK;
     else process.env.KQA_AXION_LEGACY_TENANT_FALLBACK = previousEnv.axionFallback;
+  });
+
+  it("removes stored respondent notice data while preserving analytics settings", async () => {
+    const tenants = client.db(dbName).collection("tenants");
+    const allTenants = await tenants.find({}).toArray();
+    expect(allTenants.every((tenant) => !Object.hasOwn(tenant, "respondentPolicy"))).toBe(true);
+    expect(allTenants.some((tenant) => tenant.analyticsMinimumCellSize === 9)).toBe(true);
   });
 
   it("serializes concurrent duplicate operationIds into one participant mutation", async () => {

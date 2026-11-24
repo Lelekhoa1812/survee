@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
     version: { version: 7, html: "<!doctype html><title>Study</title>", manifest: { title: "Study", sections: [{ id: "context", title: "About you" }], questions: [] as { id: string }[] } as Record<string, any> },
   },
   loadByToken: vi.fn(),
-  getWorkspacePolicy: vi.fn(),
   ensureQuestionOrderAssignment: vi.fn(),
   shouldRecordVisit: vi.fn(() => false),
   respondentRateLimit: vi.fn(async () => null as Response | null),
@@ -31,7 +30,6 @@ vi.mock("@/lib/repo", () => ({
   saveAnswers: mocks.saveAnswers,
   submitAnswers: mocks.submitAnswers,
 }));
-vi.mock("@/lib/repo/workspace-policy", () => ({ getWorkspacePolicy: mocks.getWorkspacePolicy }));
 vi.mock("@/lib/tokens", () => ({ looksLikeToken: () => true }));
 vi.mock("@/lib/visit", () => ({ shouldRecordVisit: mocks.shouldRecordVisit }));
 vi.mock("@/lib/respondent-rate-limit", () => ({ respondentRateLimit: mocks.respondentRateLimit }));
@@ -52,7 +50,6 @@ const request = (url: string, method: string, body?: unknown) => new Request(url
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.loadByToken.mockResolvedValue(mocks.context);
-  mocks.getWorkspacePolicy.mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
   mocks.ensureQuestionOrderAssignment.mockImplementation(async (input) => ({ ...input, assignedAt: "2026-11-16T00:00:00.000Z" }));
   mocks.shouldRecordVisit.mockReturnValue(false);
   mocks.respondentRateLimit.mockResolvedValue(null);
@@ -66,36 +63,9 @@ describe("respondent questionnaire version routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.respondentRateLimit).toHaveBeenCalledWith(expect.any(Request), token, "load");
-    await expect(response.json()).resolves.toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }], recordGroups: { people: [{ id: "row-1" }] }, respondentPolicy: null });
-    expect(mocks.getWorkspacePolicy).toHaveBeenCalledWith("tenant-1");
-  });
-
-  it("returns only workspace-authored respondent policy text to a valid respondent link", async () => {
-    mocks.getWorkspacePolicy.mockResolvedValue({
-      analyticsMinimumCellSize: 8,
-      respondentPolicy: { notice: "Host-authored notice", purpose: "Host-authored purpose", retention: "Host-authored retention", contact: "host@example.test", withdrawal: "Host-authored withdrawal", revision: 4, updatedAt: "2026-11-20T00:00:00.000Z" },
-    });
-
-    const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
-
-    const body = await response.json();
-    expect(body).toMatchObject({
-      respondentPolicy: {
-        notice: "Host-authored notice", purpose: "Host-authored purpose", retention: "Host-authored retention",
-        contact: "host@example.test", withdrawal: "Host-authored withdrawal",
-      },
-    });
-    expect(body.respondentPolicy).not.toHaveProperty("revision");
-    expect(body).not.toHaveProperty("analyticsMinimumCellSize");
-    expect(mocks.getWorkspacePolicy).toHaveBeenCalledWith(mocks.context.tenantId);
-  });
-
-  it("does not look up workspace policy for an invalid respondent link", async () => {
-    mocks.loadByToken.mockResolvedValueOnce(null);
-    const response = await getRespondent(request(`https://kqa.local/api/p/${token}`, "GET"), params);
-
-    expect(response.status).toBe(404);
-    expect(mocks.getWorkspacePolicy).not.toHaveBeenCalled();
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ version: 7, title: "Study", sections: [{ id: "context", title: "About you" }], recordGroups: { people: [{ id: "row-1" }] } });
+    expect(body).not.toHaveProperty("respondentPolicy");
   });
 
   it("throttles respondent reads before looking up a link", async () => {

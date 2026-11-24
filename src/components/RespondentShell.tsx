@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerMap, AnswerValue, Question, QuestionOrderGroup, RepeatRecordMap, RepeatRecordOperation, RepeatRecordRow, Section } from "@/lib/format/schema";
 import { ID_RE } from "@/lib/format/schema";
 import { displayValue } from "@/lib/format/answers";
-import { RESPONDENT_LOCALE_META, type RespondentLocale, type RespondentMessage, respondentBridgeMessages, respondentMessage, respondentMessageParts, respondentPolicyMessage, respondentRepeatIssue, type RespondentRepeatIssue, respondentTime } from "@/lib/respondent-locale";
+import { RESPONDENT_LOCALE_META, type RespondentLocale, type RespondentMessage, respondentBridgeMessages, respondentMessage, respondentMessageParts, respondentRepeatIssue, type RespondentRepeatIssue, respondentTime } from "@/lib/respondent-locale";
 import { api, BrandMark, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 
 type Phase = "loading" | "ready" | "invalid" | "error";
@@ -12,7 +12,6 @@ type SaveState = "idle" | "saving" | "saved" | "error" | "failed" | "offline";
 interface Loaded {
   participant: { name: string; status: "invited" | "in_progress" | "submitted"; writeEpoch: number; submittedAt?: string };
   interview: { name: string; status: "open" | "closed" };
-  respondentPolicy?: { notice?: string; purpose?: string; retention?: string; contact?: string; withdrawal?: string } | null;
   version: number;
   title: string;
   sections?: Section[];
@@ -1145,18 +1144,6 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
       })}</ul></div></div>}
       {firstLengthDraft && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> <LocalizedMessage locale={locale} message={lengthDraftHidden ? "lengthHidden" : "lengthOver"} values={{ question: firstLengthDraft.question.label, count: firstLengthDraft.count, max: firstLengthDraft.max }} valueLang={questionnaireLanguage} /> <button className="btn" type="button" onClick={focusLengthDraft}>{lengthDraftHidden ? t("reviewEarlier") : t("editResponse")}</button></div>}
       {rejectedRecordDrafts.length > 0 && <div className="rs-banner warn" role="alert"><Icon name="alert" size={16} /> {t("repeatRejectedCount", { count: rejectedRecordDrafts.length })} <button className="btn" type="button" onClick={() => setConfirming(true)}>{t("repeatRejectedTitle")}</button>{draftRecoveryReason === "record-conflict" && <button className="btn" type="button" onClick={() => setConflictDraftOpen(true)}>{t("reviewUnsaved")}</button>}</div>}
-
-      {data.respondentPolicy && (
-        <section className="rs-policy" aria-labelledby="rs-workspace-policy-title">
-          <div className="rs-policy-in">
-            <h2 id="rs-workspace-policy-title">{respondentPolicyMessage(locale, "title")}</h2>
-            {(["notice", "purpose", "retention", "contact", "withdrawal"] as const).map((key) => {
-              const value = data.respondentPolicy?.[key]?.trim();
-              return value ? <div className="rs-policy-field" key={key}><h3>{respondentPolicyMessage(locale, key)}</h3><p dir="auto">{value}</p></div> : null;
-            })}
-          </div>
-        </section>
-      )}
 
       {guidedMode && activeGuidedGroup && (
         <section className="rs-guided" aria-label={t("questionnaireSections")}>

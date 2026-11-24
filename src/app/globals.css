@@ -668,12 +668,6 @@ pre.src .hit { background: rgba(245, 154, 146, .22); display: inline-block; widt
 .rs-banner.ok { background: var(--accent-soft); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); }
 .rs-banner.warn { background: var(--warn-soft); border-bottom: 1px solid var(--warn-line); }
 .rs-banner.none { display: none; }
-.rs-policy { flex: none; padding: 14px clamp(16px, 4vw, 44px); border-bottom: 1px solid var(--line); background: var(--surface-2); }
-.rs-policy-in { max-width: 1160px; margin: 0 auto; display: grid; gap: 10px; }
-.rs-policy h2 { font-size: 15px; }
-.rs-policy-field { display: grid; gap: 2px; }
-.rs-policy-field h3 { font-size: 12px; color: var(--muted); }
-.rs-policy-field p { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .rs-guided { flex: none; padding: 16px clamp(16px, 4vw, 44px); border-bottom: 1px solid var(--line); background: var(--surface); }
 .rs-guided-step { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .rs-guided-empty > div { max-width: 1160px; width: 100%; margin: 0 auto; display: grid; justify-items: start; gap: 8px; }

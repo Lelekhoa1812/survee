@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
   getInterview: vi.fn(),
   getVersion: vi.fn(),
   iterate: vi.fn(),
-  getWorkspacePolicy: vi.fn(),
+  getWorkspaceAnalytics: vi.fn(),
 }));
 
 vi.mock("@/lib/http", () => ({
@@ -31,7 +31,7 @@ vi.mock("@/lib/repo", () => ({
   getVersion: state.getVersion,
   iterateAnalyticsParticipants: state.iterate,
 }));
-vi.mock("@/lib/repo/workspace-policy", () => ({ getWorkspacePolicy: state.getWorkspacePolicy }));
+vi.mock("@/lib/repo/workspace-analytics", () => ({ getWorkspaceAnalytics: state.getWorkspaceAnalytics }));
 
 import { GET } from "../src/app/api/admin/interviews/[id]/analysis/route";
 
@@ -48,7 +48,7 @@ describe("interview answer-segmentation route", () => {
       ...Array.from({ length: 5 }, () => ({ status: "invited", answers: { fit: { value: "no" }, budget: { value: 4 }, confidence: { value: "low" } } })),
       ...Array.from({ length: 5 }, () => ({ status: "in_progress", answers: { fit: { value: "retired" }, budget: { value: 3 }, confidence: { value: "high" } } })),
     ];
-    state.getWorkspacePolicy.mockReset().mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
+    state.getWorkspaceAnalytics.mockReset().mockResolvedValue({ analyticsMinimumCellSize: 5 });
     state.getInterview.mockReset().mockResolvedValue(state.interview);
     state.getVersion.mockReset().mockResolvedValue(state.version);
     state.iterate.mockReset().mockImplementation((_id: string, _questionIds: string[], options: { statuses: string[] }) => (async function* () {
@@ -72,7 +72,7 @@ describe("interview answer-segmentation route", () => {
 
   it("withholds complete aggregate segment output when any cell is below the workspace default", async () => {
     state.rows = [{ status: "submitted", answers: { fit: { value: "yes" }, budget: { value: 2 }, confidence: { value: "high" } } }];
-    state.getWorkspacePolicy.mockResolvedValue({ analyticsMinimumCellSize: 5, respondentPolicy: null });
+    state.getWorkspaceAnalytics.mockResolvedValue({ analyticsMinimumCellSize: 5 });
     const response = await GET(request("segmentBy=fit&questionId=budget"), { params: Promise.resolve({ id: "interview" }) });
     const body = await response.json() as Record<string, unknown>;
     expect(body).toMatchObject({ ok: true, suppressed: true, minimumCellSize: 5, reason: "minimum_cell_size" });

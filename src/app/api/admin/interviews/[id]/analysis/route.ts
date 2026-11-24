@@ -5,7 +5,7 @@ import { suppressSmallCohortAnalytics } from "@/lib/analytics/disclosure";
 import { eligibilityQuestionIds } from "@/lib/format/answers";
 import { adminSession, fail, guardAdmin, json, withServerErrors } from "@/lib/http";
 import { getInterview, getVersion, iterateAnalyticsParticipants } from "@/lib/repo";
-import { getWorkspacePolicy } from "@/lib/repo/workspace-policy";
+import { getWorkspaceAnalytics } from "@/lib/repo/workspace-analytics";
 import type { ParticipantStatus } from "@/lib/repo/types";
 
 /** Return aggregate-only answer segments for up to 20 selected outcome questions in one scan. */
@@ -21,8 +21,8 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
   const session = await adminSession();
-  const workspacePolicy = await getWorkspacePolicy(session?.tenantId ?? "");
-  const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
+  const workspaceAnalytics = await getWorkspaceAnalytics(session?.tenantId ?? "");
+  const minimumCellSize = workspaceAnalytics?.analyticsMinimumCellSize ?? 5;
   if (interview.currentVersion !== Number(requestedVersion)) {
     return fail(409, "This survey changed while the page was open. Reload the interview to view analysis for the latest version.");
   }

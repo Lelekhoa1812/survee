@@ -10,7 +10,7 @@ import { getInterview, getInterviewParticipantCounts, getVersion, iterateAnalyti
 import { listCurrentMailByParticipants, mailRecord } from "@/lib/repo/mail";
 import { participantRows } from "@/lib/host/participant-rows";
 import { adminSession } from "@/lib/http";
-import { getWorkspacePolicy } from "@/lib/repo/workspace-policy";
+import { getWorkspaceAnalytics } from "@/lib/repo/workspace-analytics";
 import { ANALYTICS_COHORTS, type AnalyticsCohortKey } from "@/lib/analytics/cohorts";
 import type { QuestionSummary } from "@/lib/analytics/summary";
 
@@ -46,13 +46,13 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   let analysisSuppressed: InterviewData["analysisSuppressed"];
   if (analysisOnly) {
     const questionIds = current.manifest.questions.map((question) => question.id);
-    const [summary, workspacePolicy] = await Promise.all([getCachedHostSummary({
+    const [summary, workspaceAnalytics] = await Promise.all([getCachedHostSummary({
       tenantId: session.tenantId,
       interviewId: id,
       surveyVersion: current.version,
       respondentRevision: interview.respondentWriteRevision ?? 0,
-    }, () => summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds))))), getWorkspacePolicy(session.tenantId)]);
-    const minimumCellSize = workspacePolicy?.analyticsMinimumCellSize ?? 5;
+    }, () => summarizeQuestionCohorts(current.manifest.questions, withCurrentEligibility(current.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(current.manifest, questionIds))))), getWorkspaceAnalytics(session.tenantId)]);
+    const minimumCellSize = workspaceAnalytics?.analyticsMinimumCellSize ?? 5;
     const statusCountsAreSafe = Object.values(summary.statusCounts).every((count) => count === 0 || count >= minimumCellSize);
     const summaries: Partial<Record<AnalyticsCohortKey, Record<string, QuestionSummary>>> = {};
     const baseCohortSafe = new Set<string>();

@@ -52,6 +52,10 @@ describe("settings section navigation", () => {
 
     expect(ownerNav).toContain('href="#legacy-data"');
     expect(ownerNav).toContain('href="#api-keys"');
+    expect(ownerNav).toContain('href="#workspace-analytics"');
+    expect(ownerNav).not.toContain("Workspace policies");
+    expect(ownerHtml).not.toContain("Respondent notice");
+    expect(ownerHtml).not.toContain("Withdrawal instructions");
     expect(ownerHtml).toContain('id="legacy-data"');
     expect(memberNav).not.toContain('href="#legacy-data"');
     expect(memberNav).not.toContain('href="#api-keys"');
