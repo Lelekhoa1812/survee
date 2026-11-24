@@ -54,7 +54,7 @@ vi.mock("@/lib/repo", () => ({
 import { GET } from "../src/app/api/admin/interviews/[id]/export/route";
 import { exportInterview } from "../src/lib/export";
 
-function request(format: "csv-wide" | "csv-long" | "json" = "csv-wide") {
+function request(format: "csv-wide" | "csv-long" | "csv-records" | "json" = "csv-wide") {
   return new Request(`https://survee.example/api/admin/interviews/interview-id/export?format=${format}`);
 }
 
@@ -163,6 +163,28 @@ describe("export revision checks", () => {
     } else {
       expect(streamed).toContain("presentation,1,kqa-question-order-v1,context,second;first,2026-01-02T03:04:05.000Z");
     }
+  });
+
+  it("streams repeat-record CSV identical to the buffered export", async () => {
+    state.singlePage = true;
+    state.manifest = {
+      format: "kqa/1", title: "Study", questions: [{ id: "items", type: "repeat", label: "Items", fields: [{ id: "label", label: "Label", type: "text" }], maxRows: 5 }],
+    };
+    state.participant = {
+      id: "participant-1", name: "Alex", status: "invited", createdAt: "2026-01-01T00:00:00.000Z",
+      answers: {}, recordGroups: { items: [{ id: "row-1", values: { label: "=SUM(A1)" }, revision: 1, fieldRevisions: {} }] },
+    } as any;
+    const response = await GET(request("csv-records"), params);
+    expect(response.status).toBe(200);
+    const streamed = await response.text();
+    const buffered = await exportInterview({
+      interview: { id: "interview-id", name: "Study", mode: "multi", status: "open", createdAt: "2026-01-01T00:00:00.000Z" },
+      manifest: state.manifest as any, surveyVersion: 1,
+      participants: [{ ...state.participant, status: "invited" } as any], generatedAt: "2026-01-03T00:00:00.000Z",
+    }, "csv-records");
+    expect(streamed).toBe((buffered.body as string).replace(/^\uFEFF/, ""));
+    expect(streamed).toContain("'=SUM(A1)");
+    expect(state.exportEvents).toEqual([{ id: "interview-id", format: "csv-records" }]);
   });
 
   it("returns a stale conflict when respondent data changes during a buffered read", async () => {

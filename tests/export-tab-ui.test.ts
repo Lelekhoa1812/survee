@@ -27,8 +27,16 @@ describe("export availability", () => {
     expect(html).toContain("CSV exports sort people in creation order and stream participant data in bounded pages");
     expect(html).toContain('data-export-format="csv-wide"');
     expect(html).toContain('data-export-format="csv-long"');
+    expect(html).toContain('data-export-format="csv-records"');
     expect(html).toContain("download fails without saving a partial file");
     expect(html).toContain("Export limit reached");
     expect(html).not.toContain("/api/admin/interviews/interview-1/export?format=xlsx");
+  });
+
+  it("offers repeat-record CSV for current or historical repeat rows", () => {
+    const data = { ...base, manifest: { format: "kqa/1", title: "Research", questions: [{ id: "items", type: "repeat", label: "Items", fields: [], maxRows: 5 }] } } as unknown as InterviewData;
+    const html = renderToStaticMarkup(createElement(ExportTab, { data }));
+    expect(html).toContain('data-export-format="csv-records"');
+    expect(html).toContain("including records from older questionnaire versions");
   });
 });

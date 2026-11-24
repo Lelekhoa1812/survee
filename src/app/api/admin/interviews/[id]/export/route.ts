@@ -1,6 +1,6 @@
 import { EXPORT_FORMATS, exportFilename, exportInterview, ExportOutputSizeLimitError, XlsxComplexityLimitError, type ExportFormat, type ExportParticipant } from "@/lib/export";
 import { encodeCsvRow } from "@/lib/export/csv";
-import { LONG_HEADER, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
+import { LONG_HEADER, RECORD_HEADER, recordParticipantRows, wideColumns, longParticipantRows, wideParticipantRow } from "@/lib/export/rows";
 import { fail, guardAdmin, withServerErrors } from "@/lib/http";
 import { getInterview, getVersion, listParticipantPage, listParticipants, ParticipantExportSizeLimitError, ParticipantReadLimitError, recordExportEvent } from "@/lib/repo";
 import { MAX_EXPORT_SOURCE_BYTES, MAX_STREAMED_CSV_OUTPUT_BYTES } from "@/lib/participant-limits";
@@ -68,7 +68,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
     participants: [],
     generatedAt: new Date().toISOString(),
   };
-  if (format === "csv-wide" || format === "csv-long") {
+  if (format === "csv-wide" || format === "csv-long" || format === "csv-records") {
     {
       let firstPage;
       try {
@@ -82,7 +82,7 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
       }
       const filename = exportFilename(base, format);
       const encoder = new TextEncoder();
-      const headers = format === "csv-wide" ? wideColumns(version.manifest, version.version).map((column) => column.header) : LONG_HEADER;
+      const headers = format === "csv-wide" ? wideColumns(version.manifest, version.version).map((column) => column.header) : format === "csv-long" ? LONG_HEADER : RECORD_HEADER;
       let page = firstPage;
       let personIndex = 0;
       let rows: string[][] = [];
@@ -101,7 +101,9 @@ export const GET = withServerErrors("admin/interviews/[id]/export", async functi
           };
           const rowsFor = (person: ExportParticipant) => format === "csv-wide"
             ? [wideParticipantRow(version.manifest, version.version, person)]
-            : longParticipantRows(version.manifest, person);
+            : format === "csv-long"
+              ? longParticipantRows(version.manifest, person)
+              : recordParticipantRows(version.manifest, person);
           try {
             if (cancelled) return;
             if (!headerSent) {

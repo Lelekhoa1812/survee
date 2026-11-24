@@ -1,8 +1,8 @@
 import type { AnswerMap, Manifest, RepeatRecordMap } from "../format/schema";
 import type { QuestionOrderAssignmentView } from "../repo/types";
 
-export type ExportFormat = "json" | "csv-wide" | "csv-long" | "xlsx" | "md";
-export const EXPORT_FORMATS: ExportFormat[] = ["json", "csv-wide", "csv-long", "xlsx", "md"];
+export type ExportFormat = "json" | "csv-wide" | "csv-long" | "csv-records" | "xlsx" | "md";
+export const EXPORT_FORMATS: ExportFormat[] = ["json", "csv-wide", "csv-long", "csv-records", "xlsx", "md"];
 
 export type ParticipantStatus = "invited" | "in_progress" | "submitted";
 

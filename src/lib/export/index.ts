@@ -1,4 +1,4 @@
-import { csvLong, csvWide } from "./csv";
+import { csvLong, csvRecords, csvWide } from "./csv";
 import { jsonExport } from "./json";
 import { markdownExport } from "./markdown";
 import type { ExportFile, ExportFormat, ExportInput } from "./types";
@@ -25,6 +25,9 @@ export async function exportInterview(input: ExportInput, format: ExportFormat):
       break;
     case "csv-long":
       file = csvLong(input);
+      break;
+    case "csv-records":
+      file = csvRecords(input);
       break;
     case "xlsx":
       file = await xlsxExport(input);

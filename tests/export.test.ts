@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Workbook } from "exceljs";
 import type { Manifest } from "../src/lib/format/schema";
-import { csvLong, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
+import { csvLong, csvRecords, csvWide, neutraliseCell, toCsv } from "../src/lib/export/csv";
 import { exportFilename, longParticipantRows, longTable, recordTable, slugify, wideParticipantRow, wideTable } from "../src/lib/export/rows";
 import { jsonExport } from "../src/lib/export/json";
 import { escapeInline, markdownExport } from "../src/lib/export/markdown";
@@ -500,6 +500,30 @@ describe("repeat record exports", () => {
     expect(table.rows[2]).toMatchObject(["p-ben", "Ben Okafor", "in_progress", "assets", "Assets", "row-2", "2", "asset-name", "Asset name", "text", "false", ""]);
   });
 
+  it("exports normalized repeat records as formula-safe CSV in creation order", () => {
+    const multiPerson: ExportInput = {
+      ...repeatInput,
+      participants: [
+        { ...repeatInput.participants[0], createdAt: "2026-11-02T00:00:00.000Z" },
+        { ...repeatInput.participants[0], id: "p-ana", name: "Ana Lopez", createdAt: "2026-11-01T00:00:00.000Z", recordGroups: { assets: [{ id: "ana-row", values: { "asset-name": "chair" }, revision: 1, fieldRevisions: {} }] } },
+      ],
+    };
+    const file = csvRecords(multiPerson);
+    expect(file.filename).toBe("kqa-staff-pulse-survey-2026-20261113-records.csv");
+    expect(file.body).toContain("\uFEFFPerson id,Person,Person status,Question id,Question,Row id,Row order,Field id,Field,Field type,Value present,Value\r\n");
+    expect(file.body).toContain("p-ben,Ben Okafor,in_progress,assets,Assets,row-1,1,asset-name,Asset name,text,true,'=SUM(A1)\r\n");
+    expect(file.body.indexOf("p-ben")).toBeLessThan(file.body.indexOf("p-ana"));
+    expect(file.body).toContain("false,\r\n");
+  });
+
+  it("preserves identity for legacy repeat rows without any field values", () => {
+    const empty = { ...repeatInput, participants: [{ ...repeatInput.participants[0], recordGroups: { assets: [{ id: "empty-row", values: {}, revision: 1, fieldRevisions: {} }] } }] };
+    const table = recordTable(empty);
+    expect(table.rows[0]).toEqual(["p-ben", "Ben Okafor", "in_progress", "assets", "Assets", "empty-row", "1", "asset-name", "Asset name", "text", "false", ""]);
+    const unknownGroup = { ...empty, participants: [{ ...empty.participants[0], recordGroups: { retired_group: [{ id: "legacy-empty", values: {}, revision: 1, fieldRevisions: {} }] } }] };
+    expect(recordTable(unknownGroup).rows).toEqual([["p-ben", "Ben Okafor", "in_progress", "retired_group", "", "legacy-empty", "1", "", "", "", "false", ""]]);
+  });
+
   it("adds a formula-safe Records sheet only for existing rows and leaves CSV cardinality unchanged", async () => {
     const wide = wideTable(repeatInput);
     const long = longTable(repeatInput);
@@ -713,12 +737,13 @@ describe("filenames and dispatch", () => {
   });
 
   it("dispatches every format through exportInterview", async () => {
-    const formats = ["json", "csv-wide", "csv-long", "xlsx", "md"] as const;
+    const formats = ["json", "csv-wide", "csv-long", "csv-records", "xlsx", "md"] as const;
     const files = await Promise.all(formats.map((f) => exportInterview(input, f)));
     expect(files.map((f) => f.filename)).toEqual([
       "kqa-staff-pulse-survey-2026-20261113.json",
       "kqa-staff-pulse-survey-2026-20261113-wide.csv",
       "kqa-staff-pulse-survey-2026-20261113-long.csv",
+      "kqa-staff-pulse-survey-2026-20261113-records.csv",
       "kqa-staff-pulse-survey-2026-20261113.xlsx",
       "kqa-staff-pulse-survey-2026-20261113.md",
     ]);

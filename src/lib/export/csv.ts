@@ -1,4 +1,4 @@
-import { exportFilename, longTable, wideTable, type Table } from "./rows";
+import { exportFilename, longTable, RECORD_HEADER, recordParticipantRows, sortedParticipants, wideTable, type Table } from "./rows";
 import type { ExportFile, ExportInput } from "./types";
 
 /** Spreadsheet programs may ignore leading whitespace before formula markers. */
@@ -41,5 +41,13 @@ export function csvLong(input: ExportInput): ExportFile {
     filename: exportFilename(input, "csv-long"),
     contentType: "text/csv; charset=utf-8",
     body: toCsv(longTable(input, "created-desc")),
+  };
+}
+
+export function csvRecords(input: ExportInput): ExportFile {
+  return {
+    filename: exportFilename(input, "csv-records"),
+    contentType: "text/csv; charset=utf-8",
+    body: toCsv({ header: [...RECORD_HEADER], rows: sortedParticipants(input, "created-desc").flatMap((person) => recordParticipantRows(input.manifest, person)) }),
   };
 }
