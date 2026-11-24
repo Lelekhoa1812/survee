@@ -200,7 +200,6 @@ export async function backfillLegacyTenant(db: Db): Promise<Record<string, numbe
   let finalState: "complete" | "interrupted" | "needs_review" = "interrupted";
   const resumable = lease.legacyTenantMigration?.state === "interrupted"
     || lease.legacyTenantMigration?.state === "running";
-  const completed = new Set(resumable ? lease.legacyTenantMigration?.completedCollections ?? [] : []);
   let leaseLost = false;
   let renewing: Promise<void> | null = null;
   const renewLease = async () => {
@@ -229,10 +228,9 @@ export async function backfillLegacyTenant(db: Db): Promise<Record<string, numbe
     }
     for (const collection of OWNED) {
       if (leaseLost) throw new TenantMigrationInProgressError();
-      if (completed.has(collection)) {
-        modified[collection] = 0;
-        continue;
-      }
+      // A legacy fallback write can recreate an unscoped row after an earlier
+      // collection checkpoint. Re-scan completed collections on resume so a
+      // checkpoint never substitutes for the final data state.
       await renewLease();
       if (leaseLost) throw new TenantMigrationInProgressError();
       const result = await db.collection(collection).updateMany(
@@ -252,7 +250,6 @@ export async function backfillLegacyTenant(db: Db): Promise<Record<string, numbe
         },
       );
       if (checkpoint.matchedCount !== 1) throw new TenantMigrationInProgressError();
-      completed.add(collection);
     }
     if (renewing) await renewing;
     if (leaseLost) throw new TenantMigrationInProgressError();

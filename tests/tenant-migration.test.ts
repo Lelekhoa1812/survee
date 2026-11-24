@@ -243,11 +243,26 @@ describe("tenant migration preflight", () => {
     expect(retried.interviews).toBe(0);
     expect(retried.survey_versions).toBe(1);
     expect(scoped.size).toBe(8);
-    expect(updateCalls.filter((name) => name === "interviews")).toHaveLength(1);
+    expect(updateCalls.filter((name) => name === "interviews")).toHaveLength(2);
     expect(new Set(checkpointed)).toEqual(new Set(["interviews", "survey_versions", "participants", "events", "mail_messages", "api_keys", "oauth_codes", "analytics_runs"]));
     const audit = await auditTenantMigration(db);
     expect(audit.preflight.readyForReviewedBackfill).toBe(true);
     expect(Object.values(audit.collections).filter((collection) => "missingTenant" in collection).every((collection) => collection.missingTenant === 0)).toBe(true);
+  });
+
+  it("re-scans a checkpointed collection if a legacy write appears before the retry", async () => {
+    const { db, scoped, updateCalls } = partialBackfillDb("survey_versions");
+
+    await expect(backfillLegacyTenant(db)).rejects.toThrow("simulated interrupted backfill");
+    expect(scoped.has("interviews")).toBe(true);
+    scoped.delete("interviews"); // Simulate a fallback write that did not stamp tenantId after checkpoint.
+
+    const retried = await backfillLegacyTenant(db);
+    expect(retried.interviews).toBe(1);
+    expect(scoped.has("interviews")).toBe(true);
+    expect(updateCalls.filter((name) => name === "interviews")).toHaveLength(2);
+    const audit = await auditTenantMigration(db);
+    expect(audit.collections.interviews.missingTenant).toBe(0);
   });
 
   it("refuses a concurrent backfill when another owner holds the lease", async () => {
