@@ -135,7 +135,16 @@ const respondentToken = process.env.KQA_A11Y_RESPONDENT_TOKEN || "";
 if (interviewId && !/^[a-f\d]{24}$/i.test(interviewId)) throw new Error("KQA_A11Y_INTERVIEW_ID must be a 24-character MongoDB ObjectId.");
 if (respondentToken && !/^[A-Za-z\d_-]{20,120}$/.test(respondentToken)) throw new Error("KQA_A11Y_RESPONDENT_TOKEN has an invalid shape.");
 
-const routes = (requestedRoutes.length ? requestedRoutes : ["/", "/admin/login", "/signup", "/forgot-password", "/reset-password"])
+const routes = (requestedRoutes.length ? requestedRoutes : [
+  "/",
+  "/admin/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/verify",
+  "/verify-email",
+  "/join",
+])
   .map((path) => ({ name: safeRouteName(path), path, kind: "page" }));
 const coverage = { authenticatedHost: false, interviewTabs: false, respondentQuestionnaire: false, gaps: [] };
 if (args.authenticated) {
@@ -185,7 +194,32 @@ const browserVersion = await browser.version();
 try {
   console.log(`axe-core ${axe.version}; ${base.origin}; routes ${routes.map(({ name }) => name).join(", ")}`);
   console.log(`Rules: ${wcagTags.join(", ")}; viewport widths ${viewports.map(({ width }) => width).join(" and ")} CSS px`);
-  for (const route of routes) {
+  let targetIdentityVerified = false;
+  const preflightPage = await browser.newPage();
+  try {
+    const response = await preflightPage.goto(new URL("/", base), { waitUntil: "networkidle2" });
+    const title = await preflightPage.title();
+    targetIdentityVerified = (response?.status() ?? 0) >= 200
+      && (response?.status() ?? 0) < 400
+      && /\bsurvee\b/i.test(title);
+    if (!targetIdentityVerified) {
+      const message = `Target identity preflight failed: expected Survee homepage, received HTTP ${response?.status() ?? 0} with title ${JSON.stringify(title)}.`;
+      failures.push(message);
+      runFailures.push(message);
+      console.error(`FAIL ${message}`);
+    } else {
+      console.log(`PASS Survee target identity preflight (${JSON.stringify(title)})`);
+    }
+  } catch {
+    const message = "Target identity preflight failed: the configured homepage could not be loaded.";
+    failures.push(message);
+    runFailures.push(message);
+    console.error(`FAIL ${message}`);
+  } finally {
+    await preflightPage.close();
+  }
+
+  if (targetIdentityVerified) for (const route of routes) {
     const requiresSession = route.path.startsWith("/admin") && route.path !== "/admin/login";
     if (requiresSession && args.authenticated && !authenticatedLoginAttempted) {
       authenticatedLoginAttempted = true;

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   session: { transaction: true },
   deletedCount: 1,
   interviewExists: true,
+  interviewName: "Study",
   pendingInvite: null as Record<string, unknown> | null,
   aggregateRows: [] as { _id: "invited" | "in_progress" | "submitted"; count: number }[],
   aggregatePipelines: [] as unknown[][],
@@ -24,7 +25,7 @@ vi.mock("../src/lib/db", () => ({
   col: {
     mcpOperations: async () => ({ updateMany: async (filter: Record<string, unknown>, update: unknown, options: Record<string, unknown>) => { mocks.calls.push({ collection: "mcpOperations", filter, update, options }); } }),
     interviews: async () => ({
-      findOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "interviewLookup", filter, options }); return mocks.interviewExists ? { _id: new ObjectId(interviewId) } : null; },
+      findOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => { mocks.calls.push({ collection: "interviewLookup", filter, options }); return mocks.interviewExists ? { _id: new ObjectId(interviewId), name: mocks.interviewName } : null; },
       deleteOne: async (filter: Record<string, unknown>, options: Record<string, unknown>) => {
         mocks.calls.push({ collection: "interviews", filter, options });
         return { deletedCount: mocks.deletedCount };
@@ -83,6 +84,7 @@ const asAxion = <T>(work: () => Promise<T>) => withTenantPrincipal({ tenantId: "
 beforeEach(() => {
   mocks.deletedCount = 1;
   mocks.interviewExists = true;
+  mocks.interviewName = "Study";
   mocks.pendingInvite = null;
   mocks.calls.length = 0;
   mocks.aggregateRows = [];
@@ -119,6 +121,16 @@ describe("deleteInterview", () => {
 
     expect(deleted).toBe("invite_pending");
     expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviewLookup", "interviewPendingLookup"]);
+  });
+
+  it("does not delete when its name changed after the confirmation prompt was loaded", async () => {
+    mocks.interviewName = "Renamed study";
+
+    const deleted = await asAxion(() => deleteInterview(interviewId, "Study"));
+
+    expect(deleted).toBe("confirmation_mismatch");
+    expect(mocks.withMongoTransaction).toHaveBeenCalledOnce();
+    expect(mocks.calls.map(({ collection }) => collection)).toEqual(["interviewLookup"]);
   });
 
   it("does not remove dependent records when the tenant-scoped interview no longer exists", async () => {

@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ deleted: true, denied: null as Response | null }));
+const state = vi.hoisted(() => ({ deleted: true as boolean | "invite_pending" | "confirmation_mismatch", denied: null as Response | null, deleteArgs: [] as unknown[] }));
 
 vi.mock("@/lib/http", () => ({
   withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
   readJson: async () => ({ ok: true, data: { confirmName: "Study" } }),
-  fail: (status: number, error: string) => new Response(JSON.stringify({ ok: false, error }), { status }),
+  fail: (status: number, error: string, extra?: Record<string, unknown>) => new Response(JSON.stringify({ ok: false, error, ...extra }), { status }),
   json: (data: unknown) => new Response(JSON.stringify(data), { status: 200 }),
 }));
 
 vi.mock("@/lib/repo", () => ({
-  deleteInterview: async () => state.deleted,
+  deleteInterview: async (...args: unknown[]) => { state.deleteArgs = args; return state.deleted; },
   getInterview: async () => ({ name: "Study" }),
   listParticipants: async () => [],
   listVersions: async () => [],
@@ -31,6 +31,7 @@ const request = () => new Request("https://kqa.local/api/admin/interviews/012345
 beforeEach(() => {
   state.deleted = true;
   state.denied = null;
+  state.deleteArgs = [];
 });
 
 describe("admin interview delete route", () => {
@@ -48,5 +49,15 @@ describe("admin interview delete route", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
+    expect(state.deleteArgs).toEqual(["0123456789abcdef01234567", "Study"]);
+  });
+
+  it("returns a conflict when the interview was renamed after the user confirmed its old name", async () => {
+    state.deleted = "confirmation_mismatch";
+
+    const response = await DELETE(request(), params);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, code: "confirmation_mismatch" });
   });
 });

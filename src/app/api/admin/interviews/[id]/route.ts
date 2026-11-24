@@ -58,7 +58,8 @@ export const DELETE = withServerErrors("admin/interviews/[id]", async function D
   const interview = await getInterview(id);
   if (!interview) return fail(404, "Interview not found.");
   if (body.data.confirmName !== interview.name) return fail(400, "Type the interview name exactly to confirm deleting it.", { code: "confirmation_mismatch" });
-  const deleted = await deleteInterview(id);
+  const deleted = await deleteInterview(id, interview.name);
   if (deleted === "invite_pending") return fail(409, "This interview has an invite outcome that is still unconfirmed. Resolve the invite status before deleting its data.", { code: "invite_outcome_pending" });
+  if (deleted === "confirmation_mismatch") return fail(409, "The interview name changed before deletion. Review the new name and confirm again.", { code: "confirmation_mismatch" });
   return deleted ? json({ ok: true }) : fail(404, "Interview not found.");
 });

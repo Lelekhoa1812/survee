@@ -1333,8 +1333,9 @@ const TOOLS: ToolDef[] = [
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
       if (args.confirmName !== interview.name) return err("Type the interview name exactly to confirm deleting it.", "confirmation_mismatch");
-      const deleted = await deleteInterview(id);
+      const deleted = await deleteInterview(id, args.confirmName);
       if (deleted === "invite_pending") return err("This interview has an invite outcome that is still unconfirmed. Resolve the invite status before deleting its data.", "invite_outcome_pending");
+      if (deleted === "confirmation_mismatch") return err("The interview name changed before deletion. Review the new name and confirm again.", "confirmation_mismatch");
       return deleted ? ok({ ok: true }) : err("Interview not found.", "not_found");
     },
   },

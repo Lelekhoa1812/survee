@@ -622,7 +622,7 @@ async function deleteInterviewInternal(
   id: string,
   confirmName?: string,
   operation?: { operationId: string; credentialId: string; argumentDigest: string },
-): Promise<boolean | "invite_pending" | DeleteInterviewOperationResult> {
+): Promise<boolean | "invite_pending" | "confirmation_mismatch" | DeleteInterviewOperationResult> {
   const oid = toOid(id);
   if (!oid) return operation ? { kind: "not_found" } : false;
   const tenantId = await currentTenantId();
@@ -640,7 +640,9 @@ async function deleteInterviewInternal(
     const interviews = await col.interviews();
     const interview = await interviews.findOne(tenantFilter(tenantId, { _id: oid }), { session, projection: { _id: 1, name: 1 } });
     if (!interview) return operation ? { kind: "not_found" as const } : false;
-    if (operation && confirmName !== interview.name) return { kind: "confirmation_mismatch" as const };
+    if (confirmName !== undefined && confirmName !== interview.name) {
+      return operation ? { kind: "confirmation_mismatch" as const } : "confirmation_mismatch";
+    }
     const pendingInvite = await (await col.mail()).findOne(
       tenantFilter(tenantId, { interviewId: oid, status: "pending", delivery: { $nin: ["delivered", "bounced"] } }),
       { session, projection: { _id: 1 } },
@@ -685,8 +687,8 @@ async function deleteInterviewInternal(
   }
 }
 
-export async function deleteInterview(id: string): Promise<boolean | "invite_pending"> {
-  return await deleteInterviewInternal(id) as boolean | "invite_pending";
+export async function deleteInterview(id: string, confirmName?: string): Promise<boolean | "invite_pending" | "confirmation_mismatch"> {
+  return await deleteInterviewInternal(id, confirmName) as boolean | "invite_pending" | "confirmation_mismatch";
 }
 
 export async function deleteInterviewWithOperation(
