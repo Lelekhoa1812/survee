@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   denied: null as Response | null,
-  interview: { _id: "interview", tenantId: "tenant", currentVersion: 1 },
+  interview: { _id: "interview", tenantId: "tenant", currentVersion: 1 } as { _id: string; tenantId: string; currentVersion: number; respondentWriteRevision?: number },
   version: {
     version: 1,
     manifest: { questions: [
@@ -108,6 +108,25 @@ describe("interview answer-segmentation route", () => {
     expect(JSON.stringify(body)).not.toContain("private note");
     expect(JSON.stringify(body)).not.toContain("retired");
     expect(body.methodology.join(" ")).toContain("workspace minimum cell size is 5");
+  });
+
+  it.each([
+    "segmentBy=fit&questionId=budget",
+    "segmentBy=fit&crossTabWith=confidence",
+  ])("rejects an analysis scan when respondent data changes before it finishes (%s)", async (query) => {
+    state.interview = { _id: "interview", tenantId: "tenant", currentVersion: 1, respondentWriteRevision: 4 };
+    state.getInterview
+      .mockReset()
+      .mockResolvedValueOnce(state.interview)
+      .mockResolvedValueOnce({ ...state.interview, respondentWriteRevision: 5 });
+
+    const response = await GET(request(query), { params: Promise.resolve({ id: "interview" }) });
+    const body = await response.json() as { error: string };
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("Answers changed while this analysis was running");
+    expect(state.iterate).toHaveBeenCalledOnce();
+    expect(state.getInterview).toHaveBeenCalledTimes(2);
   });
 
   it("keeps a safe combined analysis when every status subgroup is below the minimum", async () => {

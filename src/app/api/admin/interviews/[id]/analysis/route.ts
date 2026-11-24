@@ -28,6 +28,14 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
   }
   const version = await getVersion(interview._id, interview.currentVersion);
   if (!version) return fail(404, "Survey version not found.");
+  const staleScanResponse = async () => {
+    const current = await getInterview(id);
+    return current
+      && current.currentVersion === interview.currentVersion
+      && (current.respondentWriteRevision ?? 0) === (interview.respondentWriteRevision ?? 0)
+      ? null
+      : fail(409, "Answers changed while this analysis was running. Retry the analysis to get a consistent result.");
+  };
 
   const segmentById = (url.searchParams.get("segmentBy") ?? "").trim();
   const crossTabWithIds = url.searchParams.getAll("crossTabWith").map((id) => id.trim());
@@ -51,6 +59,8 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
       withCurrentEligibility(version.manifest, iterateAnalyticsParticipants(id, eligibilityQuestionIds(version.manifest, [rowQuestion.id, columnQuestion.id]), { statuses })),
       statuses,
     );
+    const stale = await staleScanResponse();
+    if (stale) return stale;
     const result = {
       ok: true,
       interviewId: id,
@@ -67,7 +77,7 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
       })),
       overlapping: analysis.overlapping,
       methodology: [
-        "The cross-tab uses two closed categorical questions from the current survey version and only the participant statuses shown in scope. It is computed from one projected live scan; updates during the scan are not isolated by a database snapshot.",
+        "The cross-tab uses two closed categorical questions from the current survey version and only the participant statuses shown in scope. It is computed from one projected live scan; if the survey version or respondent data revision changes during the scan, the request is rejected and can be retried. MongoDB snapshot isolation is not used.",
         "Each cell counts distinct people for that answer pair. Row percentages use the row's participant count as denominator. If either question is a checkbox, people can appear in multiple rows or columns and cell counts and percentages can overlap or sum above 100%.",
         "Inactive by current rules is a separate dimension group. Eligibility is inferred from current rules and saved answers, not historical display. No stored answer includes blank and note-only responses among eligible people. Invalid stored values appear as Unmapped answer.",
         `The workspace minimum cell size is ${minimumCellSize}; if a reported cell, margin, denominator, or derived count is below it, the complete aggregate result is withheld. Non-comparison results omit per-status counts. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity or prevent differencing across repeated queries.`,
@@ -104,6 +114,8 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
     statuses,
     compareStatuses,
   );
+  const stale = await staleScanResponse();
+  if (stale) return stale;
   const participantCount = statuses.reduce((count, status) => count + analysis.statusCounts[status], 0);
   const result = {
     ok: true,
@@ -119,11 +131,11 @@ export const GET = withServerErrors("admin/interviews/[id]/analysis", async func
       disclosureRisk: { ...disclosureRisk, singletonStatusGroups: [] },
     })),
     methodology: [
-      "Answer segments use the selected current-version question and only the participant statuses shown in scope. All selected outcome summaries exclude the segmentation question and use the same projected participant scan and asOf.",
+      "Answer segments use the selected current-version question and only the participant statuses shown in scope. All selected outcome summaries exclude the segmentation question and use the same projected participant scan and asOf; if the survey version or respondent data revision changes during the scan, the request is rejected and can be retried. MongoDB snapshot isolation is not used.",
       "Single-choice, dropdown, and scale answers place each person in one answer segment. Checkbox answers can place one person in several option segments; those segment counts and percentages overlap and must not be added together.",
       "Inactive by current rules is a separate dimension group. Eligibility is inferred from current rules and saved answers, not historical display. No stored answer includes blank and note-only dimension responses among eligible people. Invalid stored dimension values appear as Unmapped answer.",
       `The workspace minimum cell size is ${minimumCellSize}; if a reported cell, margin, denominator, or derived count is below it, the complete aggregate result is withheld. Non-comparison results omit per-status counts. Zero cells remain visible. This reduces small-group disclosure but does not guarantee anonymity or prevent differencing across repeated queries.`,
-      ...(compareStatuses ? ["Status summaries for all selected answer segments share this asOf and one participant scan; updates during the live read are not isolated by a database snapshot."] : []),
+      ...(compareStatuses ? ["Status summaries for all selected answer segments share this asOf and one participant scan; revision changes during the live read cause the request to be rejected."] : []),
     ],
   };
   const disclosure = suppressSmallCohortAnalytics(result, minimumCellSize);
