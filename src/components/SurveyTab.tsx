@@ -9,6 +9,7 @@ import type { InterviewData } from "./interview-types";
 import { PreviewFrame } from "./PreviewFrame";
 import { Uploader, type UploadState } from "./Uploader";
 import { api, Badge, Icon, Spinner, useToast } from "./ui";
+import { clearClientOperationId, clientOperationId } from "@/lib/client-idempotency";
 import { fullTime } from "@/lib/time";
 
 interface CandidatePreview {
@@ -114,23 +115,28 @@ export function SurveyTab({ data, refresh, canManage = true }: { data: Interview
     const html = upload.html;
     const fileName = upload.fileName;
     setBusy(true);
+    const body = {
+      action: "apply" as const,
+      html,
+      fileName,
+      expectedVersion: preview.currentVersion,
+      baseHash: preview.baseHash,
+      candidateHash: preview.candidateHash,
+      compatibilityHash: preview.compatibilityHash,
+      previewToken: preview.previewToken,
+      acknowledgeCompatibilityImpact: ackCompatibility,
+    };
+    const scope = `publish-version:${data.interview.id}`;
+    const operation = await clientOperationId(scope, body);
     const res = await api<{ version: number; code?: string }>(endpoint, {
       method: "POST",
-      body: {
-        action: "apply",
-        html,
-        fileName,
-        expectedVersion: preview.currentVersion,
-        baseHash: preview.baseHash,
-        candidateHash: preview.candidateHash,
-        compatibilityHash: preview.compatibilityHash,
-        previewToken: preview.previewToken,
-        acknowledgeCompatibilityImpact: ackCompatibility,
-      },
+      headers: { "Idempotency-Key": operation.operationId },
+      body,
     });
     setBusy(false);
     if (revision !== uploadRevision.current) return;
     if (res.ok) {
+      clearClientOperationId(scope, operation.fingerprint);
       toast(`Version ${res.data.version} is live for everyone.`);
       setReplacing(false);
       setPreview(null);

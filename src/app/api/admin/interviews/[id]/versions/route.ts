@@ -1,5 +1,6 @@
 import { fail, guardAdmin, json, readJson, str, adminSession, withServerErrors } from "@/lib/http";
-import { getInterview, getVersion, publishVersionIfCurrent } from "@/lib/repo";
+import { operationArgumentDigest, requestOperationId } from "@/lib/operation-id";
+import { getInterview, getQuestionnairePublishOperation, getVersion, publishVersionIfCurrent } from "@/lib/repo";
 import { prepareSurvey, withCompat } from "@/lib/survey";
 import { LIMITS } from "@/lib/format/schema";
 import { summarizeQuestionChanges, summarizeSectionChanges } from "@/lib/survey-changes";
@@ -140,6 +141,25 @@ export const POST = withServerErrors("admin/interviews/[id]/versions", async fun
     if (!Number.isInteger(expectedVersion) || (expectedVersion as number) < 1 || !baseHash || !candidateHash || !compatibilityHash) {
       return fail(400, "Apply requires the version and hashes returned by the preview.", { code: "preview_required" });
     }
+    const operationId = requestOperationId(req);
+    if (!operationId) return fail(400, "Send a valid Idempotency-Key header so an uncertain retry cannot publish another questionnaire version.", { code: "idempotency_key_required" });
+    const operation = {
+      operationId,
+      credentialId: `host:${session.userId}`,
+      argumentDigest: operationArgumentDigest({
+        interviewId: id,
+        expectedVersion,
+        baseHash,
+        candidateHash,
+        fileName,
+        compatibilityHash,
+        acknowledgeCompatibilityImpact: body.data.acknowledgeCompatibilityImpact === true,
+      }),
+    };
+    const previous = await getQuestionnairePublishOperation("host_publish_questionnaire_version", operation);
+    if (previous?.kind === "conflict") return fail(409, "This Idempotency-Key was already used for a different questionnaire publication.", { code: "idempotency_key_conflict" });
+    if (previous?.kind === "deleted") return fail(410, "The interview from this publication was deleted. Use a new Idempotency-Key to publish another version.", { code: "operation_result_unavailable" });
+    if (previous?.kind === "replayed") return json(previous.result, 201);
     const preview = verifyQuestionnairePreviewToken(body.data.previewToken, {
       tenantId: session.tenantId,
       interviewId: id,
@@ -182,21 +202,26 @@ export const POST = withServerErrors("admin/interviews/[id]/versions", async fun
       }, 409);
     }
 
-    const published = prepared.compatibilityRevision === undefined
-      ? await publishVersionIfCurrent(id, expectedVersion as number, baseHash, prepared.survey, "host_patch")
-      : await publishVersionIfCurrent(id, expectedVersion as number, baseHash, prepared.survey, "host_patch", prepared.compatibilityRevision);
-    if (!published) return fail(404, "Interview not found.");
-    if ("assetUnavailable" in published) return fail(409, "A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview the candidate again.", { code: "asset_unavailable" });
-    if ("conflict" in published) return fail(409, "Another change was published first. Preview the candidate again.", { code: "stale_preview" });
-    return json({
+    const responseData = {
       ok: true,
-      version: published.version,
+      version: (expectedVersion as number) + 1,
       previousVersion: expectedVersion,
       interviewId: id,
       candidateHash,
       compatibilityImpact,
       report: { ok: true, counts: prepared.report.counts, diagnostics: prepared.report.diagnostics },
-    }, 201);
+    };
+    const published = await publishVersionIfCurrent(id, expectedVersion as number, baseHash, prepared.survey, "host_patch", prepared.compatibilityRevision, {
+      tool: "host_publish_questionnaire_version",
+      details: { ...operation, result: responseData },
+    });
+    if (!published) return fail(404, "Interview not found.");
+    if ("operationDeleted" in published) return fail(410, "The interview from this publication was deleted. Use a new Idempotency-Key to publish another version.", { code: "operation_result_unavailable" });
+    if ("operationConflict" in published) return fail(409, "This Idempotency-Key was already used for a different questionnaire publication.", { code: "idempotency_key_conflict" });
+    if ("replayed" in published) return json(published.result, 201);
+    if ("assetUnavailable" in published) return fail(409, "A referenced workspace image is missing or unavailable. Upload it again or remove its URL, then preview the candidate again.", { code: "asset_unavailable" });
+    if ("conflict" in published) return fail(409, "Another change was published first. Preview the candidate again.", { code: "stale_preview" });
+    return json({ ...responseData, version: published.version }, 201);
   } catch {
     return fail(503, action === "preview" ? "The questionnaire preview could not be completed." : "The new questionnaire version could not be published.");
   }

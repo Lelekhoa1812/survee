@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sha256 } from "../src/lib/questionnaire-preview";
 
 const state = vi.hoisted(() => ({
-  session: { tenantId: "tenant-1", role: "owner" } as any,
+  session: { tenantId: "tenant-1", role: "owner", userId: "user-1" } as any,
   denied: null as Response | null,
   body: {} as any,
   currentVersion: 2,
@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   currentManifest: null as any,
   candidateManifest: null as any,
   publish: vi.fn(async () => ({ version: 3 })),
+  previousPublish: null as { kind: string; result?: Record<string, unknown> } | null,
 }));
 
 const interviewId = "0123456789abcdef01234567";
@@ -39,6 +40,7 @@ vi.mock("@/lib/repo", () => ({
     manifest: state.currentManifest,
   }),
   publishVersionIfCurrent: state.publish,
+  getQuestionnairePublishOperation: async () => state.previousPublish,
 }));
 
 vi.mock("@/lib/survey", () => ({
@@ -58,8 +60,11 @@ vi.mock("@/lib/survey", () => ({
 
 import { GET, POST } from "../src/app/api/admin/interviews/[id]/versions/route";
 
-function request() {
-  return new Request("https://kqa.local/api/admin/interviews/0123456789abcdef01234567/versions", { method: "POST" });
+function request(key?: string) {
+  return new Request("https://kqa.local/api/admin/interviews/0123456789abcdef01234567/versions", {
+    method: "POST",
+    headers: key ? { "Idempotency-Key": key } : {},
+  });
 }
 
 function previewBody() {
@@ -87,7 +92,8 @@ function applyBody(preview: Record<string, unknown>, html = candidate) {
 }
 
 beforeEach(() => {
-  state.session = { tenantId: "tenant-1", role: "owner" };
+  state.session = { tenantId: "tenant-1", role: "owner", userId: "user-1" };
+  state.previousPublish = null;
   state.denied = null;
   state.body = {};
   state.currentVersion = 2;
@@ -110,7 +116,7 @@ describe("host questionnaire version preview and apply", () => {
 
   it("rejects the former one-call publish request", async () => {
     state.body = { html: candidate, fileName: "updated.html" };
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(400);
     expect(state.publish).not.toHaveBeenCalled();
   });
@@ -193,17 +199,20 @@ describe("host questionnaire version preview and apply", () => {
   it("publishes only the candidate tied to the reviewed preview", async () => {
     const { data: preview } = await getPreview();
     state.body = applyBody(preview);
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({ ok: true, version: 3, previousVersion: 2, candidateHash: sha256(candidate) });
-    expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "host_patch");
+    expect(state.publish).toHaveBeenCalledWith(
+      interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "host_patch", undefined,
+      expect.objectContaining({ tool: "host_publish_questionnaire_version", details: expect.objectContaining({ operationId: "publish-1", credentialId: "host:user-1" }) }),
+    );
   });
 
   it("returns a specific conflict when a referenced workspace image is unavailable", async () => {
     const { data: preview } = await getPreview();
     state.body = applyBody(preview);
     state.publish.mockResolvedValueOnce({ assetUnavailable: true } as any);
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "asset_unavailable" });
   });
@@ -211,7 +220,7 @@ describe("host questionnaire version preview and apply", () => {
   it("rejects an altered candidate without publishing", async () => {
     const { data: preview } = await getPreview();
     state.body = applyBody(preview, `${candidate} changed`);
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "candidate_changed" });
     expect(state.publish).not.toHaveBeenCalled();
@@ -221,7 +230,7 @@ describe("host questionnaire version preview and apply", () => {
     state.compatibilityImpact = true;
     const { data: preview } = await getPreview();
     state.body = applyBody(preview);
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "acknowledgement_required" });
     expect(state.publish).not.toHaveBeenCalled();
@@ -231,7 +240,7 @@ describe("host questionnaire version preview and apply", () => {
     state.compatibilityImpact = true;
     const { data: preview } = await getPreview();
     state.body = { ...applyBody(preview), acknowledgeCompatibilityImpact: true };
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({ ok: true, compatibilityImpact: true });
     expect(state.publish).toHaveBeenCalledTimes(1);
@@ -242,7 +251,7 @@ describe("host questionnaire version preview and apply", () => {
     const { data: preview } = await getPreview();
     state.compatibilityImpact = false;
     state.body = { ...applyBody(preview), acknowledgeCompatibilityImpact: true };
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "stale_preview" });
     expect(state.publish).not.toHaveBeenCalled();
@@ -251,7 +260,7 @@ describe("host questionnaire version preview and apply", () => {
   it("binds the preview to the uploaded file name", async () => {
     const { data: preview } = await getPreview();
     state.body = { ...applyBody(preview), fileName: "renamed.html" };
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ code: "invalid_preview" });
     expect(state.publish).not.toHaveBeenCalled();
@@ -269,7 +278,7 @@ describe("host questionnaire version preview and apply", () => {
     const { data: preview } = await getPreview();
     state.currentVersion = 3;
     state.body = applyBody(preview);
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "stale_preview" });
     expect(state.publish).not.toHaveBeenCalled();
@@ -279,9 +288,38 @@ describe("host questionnaire version preview and apply", () => {
     const { data: preview } = await getPreview();
     state.session.tenantId = "another-tenant";
     state.body = applyBody(preview);
-    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ code: "invalid_preview" });
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("requires an operation id before it can publish another version", async () => {
+    const { data: preview } = await getPreview();
+    state.body = applyBody(preview);
+    const response = await POST(request(), { params: Promise.resolve({ id: interviewId }) });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ code: "idempotency_key_required" });
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("replays a completed publication without preparing the candidate again", async () => {
+    const { data: preview } = await getPreview();
+    state.body = applyBody(preview);
+    state.previousPublish = { kind: "replayed", result: { ok: true, version: 3, previousVersion: 2, interviewId, candidateHash: sha256(candidate) } };
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({ ok: true, version: 3 });
+    expect(state.publish).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reused publication key when the candidate changed", async () => {
+    const { data: preview } = await getPreview();
+    state.body = applyBody(preview);
+    state.previousPublish = { kind: "conflict" };
+    const response = await POST(request("publish-1"), { params: Promise.resolve({ id: interviewId }) });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "idempotency_key_conflict" });
     expect(state.publish).not.toHaveBeenCalled();
   });
 });

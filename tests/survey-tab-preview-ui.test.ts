@@ -224,4 +224,41 @@ describe("host questionnaire version preview", () => {
     expect(text).toContain("Read this first");
     expect(text).toContain("Moved section intro: position 1 → 2");
   });
+
+  it("reuses the publication operation id after a lost response", async () => {
+    localStorage.clear();
+    state.api.mockImplementation(async (_url: string, init?: { body?: { action?: string } }) => {
+      if (init?.body?.action === "apply") return { ok: false, status: 503, data: { error: "The new questionnaire version could not be published." } };
+      return { ok: true, data: preview };
+    });
+    await act(async () => root.render(createElement(SurveyTab, { data, refresh: () => {} })));
+    await click("Upload a new version");
+    await click("Simulate ready upload");
+    await click("Preview candidate changes");
+    await vi.waitFor(() => expect(host.textContent).toContain("I reviewed the candidate preview"));
+    const review = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    await act(async () => review?.click());
+
+    async function publish() {
+      const before = state.api.mock.calls.filter((call) => call[1]?.body?.action === "apply").length;
+      await click("Make this version live");
+      await vi.waitFor(() => {
+        const calls = state.api.mock.calls.filter((call) => call[1]?.body?.action === "apply");
+        expect(calls.length).toBeGreaterThan(before);
+      });
+    }
+
+    await publish();
+    await vi.waitFor(() => {
+      const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes("Make this version live"));
+      expect(button?.hasAttribute("disabled")).toBe(false);
+    });
+    await publish();
+
+    const applyCalls = state.api.mock.calls.filter((call) => call[1]?.body?.action === "apply");
+    expect(applyCalls).toHaveLength(2);
+    expect(applyCalls[0][1].headers["Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(applyCalls[1][1].headers["Idempotency-Key"]).toBe(applyCalls[0][1].headers["Idempotency-Key"]);
+    expect(JSON.stringify(localStorage)).not.toContain(applyCalls[0][1].body.html);
+  });
 });
