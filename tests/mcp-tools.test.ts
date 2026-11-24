@@ -560,6 +560,8 @@ describe("MCP tools", () => {
     expect(body.result).toMatchObject({ isError: false, structuredContent: { person: { name: "Grace Hopper" } } });
     expect(body.result.structuredContent.person).not.toHaveProperty("token");
     expect(body.result.structuredContent.person).not.toHaveProperty("answers");
+    expect(body.result.structuredContent.person).not.toHaveProperty("link");
+    expect(body.result.structuredContent.person).toMatchObject({ answered: 0, total: analyticsManifest.questions.length });
     expect(updateParticipantWithOperation).toHaveBeenCalledWith(personId, { name: "Grace Hopper" }, expect.objectContaining({ operationId: "profile-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
     const replayPerson = { id: personId, interviewId, token: "person-token", name: "Grace Hopper", status: "invited" as const, answers: {}, revision: 0, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z" };
     vi.mocked(getUpdatePersonOperation).mockResolvedValueOnce({ kind: "replayed", person: replayPerson as never });
@@ -568,6 +570,7 @@ describe("MCP tools", () => {
     expect(replayBody.result.structuredContent).toMatchObject({ person: { name: "Grace Hopper" } });
     expect(replayBody.result.structuredContent.person).not.toHaveProperty("token");
     expect(replayBody.result.structuredContent.person).not.toHaveProperty("answers");
+    expect(replayBody.result.structuredContent.person).not.toHaveProperty("link");
     expect(updateParticipantWithOperation).toHaveBeenCalledOnce();
     vi.mocked(getUpdatePersonOperation).mockResolvedValueOnce({ kind: "conflict" });
     const conflict = await call("update_person", { personId, name: "Different", operationId: "profile-1" });
@@ -971,17 +974,20 @@ describe("MCP tools", () => {
 
   it("delegates single-mode promotion to the atomic add-people repository write", async () => {
     vi.mocked(getInterview).mockResolvedValueOnce({ _id: new ObjectId(interviewId), name: "Solo", mode: "single", currentVersion: 1 } as never);
+    vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest: { format: "kqa/1", title: "One question", questions: [{ id: "q", type: "text", label: "Question" }] } } as never);
     const response = await call("add_people", { interviewId, people: [{ name: "Grace" }] });
-    const body = await response.json() as { result: { isError?: boolean } };
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { people: Array<{ answered: number; total: number }> } } };
     expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.people[0]).toMatchObject({ answered: 0, total: 1 });
     expect(vi.mocked(addParticipants)).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: undefined }]);
   });
 
   it("accepts add_people operationId and binds retries to the normalized people batch", async () => {
+    vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest: { format: "kqa/1", title: "One question", questions: [{ id: "q", type: "text", label: "Question" }] } } as never);
     const response = await call("add_people", { interviewId, people: [{ name: " Grace ", note: " synthetic " }], operationId: "batch-1" });
     const body = await response.json() as { result: { isError?: boolean; structuredContent: { people?: Array<{ name: string }> } } };
     expect(body.result.isError).toBe(false);
-    expect(body.result.structuredContent.people?.[0]).toMatchObject({ name: "Grace" });
+    expect(body.result.structuredContent.people?.[0]).toMatchObject({ name: "Grace", answered: 0, total: 1 });
     expect(addParticipantsWithOperation).toHaveBeenCalledWith(interviewId, [{ name: "Grace", email: undefined, note: "synthetic" }], expect.objectContaining({ operationId: "batch-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
     expect(getAddPeopleOperation).toHaveBeenCalledOnce();
     await call("add_people", { interviewId, people: [{ name: "Grace", note: "synthetic" }], operationId: "batch-1" });

@@ -368,7 +368,7 @@ function previewTokenError(code: QuestionnairePreviewFailure) {
   return err("This questionnaire preview is invalid for the current tenant, interview, or candidate. Preview again before continuing.", code);
 }
 
-function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[]) {
+function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[], includePrivateLink = true) {
   const mail = currentMail(person, rows);
   const link = inviteLink(person.token);
   const pr = manifest ? progress(manifest, person.answers, person.recordGroups) : null;
@@ -379,7 +379,7 @@ function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: R
     email: person.email ?? null,
     note: person.note ?? null,
     status: person.status,
-    link: link.ok ? link.link : null,
+    ...(includePrivateLink ? { link: link.ok ? link.link : null } : {}),
     answered: pr?.answered ?? 0,
     total: pr?.total ?? 0,
     requiredMissing: pr?.missingRequired.length ?? 0,
@@ -418,6 +418,13 @@ async function onePerson(personId: string) {
   const id = oid(person.id);
   const rows = id ? (await listMailByPerson(id)).map(mailRecord) : [];
   return { person, interview, version, view: shapePerson(person, version?.manifest ?? null, rows) };
+}
+
+async function currentInterviewManifest(interviewId: string): Promise<Manifest | null> {
+  const interview = await getInterview(interviewId);
+  if (!interview) return null;
+  const version = await getVersion(interview._id, interview.currentVersion);
+  return version?.manifest ?? null;
 }
 
 const TOOLS: ToolDef[] = [
@@ -1973,18 +1980,25 @@ const TOOLS: ToolDef[] = [
         const existing = await getAddPeopleOperation(operation);
         if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its people were deleted. Use a new operationId for a new batch.", "operation_result_unavailable");
         if (existing?.kind === "conflict") return err("operationId was already used with different add_people arguments.", "operation_id_conflict");
-        if (existing?.kind === "replayed") return ok({ people: existing.people.map((person) => shapePerson(person, null, [])) });
+        if (existing?.kind === "replayed") {
+          const interview = await getInterview(id);
+          if (!interview) return err("This operation's interview is no longer available.", "operation_result_unavailable");
+          const version = await getVersion(interview._id, interview.currentVersion);
+          return ok({ people: existing.people.map((person) => shapePerson(person, version?.manifest ?? null, [])) });
+        }
         const interview = await getInterview(id);
         if (!interview) return err("Interview not found.", "not_found");
+        const version = await getVersion(interview._id, interview.currentVersion);
         const added = await addParticipantsWithOperation(id, people, operation);
         if (added.kind === "conflict") return err("operationId was already used with different add_people arguments or the interview no longer exists.", "operation_id_conflict");
         if (added.kind === "deleted") return err("This operation's retained result was cleared because its people were deleted. Use a new operationId for a new batch.", "operation_result_unavailable");
-        return ok({ people: added.people.map((person) => shapePerson(person, null, [])) });
+        return ok({ people: added.people.map((person) => shapePerson(person, version?.manifest ?? null, [])) });
       }
       const interview = await getInterview(id);
       if (!interview) return err("Interview not found.", "not_found");
+      const version = await getVersion(interview._id, interview.currentVersion);
       const created = await addParticipants(id, people);
-      const views = created.map((person) => shapePerson(person, null, []));
+      const views = created.map((person) => shapePerson(person, version?.manifest ?? null, []));
       return ok({ people: views });
     },
   },
@@ -2020,20 +2034,24 @@ const TOOLS: ToolDef[] = [
         const existing = await getUpdatePersonOperation(operation);
         if (existing?.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId for another update.", "operation_result_unavailable");
         if (existing?.kind === "conflict") return err("operationId was already used with different update_person arguments.", "operation_id_conflict");
-        if (existing?.kind === "replayed") return ok({ person: shapePerson(existing.person, null, []) });
+        if (existing?.kind === "replayed") {
+          const manifest = await currentInterviewManifest(existing.person.interviewId);
+          return ok({ person: shapePerson(existing.person, manifest, [], false) });
+        }
         const updated = await updateParticipantWithOperation(id, patch, operation);
         if (updated.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId for another update.", "operation_result_unavailable");
         if (updated.kind === "conflict") return err("operationId was already used with different update_person arguments.", "operation_id_conflict");
         if (updated.kind === "not_found") return err("Person not found.", "not_found");
         if (updated.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
         if (updated.kind !== "updated" && updated.kind !== "replayed") return err("That could not be done. Try again in a moment.", "server_error");
-        return ok({ person: shapePerson(updated.person, null, []) });
+        const manifest = await currentInterviewManifest(updated.person.interviewId);
+        return ok({ person: shapePerson(updated.person, manifest, [], false) });
       }
       const updated = await updateParticipant(id, patch);
       if (updated === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
       if (!updated) return err("Person not found.", "not_found");
-      const loaded = await onePerson(id);
-      return ok({ person: loaded?.view ?? shapePerson(updated, null, []) });
+      const manifest = await currentInterviewManifest(updated.interviewId);
+      return ok({ person: shapePerson(updated, manifest, [], false) });
     },
   },
   {
