@@ -31,6 +31,7 @@ vi.mock("@/lib/repo", () => ({
   submitAnswers: mocks.submitAnswers,
 }));
 vi.mock("@/lib/tokens", () => ({ looksLikeToken: () => true }));
+vi.mock("@/lib/frame-handle", () => ({ resolveRespondentFrameHandle: (handle: string) => handle === "opaque-frame-handle" ? "A".repeat(24) : null }));
 vi.mock("@/lib/visit", () => ({ shouldRecordVisit: mocks.shouldRecordVisit }));
 vi.mock("@/lib/respondent-rate-limit", () => ({ respondentRateLimit: mocks.respondentRateLimit }));
 
@@ -41,6 +42,7 @@ import { POST as submitRespondentAnswers } from "../src/app/api/p/[token]/submit
 
 const token = "A".repeat(24);
 const params = { params: Promise.resolve({ token }) };
+const frameParams = { params: Promise.resolve({ token: "opaque-frame-handle" }) };
 const request = (url: string, method: string, body?: unknown) => new Request(url, {
   method,
   headers: body === undefined ? undefined : { "Content-Type": "application/json" },
@@ -78,10 +80,18 @@ describe("respondent questionnaire version routes", () => {
   });
 
   it("rate limits questionnaire frame reads before loading HTML", async () => {
-    const response = await getQuestionnaireFrame(request(`https://kqa.local/api/frame/${token}`, "GET"), params);
+    const response = await getQuestionnaireFrame(request("https://kqa.local/api/frame/opaque-frame-handle", "GET"), frameParams);
 
     expect(response.status).toBe(200);
     expect(mocks.respondentRateLimit).toHaveBeenCalledWith(expect.any(Request), token, "frame");
+  });
+
+  it("rejects invalid frame handles before looking up a respondent", async () => {
+    const response = await getQuestionnaireFrame(request("https://kqa.local/api/frame/not-a-frame-handle", "GET"), { params: Promise.resolve({ token: "not-a-frame-handle" }) });
+
+    expect(response.status).toBe(404);
+    expect(mocks.respondentRateLimit).not.toHaveBeenCalled();
+    expect(mocks.loadByToken).not.toHaveBeenCalled();
   });
 
   it("persists and returns a complete order on respondent visits while preserving canonical questions", async () => {

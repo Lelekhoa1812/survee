@@ -123,7 +123,7 @@ function LocalizedMessage({ locale, message, values, valueLang }: { locale: Resp
   return <>{respondentMessageParts(locale, message, values).map((part, index) => <Fragment key={index}>{part.kind === "isolate" ? <bdi lang={valueLang} dir="auto">{part.text}</bdi> : part.text}</Fragment>)}</>;
 }
 
-export function RespondentShell({ token, initialLocale = "en-AU" }: { token: string; initialLocale?: RespondentLocale }) {
+export function RespondentShell({ token, frameHandle = "invalid", initialLocale = "en-AU" }: { token: string; frameHandle?: string; initialLocale?: RespondentLocale }) {
   const toast = useToast();
   const [locale, setLocale] = useState<RespondentLocale>(initialLocale);
   const localeRef = useRef<RespondentLocale>(initialLocale);
@@ -1200,7 +1200,7 @@ export function RespondentShell({ token, initialLocale = "en-AU" }: { token: str
         {!frameReady && <div className="rs-loading"><span className="row"><Spinner /> {t("loadingQuestions")}</span></div>}
         <iframe
           ref={frame}
-          src={`/api/frame/${token}`}
+          src={`/api/frame/${frameHandle}`}
           title={data.title}
           sandbox="allow-scripts allow-forms"
           referrerPolicy="no-referrer"
