@@ -127,4 +127,18 @@ describe("new interview composer draft retention", () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 900)));
     expect(mocks.api.mock.calls.filter(([url, init]) => url === "/api/admin/campaign-draft" && init?.method === "PUT")).toHaveLength(writesBeforeDebounce);
   });
+
+  it("restores a server draft and deletes its revision when discarded", async () => {
+    mocks.api.mockImplementation(async (_url: string, init?: { method?: string }) => init?.method === "DELETE"
+      ? { ok: true, status: 200, data: { ok: true } }
+      : { ok: true, status: 200, data: { draft: { revision: 4, name: "Recovered study", description: "Existing work", mode: "multi", html: "<html>draft</html>", fileName: "recovered.html", updatedAt: "2026-11-24T00:00:00.000Z" } } });
+    await act(async () => root.render(createElement(NewInterview)));
+    expect((host.querySelector("#name") as HTMLInputElement).value).toBe("Recovered study");
+    expect((host.querySelector("#desc") as HTMLTextAreaElement).value).toBe("Existing work");
+    expect(host.textContent).toContain("Checker feedback for recovered.html");
+
+    await click("Discard draft");
+    expect(mocks.api).toHaveBeenCalledWith("/api/admin/campaign-draft", { method: "DELETE", body: { expectedRevision: 4 } });
+    expect((host.querySelector("#name") as HTMLInputElement).value).toBe("");
+  });
 });
