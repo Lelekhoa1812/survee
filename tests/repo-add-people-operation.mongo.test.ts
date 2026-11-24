@@ -35,6 +35,8 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
   let accounts!: typeof import("../src/lib/repo/accounts");
   let repository!: typeof import("../src/lib/repo");
   let mailRepository!: typeof import("../src/lib/repo/mail");
+  let workspaceRepository!: typeof import("../src/lib/repo/workspaces");
+  let tenantMigration!: typeof import("../src/lib/tenant-migration");
   let campaignDrafts!: typeof import("../src/lib/campaign-drafts");
   let withTenantPrincipal!: typeof import("../src/lib/tenant-context").withTenantPrincipal;
   let interviewId!: import("mongodb").ObjectId;
@@ -60,6 +62,8 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     accounts = await import("../src/lib/repo/accounts");
     repository = await import("../src/lib/repo");
     mailRepository = await import("../src/lib/repo/mail");
+    workspaceRepository = await import("../src/lib/repo/workspaces");
+    tenantMigration = await import("../src/lib/tenant-migration");
     campaignDrafts = await import("../src/lib/campaign-drafts");
     ({ withTenantPrincipal } = await import("../src/lib/tenant-context"));
     client = await new mongo.MongoClient(isolated.uri, { serverSelectionTimeoutMS: 8_000 }).connect();
@@ -793,5 +797,59 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
       tenantId: "integration-workspace", participantId, status: "pending", delivery: { $nin: ["delivered", "bounced"] },
     }).sort({ _id: -1 }).limit(50).explain("executionStats");
     expect(JSON.stringify(plan.queryPlanner.winningPlan)).not.toMatch(/"stage"\s*:\s*"SORT"/);
+  });
+
+  it("re-scans an already-checkpointed collection after a late legacy write", async () => {
+    const migrationDbName = `tenant_mig_${randomUUID().replaceAll("-", "")}`;
+    const database = client.db(migrationDbName);
+    const interviewId = new mongo.ObjectId();
+    await database.collection("interviews").insertOne({
+      _id: interviewId, name: "Late legacy migration fixture", mode: "multi", status: "open", currentVersion: 1,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await database.collection("survey_versions").insertOne({
+      _id: new mongo.ObjectId(), interviewId, version: 1, html: "<!doctype html>", manifest: { format: "kqa/1" }, createdAt: new Date(),
+    });
+
+    const interruptedDb = {
+      collection(name: string) {
+        const collection = database.collection(name);
+        if (name !== "survey_versions") return collection;
+        return new Proxy(collection, {
+          get(target, property, receiver) {
+            if (property === "updateMany") return async () => { throw new Error("simulated interruption after interview checkpoint"); };
+            return Reflect.get(target, property, receiver);
+          },
+        });
+      },
+    } as unknown as import("mongodb").Db;
+
+    try {
+      await expect(tenantMigration.backfillLegacyTenant(interruptedDb)).rejects.toThrow("simulated interruption");
+      expect((await database.collection<import("../src/lib/repo/types").TenantDoc>("tenants").findOne({ _id: "axion" }))?.legacyTenantMigration?.completedCollections).toContain("interviews");
+      await database.collection("interviews").updateOne({ _id: interviewId }, { $unset: { tenantId: "" } });
+
+      await tenantMigration.backfillLegacyTenant(database);
+      expect((await database.collection("interviews").findOne({ _id: interviewId }))?.tenantId).toBe("axion");
+      expect((await database.collection<import("../src/lib/repo/types").TenantDoc>("tenants").findOne({ _id: "axion" }))?.legacyTenantMigration?.state).toBe("complete");
+    } finally {
+      await database.dropDatabase();
+    }
+  });
+
+  it("keeps a confirmed workspace delivery when an unknown check is saved to Mongo", async () => {
+    const database = client.db(dbName);
+    const id = new mongo.ObjectId();
+    await database.collection("workspace_invitations").insertOne({
+      _id: id, tenantId: "integration-workspace", email: "invitee@example.test", messageId: "<confirmed-workspace@example.test>",
+      mailStatus: "sent", delivery: "delivered", deliveryDetail: "250 accepted", deliveryCheckedAt: new Date(),
+    });
+
+    const effective = await workspaceRepository.updateWorkspaceInvitationMail("integration-workspace", id.toHexString(), "<confirmed-workspace@example.test>", {
+      delivery: "unknown", deliveryDetail: "not visible on this check", deliveryCheckedAt: new Date(),
+    });
+
+    expect(effective).toBe("delivered");
+    expect(await database.collection("workspace_invitations").findOne({ _id: id })).toMatchObject({ delivery: "delivered", deliveryDetail: "250 accepted" });
   });
 });
