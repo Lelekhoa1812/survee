@@ -35,11 +35,11 @@ export function VerifyEmailChangeForm() {
     <section className="card auth-card">
       <div className="stack" style={{ gap: 10 }}>
         <BrandMark size={40} wordmark />
-        <div><h1>{verifiedEmail ? "Email verified" : "Verify your new email"}</h1><p className="muted" style={{ marginTop: 4 }}>{verifiedEmail ? `${verifiedEmail} is now the sign-in address for your account.` : "Select the button to confirm this address for your survee account."}</p></div>
+        <div><h1>{verifiedEmail ? "Email verified" : "Verify your new email"}</h1><p className="muted" style={{ marginTop: 4 }}>{verifiedEmail ? `${verifiedEmail} is now the sign-in address for your account. For security, sign in again with this address.` : "Select the button to confirm this address for your survee account."}</p></div>
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
       {verifiedEmail ? (
-        <button className="btn primary lg block" type="button" onClick={() => { router.replace("/admin/settings"); router.refresh(); }}>Return to Settings</button>
+        <button className="btn primary lg block" type="button" onClick={() => { router.replace("/admin/login"); router.refresh(); }}>Sign in with new email</button>
       ) : (
         <button className="btn primary lg block" type="button" disabled={!token || busy} onClick={() => void verify()}>
           {busy ? <Spinner /> : null} Verify and continue

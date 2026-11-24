@@ -132,6 +132,9 @@ export interface ImageAssetDoc {
 export interface PendingEmailChangeDoc {
   _id: ObjectId;
   userId: ObjectId;
+  /** Account version and previous address at request time; credential changes retire this link. */
+  authVersion?: number | null;
+  previousEmail?: string;
   email: string;
   tokenHash: string;
   createdAt: Date;

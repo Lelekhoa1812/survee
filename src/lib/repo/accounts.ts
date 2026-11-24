@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { AXION_OWNER_EMAIL, AXION_TENANT_ID, adminConfig } from "../env";
 import { derivePasswordKey, PASSWORD_HASH_BYTES, PASSWORD_HASH_COST } from "../password-kdf";
-import { col } from "../db";
+import { col, withMongoTransaction } from "../db";
 import type { MembershipDoc, PendingEmailChangeDoc, PendingPasswordResetDoc, PendingSignupDoc, TenantDoc, TenantRole, UserDoc } from "./types";
 
 const PREVIOUS_AXION_OWNER_EMAIL = "admin@axiob.local";
@@ -468,6 +468,8 @@ export async function createPendingEmailChange(input: { userId: string; currentP
   const pending: PendingEmailChangeDoc = {
     _id: id,
     userId,
+    authVersion: user.authVersion ?? null,
+    previousEmail: user.email,
     email,
     tokenHash: createHash("sha256").update(input.token).digest("hex"),
     createdAt: now,
@@ -486,34 +488,50 @@ export async function removePendingEmailChange(id: ObjectId): Promise<void> {
   await (await col.emailChanges()).deleteOne({ _id: id });
 }
 
-export async function completeEmailChange(token: string): Promise<{ ok: true; email: string; previousEmail: string } | { ok: false; error: string }> {
+type EmailChangeFailure = { ok: false; error: string };
+type EmailChangeResult = { ok: true; email: string; previousEmail: string } | EmailChangeFailure;
+
+class EmailChangeAbort extends Error {
+  constructor(readonly result: EmailChangeFailure) {
+    super(result.error);
+  }
+}
+
+export async function completeEmailChange(token: string): Promise<EmailChangeResult> {
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const changes = await col.emailChanges();
-  const pending = await changes.findOne({ tokenHash, expiresAt: { $gt: new Date() } });
-  if (!pending) return { ok: false, error: "That verification link is invalid or has expired. Request a new one." };
   const users = await col.users();
-  const owner = await users.findOne({ _id: pending.userId });
-  if (!owner) return { ok: false, error: "This account could not be verified." };
-  const previousEmail = owner.email;
-  const duplicate = await users.findOne({ email: pending.email }, { projection: { _id: 1 } });
-  if (duplicate && !duplicate._id.equals(owner._id)) return { ok: false, error: "That address is already in use. Request a different one." };
-  // Fence any password-reset request that was issued to the previous verified address.
-  // The version predicate also makes a concurrent password reset or email change win once.
-  const versionFilter = owner.authVersion === undefined ? { authVersion: { $exists: false } } : { authVersion: owner.authVersion };
   try {
-    const updated = await users.updateOne(
-      { _id: owner._id, email: owner.email, ...versionFilter },
-      { $set: { email: pending.email, emailVerifiedAt: new Date(), authVersion: (owner.authVersion ?? 0) + 1, updatedAt: new Date() }, $unset: { legacyBootstrap: "" } },
-    );
-    if (updated.matchedCount !== 1) return { ok: false, error: "This account changed while verifying the address. Request a new link." };
+    return await withMongoTransaction(async (session) => {
+      const pending = await changes.findOne({ tokenHash, expiresAt: { $gt: new Date() } }, { session });
+      if (!pending) return { ok: false, error: "That verification link is invalid or has expired. Request a new one." };
+      if (pending.authVersion === undefined) {
+        await changes.deleteOne({ _id: pending._id, tokenHash }, { session });
+        return { ok: false, error: "This account changed while verifying the address. Request a new link." };
+      }
+      const owner = await users.findOne({ _id: pending.userId }, { session });
+      if (!owner) return { ok: false, error: "This account could not be verified." };
+      if ((owner.authVersion ?? null) !== pending.authVersion) {
+        await changes.deleteOne({ _id: pending._id, tokenHash }, { session });
+        return { ok: false, error: "This account changed while verifying the address. Request a new link." };
+      }
+      const duplicate = await users.findOne({ email: pending.email }, { projection: { _id: 1 }, session });
+      if (duplicate && !duplicate._id.equals(owner._id)) return { ok: false, error: "That address is already in use. Request a different one." };
+      // Fence credential changes and consume the token in the same transaction as the email update.
+      const versionFilter = pending.authVersion === null ? { authVersion: { $exists: false } } : { authVersion: pending.authVersion };
+      const updated = await users.updateOne(
+        { _id: owner._id, email: owner.email, ...versionFilter },
+        { $set: { email: pending.email, emailVerifiedAt: new Date(), authVersion: (owner.authVersion ?? 0) + 1, updatedAt: new Date() }, $unset: { legacyBootstrap: "" } },
+        { session },
+      );
+      if (updated.matchedCount !== 1) throw new EmailChangeAbort({ ok: false, error: "This account changed while verifying the address. Request a new link." });
+      const claimed = await changes.deleteOne({ _id: pending._id, tokenHash, expiresAt: { $gt: new Date() } }, { session });
+      if (claimed.deletedCount !== 1) throw new EmailChangeAbort({ ok: false, error: "That verification link is invalid or has expired. Request a new one." });
+      return { ok: true, email: pending.email, previousEmail: pending.previousEmail ?? owner.email };
+    });
   } catch (error) {
+    if (error instanceof EmailChangeAbort) return error.result;
     if (error && typeof error === "object" && "code" in error && error.code === 11000) return { ok: false, error: "That address is already in use. Request a different one." };
     throw error;
   }
-  // Update first, then consume. If the account write fails, the link remains
-  // retryable; concurrent opens may update the same address, but only one can
-  // consume the single-use token and report success.
-  const claimed = await changes.deleteOne({ _id: pending._id, tokenHash, expiresAt: { $gt: new Date() } });
-  if (claimed.deletedCount !== 1) return { ok: false, error: "That verification link is invalid or has expired. Request a new one." };
-  return { ok: true, email: pending.email, previousEmail };
 }

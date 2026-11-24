@@ -19,7 +19,9 @@ vi.mock("../src/lib/db", () => ({
           && (!query.email || item.email === query.email)
           && (query.authVersion?.$exists === false
             ? item.authVersion === undefined
-            : query.authVersion === undefined || item.authVersion === query.authVersion));
+            : query.authVersion === null
+              ? item.authVersion == null
+              : query.authVersion === undefined || item.authVersion === query.authVersion));
         if (!user) return { matchedCount: 0 };
         Object.assign(user, update.$set);
         for (const key of Object.keys(update.$unset ?? {})) delete user[key];
@@ -40,6 +42,7 @@ vi.mock("../src/lib/db", () => ({
       },
     }),
   },
+  withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => work({}),
 }));
 
 import { completeEmailChange } from "../src/lib/repo/accounts";
@@ -57,7 +60,7 @@ describe("email verification links", () => {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     store.users.push({ _id: userId, email: "owner@old.example", passwordHash: "unused" });
     store.changes.push({
-      _id: new ObjectId(), userId, email: "owner@new.example", tokenHash,
+      _id: new ObjectId(), userId, previousEmail: "owner@old.example", authVersion: null, email: "owner@new.example", tokenHash,
       createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
     });
   }
@@ -82,6 +85,16 @@ describe("email verification links", () => {
 
     expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(store.users[0].email).toBe("owner@new.example");
+    expect(store.changes).toHaveLength(0);
+  });
+
+  it("retires the pending link if the account version changes before verification", async () => {
+    const token = "credential-change-before-email-verification";
+    seed(token);
+    store.users[0].authVersion = 2;
+
+    await expect(completeEmailChange(token)).resolves.toMatchObject({ ok: false });
+    expect(store.users[0].email).toBe("owner@old.example");
     expect(store.changes).toHaveLength(0);
   });
 
