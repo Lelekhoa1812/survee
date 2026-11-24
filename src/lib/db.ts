@@ -73,61 +73,71 @@ async function ensurePendingSignupEmailIndex(d: Db): Promise<void> {
   // Deployments before this index could contain several pending rows for one
   // address. Keep the newest active claim deterministically, then enforce one
   // canonical email slot. Stream rows and flush bounded write batches so cold
-  // starts do not retain the full collection and all pending writes at once.
-  // Repeat on duplicate-key races with another cold start.
-  await signups.createIndex({ createdAt: -1, _id: -1 }, { name: "signup_cleanup_order" });
-  const removeCleanupIndex = async () => {
+  // starts do not retain the full collection or all pending writes at once.
+  // Mongo computes duplicate ranks and may spill its partition sort to disk.
+  // Repeat on duplicate-key races with another cold start or concurrent signup.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const now = new Date();
+    await signups.deleteMany({ $or: [{ expiresAt: { $lte: now } }, { consumedAt: { $exists: true } }] });
+    let duplicateIds: ObjectId[] = [];
+    let updates: { updateOne: { filter: { _id: ObjectId }; update: { $set: { email: string } } } }[] = [];
+    const flush = async () => {
+      if (duplicateIds.length) await signups.deleteMany({ _id: { $in: duplicateIds } });
+      if (updates.length) await signups.bulkWrite(updates, { ordered: false });
+      duplicateIds = [];
+      updates = [];
+    };
     try {
-      await signups.dropIndex("signup_cleanup_order");
-    } catch (error) {
-      const code = (error as { code?: number }).code;
-      if (code !== 26 && code !== 27) throw error;
-    }
-  };
-  try {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const now = new Date();
-      await signups.deleteMany({ $or: [{ expiresAt: { $lte: now } }, { consumedAt: { $exists: true } }] });
-      const seen = new Set<string>();
-      let duplicateIds: ObjectId[] = [];
-      let updates: { updateOne: { filter: { _id: ObjectId }; update: { $set: { email: string } } } }[] = [];
-      const flush = async () => {
-        if (duplicateIds.length) await signups.deleteMany({ _id: { $in: duplicateIds } });
-        if (updates.length) await signups.bulkWrite(updates, { ordered: false });
-        duplicateIds = [];
-        updates = [];
-      };
-      try {
-        const cursor = signups.find({}, { projection: { _id: 1, email: 1, createdAt: 1 } })
-          .sort({ createdAt: -1, _id: -1 })
-          .batchSize(migrationBatchSize);
-        for await (const row of cursor) {
-          const normalized = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
-          if (!normalized || seen.has(normalized)) {
-            duplicateIds.push(row._id);
-          } else {
-            seen.add(normalized);
-            if (row.email !== normalized) updates.push({ updateOne: { filter: { _id: row._id }, update: { $set: { email: normalized } } } });
-          }
-          if (duplicateIds.length >= migrationBatchSize || updates.length >= migrationBatchSize) await flush();
+      const cursor = signups.aggregate<{ _id: ObjectId; email: string; normalizedEmail: string; duplicateRank: number }>([
+        {
+          $set: {
+            normalizedEmail: {
+              $toLower: {
+                $trim: {
+                  input: { $cond: [{ $eq: [{ $type: "$email" }, "string"] }, "$email", ""] },
+                },
+              },
+            },
+            migrationSortKey: {
+              $concat: [
+                {
+                  $dateToString: {
+                    date: { $cond: [{ $eq: [{ $type: "$createdAt" }, "date"] }, "$createdAt", new Date(0)] },
+                    format: "%Y%m%d%H%M%S%L",
+                    timezone: "UTC",
+                  },
+                },
+                { $toString: "$_id" },
+              ],
+            },
+          },
+        },
+        {
+          $setWindowFields: {
+            partitionBy: "$normalizedEmail",
+            sortBy: { migrationSortKey: -1 },
+            output: { duplicateRank: { $documentNumber: {} } },
+          },
+        },
+        { $project: { _id: 1, email: 1, normalizedEmail: 1, duplicateRank: 1 } },
+      ], { allowDiskUse: true, batchSize: migrationBatchSize });
+      for await (const row of cursor) {
+        if (!row.normalizedEmail || row.duplicateRank > 1) {
+          duplicateIds.push(row._id);
+        } else if (row.email !== row.normalizedEmail) {
+          updates.push({ updateOne: { filter: { _id: row._id }, update: { $set: { email: row.normalizedEmail } } } });
         }
-        await flush();
-        await signups.createIndex({ email: 1 }, { unique: true, name: "signup_email_unique" });
-        await removeCleanupIndex();
-        return;
-      } catch (error) {
-        if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
-        if (await hasUniqueEmailIndex()) {
-          await removeCleanupIndex();
-          return;
-        }
+        if (duplicateIds.length >= migrationBatchSize || updates.length >= migrationBatchSize) await flush();
       }
+      await flush();
+      await signups.createIndex({ email: 1 }, { unique: true, name: "signup_email_unique" });
+      return;
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+      if (await hasUniqueEmailIndex()) return;
     }
-    throw new Error("Could not migrate pending signup email claims to a unique index.");
-  } catch (error) {
-    await removeCleanupIndex().catch(() => undefined);
-    throw error;
   }
+  throw new Error("Could not migrate pending signup email claims to a unique index.");
 }
 
 async function ensureReviewDraftSlotMigration(d: Db): Promise<void> {

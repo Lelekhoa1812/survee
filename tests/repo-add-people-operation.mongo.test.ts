@@ -37,6 +37,8 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
   let campaignDrafts!: typeof import("../src/lib/campaign-drafts");
   let withTenantPrincipal!: typeof import("../src/lib/tenant-context").withTenantPrincipal;
   let interviewId!: import("mongodb").ObjectId;
+  let signupTieWinnerId!: import("mongodb").ObjectId;
+  let signupMissingDateWinnerId!: import("mongodb").ObjectId;
   const previousEnv = {
     mongodbUri: process.env.MONGODB_URI,
     mongodbDb: process.env.MONGODB_DB,
@@ -71,6 +73,35 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    const signups = client.db(dbName).collection("pending_signups");
+    const signupNow = new Date();
+    const olderClaimId = new mongo.ObjectId("000000000000000000000011");
+    const newerClaimId = new mongo.ObjectId("000000000000000000000012");
+    const tieClaimLowerId = new mongo.ObjectId("000000000000000000000021");
+    signupTieWinnerId = new mongo.ObjectId("000000000000000000000022");
+    const missingDateLowerId = new mongo.ObjectId("000000000000000000000031");
+    signupMissingDateWinnerId = new mongo.ObjectId("000000000000000000000032");
+    const signupBase = {
+      userId: new mongo.ObjectId(),
+      tenantId: new mongo.ObjectId().toHexString(),
+      tenantName: "Legacy signup fixture",
+      tenantSlug: `legacy-${randomUUID()}`,
+      passwordHash: "fixture-hash",
+      tokenHash: "fixture-token",
+      expiresAt: new Date(signupNow.getTime() + 60_000),
+    };
+    await signups.insertMany([
+      { ...signupBase, _id: olderClaimId, email: "Researcher@Example.com", createdAt: new Date(signupNow.getTime() - 2_000), tokenHash: "older-token" },
+      { ...signupBase, _id: newerClaimId, email: " researcher@example.com ", createdAt: new Date(signupNow.getTime() - 1_000), tokenHash: "newer-token" },
+      { ...signupBase, _id: tieClaimLowerId, email: "tie@example.com", createdAt: signupNow, tokenHash: "tie-lower-token" },
+      { ...signupBase, _id: signupTieWinnerId, email: " TIE@example.com ", createdAt: signupNow, tokenHash: "tie-higher-token" },
+      { ...signupBase, _id: missingDateLowerId, email: "no-date@example.com", tokenHash: "no-date-lower-token" },
+      { ...signupBase, _id: signupMissingDateWinnerId, email: " NO-DATE@example.com ", tokenHash: "no-date-higher-token" },
+      { ...signupBase, _id: new mongo.ObjectId(), email: "  ", createdAt: signupNow, tokenHash: "blank-token" },
+      { ...signupBase, _id: new mongo.ObjectId(), email: 42, createdAt: signupNow, tokenHash: "non-string-token" },
+      { ...signupBase, _id: new mongo.ObjectId(), email: "expired@example.com", createdAt: signupNow, expiresAt: new Date(signupNow.getTime() - 1), tokenHash: "expired-token" },
+      { ...signupBase, _id: new mongo.ObjectId(), email: "consumed@example.com", createdAt: signupNow, consumedAt: signupNow, tokenHash: "consumed-token" },
+    ]);
     await dbModule.db(); // Also exercises the real index setup, including the unique operation scope index.
     const cleanedTenant = await tenantCollection.findOne({ _id: legacyTenantId });
     expect(cleanedTenant).not.toHaveProperty("respondentPolicy");
@@ -116,6 +147,21 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     const allTenants = await tenants.find({}).toArray();
     expect(allTenants.every((tenant) => !Object.hasOwn(tenant, "respondentPolicy"))).toBe(true);
     expect(allTenants.some((tenant) => tenant.analyticsMinimumCellSize === 9)).toBe(true);
+  });
+
+  it("normalizes legacy signup claims and keeps the newest deterministic email owner", async () => {
+    const signups = client.db(dbName).collection("pending_signups");
+    const rows = await signups.find({}).sort({ email: 1 }).toArray();
+    expect(rows.map((row) => row.email).sort()).toEqual(["no-date@example.com", "researcher@example.com", "tie@example.com"]);
+    expect(rows.find((row) => row.email === "researcher@example.com")?._id.toHexString()).toBe("000000000000000000000012");
+    expect(rows.find((row) => row.email === "tie@example.com")?._id).toEqual(signupTieWinnerId);
+    expect(rows.find((row) => row.email === "no-date@example.com")?._id).toEqual(signupMissingDateWinnerId);
+    const uniqueEmailIndex = (await signups.listIndexes().toArray()).find((index) => index.name === "signup_email_unique");
+    expect(uniqueEmailIndex).toMatchObject({ unique: true, key: { email: 1 } });
+    await expect(signups.insertOne({
+      _id: new mongo.ObjectId(), userId: new mongo.ObjectId(), tenantId: "duplicate-probe", tenantName: "Duplicate", tenantSlug: "duplicate-probe",
+      email: "researcher@example.com", passwordHash: "fixture", tokenHash: "duplicate-email-probe", createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    })).rejects.toMatchObject({ code: 11000 });
   });
 
   it("serializes concurrent duplicate operationIds into one participant mutation", async () => {

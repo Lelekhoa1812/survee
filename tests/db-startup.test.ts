@@ -10,8 +10,11 @@ const state = vi.hoisted(() => ({
   respondentPolicyCleanupCalls: 0,
   signupRows: [] as { _id: { key: number }; email: string; createdAt: Date }[],
   signupEmailIndex: false,
-  signupCleanupIndex: false,
-  signupCleanupIndexDropped: false,
+  signupAggregationPipeline: [] as unknown[],
+  signupAggregationOptions: null as null | { allowDiskUse?: boolean; batchSize?: number },
+  signupAggregationRuns: 0,
+  signupIndexDuplicateKeyConflicts: 0,
+  signupIndexCreatedDuringConflict: false,
   signupBulkWriteSizes: [] as number[],
   signupDuplicateDeleteSizes: [] as number[],
   signupDeletedIds: [] as number[],
@@ -25,11 +28,17 @@ vi.mock("mongodb", async (importOriginal) => {
       return {
         async createIndex(spec: unknown, options?: { name?: string }) {
           if (options?.name) state.indexes.push(options.name);
-          if (name === "pending_signups" && options?.name === "signup_cleanup_order") state.signupCleanupIndex = JSON.stringify(spec) === JSON.stringify({ createdAt: -1, _id: -1 });
-          if (name === "pending_signups" && options?.name === "signup_email_unique") state.signupEmailIndex = true;
+          if (name === "pending_signups" && options?.name === "signup_email_unique") {
+            if (state.signupIndexDuplicateKeyConflicts > 0) {
+              state.signupIndexDuplicateKeyConflicts--;
+              if (state.signupIndexCreatedDuringConflict) state.signupEmailIndex = true;
+              throw Object.assign(new Error("duplicate key during index build"), { code: 11000 });
+            }
+            state.signupEmailIndex = true;
+          }
           return "index";
         },
-        async dropIndex(indexName?: string) { if (name === "questionnaire_review_drafts") state.reviewIndexDrops++; if (name === "pending_signups" && indexName === "signup_cleanup_order") state.signupCleanupIndexDropped = true; const error = new Error("index not found") as Error & { code: number }; error.code = 27; throw error; },
+        async dropIndex() { if (name === "questionnaire_review_drafts") state.reviewIndexDrops++; const error = new Error("index not found") as Error & { code: number }; error.code = 27; throw error; },
         async updateMany(filter?: unknown, update?: unknown) {
           if (name === "questionnaire_review_drafts") state.reviewBackfills++;
           if (name === "tenants") {
@@ -66,6 +75,20 @@ vi.mock("mongodb", async (importOriginal) => {
           return { acknowledged: true };
         },
         listIndexes() { return { toArray: async () => state.signupEmailIndex && name === "pending_signups" ? [{ key: { email: 1 }, unique: true }] : [] }; },
+        aggregate(pipeline: unknown[], options: { allowDiskUse?: boolean; batchSize?: number }) {
+          state.signupAggregationPipeline = pipeline;
+          state.signupAggregationOptions = options;
+          state.signupAggregationRuns++;
+          const rows = name === "pending_signups" ? [...state.signupRows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b._id.key - a._id.key) : [];
+          const ranks = new Map<string, number>();
+          const rankedRows = rows.map((row) => {
+            const normalizedEmail = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
+            const duplicateRank = (ranks.get(normalizedEmail) ?? 0) + 1;
+            ranks.set(normalizedEmail, duplicateRank);
+            return { ...row, normalizedEmail, duplicateRank };
+          });
+          return { async *[Symbol.asyncIterator]() { yield* rankedRows; } };
+        },
         find() {
           const rows = name === "pending_signups" ? [...state.signupRows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b._id.key - a._id.key) : [];
           return {
@@ -105,8 +128,11 @@ describe("MongoDB cold-start connection recovery", () => {
     state.respondentPolicyCleanupCalls = 0;
     state.signupRows = [];
     state.signupEmailIndex = false;
-    state.signupCleanupIndex = false;
-    state.signupCleanupIndexDropped = false;
+    state.signupAggregationPipeline = [];
+    state.signupAggregationOptions = null;
+    state.signupAggregationRuns = 0;
+    state.signupIndexDuplicateKeyConflicts = 0;
+    state.signupIndexCreatedDuringConflict = false;
     state.signupBulkWriteSizes = [];
     state.signupDuplicateDeleteSizes = [];
     state.signupDeletedIds = [];
@@ -185,12 +211,40 @@ describe("MongoDB cold-start connection recovery", () => {
     await expect(db()).resolves.toBeDefined();
 
     expect(state.signupEmailIndex).toBe(true);
-    expect(state.signupCleanupIndex).toBe(true);
-    expect(state.signupCleanupIndexDropped).toBe(true);
+    expect(state.signupAggregationPipeline.some((stage) => "$setWindowFields" in (stage as Record<string, unknown>))).toBe(true);
+    expect(state.signupAggregationOptions).toEqual({ allowDiskUse: true, batchSize: 500 });
     expect(state.signupBulkWriteSizes).toEqual([500, 500, 2]);
     expect(state.signupDuplicateDeleteSizes).toEqual([2]);
     expect(state.signupDeletedIds).toEqual([2001, 2002]);
     expect(state.signupEmailUpdates).toContainEqual({ id: 2000, email: "duplicate@example.com" });
     expect(Math.max(...state.signupBulkWriteSizes, ...state.signupDuplicateDeleteSizes)).toBeLessThanOrEqual(500);
+  });
+
+  it("repeats the bounded signup scan after a concurrent claim defeats unique-index creation", async () => {
+    state.signupRows = [
+      { _id: { key: 2 }, email: "person@example.com", createdAt: new Date(2) },
+      { _id: { key: 1 }, email: " Person@Example.com ", createdAt: new Date(1) },
+    ];
+    state.signupIndexDuplicateKeyConflicts = 1;
+
+    const { db } = await import("../src/lib/db");
+    await expect(db()).rejects.toThrow("MongoDB unavailable during cold start");
+    await db();
+
+    expect(state.signupAggregationRuns).toBe(2);
+    expect(state.signupEmailIndex).toBe(true);
+    expect(state.signupDeletedIds).toEqual([1, 1]);
+  });
+
+  it("accepts a unique signup index another cold isolate created during duplicate-key recovery", async () => {
+    state.signupIndexDuplicateKeyConflicts = 1;
+    state.signupIndexCreatedDuringConflict = true;
+
+    const { db } = await import("../src/lib/db");
+    await expect(db()).rejects.toThrow("MongoDB unavailable during cold start");
+    await db();
+
+    expect(state.signupAggregationRuns).toBe(1);
+    expect(state.signupEmailIndex).toBe(true);
   });
 });
