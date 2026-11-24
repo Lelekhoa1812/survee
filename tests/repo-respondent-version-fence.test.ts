@@ -96,6 +96,7 @@ beforeEach(() => {
       else mocks.participant[path] = value;
     }
     mocks.participant.revision += update.$inc?.revision ?? 0;
+    mocks.participant.writeEpoch = (mocks.participant.writeEpoch ?? 0) + (update.$inc?.writeEpoch ?? 0);
     return { ...mocks.participant };
   });
   mocks.withMongoTransaction.mockReset().mockImplementation(async (work: (session: unknown) => Promise<unknown>) => {
@@ -142,6 +143,29 @@ describe("respondent version fence", () => {
 
     expect(result).toMatchObject({ ok: true, submittedAt: "2026-01-01T00:00:00.000Z" });
     expect(mocks.respondentWriteRevision).toBe(0);
+  });
+
+  it("replays a committed submit after its response is lost without recording a second submit", async () => {
+    mocks.participant.writeEpoch = 7;
+    mocks.participant.answers = { q1: { value: "answer" } };
+
+    const first = await asAxion(() => submitAnswers(token, 4, 7));
+    const retry = await asAxion(() => submitAnswers(token, 4, 7));
+
+    expect(first).toMatchObject({ ok: true });
+    expect(retry).toEqual(first);
+    expect(mocks.participant.writeEpoch).toBe(8);
+    expect(mocks.events.filter((event) => event === "submit")).toHaveLength(1);
+  });
+
+  it("does not replay a submit from before an intervening reopen and resubmit", async () => {
+    mocks.participant.status = "submitted";
+    mocks.participant.writeEpoch = 9;
+    mocks.participant.submittedAt = new Date("2026-11-01T00:00:00.000Z");
+
+    const stale = await asAxion(() => submitAnswers(token, 4, 7));
+
+    expect(stale).toMatchObject({ ok: false, status: 409, code: "respondent_state_changed" });
   });
 
   it("writes answers through the same transaction fence used by publication", async () => {

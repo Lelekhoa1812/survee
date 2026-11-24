@@ -212,6 +212,35 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  it("replays a submitted response after a lost reply without recording another submit event", async () => {
+    const database = client.db(dbName);
+    const now = new Date();
+    const html = "<!doctype html><html lang=\"en\"><body><h1>Submit retry fixture</h1></body></html>";
+    await database.collection("survey_versions").insertOne({
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId, version: 1,
+      html, htmlSha256: createHash("sha256").update(html).digest("hex"), bytes: Buffer.byteLength(html),
+      manifest: { format: "kqa/1", title: "Submit retry fixture", questions: [{ id: "q1", type: "text", label: "Optional answer", required: false }] },
+      check: { errors: 0, warnings: 0, info: 0, checkedAt: now.toISOString(), checkerVersion: "integration" }, createdAt: now,
+    });
+    const [person] = await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.addParticipants(interviewId.toHexString(), [{ name: "Submit retry fixture" }]),
+    );
+    const submit = () => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => repository.submitAnswers(person.token, 1, 0),
+    );
+
+    const first = await submit();
+    const retry = await submit();
+
+    expect(first).toMatchObject({ ok: true, submittedAt: expect.any(String) });
+    expect(retry).toEqual(first);
+    const saved = await database.collection("participants").findOne({ token: person.token });
+    expect(saved).toMatchObject({ status: "submitted", writeEpoch: 1 });
+    expect(await database.collection("events").countDocuments({ participantId: saved?._id, type: "submit" })).toBe(1);
+  });
+
   it("keeps a full lookahead respondent out of each streamed export page byte budget", async () => {
     const database = client.db(dbName);
     const participantIds = [new mongo.ObjectId(), new mongo.ObjectId()];

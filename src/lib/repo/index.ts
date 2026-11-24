@@ -2001,8 +2001,17 @@ export async function submitAnswers(token: string, expectedVersion: number, expe
     // wins the fence must be reflected in the answers used for validation.
     const current = await participants.findOne(tenantFilter(ctx.tenantId, { _id: participantId, token }), { session });
     if (!current) return { ok: false, status: 404, error: "This link is not valid.", code: "not_found" };
-    if ((current.writeEpoch ?? 0) !== writeEpoch) return { ok: false, status: 409, error: "This response changed in another window. Reload the page before continuing.", code: "respondent_state_changed" };
-    if (current.status === "submitted") return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
+    const currentWriteEpoch = current.writeEpoch ?? 0;
+    if (current.status === "submitted") {
+      // A successful submit advances the epoch. Accept one retry from the page
+      // that performed that submit, but do not accept a page from before a later
+      // reopen/resubmit cycle.
+      if (writeEpoch !== currentWriteEpoch && writeEpoch + 1 !== currentWriteEpoch) {
+        return { ok: false, status: 409, error: "This response changed in another window. Reload the page before continuing.", code: "respondent_state_changed" };
+      }
+      return { ok: true, submittedAt: (current.submittedAt ?? new Date()).toISOString() };
+    }
+    if (currentWriteEpoch !== writeEpoch) return { ok: false, status: 409, error: "This response changed in another window. Reload the page before continuing.", code: "respondent_state_changed" };
     const pr = progress(ctx.version.manifest, current.answers, current.recordGroups ?? {});
     if (pr.missingRequired.length || pr.invalidSelections.length || pr.invalidMinimumSelections.length || pr.invalidExclusiveSelections.length || pr.invalidRankSelections.length || pr.invalidAnswers.length || pr.repeatErrors.length) {
       const label = new Map(ctx.version.manifest.questions.map((q) => [q.id, q.label]));
