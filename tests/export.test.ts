@@ -356,6 +356,24 @@ describe("JSON", () => {
     expect(doc.participants.every((person: Record<string, unknown>) => !Object.hasOwn(person, "recordGroups"))).toBe(true);
   });
 
+  it("preserves stored answers whose question IDs are absent from the current manifest", () => {
+    const historicalInput: ExportInput = {
+      ...input,
+      participants: [{
+        ...input.participants[0],
+        answers: {
+          ...input.participants[0].answers,
+          retired_question: { value: "historical response", note: "host note", updatedAt: T },
+        },
+      }],
+    };
+
+    const participant = JSON.parse(jsonExport(historicalInput).body as string).participants[0];
+
+    expect(participant.answers).not.toHaveProperty("retired_question");
+    expect(participant.unmappedAnswers.retired_question).toEqual({ value: "historical response", note: "host note", updatedAt: T });
+  });
+
   it("exports complete question-order assignments by version even when a group has no answers", () => {
     const orderedManifest: Manifest = {
       ...manifest,

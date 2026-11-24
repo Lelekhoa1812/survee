@@ -214,17 +214,22 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
 
   it("replays a submitted response after a lost reply without recording another submit event", async () => {
     const database = client.db(dbName);
+    const submitInterviewId = new mongo.ObjectId();
     const now = new Date();
     const html = "<!doctype html><html lang=\"en\"><body><h1>Submit retry fixture</h1></body></html>";
+    await database.collection("interviews").insertOne({
+      _id: submitInterviewId, tenantId: "integration-workspace", name: "Submit retry fixture",
+      mode: "multi", status: "open", currentVersion: 1, createdAt: now, updatedAt: now,
+    });
     await database.collection("survey_versions").insertOne({
-      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId, version: 1,
+      _id: new mongo.ObjectId(), tenantId: "integration-workspace", interviewId: submitInterviewId, version: 1,
       html, htmlSha256: createHash("sha256").update(html).digest("hex"), bytes: Buffer.byteLength(html),
       manifest: { format: "kqa/1", title: "Submit retry fixture", questions: [{ id: "q1", type: "text", label: "Optional answer", required: false }] },
       check: { errors: 0, warnings: 0, info: 0, checkedAt: now.toISOString(), checkerVersion: "integration" }, createdAt: now,
     });
     const [person] = await withTenantPrincipal(
       { tenantId: "integration-workspace", role: "admin", source: "api_key" },
-      () => repository.addParticipants(interviewId.toHexString(), [{ name: "Submit retry fixture" }]),
+      () => repository.addParticipants(submitInterviewId.toHexString(), [{ name: "Submit retry fixture" }]),
     );
     const submit = () => withTenantPrincipal(
       { tenantId: "integration-workspace", role: "admin", source: "api_key" },

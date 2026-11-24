@@ -39,6 +39,18 @@ export function jsonExport(input: ExportInput): ExportFile {
           optionOrderVersion: a.optionOrderVersion,
         };
       }
+      const currentQuestionIds = new Set(manifest.questions.map((question) => question.id));
+      const unmappedAnswers = Object.fromEntries(
+        Object.entries(p.answers)
+          .filter(([questionId, answer]) => !currentQuestionIds.has(questionId) && (answer.value !== undefined || answer.note !== undefined))
+          .map(([questionId, answer]) => [questionId, {
+            value: answer.value,
+            note: answer.note,
+            updatedAt: answer.updatedAt,
+            presentedOptionOrder: answer.presentedOptionOrder,
+            optionOrderVersion: answer.optionOrderVersion,
+          }]),
+      );
       const recordGroups = Object.fromEntries(
         Object.entries(p.recordGroups ?? {})
           .filter(([, rows]) => rows.length > 0)
@@ -63,6 +75,7 @@ export function jsonExport(input: ExportInput): ExportFile {
         /** Current-rule inference; KQA does not record whether a question was actually rendered. */
         eligibility: Object.fromEntries(manifest.questions.map((q) => [q.id, eligibility[q.id] === false ? "inactive" : "eligible"])),
         answers,
+        ...(Object.keys(unmappedAnswers).length ? { unmappedAnswers } : {}),
         ...(Object.keys(recordGroups).length ? { recordGroups } : {}),
         ...(p.questionOrderAssignments?.length ? { questionOrderAssignments: p.questionOrderAssignments } : {}),
       };
