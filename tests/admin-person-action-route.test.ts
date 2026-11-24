@@ -3,18 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   token: null as string | null | "invite_pending",
+  deliveryResult: { ok: false, code: "superseded", error: "The invite changed." } as unknown,
   guardAdmin: vi.fn(async () => null),
   regenerateToken: vi.fn(async () => mocks.token),
+  readJson: vi.fn(async () => ({ ok: true, data: {} })),
 }));
 
 vi.mock("@/lib/http", () => ({
   fail: (status: number, error: string, extra: Record<string, unknown> = {}) => NextResponse.json({ ok: false, error, ...extra }, { status }),
   guardAdmin: mocks.guardAdmin,
   json: (body: unknown, status = 200) => NextResponse.json(body, { status }),
-  readJson: vi.fn(),
+  readJson: mocks.readJson,
   withServerErrors: (_route: string, handler: (...args: never[]) => Promise<NextResponse>) => handler,
 }));
-vi.mock("@/lib/mail/delivery", () => ({ checkInviteDelivery: vi.fn() }));
+vi.mock("@/lib/mail/delivery", () => ({ checkInviteDelivery: vi.fn(async () => mocks.deliveryResult) }));
 vi.mock("@/lib/mail/invite", () => ({ sendInvite: vi.fn() }));
 vi.mock("@/lib/repo", () => ({ regenerateToken: mocks.regenerateToken, reopenParticipant: vi.fn() }));
 
@@ -42,5 +44,17 @@ describe("participant private-link rotation route", () => {
     const response = await POST(new Request("https://survee.example/api/admin/people/person-id/token", { method: "POST" }), context);
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("participant invitation delivery route", () => {
+  it("returns a conflict when the checked attempt was replaced before its result was saved", async () => {
+    const response = await POST(
+      new Request("https://survee.example/api/admin/people/person-id/delivery", { method: "POST", body: "{}" }),
+      { params: Promise.resolve({ pid: "person-id", action: "delivery" }) },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "superseded", error: "The invite changed." });
   });
 });
