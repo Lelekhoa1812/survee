@@ -561,6 +561,7 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.person).not.toHaveProperty("token");
     expect(body.result.structuredContent.person).not.toHaveProperty("answers");
     expect(body.result.structuredContent.person).not.toHaveProperty("link");
+    expect(body.result.structuredContent.person).not.toHaveProperty("mail");
     expect(body.result.structuredContent.person).toMatchObject({ answered: 0, total: analyticsManifest.questions.length });
     expect(updateParticipantWithOperation).toHaveBeenCalledWith(personId, { name: "Grace Hopper" }, expect.objectContaining({ operationId: "profile-1", credentialId: "service_token:axion-service-token", argumentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }));
     const replayPerson = { id: personId, interviewId, token: "person-token", name: "Grace Hopper", status: "invited" as const, answers: {}, revision: 0, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z" };
@@ -571,6 +572,7 @@ describe("MCP tools", () => {
     expect(replayBody.result.structuredContent.person).not.toHaveProperty("token");
     expect(replayBody.result.structuredContent.person).not.toHaveProperty("answers");
     expect(replayBody.result.structuredContent.person).not.toHaveProperty("link");
+    expect(replayBody.result.structuredContent.person).not.toHaveProperty("mail");
     expect(updateParticipantWithOperation).toHaveBeenCalledOnce();
     vi.mocked(getUpdatePersonOperation).mockResolvedValueOnce({ kind: "conflict" });
     const conflict = await call("update_person", { personId, name: "Different", operationId: "profile-1" });

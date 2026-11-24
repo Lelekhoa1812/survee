@@ -368,7 +368,7 @@ function previewTokenError(code: QuestionnairePreviewFailure) {
   return err("This questionnaire preview is invalid for the current tenant, interview, or candidate. Preview again before continuing.", code);
 }
 
-function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[], includePrivateLink = true) {
+function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: ReturnType<typeof mailRecord>[], includePrivateLink = true, includeMail = true) {
   const mail = currentMail(person, rows);
   const link = inviteLink(person.token);
   const pr = manifest ? progress(manifest, person.answers, person.recordGroups) : null;
@@ -385,14 +385,14 @@ function shapePerson(person: ParticipantView, manifest: Manifest | null, rows: R
     requiredMissing: pr?.missingRequired.length ?? 0,
     lastSavedAt: person.lastSavedAt ?? null,
     submittedAt: person.submittedAt ?? null,
-    mail: {
+    ...(includeMail ? { mail: {
       state: mail.state,
       sentAt: mail.sentAt ?? null,
       error: mail.error ?? null,
       delivery: mail.state === "sent" ? mail.delivery : "unknown",
       deliveryCheckedAt: mail.deliveryCheckedAt ?? null,
       detail: mail.deliveryDetail ?? null,
-    },
+    } } : {}),
   };
 }
 
@@ -1104,7 +1104,7 @@ const TOOLS: ToolDef[] = [
         status: loaded.interview.status,
         currentVersion: loaded.interview.currentVersion,
         counts,
-        people: loaded.people.map((p) => ({ id: p.id, name: p.name, status: p.status, answered: p.answered, total: p.total, requiredMissing: p.requiredMissing, mail: p.mail.state })),
+        people: loaded.people.map((p) => ({ id: p.id, name: p.name, status: p.status, answered: p.answered, total: p.total, requiredMissing: p.requiredMissing, mail: p.mail?.state ?? "unknown" })),
         nextCursor: loaded.nextCursor,
       });
     },
@@ -2036,7 +2036,7 @@ const TOOLS: ToolDef[] = [
         if (existing?.kind === "conflict") return err("operationId was already used with different update_person arguments.", "operation_id_conflict");
         if (existing?.kind === "replayed") {
           const manifest = await currentInterviewManifest(existing.person.interviewId);
-          return ok({ person: shapePerson(existing.person, manifest, [], false) });
+          return ok({ person: shapePerson(existing.person, manifest, [], false, false) });
         }
         const updated = await updateParticipantWithOperation(id, patch, operation);
         if (updated.kind === "deleted") return err("This operation's retained result was cleared because its person was deleted. Use a new operationId for another update.", "operation_result_unavailable");
@@ -2045,13 +2045,13 @@ const TOOLS: ToolDef[] = [
         if (updated.kind === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
         if (updated.kind !== "updated" && updated.kind !== "replayed") return err("That could not be done. Try again in a moment.", "server_error");
         const manifest = await currentInterviewManifest(updated.person.interviewId);
-        return ok({ person: shapePerson(updated.person, manifest, [], false) });
+        return ok({ person: shapePerson(updated.person, manifest, [], false, false) });
       }
       const updated = await updateParticipant(id, patch);
       if (updated === "invite_pending") return err("This person's invite outcome is still unconfirmed. Resolve the invite status before changing their email.", "invite_outcome_pending");
       if (!updated) return err("Person not found.", "not_found");
       const manifest = await currentInterviewManifest(updated.interviewId);
-      return ok({ person: shapePerson(updated, manifest, [], false) });
+      return ok({ person: shapePerson(updated, manifest, [], false, false) });
     },
   },
   {
