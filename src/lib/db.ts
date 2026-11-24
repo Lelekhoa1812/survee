@@ -233,6 +233,7 @@ async function ensureIndexes(d: Db) {
     d.collection("login_attempts").createIndex({ key: 1, at: -1 }, { name: "by_key" }),
     d.collection("rate_limits").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0, name: "ttl_expiry" }),
     d.collection("mcp_operations").createIndex({ tenantId: 1, tool: 1, credentialIdHash: 1, operationIdHash: 1 }, { unique: true, name: "mcp_operation_scope_unique" }),
+    d.collection("mcp_operations").createIndex({ tenantId: 1, interviewId: 1 }, { name: "mcp_operations_by_interview" }),
     d.collection("mcp_operations").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "mcp_operation_ttl" }),
     d.collection("revoked_sessions").createIndex({ sid: 1 }, { unique: true, name: "sid_unique" }),
     d.collection("revoked_sessions").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0, name: "ttl_expiry" }),
