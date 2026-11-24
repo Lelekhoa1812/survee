@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   inspectImage: vi.fn(),
   noteMcp: vi.fn(async () => {}),
   ImageAssetQuotaError: class ImageAssetQuotaError extends Error { usedBytes = 10; },
+  InterviewPageCursorError: class InterviewPageCursorError extends Error {},
+  InterviewPageFilterError: class InterviewPageFilterError extends Error {},
+  MAX_INTERVIEW_SEARCH_LENGTH: 80,
 }));
 
 vi.mock("../src/lib/repo/assets", () => ({
@@ -23,7 +26,12 @@ vi.mock("../src/lib/repo/assets", () => ({
   ImageAssetQuotaError: mocks.ImageAssetQuotaError,
   WORKSPACE_IMAGE_QUOTA_BYTES: 100,
 }));
-vi.mock("../src/lib/repo", () => ({ noteMcp: mocks.noteMcp }));
+vi.mock("../src/lib/repo", () => ({
+  noteMcp: mocks.noteMcp,
+  InterviewPageCursorError: mocks.InterviewPageCursorError,
+  InterviewPageFilterError: mocks.InterviewPageFilterError,
+  MAX_INTERVIEW_SEARCH_LENGTH: mocks.MAX_INTERVIEW_SEARCH_LENGTH,
+}));
 
 import { dispatchTool, listToolDefs } from "../src/lib/mcp/tools";
 import type { McpCapability } from "../src/lib/mcp/capabilities";

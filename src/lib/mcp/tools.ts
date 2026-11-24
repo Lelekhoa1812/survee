@@ -41,6 +41,8 @@ import {
   listInterviewPage,
   listEventPage,
   InterviewPageCursorError,
+  InterviewPageFilterError,
+  MAX_INTERVIEW_SEARCH_LENGTH,
   listParticipantPage,
   listParticipants,
   ParticipantCursorError,
@@ -519,16 +521,20 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "list_interview_page",
-    description: "List a bounded page of interviews, ordered by most recently updated. Use nextCursor to load older interviews; counts cover only the returned page.",
-    inputSchema: obj({ cursor: str, limit: { type: "integer", minimum: 1, maximum: MAX_INTERVIEW_PAGE_SIZE } }),
+    description: "List a bounded page of interviews, ordered by most recently updated. Optional filters search interview names/descriptions and select status or mode. Reuse the same filters with nextCursor; counts cover only the returned page.",
+    inputSchema: obj({ cursor: str, limit: { type: "integer", minimum: 1, maximum: MAX_INTERVIEW_PAGE_SIZE }, search: { type: "string", maxLength: MAX_INTERVIEW_SEARCH_LENGTH }, status: { type: "string", enum: ["open", "closed"] }, mode: { type: "string", enum: ["single", "multi"] } }),
     async run(args) {
       if (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 256)) return err("cursor must be a valid interview page cursor.", "invalid_args");
       const limit = args.limit === undefined ? DEFAULT_INTERVIEW_PAGE_SIZE : args.limit;
       if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > MAX_INTERVIEW_PAGE_SIZE) return err(`limit must be an integer from 1 to ${MAX_INTERVIEW_PAGE_SIZE}.`, "invalid_args");
+      if (args.search !== undefined && (typeof args.search !== "string" || args.search.length > MAX_INTERVIEW_SEARCH_LENGTH)) return err(`search must be a string of at most ${MAX_INTERVIEW_SEARCH_LENGTH} characters.`, "invalid_args");
+      if (args.status !== undefined && args.status !== "open" && args.status !== "closed") return err("status must be open or closed.", "invalid_args");
+      if (args.mode !== undefined && args.mode !== "single" && args.mode !== "multi") return err("mode must be single or multi.", "invalid_args");
       try {
-        return ok(await listInterviewPage({ cursor: args.cursor as string | undefined, limit }));
+        return ok(await listInterviewPage({ cursor: args.cursor as string | undefined, limit, search: args.search as string | undefined, status: args.status as "open" | "closed" | undefined, mode: args.mode as "single" | "multi" | undefined }));
       } catch (error) {
         if (error instanceof InterviewPageCursorError) return err(error.message, "invalid_args");
+        if (error instanceof InterviewPageFilterError) return err(error.message, "invalid_args");
         throw error;
       }
     },

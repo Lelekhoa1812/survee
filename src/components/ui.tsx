@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 // ------------------------------------------------------------------------------------------------ icons
 const PATHS: Record<string, ReactNode> = {
   check: <path d="M4 12.5l5 5L20 6.5" />,
+  search: (<><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></>),
   x: <path d="M6 6l12 12M18 6L6 18" />,
   plus: <path d="M12 5v14M5 12h14" />,
   copy: (<><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 012-2h9" /></>),

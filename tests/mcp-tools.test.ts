@@ -165,6 +165,7 @@ vi.mock("../src/lib/repo", async () => {
       at: "2026-11-13T00:00:00.000Z",
       meta: { tool: "get_design_guidance", ok: true, actor: { kind: "api_key", id: "0123456789abcdef01234567", name: "Reporting agent" } },
     }], nextCursor: "older-events" })),
+    listInterviewPage: vi.fn(async (..._args: unknown[]) => ({ interviews: [], nextCursor: null, hasMore: false })),
     listParticipants: vi.fn(async () => [
       { id: personId, name: "Ada Lovelace", status: "submitted", answers: { fit: { value: "yes", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 2, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "high", updatedAt: "2026-11-13T00:00:00.000Z" } } },
       { id: anotherPersonId, name: "Grace Hopper", status: "invited", answers: { fit: { value: "retired", updatedAt: "2026-11-13T00:00:00.000Z" }, budget: { value: 4, updatedAt: "2026-11-13T00:00:00.000Z" }, confidence: { value: "low", updatedAt: "2026-11-13T00:00:00.000Z" } } },
@@ -196,7 +197,7 @@ import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
 import { getWorkspaceAnalytics } from "../src/lib/repo/workspace-analytics";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation, updateParticipantWithOperation, getUpdatePersonOperation } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listInterviewPage, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation, updateParticipantWithOperation, getUpdatePersonOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -216,6 +217,7 @@ beforeEach(() => {
   sent.length = 0;
   searches.length = 0;
   vi.mocked(noteMcp).mockClear();
+  vi.mocked(listInterviewPage).mockClear();
   vi.mocked(createInterview).mockClear();
   vi.mocked(createInterviewWithOperation).mockClear().mockResolvedValue({ kind: "created", result: { id: interviewId, interviewId, report: { ok: true, counts: { error: 0 }, diagnostics: [] } } });
   vi.mocked(getCreateInterviewOperation).mockClear().mockResolvedValue(null);
@@ -233,6 +235,14 @@ beforeEach(() => {
 });
 
 describe("MCP tools", () => {
+  it("passes workspace discovery filters through the paged MCP tool", async () => {
+    const response = await call("list_interview_page", { search: "permit service", status: "open", mode: "multi", limit: 40 });
+    const body = await response.json() as { result: { structuredContent: { nextCursor: string | null; hasMore: boolean } } };
+
+    expect(body.result.structuredContent).toMatchObject({ nextCursor: null, hasMore: false });
+    expect(listInterviewPage).toHaveBeenCalledWith({ cursor: undefined, limit: 40, search: "permit service", status: "open", mode: "multi" });
+  });
+
   it("counts JSON string bytes exactly without serializing escaped copies", () => {
     for (const value of ["plain", 'quotes " and \\', "\u0000\b\t\n\f\r\u001f", "é漢😀", "\ud800", "\udc00", "x\ud800y"]) {
       expect(jsonStringByteLength(value)).toBe(Buffer.byteLength(JSON.stringify(value), "utf8"));

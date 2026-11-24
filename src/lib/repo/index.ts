@@ -78,6 +78,7 @@ export async function listInterviews(): Promise<InterviewSummary[]> {
 
 export const DEFAULT_INTERVIEW_PAGE_SIZE = 25;
 export const MAX_INTERVIEW_PAGE_SIZE = 100;
+export const MAX_INTERVIEW_SEARCH_LENGTH = 80;
 
 export class InterviewPageCursorError extends Error {
   constructor() {
@@ -86,10 +87,34 @@ export class InterviewPageCursorError extends Error {
   }
 }
 
-function decodeInterviewCursor(cursor: string): { updatedAt: Date; id: ObjectId } {
+export class InterviewPageFilterError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InterviewPageFilterError";
+  }
+}
+
+type InterviewPageFilters = { search?: string; status?: InterviewStatus; mode?: InterviewMode };
+
+function normalizeInterviewPageFilters(filters: InterviewPageFilters): Required<Pick<InterviewPageFilters, "search">> & Pick<InterviewPageFilters, "status" | "mode"> {
+  if (filters.status !== undefined && filters.status !== "open" && filters.status !== "closed") throw new InterviewPageFilterError("status must be open or closed.");
+  if (filters.mode !== undefined && filters.mode !== "single" && filters.mode !== "multi") throw new InterviewPageFilterError("mode must be single or multi.");
+  const rawSearch = filters.search?.normalize("NFKC").trim() ?? "";
+  if (rawSearch.length > MAX_INTERVIEW_SEARCH_LENGTH) throw new InterviewPageFilterError(`search must be ${MAX_INTERVIEW_SEARCH_LENGTH} characters or fewer.`);
+  const search = rawSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  return { search, ...(filters.status ? { status: filters.status } : {}), ...(filters.mode ? { mode: filters.mode } : {}) };
+}
+
+function interviewPageFilterHash(filters: ReturnType<typeof normalizeInterviewPageFilters>): string | undefined {
+  if (!filters.search && !filters.status && !filters.mode) return undefined;
+  return createHash("sha256").update(JSON.stringify(filters)).digest("hex").slice(0, 20);
+}
+
+function decodeInterviewCursor(cursor: string, expectedFilterHash?: string): { updatedAt: Date; id: ObjectId } {
   try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { updatedAt?: unknown; id?: unknown };
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { updatedAt?: unknown; id?: unknown; filterHash?: unknown };
     if (typeof parsed.updatedAt !== "string" || typeof parsed.id !== "string" || !/^[0-9a-f]{24}$/i.test(parsed.id)) throw new Error();
+    if (parsed.filterHash !== expectedFilterHash) throw new Error();
     const updatedAt = new Date(parsed.updatedAt);
     if (!Number.isFinite(updatedAt.getTime()) || updatedAt.toISOString() !== parsed.updatedAt) throw new Error();
     return { updatedAt, id: new ObjectId(parsed.id) };
@@ -98,15 +123,20 @@ function decodeInterviewCursor(cursor: string): { updatedAt: Date; id: ObjectId 
   }
 }
 
-export async function listInterviewPage(options: { cursor?: string; limit?: number } = {}): Promise<{ interviews: InterviewSummary[]; nextCursor: string | null; hasMore: boolean }> {
+export async function listInterviewPage(options: { cursor?: string; limit?: number; search?: string; status?: InterviewStatus; mode?: InterviewMode } = {}): Promise<{ interviews: InterviewSummary[]; nextCursor: string | null; hasMore: boolean }> {
   const limit = options.limit ?? DEFAULT_INTERVIEW_PAGE_SIZE;
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_INTERVIEW_PAGE_SIZE) throw new RangeError(`limit must be an integer from 1 to ${MAX_INTERVIEW_PAGE_SIZE}.`);
+  const filters = normalizeInterviewPageFilters(options);
+  const filterHash = interviewPageFilterHash(filters);
   const tenantId = await currentTenantId();
   if (!tenantId) return { interviews: [], nextCursor: null, hasMore: false };
-  const cursor = options.cursor ? decodeInterviewCursor(options.cursor) : null;
-  const interviewFilter = cursor
-    ? tenantFilter(tenantId, { $or: [{ updatedAt: { $lt: cursor.updatedAt } }, { updatedAt: cursor.updatedAt, _id: { $lt: cursor.id } }] })
-    : tenantFilter(tenantId);
+  const cursor = options.cursor ? decodeInterviewCursor(options.cursor, filterHash) : null;
+  const match: Record<string, unknown> = {};
+  if (filters.status) match.status = filters.status;
+  if (filters.mode) match.mode = filters.mode;
+  if (filters.search) match.$text = { $search: filters.search, $language: "none" };
+  if (cursor) match.$or = [{ updatedAt: { $lt: cursor.updatedAt } }, { updatedAt: cursor.updatedAt, _id: { $lt: cursor.id } }];
+  const interviewFilter = tenantFilter(tenantId, match);
   const [interviews, participants] = await Promise.all([col.interviews(), col.participants()]);
   const fetched = await interviews.find(interviewFilter).sort({ updatedAt: -1, _id: -1 }).limit(limit + 1).toArray();
   const hasMore = fetched.length > limit;
@@ -136,7 +166,7 @@ export async function listInterviewPage(options: { cursor?: string; limit?: numb
     };
   });
   const last = docs.at(-1);
-  const nextCursor = hasMore && last ? Buffer.from(JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last._id.toHexString() })).toString("base64url") : null;
+  const nextCursor = hasMore && last ? Buffer.from(JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last._id.toHexString(), ...(filterHash ? { filterHash } : {}) })).toString("base64url") : null;
   return { interviews: summaries, nextCursor, hasMore };
 }
 

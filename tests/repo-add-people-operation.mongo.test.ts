@@ -149,6 +149,27 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     expect(allTenants.some((tenant) => tenant.analyticsMinimumCellSize === 9)).toBe(true);
   });
 
+  it("searches and filters interview pages in Mongo before paging, within the current tenant", async () => {
+    const database = client.db(dbName);
+    const now = new Date();
+    const ids = [new mongo.ObjectId(), new mongo.ObjectId(), new mongo.ObjectId(), new mongo.ObjectId()];
+    await database.collection("interviews").insertMany([
+      { _id: ids[0], tenantId: "search-workspace-a", name: "Civic feedback", description: "Transit service review", mode: "multi", status: "open", currentVersion: 1, createdAt: now, updatedAt: new Date(now.getTime() + 3) },
+      { _id: ids[1], tenantId: "search-workspace-a", name: "Regional survey", description: "Transit network review", mode: "multi", status: "open", currentVersion: 1, createdAt: now, updatedAt: new Date(now.getTime() + 2) },
+      { _id: ids[2], tenantId: "search-workspace-a", name: "Closed planning", description: "Transit plan", mode: "single", status: "closed", currentVersion: 1, createdAt: now, updatedAt: new Date(now.getTime() + 1) },
+      { _id: ids[3], tenantId: "search-workspace-b", name: "Other workspace", description: "Transit service review", mode: "multi", status: "open", currentVersion: 1, createdAt: now, updatedAt: now },
+    ]);
+
+    const filters = { search: "transit", status: "open" as const, mode: "multi" as const, limit: 1 };
+    const first = await withTenantPrincipal({ tenantId: "search-workspace-a", role: "admin", source: "api_key" }, () => repository.listInterviewPage(filters));
+    const second = await withTenantPrincipal({ tenantId: "search-workspace-a", role: "admin", source: "api_key" }, () => repository.listInterviewPage({ ...filters, cursor: first.nextCursor ?? undefined }));
+
+    expect(first.interviews.map((row) => row.id)).toEqual([ids[0].toHexString()]);
+    expect(second.interviews.map((row) => row.id)).toEqual([ids[1].toHexString()]);
+    expect(first.hasMore).toBe(true);
+    expect(second.nextCursor).toBeNull();
+  });
+
   it("normalizes legacy signup claims and keeps the newest deterministic email owner", async () => {
     const signups = client.db(dbName).collection("pending_signups");
     const rows = await signups.find({}).sort({ email: 1 }).toArray();

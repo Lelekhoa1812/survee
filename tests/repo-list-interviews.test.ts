@@ -98,6 +98,32 @@ describe("listInterviewPage", () => {
       ],
     }));
   });
+
+  it("applies workspace filters before pagination and binds cursors to those filters", async () => {
+    const first = await withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ limit: 1, search: "Permit & service", status: "open", mode: "multi" }));
+    expect(mocks.interviewFilter).toEqual(tenantFilter(tenantId, {
+      status: "open",
+      mode: "multi",
+      $text: { $search: "Permit service", $language: "none" },
+    }));
+    const boundary = JSON.parse(Buffer.from(first.nextCursor!, "base64url").toString("utf8"));
+    expect(boundary.filterHash).toMatch(/^[a-f0-9]{20}$/);
+    await withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ cursor: first.nextCursor!, limit: 1, search: "Permit service", status: "open", mode: "multi" }));
+    expect(mocks.interviewFilter).toEqual(tenantFilter(tenantId, {
+      status: "open",
+      mode: "multi",
+      $text: { $search: "Permit service", $language: "none" },
+      $or: [
+        { updatedAt: { $lt: new Date("2026-01-04T00:00:00Z") } },
+        { updatedAt: new Date("2026-01-04T00:00:00Z"), _id: { $lt: interviewA } },
+      ],
+    }));
+    await expect(withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ cursor: first.nextCursor!, search: "Permit", status: "open", mode: "multi" }))).rejects.toThrow("valid interview page cursor");
+  });
+
+  it("rejects overlong search filters", async () => {
+    await expect(withTenantPrincipal({ tenantId, role: "service", source: "service_token" }, () => listInterviewPage({ search: "a".repeat(81) }))).rejects.toThrow("80 characters or fewer");
+  });
 });
 
 describe("listInterviews", () => {

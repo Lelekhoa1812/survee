@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { noteMcp, listInterviews, listEventPage } = vi.hoisted(() => ({
+const { noteMcp, listInterviews, listEventPage, InterviewPageCursorError, InterviewPageFilterError, MAX_INTERVIEW_SEARCH_LENGTH } = vi.hoisted(() => ({
   noteMcp: vi.fn(async () => {}),
   listInterviews: vi.fn(async () => []),
   listEventPage: vi.fn(async () => ({ events: [], nextCursor: null })),
+  InterviewPageCursorError: class InterviewPageCursorError extends Error {},
+  InterviewPageFilterError: class InterviewPageFilterError extends Error {},
+  MAX_INTERVIEW_SEARCH_LENGTH: 80,
 }));
 
 vi.mock("../src/lib/db", () => ({
@@ -15,6 +18,9 @@ vi.mock("../src/lib/repo", () => ({
   noteMcp,
   listInterviews,
   listEventPage,
+  InterviewPageCursorError,
+  InterviewPageFilterError,
+  MAX_INTERVIEW_SEARCH_LENGTH,
   getInterview: vi.fn(async () => ({ _id: { toHexString: () => "a".repeat(24) }, currentVersion: 2, name: "Probe", description: "", mode: "multi", status: "open", createdAt: new Date(), updatedAt: new Date() })),
   getVersion: vi.fn(async (_id: unknown, version: number) => (version === 2 ? { version: 2, fileName: "a.html", html: "<p></p>", manifest: { questions: [] } } : null)),
 }));

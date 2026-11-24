@@ -1,28 +1,47 @@
 import Link from "next/link";
 import { Badge, Icon } from "@/components/ui";
-import { InterviewPageCursorError, listInterviewPage } from "@/lib/repo";
+import { InterviewPageCursorError, InterviewPageFilterError, listInterviewPage, MAX_INTERVIEW_SEARCH_LENGTH } from "@/lib/repo";
 import { relTime } from "@/lib/time";
 import { adminSession } from "@/lib/http";
 
 export const metadata = { title: "Interviews" };
 export const dynamic = "force-dynamic";
 
-export default async function Dashboard({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ cursor?: string | string[] }> } = {}) {
+export default async function Dashboard({ searchParams = Promise.resolve({}) }: { searchParams?: Promise<{ cursor?: string | string[]; search?: string | string[]; status?: string | string[]; mode?: string | string[] }> } = {}) {
   const session = await adminSession();
   const canManage = session?.role === "owner" || session?.role === "admin";
   const params = await searchParams;
   const cursor = typeof params.cursor === "string" ? params.cursor : undefined;
+  const search = typeof params.search === "string" ? params.search : "";
+  const statusValue = typeof params.status === "string" ? params.status : "";
+  const modeValue = typeof params.mode === "string" ? params.mode : "";
+  const status: "open" | "closed" | undefined = statusValue === "open" || statusValue === "closed" ? statusValue : undefined;
+  const mode: "single" | "multi" | undefined = modeValue === "single" || modeValue === "multi" ? modeValue : undefined;
+  const invalidFilter = Boolean((statusValue && !status) || (modeValue && !mode) || search.length > MAX_INTERVIEW_SEARCH_LENGTH);
+  const filters = { search: search.length <= MAX_INTERVIEW_SEARCH_LENGTH ? search : undefined, status, mode };
+  const hasFilters = Boolean(filters.search?.trim() || filters.status || filters.mode);
   let page;
   let invalidCursor = false;
   try {
-    page = await listInterviewPage({ cursor });
+    page = await listInterviewPage({ cursor, ...filters });
   } catch (error) {
-    if (!(error instanceof InterviewPageCursorError)) throw error;
-    page = await listInterviewPage();
-    invalidCursor = true;
+    if (error instanceof InterviewPageCursorError) {
+      page = await listInterviewPage(filters);
+      invalidCursor = true;
+    } else if (error instanceof InterviewPageFilterError) {
+      page = await listInterviewPage();
+    } else throw error;
   }
   const { interviews } = page;
   const totals = interviews.reduce((a, i) => ({ people: a.people + i.counts.people, submitted: a.submitted + i.counts.submitted, active: a.active + (i.status === "open" ? 1 : 0) }), { people: 0, submitted: 0, active: 0 });
+  const pageUrl = (nextCursor?: string) => {
+    const query = new URLSearchParams();
+    if (filters.search?.trim()) query.set("search", filters.search);
+    if (filters.status) query.set("status", filters.status);
+    if (filters.mode) query.set("mode", filters.mode);
+    if (nextCursor) query.set("cursor", nextCursor);
+    return query.size ? `/admin?${query.toString()}` : "/admin";
+  };
 
   return (
     <main id="main-content" className="page" tabIndex={-1}>
@@ -37,6 +56,27 @@ export default async function Dashboard({ searchParams = Promise.resolve({}) }: 
       </div>
 
       {invalidCursor && <p role="status" className="muted">That interview page link is invalid or expired. Showing the latest interviews.</p>}
+      {invalidFilter && <p role="status" className="muted">One or more filters were invalid. Showing the available results.</p>}
+
+      <form action="/admin" method="get" className="card row wrap" aria-label="Filter interviews" style={{ padding: 14, marginBottom: 18 }}>
+        <label className="field" htmlFor="interview-search" style={{ flex: "2 1 260px", margin: 0 }}>
+          <span>Search interviews</span>
+          <input id="interview-search" className="input" name="search" type="search" maxLength={MAX_INTERVIEW_SEARCH_LENGTH} value={search} placeholder="Name or description" />
+        </label>
+        <label className="field" htmlFor="interview-status" style={{ flex: "1 1 140px", margin: 0 }}>
+          <span>Status</span>
+          <select id="interview-status" className="select" name="status" value={statusValue === "open" || statusValue === "closed" ? statusValue : ""}>
+            <option value="">All statuses</option><option value="open">Open</option><option value="closed">Closed</option>
+          </select>
+        </label>
+        <label className="field" htmlFor="interview-mode" style={{ flex: "1 1 150px", margin: 0 }}>
+          <span>Mode</span>
+          <select id="interview-mode" className="select" name="mode" value={modeValue === "single" || modeValue === "multi" ? modeValue : ""}>
+            <option value="">All modes</option><option value="single">One person</option><option value="multi">Multi-user</option>
+          </select>
+        </label>
+        <div className="row wrap"><button className="btn primary" type="submit">Apply filters</button>{hasFilters && <Link className="btn" href="/admin">Clear filters</Link>}</div>
+      </form>
 
       {interviews.length > 0 && (
         <div className="stats" style={{ marginBottom: 20 }}>
@@ -53,6 +93,12 @@ export default async function Dashboard({ searchParams = Promise.resolve({}) }: 
           <h2>No more interviews</h2>
           <p>You have reached the end of the interview list.</p>
           <Link href="/admin" className="btn sm">Return to latest interviews</Link>
+        </section>
+      ) : interviews.length === 0 && hasFilters ? (
+        <section className="card empty">
+          <div className="ico"><Icon name="search" size={24} /></div>
+          <h2>No matching interviews</h2>
+          <p>Try a different search or clear one or more filters.</p>
         </section>
       ) : interviews.length === 0 && !canManage ? (
         <section className="card empty">
@@ -130,8 +176,8 @@ export default async function Dashboard({ searchParams = Promise.resolve({}) }: 
       )}
       {interviews.length > 0 && (cursor || page.nextCursor) && (
         <nav aria-label="Interview pages" className="row wrap" style={{ justifyContent: "space-between", marginTop: 16 }}>
-          {cursor ? <Link className="btn sm" href="/admin">Return to latest interviews</Link> : <span />}
-          {page.nextCursor && <Link className="btn sm" href={`/admin?cursor=${encodeURIComponent(page.nextCursor)}`}>Load older interviews</Link>}
+          {cursor ? <Link className="btn sm" href={pageUrl()}>Return to latest results</Link> : <span />}
+          {page.nextCursor && <Link className="btn sm" href={pageUrl(page.nextCursor)}>Load older interviews</Link>}
         </nav>
       )}
     </main>
