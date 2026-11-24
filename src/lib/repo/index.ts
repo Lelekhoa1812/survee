@@ -2171,6 +2171,13 @@ export interface EventPage {
   nextCursor: string | null;
 }
 
+export class EventCursorError extends Error {
+  constructor() {
+    super("Invalid event cursor.");
+    this.name = "EventCursorError";
+  }
+}
+
 function decodeEventCursor(cursor: string): { at: Date; id: ObjectId } {
   try {
     if (cursor.length > 512) throw new Error();
@@ -2179,7 +2186,7 @@ function decodeEventCursor(cursor: string): { at: Date; id: ObjectId } {
     const at = new Date(parsed.at);
     if (!Number.isFinite(at.getTime()) || at.toISOString() !== parsed.at) throw new Error();
     return { at, id: new ObjectId(parsed.id) };
-  } catch { throw new Error("Invalid event cursor."); }
+  } catch { throw new EventCursorError(); }
 }
 
 /** Read an audit-history page in stable newest-first order, including ties at the same timestamp. */

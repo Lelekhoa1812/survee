@@ -1,5 +1,5 @@
 import { fail, guardAdmin, json, withServerErrors } from "@/lib/http";
-import { getInterview, listEventPage } from "@/lib/repo";
+import { EventCursorError, getInterview, listEventPage } from "@/lib/repo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -16,7 +16,8 @@ export const GET = withServerErrors("admin/interviews/[id]/events", async functi
   if (cursor !== null && (!cursor || cursor.length > 512)) return fail(400, "cursor is invalid.", { code: "invalid_cursor" });
   try {
     return json({ ok: true, ...await listEventPage(id, cursor, limit) });
-  } catch {
-    return fail(400, "cursor is invalid.", { code: "invalid_cursor" });
+  } catch (error) {
+    if (error instanceof EventCursorError) return fail(400, "cursor is invalid.", { code: "invalid_cursor" });
+    throw error;
   }
 });

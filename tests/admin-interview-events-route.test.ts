@@ -11,7 +11,11 @@ vi.mock("../src/lib/http", () => ({
   json: (value: unknown) => Response.json(value),
   withServerErrors: (_name: string, handler: (...args: any[]) => unknown) => handler,
 }));
-vi.mock("../src/lib/repo", () => ({ getInterview: state.getInterview, listEventPage: state.listEventPage }));
+vi.mock("../src/lib/repo", () => ({
+  getInterview: state.getInterview,
+  listEventPage: state.listEventPage,
+  EventCursorError: class EventCursorError extends Error {},
+}));
 
 import { GET } from "../src/app/api/admin/interviews/[id]/events/route";
 
@@ -33,5 +37,10 @@ describe("admin interview event pages", () => {
     expect(invalidLimit.status).toBe(400);
     expect(invalidCursor.status).toBe(400);
     expect(state.listEventPage).not.toHaveBeenCalled();
+  });
+
+  it("lets database failures reach the server error handler", async () => {
+    state.listEventPage.mockRejectedValueOnce(new Error("database unavailable"));
+    await expect(GET(new Request("https://kqa.test/api/events"), context)).rejects.toThrow("database unavailable");
   });
 });

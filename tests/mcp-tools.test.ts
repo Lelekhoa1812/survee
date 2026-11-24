@@ -228,7 +228,7 @@ import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
 import { getWorkspaceAnalytics } from "../src/lib/repo/workspace-analytics";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listInterviewPage, listParticipantPage, listParticipants, noteMcp, recordExportEvent, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation, updateParticipantWithOperation, getUpdatePersonOperation } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listInterviewPage, listEventPage, listParticipantPage, listParticipants, noteMcp, recordExportEvent, EventCursorError, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation, updateParticipantWithOperation, getUpdatePersonOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -594,6 +594,17 @@ describe("MCP tools", () => {
     expect(body.result.structuredContent.nextCursor).toBe("older-events");
     const paged = await call("list_events", { interviewId, cursor: "older-events", limit: 10 });
     expect(paged.status).toBe(200);
+  });
+
+  it("classifies malformed event cursors while preserving infrastructure failures", async () => {
+    vi.mocked(listEventPage).mockRejectedValueOnce(new EventCursorError());
+    const invalid = await call("list_events", { interviewId, cursor: "bad" });
+    expect(invalid.status).toBe(200);
+    await expect(invalid.json()).resolves.toMatchObject({ result: { isError: true, structuredContent: { code: "invalid_cursor" } } });
+
+    vi.mocked(listEventPage).mockRejectedValueOnce(new Error("database unavailable"));
+    const unavailable = await call("list_events", { interviewId });
+    await expect(unavailable.json()).resolves.toMatchObject({ result: { isError: true, structuredContent: { code: "server_error" } } });
   });
 
   it("returns questionnaire diagnostics with a successful create result", async () => {

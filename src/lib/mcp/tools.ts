@@ -40,6 +40,7 @@ import {
   listInterviews,
   listInterviewPage,
   listEventPage,
+  EventCursorError,
   InterviewPageCursorError,
   InterviewPageFilterError,
   MAX_INTERVIEW_SEARCH_LENGTH,
@@ -1132,7 +1133,10 @@ const TOOLS: ToolDef[] = [
       }
       let page;
       try { page = await listEventPage(id, cursor, limit); }
-      catch { return err("cursor must be a valid event page cursor.", "invalid_cursor"); }
+      catch (error) {
+        if (error instanceof EventCursorError) return err("cursor must be a valid event page cursor.", "invalid_cursor");
+        throw error;
+      }
       return ok({ events: page.events.map((event) => {
         const meta = event.meta ? { ...event.meta } : undefined;
         if (meta) delete meta.actor;

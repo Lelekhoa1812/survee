@@ -104,7 +104,7 @@ Every tool uses the same bearer check and per-key capability check. Tool definit
 | `get_survey_html` | The stored file for a version |
 | `list_versions` | Upload history without HTML |
 | `check_questionnaire` | Run the checker. Nothing is stored |
-| `list_image_assets` | List a page of images stored in the workspace; the limit is 100 MiB of image bytes rather than an image-count cap |
+| `list_image_assets` | List a page of images stored in the workspace; the limit is 100 assets per page |
 | `upload_image_asset` | Store an image and return its reusable questionnaire URL; required `operationId` makes uncertain retries return the same asset without consuming quota twice |
 | `update_image_asset` | Rename an image; image bytes stay immutable so saved questionnaires keep rendering |
 | `delete_image_asset` | Delete an unused image after exact-name confirmation; deletion is blocked while a saved questionnaire or active preview uses it |
