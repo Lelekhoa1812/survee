@@ -854,4 +854,38 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     expect(effective).toBe("delivered");
     expect(await database.collection("workspace_invitations").findOne({ _id: id })).toMatchObject({ delivery: "delivered", deliveryDetail: "250 accepted" });
   });
+
+  it("lets one concurrent password reset win and retires a stale token after a version change", async () => {
+    const database = client.db(dbName);
+    const userId = new mongo.ObjectId();
+    const oldHash = await accounts.hashPassword("previous password long enough");
+    const now = new Date();
+    await database.collection("users").insertOne({
+      _id: userId, email: "reset-race@example.test", passwordHash: oldHash, emailVerifiedAt: now,
+      authVersion: 2, createdAt: now, updatedAt: now,
+    });
+    const token = `reset-${randomUUID()}`;
+    expect(await accounts.createPendingPasswordReset({ email: "reset-race@example.test", token })).toBeInstanceOf(mongo.ObjectId);
+
+    const passwords = ["first new password long enough", "second new password long enough"] as const;
+    const results = await Promise.all(passwords.map((password) => accounts.completePasswordReset(token, password)));
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    const stored = await database.collection<{ passwordHash: string; authVersion: number }>("users").findOne({ _id: userId });
+    expect(stored?.authVersion).toBe(3);
+    const winner = passwords[results.findIndex((result) => result.ok)];
+    const loser = passwords[results.findIndex((result) => !result.ok)];
+    expect(await accounts.verifyPassword(winner, stored!.passwordHash)).toBe(true);
+    expect(await accounts.verifyPassword(loser, stored!.passwordHash)).toBe(false);
+    expect(await database.collection("pending_password_resets").countDocuments({ userId })).toBe(0);
+    await expect(accounts.completePasswordReset(token, "third new password long enough")).resolves.toEqual({ ok: false });
+
+    const staleToken = `stale-${randomUUID()}`;
+    expect(await accounts.createPendingPasswordReset({ email: "reset-race@example.test", token: staleToken })).toBeInstanceOf(mongo.ObjectId);
+    await database.collection("users").updateOne({ _id: userId }, { $inc: { authVersion: 1 } });
+    await expect(accounts.completePasswordReset(staleToken, "stale password long enough 123")).resolves.toEqual({ ok: false });
+    expect(await database.collection("pending_password_resets").countDocuments({ userId })).toBe(0);
+    const afterStale = await database.collection<{ passwordHash: string; authVersion: number }>("users").findOne({ _id: userId });
+    expect(afterStale?.authVersion).toBe(4);
+    expect(afterStale?.passwordHash).toBe(stored!.passwordHash);
+  });
 });
