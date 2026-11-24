@@ -242,6 +242,43 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     expect(await client.db(dbName).collection("mcp_operations").countDocuments({ tool: "add_people", tenantId: "integration-workspace" })).toBe(1);
   });
 
+  it("serializes concurrent keyed invitation resends into one pending SMTP attempt", async () => {
+    const participantId = new mongo.ObjectId();
+    const token = `invite-operation-${randomUUID()}`;
+    await (await dbModule.col.participants()).insertOne({
+      _id: participantId, tenantId: "integration-workspace", interviewId, token,
+      name: "Invite operation fixture", email: "invite-operation@example.com", status: "invited", answers: {}, revision: 0,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const operation = {
+      operationId: `invite-resend-${randomUUID()}`,
+      credentialId: "api_key:integration-key",
+      argumentDigest: createHash("sha256").update(`resend:${participantId.toHexString()}`).digest("hex"),
+    };
+    const reserve = () => withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => mailRepository.insertMailWithOperation({
+        interviewId, participantId, kind: "invite", to: "invite-operation@example.com", token,
+        status: "pending", messageId: `<${operation.operationId}@example.com>`, sentAt: new Date(), triggeredBy: "mcp",
+      }, operation),
+    );
+
+    const results = await Promise.all([reserve(), reserve()]);
+    expect(results.map(({ kind }) => kind).sort()).toEqual(["created", "replayed"]);
+    const created = results.find((result) => result.kind === "created");
+    const replayed = results.find((result) => result.kind === "replayed");
+    expect(created?.kind).toBe("created");
+    expect(replayed?.kind).toBe("replayed");
+    expect(await client.db(dbName).collection("mail_messages").countDocuments({ participantId })).toBe(1);
+
+    const lookup = await withTenantPrincipal(
+      { tenantId: "integration-workspace", role: "admin", source: "api_key" },
+      () => mailRepository.getInviteSendOperation(operation),
+    );
+    expect(lookup?.kind).toBe("replayed");
+    if (lookup?.kind === "replayed") expect(lookup.attempt).toMatchObject({ status: "pending", participantId: participantId.toHexString() });
+  });
+
   it("enforces one actor draft per workspace and revision fences on Mongo", async () => {
     const collection = client.db(dbName).collection("campaign_drafts") as import("mongodb").Collection<import("../src/lib/repo/types").CampaignDraftDoc>;
     const tenantId = `draft-workspace-${randomUUID()}`;

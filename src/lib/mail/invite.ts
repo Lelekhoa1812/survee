@@ -3,14 +3,14 @@ import { smtpSettings } from "../env";
 import { col, withMongoTransaction } from "../db";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { consumeRateLimit, getInterview, getParticipant } from "../repo";
-import { insertMail, listMailByPerson, mailRecord, updateMailAttempt } from "../repo/mail";
+import { getInviteSendOperation, insertMail, insertMailWithOperation, listMailByPerson, mailRecord, updateMailAttempt, type InviteSendOperation, type InviteSendOperationResult } from "../repo/mail";
 import { domainOf, parseEmail } from "./address";
 import { inviteLink } from "./policy";
 import { currentMail, type MailRecord } from "./state";
 import { newMessageId, sendSmtp, type OutboundMail } from "./smtp";
 import { inviteMessage } from "./template";
 
-export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "preflight_unavailable" | "outcome_unknown" | "attempt_unavailable";
+export type SendCode = "not_found" | "no_email" | "closed" | "no_public_url" | "mail_not_configured" | "rate_limited" | "rate_limit_unavailable" | "preflight_unavailable" | "outcome_unknown" | "attempt_unavailable" | "operation_id_conflict" | "operation_result_unavailable";
 
 export type SendInviteResult =
   | { ok: true; result: "sent" | "already_sent"; to: string; sentAt: string; messageId?: string; interviewId: string; personId: string }
@@ -27,7 +27,8 @@ export interface InviteContext {
 export interface SendInviteDeps {
   load?: (personId: string) => Promise<InviteContext | null>;
   send?: (message: OutboundMail) => Promise<{ messageId: string }>;
-  begin?: (row: Parameters<typeof insertMail>[0]) => Promise<string | null>;
+  begin?: (row: Parameters<typeof insertMail>[0], operation?: InviteSendOperation) => Promise<string | null | InviteSendOperationResult>;
+  findOperation?: (operation: InviteSendOperation) => Promise<Exclude<InviteSendOperationResult, { kind: "created" }> | null>;
   finish?: (id: string, patch: { status: "sent"; messageId: string }) => Promise<boolean>;
   log?: (interviewId: string, participantId: string, result: "sent" | "failed", domain: string) => Promise<void>;
   linkFor?: (token: string) => { ok: true; link: string } | { ok: false; error: string };
@@ -76,7 +77,24 @@ async function logInvite(interviewId: string, participantId: string, result: "se
 }
 
 /** One durable mail attempt is recorded before SMTP. Refusals never create an attempt. */
-export async function sendInvite(input: { personId: string; triggeredBy: "admin" | "mcp"; resend?: boolean }, deps: SendInviteDeps = {}): Promise<SendInviteResult> {
+function replayOperationAttempt(attempt: MailRecord, interviewId: string): SendInviteResult {
+  if (attempt.status === "sent") {
+    return { ok: true, result: "sent", to: attempt.to, sentAt: attempt.sentAt, ...(attempt.messageId ? { messageId: attempt.messageId } : {}), interviewId, personId: attempt.participantId ?? "" };
+  }
+  return { ok: false, code: "outcome_unknown", error: "The invite outcome is unconfirmed. Check mail status; this operation will not send another message.", interviewId, personId: attempt.participantId ?? "" };
+}
+
+export async function sendInvite(input: { personId: string; triggeredBy: "admin" | "mcp"; resend?: boolean; operation?: InviteSendOperation }, deps: SendInviteDeps = {}): Promise<SendInviteResult> {
+  if (input.operation) {
+    try {
+      const existing = await (deps.findOperation ?? getInviteSendOperation)(input.operation);
+      if (existing?.kind === "deleted") return { ok: false, code: "operation_result_unavailable", error: "This operation's invite attempt was erased. Use a new operationId to send another invite." };
+      if (existing?.kind === "conflict") return { ok: false, code: "operation_id_conflict", error: "operationId was already used with different send_invite arguments." };
+      if (existing?.kind === "replayed") return replayOperationAttempt(existing.attempt, existing.interviewId);
+    } catch {
+      return { ok: false, code: "preflight_unavailable", error: "Could not verify this invite operation before sending. No message was sent." };
+    }
+  }
   let ctx: InviteContext | null;
   try {
     ctx = await (deps.load ?? loadFromDb)(input.personId);
@@ -138,7 +156,9 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   const message = inviteMessage(ctx.person.name, ctx.interview.name, link.link);
   const messageId = newMessageId(ready.from);
   const send = deps.send ?? sendSmtp;
-  const begin = deps.begin ?? (async (row: Parameters<typeof insertMail>[0]) => (await insertMail(row))?._id.toHexString() ?? null);
+  const begin = deps.begin ?? (async (row: Parameters<typeof insertMail>[0], operation?: InviteSendOperation) => operation
+    ? insertMailWithOperation(row, operation)
+    : (await insertMail(row))?._id.toHexString() ?? null);
   const finish = deps.finish ?? (async (id: string, patch: { status: "sent"; messageId: string }) =>
     updateMailAttempt(new ObjectId(id), patch));
   const base = {
@@ -152,7 +172,17 @@ export async function sendInvite(input: { personId: string; triggeredBy: "admin"
   };
   let attemptId: string | null;
   try {
-    attemptId = await begin({ ...base, status: "pending", messageId });
+    const started = await begin({ ...base, status: "pending", messageId }, input.operation);
+    if (started && typeof started === "object") {
+      if (started.kind === "conflict") return { ok: false, code: "operation_id_conflict", error: "operationId was already used with different send_invite arguments." };
+      if (started.kind === "deleted") return { ok: false, code: "operation_result_unavailable", error: "This operation's invite attempt was erased. Use a new operationId to send another invite." };
+      if (started.kind === "replayed") {
+        return replayOperationAttempt(started.attempt, started.interviewId || ctx.interview.id);
+      }
+      attemptId = started.kind === "created" ? started.attemptId : null;
+    } else {
+      attemptId = started;
+    }
   } catch {
     return { ok: false, code: "attempt_unavailable", error: "The invite attempt could not be recorded, so no email was sent. Try again later.", interviewId: ctx.interview.id, personId: ctx.person.id };
   }

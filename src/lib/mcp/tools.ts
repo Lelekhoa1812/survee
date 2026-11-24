@@ -2157,8 +2157,8 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "send_invite",
-    description: "Email one person their private link. Refuses when they have no email, the interview is closed, or the public URL is unset. A pending outcome is not retried automatically; pass resend: true only when you accept that a duplicate may be delivered.",
-    inputSchema: obj({ personId: str, resend: bool }, ["personId"]),
+    description: "Email one person their private link. Refuses when they have no email, the interview is closed, or the public URL is unset. A pending outcome is not retried automatically. If you intentionally resend, pass resend: true and a required operationId; reuse it only to retry that uncertain resend, and use a new ID for another deliberate resend.",
+    inputSchema: obj({ personId: str, resend: bool, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId"]),
     guard(args) {
       if ("personIds" in args || Array.isArray(args.personId)) return err("Send to one person at a time.");
       return null;
@@ -2167,7 +2167,17 @@ const TOOLS: ToolDef[] = [
       if ("personIds" in args || Array.isArray(args.personId)) return err("Send to one person at a time.");
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
-      const result = await sendInvite({ personId: id, triggeredBy: "mcp", resend: args.resend === true });
+      const resend = args.resend === true;
+      if (resend && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId is required for resend: true and must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      if (!resend && args.operationId !== undefined) return err("operationId is only used with resend: true.", "invalid_args");
+      const credentialId = resend ? stableMcpCredentialId() : null;
+      if (resend && !credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
+      const operation = resend ? {
+        operationId: args.operationId as string,
+        credentialId: credentialId!,
+        argumentDigest: createHash("sha256").update(canonicalJson({ personId: id, resend })).digest("hex"),
+      } : undefined;
+      const result = await sendInvite({ personId: id, triggeredBy: "mcp", resend, operation });
       if (!result.ok) return err(result.error, result.code);
       return ok({ result: result.result, to: result.to, sentAt: result.sentAt, messageId: result.messageId ?? null, interviewId: result.interviewId, personId: result.personId });
     },

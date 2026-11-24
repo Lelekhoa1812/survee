@@ -16,6 +16,7 @@ process.env.IMAP_HOST = "imap.example.com";
 process.env.IMAP_PORT = "993";
 
 const mailRows: Record<string, unknown>[] = [];
+const mcpOperationRows: Record<string, unknown>[] = [];
 const analyticsRuns = new Map<string, { result: Record<string, unknown>; expiresAt: Date }>();
 const sent: { message: Record<string, unknown>; options: { port?: number; secure?: boolean; requireTLS?: boolean } }[] = [];
 const searches: unknown[] = [];
@@ -102,6 +103,15 @@ vi.mock("../src/lib/db", () => ({
         return mailRows.find((item) => String(item._id) === String(criteria._id)) ?? null;
       },
       deleteMany: async () => ({ deletedCount: 0 }),
+    }),
+    mcpOperations: async () => ({
+      findOne: async (filter: Record<string, unknown>) => mcpOperationRows.find((row) => Object.entries(filter).every(([key, value]) => String(row[key]) === String(value))) ?? null,
+      insertOne: async (row: Record<string, unknown>) => { mcpOperationRows.push(row); return { insertedId: row._id }; },
+      deleteOne: async (filter: Record<string, unknown>) => {
+        const index = mcpOperationRows.findIndex((row) => String(row._id) === String(filter._id));
+        if (index >= 0) mcpOperationRows.splice(index, 1);
+        return { deletedCount: index >= 0 ? 1 : 0 };
+      },
     }),
     events: async () => ({ insertOne: async () => ({}) }),
   },
@@ -234,6 +244,7 @@ function call(name: string, args: Record<string, unknown>) {
 
 beforeEach(() => {
   mailRows.length = 0;
+  mcpOperationRows.length = 0;
   analyticsRuns.clear();
   sent.length = 0;
   searches.length = 0;
@@ -1480,6 +1491,39 @@ describe("MCP tools", () => {
     expect(retryBody.result.structuredContent).toMatchObject({ result: "already_sent", messageId: "<mcp-sent@example.com>" });
     expect(sent).toHaveLength(1);
     expect(mailRows).toHaveLength(1);
+  });
+
+  it("requires an operationId for an intentional resend", async () => {
+    const res = await call("send_invite", { personId, resend: true });
+    const body = await res.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toBe("invalid_args");
+    expect(sent).toHaveLength(0);
+    expect(mailRows).toHaveLength(0);
+  });
+
+  it("replays a keyed resend attempt without sending another email", async () => {
+    const first = await call("send_invite", { personId, resend: true, operationId: "resend-one" });
+    const firstBody = await first.json() as { result: { structuredContent: { result?: string; messageId?: string } } };
+    expect(firstBody.result.structuredContent).toMatchObject({ result: "sent", messageId: "<mcp-sent@example.com>" });
+
+    const retry = await call("send_invite", { personId, resend: true, operationId: "resend-one" });
+    const retryBody = await retry.json() as { result: { isError?: boolean; structuredContent: { result?: string; messageId?: string } } };
+    expect(retryBody.result.isError).toBeFalsy();
+    expect(retryBody.result.structuredContent).toMatchObject({ result: "sent", messageId: "<mcp-sent@example.com>" });
+    expect(sent).toHaveLength(1);
+    expect(mailRows).toHaveLength(1);
+    expect(mcpOperationRows).toHaveLength(1);
+  });
+
+  it("rejects reuse of a resend operationId with different arguments", async () => {
+    const first = await call("send_invite", { personId, resend: true, operationId: "resend-conflict" });
+    expect(first.status).toBe(200);
+    const conflict = await call("send_invite", { personId: anotherPersonId, resend: true, operationId: "resend-conflict" });
+    const body = await conflict.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.code).toBe("operation_id_conflict");
+    expect(sent).toHaveLength(1);
   });
 
   it("refuses a bulk send", async () => {
