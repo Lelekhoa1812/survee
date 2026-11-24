@@ -50,6 +50,13 @@ async function click(label: string) {
   await act(async () => { button.click(); });
 }
 
+async function clickUntilApi(label: string, minCalls: number) {
+  await click(label);
+  await vi.waitFor(() => {
+    expect(api.mock.calls.length).toBeGreaterThanOrEqual(minCalls);
+  });
+}
+
 async function setValue(input: HTMLInputElement, value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
@@ -66,12 +73,12 @@ describe("API key create form retry", () => {
     await click("New key");
     const name = container.querySelector('input[placeholder="Laptop agent"]') as HTMLInputElement;
     await setValue(name, "Agent");
-    await click("Create key");
+    await clickUntilApi("Create key", 1);
     expect(api).toHaveBeenCalledTimes(1);
     const first = api.mock.calls[0][1];
     expect(first.headers["Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/i);
     expect(first.body.value).toMatch(/^kqa_[A-Za-z0-9_-]{43}$/);
-    await click("Create key");
+    await clickUntilApi("Create key", 3);
     expect(api).toHaveBeenCalledTimes(3);
     const retry = api.mock.calls[1][1];
     expect(retry.headers["Idempotency-Key"]).toBe(first.headers["Idempotency-Key"]);
@@ -85,10 +92,10 @@ describe("API key create form retry", () => {
     await click("New key");
     const name = container.querySelector('input[placeholder="Laptop agent"]') as HTMLInputElement;
     await setValue(name, "Agent");
-    await click("Create key");
+    await clickUntilApi("Create key", 1);
     const first = api.mock.calls[0][1];
     await setValue(name, "Agent renamed");
-    await click("Create key");
+    await clickUntilApi("Create key", 2);
     const retry = api.mock.calls[1][1];
     expect(retry.headers["Idempotency-Key"]).not.toBe(first.headers["Idempotency-Key"]);
     expect(retry.body.name).toBe("Agent renamed");
@@ -109,7 +116,7 @@ describe("API key create form retry", () => {
     expect(container.textContent).not.toContain("Key value");
     const name = container.querySelector('input[placeholder="Laptop agent"]') as HTMLInputElement;
     await setValue(name, "Agent renamed");
-    await click("Save");
+    await clickUntilApi("Save", 1);
     const save = api.mock.calls.find((call) => call[0] === "/api/admin/keys/key-1");
     expect(save?.[1]).toMatchObject({ method: "PATCH", body: { name: "Agent renamed", note: "desk", expiresAt: null, capabilities: ["interviews:read"] } });
     expect(save?.[1].headers?.["Idempotency-Key"]).toBeUndefined();
