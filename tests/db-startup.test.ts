@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   respondentPolicyCleanupCalls: 0,
   signupRows: [] as { _id: { key: number }; email: string; createdAt: Date }[],
   signupEmailIndex: false,
+  signupIndexOptions: {} as Record<string, unknown>,
   signupAggregationPipeline: [] as unknown[],
   signupAggregationOptions: null as null | { allowDiskUse?: boolean; batchSize?: number },
   signupAggregationRuns: 0,
@@ -74,7 +75,7 @@ vi.mock("mongodb", async (importOriginal) => {
           if (name === "schema_migrations" && document?._id === "remove_respondent_policy_fields_v1") state.respondentPolicyMigrationDone = true;
           return { acknowledged: true };
         },
-        listIndexes() { return { toArray: async () => state.signupEmailIndex && name === "pending_signups" ? [{ key: { email: 1 }, unique: true }] : [] }; },
+        listIndexes() { return { toArray: async () => state.signupEmailIndex && name === "pending_signups" ? [{ name: "signup_email_unique", key: { email: 1 }, unique: true, ...state.signupIndexOptions }] : [] }; },
         aggregate(pipeline: unknown[], options: { allowDiskUse?: boolean; batchSize?: number }) {
           state.signupAggregationPipeline = pipeline;
           state.signupAggregationOptions = options;
@@ -128,6 +129,7 @@ describe("MongoDB cold-start connection recovery", () => {
     state.respondentPolicyCleanupCalls = 0;
     state.signupRows = [];
     state.signupEmailIndex = false;
+    state.signupIndexOptions = {};
     state.signupAggregationPipeline = [];
     state.signupAggregationOptions = null;
     state.signupAggregationRuns = 0;
@@ -247,5 +249,15 @@ describe("MongoDB cold-start connection recovery", () => {
 
     expect(state.signupAggregationRuns).toBe(1);
     expect(state.signupEmailIndex).toBe(true);
+  });
+
+  it("does not accept a partial signup index as the canonical unique index", async () => {
+    state.signupEmailIndex = true;
+    state.signupIndexOptions = { partialFilterExpression: { email: { $exists: true } } };
+
+    const { db } = await import("../src/lib/db");
+    await expect(db()).rejects.toThrow("MongoDB unavailable during cold start");
+    await expect(db()).rejects.toThrow("signup_email_unique index has incompatible options");
+    expect(state.signupAggregationRuns).toBe(0);
   });
 });

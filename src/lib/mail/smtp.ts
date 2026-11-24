@@ -56,7 +56,7 @@ export async function sendSmtp(message: OutboundMail): Promise<{ messageId: stri
       html: message.html,
       messageId: message.messageId,
       replyTo: cfg.user,
-      dsn: { id: message.messageId, return: "headers", notify: ["failure", "success", "delay"], recipient: cfg.user },
+      dsn: { id: message.messageId, return: "headers", notify: ["failure", "success", "delay"], recipient: message.to },
     });
     const messageId = typeof info.messageId === "string" && info.messageId.trim() ? info.messageId.trim() : message.messageId;
     return { messageId };

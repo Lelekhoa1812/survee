@@ -36,7 +36,7 @@ export const POST = withServerErrors("admin/people/[pid]/[action]", async functi
     if (!body.ok) return body.res;
     if (body.data.attemptId !== undefined && typeof body.data.attemptId !== "string") return fail(400, "That invite attempt is invalid.", { code: "invalid_args" });
     const result = await checkInviteDelivery(pid, {}, body.data.attemptId as string | undefined);
-    if (!result.ok) return fail(result.code === "not_found" ? 404 : result.code === "rate_limited" ? 429 : result.code === "rate_limit_unavailable" ? 503 : 400, result.error, { code: result.code });
+    if (!result.ok) return fail(result.code === "not_found" ? 404 : result.code === "superseded" ? 409 : result.code === "rate_limited" ? 429 : result.code === "rate_limit_unavailable" ? 503 : 400, result.error, { code: result.code });
     return json({ ok: true, delivery: result.delivery, detail: result.detail ?? null, checkedAt: result.checkedAt });
   }
   return fail(404, "Unknown action.");

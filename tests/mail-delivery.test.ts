@@ -14,7 +14,7 @@ function harness(extra: Partial<DeliveryDeps> = {}) {
   const deps: DeliveryDeps = {
     load: async () => context,
     check,
-    save: async () => undefined,
+    save: async (_id, patch) => patch.delivery,
     rateLimit,
     ...extra,
   };
@@ -52,7 +52,7 @@ describe("invite delivery check throttling", () => {
       ...context,
       rows: [{ ...context.rows[0], status: "pending" as const }],
     };
-    const save = vi.fn(async () => undefined);
+    const save = vi.fn(async (_id: string, patch: { delivery: "delivered" | "bounced" | "unknown" }) => patch.delivery);
     const check = vi.fn(async () => new Map([[messageId, { status: "delivered" as const, detail: "Recipient server accepted the message." }]]));
     const { deps } = harness({ load: async () => pendingContext, check, save });
 
@@ -67,7 +67,7 @@ describe("invite delivery check throttling", () => {
   it("checks one exact historical attempt after the participant email and link have changed", async () => {
     const historical = { id: "mail-old", participantId: "person-1", to: "old@example.com", token: "old-token", status: "pending" as const, sentAt: "2026-01-01T00:00:00.000Z", messageId };
     const pendingContext = { ...context, person: { ...context.person, email: "new@example.com", token: "new-token" }, rows: [] };
-    const save = vi.fn(async () => undefined);
+    const save = vi.fn(async (_id: string, patch: { delivery: "delivered" | "bounced" | "unknown" }) => patch.delivery);
     const check = vi.fn(async () => new Map([[messageId, { status: "bounced" as const, detail: "Recipient server rejected the message." }]]));
     const { deps } = harness({ load: async () => pendingContext, loadAttempt: async () => historical, check, save });
 
@@ -87,5 +87,12 @@ describe("invite delivery check throttling", () => {
     });
 
     expect(await checkInviteDelivery("person-1", deps)).toMatchObject({ ok: true, delivery: "delivered" });
+  });
+
+  it("does not report a transient result when the attempt changed before persistence", async () => {
+    const check = vi.fn(async () => new Map([[messageId, { status: "bounced" as const, detail: "Recipient server rejected the message." }]]));
+    const { deps } = harness({ check, save: async () => undefined });
+
+    expect(await checkInviteDelivery("person-1", deps)).toMatchObject({ ok: false, code: "superseded" });
   });
 });

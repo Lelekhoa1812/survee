@@ -63,9 +63,15 @@ async function ensurePendingSignupEmailIndex(d: Db): Promise<void> {
       if (error && typeof error === "object" && "code" in error && error.code === 26) return [];
       throw error;
     });
+    const canonical = indexes.find((index) => index.name === "signup_email_unique");
+    if (canonical && (canonical.unique !== true || canonical.sparse === true || canonical.partialFilterExpression !== undefined || canonical.collation !== undefined)) {
+      throw new Error("The signup_email_unique index has incompatible options; repair the index before starting the app.");
+    }
     return indexes.some((index) => {
       const keys = Object.entries(index.key ?? {});
-      return index.unique === true && keys.length === 1 && keys[0][0] === "email" && keys[0][1] === 1;
+      return index.name === "signup_email_unique" && index.unique === true && index.sparse !== true
+        && index.partialFilterExpression === undefined && index.collation === undefined
+        && keys.length === 1 && keys[0][0] === "email" && keys[0][1] === 1;
     });
   };
 

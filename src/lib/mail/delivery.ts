@@ -10,7 +10,7 @@ import { currentTenantId } from "../tenant-context";
 
 export type DeliveryResult =
   | { ok: true; delivery: MailDelivery; checkedAt: string; detail?: string; personId: string; interviewId: string }
-  | { ok: false; code: "not_found" | "not_sent" | "rate_limited" | "rate_limit_unavailable"; error: string };
+  | { ok: false; code: "not_found" | "not_sent" | "rate_limited" | "rate_limit_unavailable" | "superseded"; error: string };
 
 export interface DeliveryDeps {
   load?: (personId: string) => Promise<{ person: { id: string; interviewId: string; email?: string; token: string }; rows: MailRecord[] } | null>;
@@ -73,7 +73,9 @@ export async function checkInviteDelivery(personId: string, deps: DeliveryDeps =
     const save = deps.save ?? (async (id: string, patch: { delivery: MailDelivery; deliveryCheckedAt: Date; deliveryDetail?: string }) => {
       return updateMailDelivery(new ObjectId(id), patch);
     });
-    effectiveDelivery = await save(row.id, { delivery: result.status, deliveryCheckedAt: checkedAt, deliveryDetail: result.detail }) ?? result.status;
+    const saved = await save(row.id, { delivery: result.status, deliveryCheckedAt: checkedAt, deliveryDetail: result.detail });
+    if (!saved) return { ok: false, code: "superseded", error: "This invite changed while delivery was being checked. Reload the people list and check the current message." };
+    effectiveDelivery = saved;
   }
   return { ok: true, delivery: effectiveDelivery, checkedAt: checkedAt.toISOString(), detail: effectiveDelivery === result.status ? result.detail : undefined, personId: ctx.person.id, interviewId: ctx.person.interviewId };
 }
