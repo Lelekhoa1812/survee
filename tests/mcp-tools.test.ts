@@ -1392,6 +1392,21 @@ describe("MCP tools", () => {
     expect(mailRows).toHaveLength(1);
   });
 
+  it("does not send a second invite when the first MCP response is retried", async () => {
+    const first = await call("send_invite", { personId });
+    const firstBody = await first.json() as { result: { structuredContent: { result?: string; messageId?: string } } };
+    expect(firstBody.result.structuredContent).toMatchObject({ result: "sent", messageId: "<mcp-sent@example.com>" });
+
+    // The caller may have lost the response after SMTP accepted and the sent
+    // state was persisted. A normal retry should return that receipt, not send.
+    const retry = await call("send_invite", { personId });
+    const retryBody = await retry.json() as { result: { isError?: boolean; structuredContent: { result?: string; messageId?: string } } };
+    expect(retryBody.result.isError).toBeFalsy();
+    expect(retryBody.result.structuredContent).toMatchObject({ result: "already_sent", messageId: "<mcp-sent@example.com>" });
+    expect(sent).toHaveLength(1);
+    expect(mailRows).toHaveLength(1);
+  });
+
   it("refuses a bulk send", async () => {
     const res = await call("send_invite", { personIds: [personId] });
     const body = await res.json() as { result: { isError?: boolean; structuredContent: { error?: string } } };
