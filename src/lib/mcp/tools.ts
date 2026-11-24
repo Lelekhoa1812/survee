@@ -126,8 +126,8 @@ function stableMcpCredentialId(): string | null {
   return principal.auditActor ? `${principal.auditActor.kind}:${principal.auditActor.id}` : `${principal.source}:${principal.tenantId}`;
 }
 
-function questionnairePublishOperation(args: Record<string, unknown>, tool: string): { operation?: { operationId: string; credentialId: string; argumentDigest: string }; error?: ToolResult } {
-  if (args.operationId === undefined) return {};
+function questionnairePublishOperation(args: Record<string, unknown>, tool: string, required = false): { operation?: { operationId: string; credentialId: string; argumentDigest: string }; error?: ToolResult } {
+  if (args.operationId === undefined) return required ? { error: err("operationId is required so an uncertain retry cannot publish a duplicate questionnaire version.", "invalid_args") } : {};
   if (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId)) {
     return { error: err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args") };
   }
@@ -1817,7 +1817,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "upload_survey_version",
-    description: "Upload a compatible questionnaire version. If saved answers may be affected, review the returned findings and retry with its short-lived previewToken, matching hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes. Optional operationId replays a successful upload for seven days.",
+    description: "Upload a compatible questionnaire version. Requires operationId so an uncertain retry cannot create a duplicate version. If saved answers may be affected, review the returned findings and retry with its short-lived previewToken, matching hashes, and explicit compatibility acknowledgement; prefer preview/apply for agent-authored changes. The operationId replays a successful upload for seven days.",
     inputSchema: obj({
       interviewId: str,
       html: str,
@@ -1829,11 +1829,11 @@ const TOOLS: ToolDef[] = [
       compatibilityHash: str,
       acknowledgeCompatibilityImpact: bool,
       operationId: { type: "string", minLength: 1, maxLength: 128 },
-    }, ["interviewId", "html"]),
+    }, ["interviewId", "html", "operationId"]),
     async run(args) {
       const id = asString(args.interviewId, 40);
       if (!id) return err("interviewId is required.");
-      const retry = questionnairePublishOperation(args, "upload_survey_version");
+      const retry = questionnairePublishOperation(args, "upload_survey_version", true);
       if (retry.error) return retry.error;
       const replay = await replayQuestionnairePublish("upload_survey_version", retry.operation);
       if (replay) return replay;

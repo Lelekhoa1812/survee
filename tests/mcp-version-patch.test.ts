@@ -8,7 +8,7 @@ const state = vi.hoisted(() => ({
   baseHash: "a".repeat(64),
   compatibilityImpact: false,
   invalid: false,
-  publish: vi.fn(async () => ({ version: 3 })),
+  publish: vi.fn(async (..._args: unknown[]) => ({ version: 3 })),
 }));
 
 const interviewId = new ObjectId().toHexString();
@@ -24,6 +24,7 @@ vi.mock("../src/lib/repo", async () => {
     getVersion: vi.fn(async (_id: ObjectId, version: number) => version === state.currentVersion ? ({
       version, htmlSha256: state.baseHash, html: "old html", manifest: { format: "kqa/1", title: "Old", questions: [{ id: "q1", type: "text", label: "Old" }] },
     }) : null),
+    getQuestionnairePublishOperation: vi.fn(async () => null),
     publishVersionIfCurrent: state.publish,
   };
 });
@@ -145,15 +146,22 @@ describe("MCP questionnaire version patch", () => {
   });
 
   it("keeps legacy uploads one-call for compatible changes while using optimistic checks", async () => {
-    const result = await callTool("upload_survey_version", { interviewId, html: candidate });
+    const result = await callTool("upload_survey_version", { interviewId, html: candidate, operationId: "legacy-compatible" });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2, compatibilityImpact: false });
-    expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "mcp_upload");
+    expect(state.publish).toHaveBeenCalledTimes(1);
+    expect(state.publish.mock.calls[0]?.[6]).toMatchObject({ tool: "upload_survey_version", details: { operationId: "legacy-compatible" } });
+  });
+
+  it("requires an operationId for duplicate-prone legacy uploads", async () => {
+    const result = await callTool("upload_survey_version", { interviewId, html: candidate });
+    expect(result.structuredContent).toMatchObject({ code: "invalid_args", error: expect.stringContaining("operationId is required") });
+    expect(state.publish).not.toHaveBeenCalled();
   });
 
   it("returns a non-mutating preview when legacy upload finds answer compatibility impact", async () => {
     state.compatibilityImpact = true;
-    const result = await callTool("upload_survey_version", { interviewId, html: candidate });
+    const result = await callTool("upload_survey_version", { interviewId, html: candidate, operationId: "legacy-impact-preview" });
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({
       code: "acknowledgement_required",
@@ -171,17 +179,17 @@ describe("MCP questionnaire version patch", () => {
   it("requires the reviewed hashes and acknowledgement before legacy upload publishes an impacted candidate", async () => {
     state.compatibilityImpact = true;
     const incomplete = await callTool("upload_survey_version", {
-      interviewId, html: candidate, acknowledgeCompatibilityImpact: true,
+      interviewId, html: candidate, acknowledgeCompatibilityImpact: true, operationId: "legacy-impact-review",
     });
     expect(incomplete.structuredContent.code).toBe("preview_required");
     expect(state.publish).not.toHaveBeenCalled();
 
-    const preview = await callTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false });
+    const preview = await callTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false, operationId: "legacy-impact-review" });
     expect(preview.structuredContent.code).toBe("acknowledgement_required");
     const compatibilityHash = preview.structuredContent.compatibilityHash as string;
     const spoofedAcknowledgement = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
-      candidateHash: hash(candidate), compatibilityHash, acknowledgeCompatibilityImpact: true,
+      candidateHash: hash(candidate), compatibilityHash, acknowledgeCompatibilityImpact: true, operationId: "legacy-impact-review",
     });
     expect(spoofedAcknowledgement.structuredContent.code).toBe("acknowledgement_required");
     expect(spoofedAcknowledgement.structuredContent.previewToken).toEqual(expect.any(String));
@@ -190,21 +198,22 @@ describe("MCP questionnaire version patch", () => {
     const published = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
       candidateHash: hash(candidate), compatibilityHash, acknowledgeCompatibilityImpact: true,
-      previewToken: spoofedAcknowledgement.structuredContent.previewToken as string,
+      previewToken: spoofedAcknowledgement.structuredContent.previewToken as string, operationId: "legacy-impact-review",
     });
     expect(published.isError).toBeFalsy();
     expect(published.structuredContent).toMatchObject({ ok: true, version: 3, previousVersion: 2, compatibilityImpact: true });
-    expect(state.publish).toHaveBeenCalledWith(interviewId, 2, state.baseHash, expect.objectContaining({ html: candidate }), "mcp_upload");
+    expect(state.publish).toHaveBeenCalledTimes(1);
+    expect(state.publish.mock.calls[0]?.[6]).toMatchObject({ tool: "upload_survey_version", details: { operationId: "legacy-impact-review" } });
   });
 
   it("publishes a legacy upload with a valid preview token when compatibilityHash is omitted", async () => {
     state.compatibilityImpact = true;
-    const preview = await callTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false });
+    const preview = await callTool("upload_survey_version", { interviewId, html: candidate, acknowledgeCompatibilityImpact: false, operationId: "legacy-preview-token" });
     expect(preview.structuredContent.code).toBe("acknowledgement_required");
     const previewToken = preview.structuredContent.previewToken as string;
     const published = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
-      candidateHash: hash(candidate), acknowledgeCompatibilityImpact: true, previewToken,
+      candidateHash: hash(candidate), acknowledgeCompatibilityImpact: true, previewToken, operationId: "legacy-preview-token",
     });
     expect(published.structuredContent.code).not.toBe("stale_preview");
     expect(published.isError).toBeFalsy();
@@ -214,13 +223,13 @@ describe("MCP questionnaire version patch", () => {
   it("rejects stale or altered legacy-upload previews", async () => {
     const stale = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 1, baseHash: state.baseHash,
-      candidateHash: hash(candidate),
+      candidateHash: hash(candidate), operationId: "legacy-stale",
     });
     expect(stale.structuredContent.code).toBe("stale_preview");
 
     const altered = await callTool("upload_survey_version", {
       interviewId, html: candidate, expectedVersion: 2, baseHash: state.baseHash,
-      candidateHash: "b".repeat(64),
+      candidateHash: "b".repeat(64), operationId: "legacy-altered",
     });
     expect(altered.structuredContent.code).toBe("candidate_changed");
     expect(state.publish).not.toHaveBeenCalled();

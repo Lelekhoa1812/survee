@@ -796,6 +796,7 @@ describe("MCP tools", () => {
     for (const name of ["apply_questionnaire_version_patch", "apply_questionnaire_required_patch", "apply_questionnaire_block_patch", "upload_survey_version"]) {
       expect(tools.find((tool) => tool.name === name)?.inputSchema.properties).toMatchObject({ operationId: { type: "string", minLength: 1, maxLength: 128 } });
     }
+    expect(tools.find((tool) => tool.name === "upload_survey_version")?.inputSchema.required).toContain("operationId");
   });
 
   it("publishes the preview token as required for questionnaire patch application", async () => {

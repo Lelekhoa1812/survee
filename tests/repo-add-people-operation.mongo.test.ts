@@ -32,6 +32,7 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
   let client!: import("mongodb").MongoClient;
   let mongo!: typeof import("mongodb");
   let dbModule!: typeof import("../src/lib/db");
+  let accounts!: typeof import("../src/lib/repo/accounts");
   let repository!: typeof import("../src/lib/repo");
   let mailRepository!: typeof import("../src/lib/repo/mail");
   let campaignDrafts!: typeof import("../src/lib/campaign-drafts");
@@ -56,6 +57,7 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
 
     mongo = await import("mongodb");
     dbModule = await import("../src/lib/db");
+    accounts = await import("../src/lib/repo/accounts");
     repository = await import("../src/lib/repo");
     mailRepository = await import("../src/lib/repo/mail");
     campaignDrafts = await import("../src/lib/campaign-drafts");
@@ -147,6 +149,46 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     const allTenants = await tenants.find({}).toArray();
     expect(allTenants.every((tenant) => !Object.hasOwn(tenant, "respondentPolicy"))).toBe(true);
     expect(allTenants.some((tenant) => tenant.analyticsMinimumCellSize === 9)).toBe(true);
+  });
+
+  it("commits email replacement and one-time verification consumption atomically", async () => {
+    const database = client.db(dbName);
+    const userId = new mongo.ObjectId();
+    const token = `email-change-${randomUUID()}`;
+    const oldEmail = `old-${randomUUID()}@example.test`;
+    const newEmail = `new-${randomUUID()}@example.test`;
+    await database.collection("users").insertOne({
+      _id: userId, email: oldEmail, emailVerifiedAt: new Date(), passwordHash: await accounts.hashPassword("fixture password long enough"),
+      authVersion: 7, createdAt: new Date(), updatedAt: new Date(),
+    });
+    const created = await accounts.createPendingEmailChange({ userId: userId.toHexString(), currentPassword: "fixture password long enough", email: newEmail, token });
+    expect(created.ok).toBe(true);
+
+    await expect(accounts.completeEmailChange(token)).resolves.toEqual({ ok: true, email: newEmail, previousEmail: oldEmail });
+    await expect(accounts.completeEmailChange(token)).resolves.toMatchObject({ ok: false });
+    const updated = await database.collection("users").findOne({ _id: userId });
+    expect(updated).toMatchObject({ email: newEmail, authVersion: 8 });
+    expect(await database.collection("pending_email_changes").countDocuments({ userId })).toBe(0);
+  });
+
+  it("rejects a pending email change after credential version changes", async () => {
+    const database = client.db(dbName);
+    const userId = new mongo.ObjectId();
+    const token = `stale-email-change-${randomUUID()}`;
+    const oldEmail = `stale-old-${randomUUID()}@example.test`;
+    const newEmail = `stale-new-${randomUUID()}@example.test`;
+    await database.collection("users").insertOne({
+      _id: userId, email: oldEmail, emailVerifiedAt: new Date(), passwordHash: await accounts.hashPassword("fixture password long enough"),
+      authVersion: 2, createdAt: new Date(), updatedAt: new Date(),
+    });
+    const created = await accounts.createPendingEmailChange({ userId: userId.toHexString(), currentPassword: "fixture password long enough", email: newEmail, token });
+    expect(created.ok).toBe(true);
+    await database.collection("users").updateOne({ _id: userId }, { $inc: { authVersion: 1 } });
+
+    await expect(accounts.completeEmailChange(token)).resolves.toMatchObject({ ok: false });
+    const unchanged = await database.collection("users").findOne({ _id: userId });
+    expect(unchanged).toMatchObject({ email: oldEmail, authVersion: 3 });
+    expect(await database.collection("pending_email_changes").countDocuments({ userId })).toBe(0);
   });
 
   it("searches and filters interview pages in Mongo before paging, within the current tenant", async () => {
