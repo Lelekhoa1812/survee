@@ -486,7 +486,7 @@ export async function removePendingEmailChange(id: ObjectId): Promise<void> {
   await (await col.emailChanges()).deleteOne({ _id: id });
 }
 
-export async function completeEmailChange(token: string): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+export async function completeEmailChange(token: string): Promise<{ ok: true; email: string; previousEmail: string } | { ok: false; error: string }> {
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const changes = await col.emailChanges();
   const pending = await changes.findOne({ tokenHash, expiresAt: { $gt: new Date() } });
@@ -494,6 +494,7 @@ export async function completeEmailChange(token: string): Promise<{ ok: true; em
   const users = await col.users();
   const owner = await users.findOne({ _id: pending.userId });
   if (!owner) return { ok: false, error: "This account could not be verified." };
+  const previousEmail = owner.email;
   const duplicate = await users.findOne({ email: pending.email }, { projection: { _id: 1 } });
   if (duplicate && !duplicate._id.equals(owner._id)) return { ok: false, error: "That address is already in use. Request a different one." };
   // Fence any password-reset request that was issued to the previous verified address.
@@ -514,5 +515,5 @@ export async function completeEmailChange(token: string): Promise<{ ok: true; em
   // consume the single-use token and report success.
   const claimed = await changes.deleteOne({ _id: pending._id, tokenHash, expiresAt: { $gt: new Date() } });
   if (claimed.deletedCount !== 1) return { ok: false, error: "That verification link is invalid or has expired. Request a new one." };
-  return { ok: true, email: pending.email };
+  return { ok: true, email: pending.email, previousEmail };
 }

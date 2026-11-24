@@ -66,7 +66,7 @@ describe("email verification links", () => {
     const token = "one-time-email-token";
     seed(token);
 
-    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example" });
+    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example", previousEmail: "owner@old.example" });
     await expect(completeEmailChange(token)).resolves.toMatchObject({ ok: false });
     expect(store.users[0].email).toBe("owner@new.example");
     expect(store.users[0].emailVerifiedAt).toBeInstanceOf(Date);
@@ -95,7 +95,7 @@ describe("email verification links", () => {
     expect(store.users[0].email).toBe("owner@old.example");
 
     store.updateError = false;
-    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example" });
+    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example", previousEmail: "owner@old.example" });
     expect(store.changes).toHaveLength(0);
   });
 
@@ -109,7 +109,7 @@ describe("email verification links", () => {
     expect(store.users[0].email).toBe("owner@old.example");
 
     store.unmatchedUpdate = false;
-    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example" });
+    await expect(completeEmailChange(token)).resolves.toEqual({ ok: true, email: "owner@new.example", previousEmail: "owner@old.example" });
     expect(store.changes).toHaveLength(0);
   });
 });
