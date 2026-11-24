@@ -254,7 +254,7 @@ Some repository evaluation scripts require provider-generated result JSON and we
 ## Next review order
 
 1. Recheck the deployed operation-ID schema after release. The web app audit found no other concrete duplicate-prone MCP mutation gap; the hosted KQA connector source is unavailable and its observed schema mismatch remains unresolved.
-2. Consider immutable export artifacts for durable point-in-time snapshots, streaming XLSX generation for larger workbooks, and explicit completion metadata for streaming CSV failures.
+2. Consider immutable export artifacts for durable point-in-time snapshots, streaming XLSX generation for larger workbooks, and explicit completion metadata for streaming CSV failures. Current limits: MCP's 16 MiB JSON envelope cap makes the effective base64 XLSX limit lower than its 16 MiB file cap; export audit writes are best-effort and logged on failure; revision checks bracket reads but do not provide database snapshot isolation. Docs now state these constraints.
 3. Decide whether workspace image capacity needs tenant-specific plan settings.
 4. Improve aging/status visibility for attempts without delivery notices, without automatically resending or releasing private links; verify behavior with real provider DSN samples before broadening report compatibility.
 5. Reduce repeated full pending-signup scans across cold isolates. Existing writers already canonicalize email and duplicate-key index races rescan, so a one-deploy index rollout is plausible; a lease alone is not resumability. Before changing the migration, test interleaved writers/index creation, independent initializers, TTL delay, and JavaScript versus Mongo `$toLower` for non-ASCII addresses, then choose a durable checkpoint strategy if collection size warrants it.
