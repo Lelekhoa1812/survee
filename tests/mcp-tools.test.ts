@@ -306,6 +306,31 @@ describe("MCP tools", () => {
     expect(oversizedBody.result.structuredContent).toMatchObject({ code: "export_payload_limit", limitBytes: 8 * 1024 * 1024 });
   });
 
+  it("exposes repeat-record CSV through MCP and audits the successful export", async () => {
+    const repeatManifest = {
+      ...analyticsManifest,
+      questions: [...analyticsManifest.questions, {
+        id: "assets", type: "repeat" as const, label: "Assets", maxRows: 4,
+        fields: [{ id: "name", label: "Name", type: "text" as const }],
+      }],
+    };
+    vi.mocked(getVersion).mockResolvedValueOnce({ version: 1, manifest: repeatManifest } as never);
+    vi.mocked(listParticipants).mockResolvedValueOnce([{
+      id: personId, name: "Ada Lovelace", status: "submitted", createdAt: "2026-11-13T00:00:00.000Z", answers: {},
+      recordGroups: { assets: [{ id: "row-1", values: { name: "prototype" }, revision: 1, fieldRevisions: { name: 1 } }] },
+    }] as never);
+
+    const formatSchema = listToolDefs().find((tool) => tool.name === "export_interview")?.inputSchema as { properties: { format: { enum: string[] } } };
+    expect(formatSchema.properties.format.enum).toContain("csv-records");
+    const response = await call("export_interview", { interviewId, format: "csv-records" });
+    const body = await response.json() as { result: { isError?: boolean; structuredContent: { body: string; encoding: string } } };
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.encoding).toBe("utf8");
+    expect(body.result.structuredContent.body).toContain("Ada Lovelace");
+    expect(body.result.structuredContent.body).toContain("assets,Assets,row-1,1,name,Name,text,true,prototype");
+    expect(recordExportEvent).toHaveBeenCalledWith(interviewId, "csv-records");
+  });
+
   it("rejects an MCP export when participant data changes during the buffered read", async () => {
     const snapshot = {
       _id: new ObjectId(interviewId), name: "Investor interview", mode: "multi", status: "open",
