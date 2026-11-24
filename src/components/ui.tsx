@@ -261,11 +261,12 @@ export function Badge({ kind = "", children, plain }: { kind?: "ok" | "warn" | "
 
 export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string>; keepalive?: boolean }): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
   try {
-    const headers = { ...(init?.headers ?? {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) };
+    const multipart = typeof FormData !== "undefined" && init?.body instanceof FormData;
+    const headers = { ...(init?.headers ?? {}), ...(init?.body && !multipart ? { "Content-Type": "application/json" } : {}) };
     const res = await fetch(url, {
       method: init?.method ?? (init?.body ? "POST" : "GET"),
       headers: Object.keys(headers).length ? headers : undefined,
-      body: init?.body ? JSON.stringify(init.body) : undefined,
+      body: init?.body ? multipart ? init.body as FormData : JSON.stringify(init.body) : undefined,
       credentials: "same-origin",
       keepalive: init?.keepalive,
     });

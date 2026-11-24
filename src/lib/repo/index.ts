@@ -254,10 +254,10 @@ export interface CreateInterviewMcpResult { id: string; interviewId: string; rep
 
 export type AddPeopleOperationResult = { kind: "created" | "replayed"; people: ParticipantView[] } | { kind: "conflict" } | { kind: "deleted" };
 
-function createInterviewOperationScope(tenantId: string, operation: { operationId: string; credentialId: string }) {
+function createInterviewOperationScope(tenantId: string, operation: { operationId: string; credentialId: string; tool?: string }) {
   return {
     tenantId,
-    tool: "create_interview",
+    tool: operation.tool ?? "create_interview",
     credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
     operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
   };
@@ -273,11 +273,11 @@ function mcpOperationScope(tenantId: string, tool: string, operation: { operatio
 }
 
 export async function getAddPeopleOperation(
-  operation: { operationId: string; credentialId: string; argumentDigest: string },
+  operation: { operationId: string; credentialId: string; argumentDigest: string; tool?: string },
 ): Promise<AddPeopleOperationResult | null> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
-  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, "add_people", operation));
+  const existing = await (await col.mcpOperations()).findOne(mcpOperationScope(tenantId, operation.tool ?? "add_people", operation));
   if (!existing || existing.expiresAt <= new Date()) return null;
   if (existing.deletedAt) return { kind: "deleted" };
   return existing.argumentDigest === operation.argumentDigest
@@ -287,7 +287,7 @@ export async function getAddPeopleOperation(
 
 /** Read a retained successful result before rechecking a caller's retry under newer checker rules. */
 export async function getCreateInterviewOperation(
-  operation: { operationId: string; credentialId: string; argumentDigest: string },
+  operation: { operationId: string; credentialId: string; argumentDigest: string; tool?: string },
 ): Promise<CreateInterviewOperationResult | null> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
@@ -302,7 +302,7 @@ export async function getCreateInterviewOperation(
 /** Create an interview and retain its exact MCP response in the same transaction. */
 export async function createInterviewWithOperation(
   input: { name: string; description?: string; mode: InterviewMode; survey: NewSurvey },
-  operation: { operationId: string; credentialId: string; argumentDigest: string; report: Record<string, unknown> },
+  operation: { operationId: string; credentialId: string; argumentDigest: string; report: Record<string, unknown>; tool?: string },
 ): Promise<CreateInterviewOperationResult> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
@@ -1088,11 +1088,11 @@ export async function addParticipants(interviewId: string, people: { name: strin
 export async function addParticipantsWithOperation(
   interviewId: string,
   people: { name: string; note?: string; email?: string }[],
-  operation: { operationId: string; credentialId: string; argumentDigest: string },
+  operation: { operationId: string; credentialId: string; argumentDigest: string; tool?: string },
 ): Promise<AddPeopleOperationResult> {
   const tenantId = await currentTenantId();
   if (!tenantId) throw new Error("An authenticated tenant is required.");
-  const scope = mcpOperationScope(tenantId, "add_people", operation);
+  const scope = mcpOperationScope(tenantId, operation.tool ?? "add_people", operation);
   const operations = await col.mcpOperations();
   const existing = await operations.findOne(scope);
   if (existing && existing.expiresAt > new Date()) {

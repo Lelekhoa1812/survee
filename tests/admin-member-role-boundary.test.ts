@@ -110,7 +110,9 @@ describe("workspace member access boundary", () => {
 
   it("rejects an oversized add-people batch without creating a partial list", async () => {
     state.role = "owner";
-    const response = await addPeople(jsonRequest("/api/admin/interviews/0123456789abcdef01234567/people", "POST", { people: Array.from({ length: 101 }, (_, i) => ({ name: `Person ${i + 1}` })) }), interviewCtx);
+    const request = jsonRequest("/api/admin/interviews/0123456789abcdef01234567/people", "POST", { people: Array.from({ length: 101 }, (_, i) => ({ name: `Person ${i + 1}` })) });
+    request.headers.set("Idempotency-Key", "oversized-batch");
+    const response = await addPeople(request, interviewCtx);
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ error: "Add at most 100 people per request. Split the list into batches." });
   });

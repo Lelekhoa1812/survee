@@ -7,6 +7,7 @@ import { acknowledgeInvite, InviteActions } from "./InviteActions";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { fullTime, relTime } from "@/lib/time";
 import { MAX_INVITES_PER_BATCH, MAX_PEOPLE_PER_BATCH } from "@/lib/participant-limits";
+import { clearClientOperationId, clientOperationId } from "@/lib/client-idempotency";
 
 const STATUS: Record<PersonRow["status"], { label: string; kind: "" | "info" | "ok" }> = { invited: { label: "Not started", kind: "" }, in_progress: { label: "In progress", kind: "info" }, submitted: { label: "Submitted", kind: "ok" } };
 
@@ -278,9 +279,12 @@ function AddPeople({ interviewId, switchesToMulti, onClose, onDone }: { intervie
     if (invalid || tooMany || filled.length === 0) return;
     setBusy(true);
     const people = filled.map((r) => ({ name: r.name.trim(), email: r.emailResult.ok ? r.emailResult.email ?? undefined : undefined, note: r.note.trim() || undefined }));
-    const res = await api(`/api/admin/interviews/${interviewId}/people`, { method: "POST", body: { people } });
+    const body = { people };
+    const scope = `add-people:${interviewId}`;
+    const operation = await clientOperationId(scope, body);
+    const res = await api(`/api/admin/interviews/${interviewId}/people`, { method: "POST", headers: { "Idempotency-Key": operation.operationId }, body });
     setBusy(false);
-    if (res.ok) { toast(`${filled.length} ${filled.length === 1 ? "person" : "people"} added. Their links are ready.`); onDone(); }
+    if (res.ok) { clearClientOperationId(scope, operation.fingerprint); toast(`${filled.length} ${filled.length === 1 ? "person" : "people"} added. Their links are ready.`); onDone(); }
     else toast(res.data.error ?? "Could not add them.", "err");
   }
 

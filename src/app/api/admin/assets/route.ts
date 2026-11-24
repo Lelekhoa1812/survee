@@ -1,5 +1,7 @@
-import { fail, guardAdmin, json, str, withServerErrors } from "@/lib/http";
-import { addImageAsset, ImageAssetQuotaError, listImageAssets, MAX_IMAGE_BYTES } from "@/lib/repo/assets";
+import { createHash } from "node:crypto";
+import { fail, guardAdmin, json, str, adminSession, withServerErrors } from "@/lib/http";
+import { addImageAssetWithOperation, getImageUploadOperation, ImageAssetQuotaError, listImageAssets, MAX_IMAGE_BYTES } from "@/lib/repo/assets";
+import { operationArgumentDigest, requestOperationId } from "@/lib/operation-id";
 
 export const GET = withServerErrors("admin/assets", async function GET(req: Request) {
   const denied = await guardAdmin();
@@ -16,6 +18,10 @@ export const GET = withServerErrors("admin/assets", async function GET(req: Requ
 export const POST = withServerErrors("admin/assets", async function POST(req: Request) {
   const denied = await guardAdmin({ mutating: true, roles: ["owner", "admin"] });
   if (denied) return denied;
+  const session = await adminSession();
+  if (!session) return fail(401, "Sign in to continue.");
+  const operationId = requestOperationId(req);
+  if (!operationId) return fail(400, "Send a valid Idempotency-Key header so an uncertain retry cannot create a duplicate image.", { code: "idempotency_key_required" });
   const maxBodyBytes = MAX_IMAGE_BYTES + 64 * 1024;
   const contentLength = Number(req.headers.get("content-length") ?? "0");
   if (contentLength > maxBodyBytes) return fail(413, `Each image must be ${MAX_IMAGE_BYTES / 1024 / 1024} MB or smaller.`);
@@ -45,7 +51,19 @@ export const POST = withServerErrors("admin/assets", async function POST(req: Re
   if (upload.size > MAX_IMAGE_BYTES) return fail(413, `Each image must be ${MAX_IMAGE_BYTES / 1024 / 1024} MB or smaller.`);
   const name = str(form.get("name"), 120);
   try {
-    const asset = await addImageAsset({ name, fileName: upload.name, data: Buffer.from(await upload.arrayBuffer()) });
+    const data = Buffer.from(await upload.arrayBuffer());
+    const operation = {
+      operationId,
+      credentialId: `host:${session.userId}`,
+      tool: "host_upload_image_asset",
+      argumentDigest: operationArgumentDigest({ name, fileName: upload.name, dataSha256: createHash("sha256").update(data).digest("hex") }),
+    };
+    const previous = await getImageUploadOperation(operation);
+    if (previous?.kind === "conflict") return fail(409, "This Idempotency-Key was already used with different image content or details.", { code: "idempotency_key_conflict" });
+    if (previous?.kind === "replayed") return json({ ok: true, asset: previous.asset }, 201);
+    const result = await addImageAssetWithOperation({ name, fileName: upload.name, data }, operation);
+    if (result.kind === "conflict") return fail(409, "This Idempotency-Key was already used with different image content or details.", { code: "idempotency_key_conflict" });
+    const asset = result.asset;
     return json({ ok: true, asset }, 201);
   } catch (error) {
     if (error instanceof ImageAssetQuotaError) return fail(413, error.message, { code: "workspace_image_quota_exceeded", usedBytes: error.usedBytes, requestedBytes: error.requestedBytes, quotaBytes: error.quotaBytes });

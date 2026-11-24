@@ -131,6 +131,14 @@ describe("createInterview", () => {
     expect((mocks.operations[0].expiresAt as Date).getTime() - (mocks.operations[0].createdAt as Date).getTime()).toBe(7 * 24 * 60 * 60 * 1000);
   });
 
+  it("keeps host REST operation receipts separate from MCP receipts", async () => {
+    const operation = { operationId: "request-1", credentialId: "host:user-a", tool: "host_create_interview", argumentDigest: "digest-a", report: { ok: true } };
+    const host = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "session" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, operation));
+    const mcp = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, { ...operation, tool: undefined, credentialId: "api_key:key-a" }));
+    expect([host.kind, mcp.kind]).toEqual(["created", "created"]);
+    expect(mocks.operations.map((item) => item.tool)).toEqual(["host_create_interview", "create_interview"]);
+  });
+
   it("rejects reuse of a create operation key with different arguments", async () => {
     const base = { operationId: "request-1", credentialId: "api_key:key-a", argumentDigest: "digest-a", report: { ok: true } };
     await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => createInterviewWithOperation({ name: "Test", mode: "multi", survey }, base));

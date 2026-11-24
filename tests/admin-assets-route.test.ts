@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   denied: null as Response | null,
-  addImageAsset: vi.fn(),
+  session: { userId: "user-1" },
+  addImageAssetWithOperation: vi.fn(),
+  getImageUploadOperation: vi.fn(),
   deleteImageAsset: vi.fn(),
   listImageAssets: vi.fn(),
   renameImageAsset: vi.fn(),
@@ -13,6 +15,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/http", () => ({
   withServerErrors: (_route: string, handler: (...args: unknown[]) => Promise<Response>) => handler,
   guardAdmin: async () => state.denied,
+  adminSession: async () => state.session,
   fail: (status: number, error: string, extra?: Record<string, unknown>) => Response.json({ ok: false, error, ...extra }, { status }),
   json: (data: unknown, status = 200, extra?: Record<string, string>) => Response.json(data, { status, headers: extra }),
   str: (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : undefined,
@@ -23,7 +26,8 @@ vi.mock("@/lib/http", () => ({
 }));
 
 vi.mock("@/lib/repo/assets", () => ({
-  addImageAsset: state.addImageAsset,
+  addImageAssetWithOperation: state.addImageAssetWithOperation,
+  getImageUploadOperation: state.getImageUploadOperation,
   deleteImageAsset: state.deleteImageAsset,
   listImageAssets: state.listImageAssets,
   renameImageAsset: state.renameImageAsset,
@@ -47,7 +51,9 @@ const asset = {
 beforeEach(() => {
   vi.clearAllMocks();
   state.denied = null;
-  state.addImageAsset.mockResolvedValue(asset);
+  state.session = { userId: "user-1" };
+  state.getImageUploadOperation.mockResolvedValue(null);
+  state.addImageAssetWithOperation.mockResolvedValue({ kind: "created", asset });
   state.listImageAssets.mockResolvedValue({ assets: [asset], nextCursor: null });
   state.renameImageAsset.mockResolvedValue(asset);
   state.deleteImageAsset.mockResolvedValue({ ok: true });
@@ -65,7 +71,7 @@ describe("image asset routes", () => {
     expect((await listAssets(routeRequest("/api/admin/assets"))).status).toBe(401);
     expect((await uploadAsset(routeRequest("/api/admin/assets", { method: "POST" }))).status).toBe(401);
     expect(state.listImageAssets).not.toHaveBeenCalled();
-    expect(state.addImageAsset).not.toHaveBeenCalled();
+    expect(state.addImageAssetWithOperation).not.toHaveBeenCalled();
   });
 
   it("lists pages and validates cursors and limits", async () => {
@@ -91,22 +97,36 @@ describe("image asset routes", () => {
     const form = new FormData();
     form.set("file", new Blob([png], { type: "text/plain" }), "logo.png");
     form.set("name", "Logo");
-    const response = await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", body: form }));
+    const response = await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", headers: { "Idempotency-Key": "upload-1" }, body: form }));
     expect(response.status).toBe(201);
-    expect(state.addImageAsset).toHaveBeenCalledWith({ name: "Logo", fileName: "logo.png", data: png });
+    expect(state.addImageAssetWithOperation).toHaveBeenCalledWith({ name: "Logo", fileName: "logo.png", data: png }, expect.objectContaining({ operationId: "upload-1", credentialId: "host:user-1", tool: "host_upload_image_asset", argumentDigest: expect.stringMatching(/^[0-9a-f]{64}$/) }));
 
-    const tooLarge = routeRequest("/api/admin/assets", { method: "POST", body: new Uint8Array(2 * 1024 * 1024 + 64 * 1024 + 1) });
+    const tooLarge = routeRequest("/api/admin/assets", { method: "POST", headers: { "Idempotency-Key": "upload-large" }, body: new Uint8Array(2 * 1024 * 1024 + 64 * 1024 + 1) });
     expect((await uploadAsset(tooLarge)).status).toBe(413);
-    expect(state.addImageAsset).toHaveBeenCalledTimes(1);
+    expect(state.addImageAssetWithOperation).toHaveBeenCalledTimes(1);
   });
 
   it("returns a typed workspace quota error when the storage ceiling is reached", async () => {
-    state.addImageAsset.mockRejectedValueOnce(new (await import("@/lib/repo/assets")).ImageAssetQuotaError(100, 10));
+    state.addImageAssetWithOperation.mockRejectedValueOnce(new (await import("@/lib/repo/assets")).ImageAssetQuotaError(100, 10));
     const form = new FormData();
     form.set("file", new Blob([png]), "logo.png");
-    const response = await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", body: form }));
+    const response = await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", headers: { "Idempotency-Key": "upload-quota" }, body: form }));
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toMatchObject({ code: "workspace_image_quota_exceeded", usedBytes: 100, quotaBytes: 100 });
+  });
+
+  it("requires an idempotency key and replays an existing image operation before charging quota", async () => {
+    const form = new FormData();
+    form.set("file", new Blob([png]), "logo.png");
+    form.set("name", "Logo");
+    expect((await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", body: form }))).status).toBe(400);
+    expect(state.addImageAssetWithOperation).not.toHaveBeenCalled();
+
+    state.getImageUploadOperation.mockResolvedValueOnce({ kind: "replayed", asset });
+    const response = await uploadAsset(routeRequest("/api/admin/assets", { method: "POST", headers: { "Idempotency-Key": "upload-replay" }, body: form }));
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({ asset });
+    expect(state.addImageAssetWithOperation).not.toHaveBeenCalled();
   });
 
   it("renames assets and protects deletion with exact-name confirmation", async () => {

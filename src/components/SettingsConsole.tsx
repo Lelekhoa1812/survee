@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { api, Badge, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
+import { clearClientOperationId, clientOperationId } from "@/lib/client-idempotency";
 import { fullTime, relTime } from "@/lib/time";
 import { AccountSettingsPanel } from "./AccountSettingsPanel";
 import { ImageAssetsPanel } from "./ImageAssetsPanel";
@@ -116,9 +117,9 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
     setKeys(res.data.keys);
   }
 
-  async function mutate(url: string, method: string, body?: unknown, done?: string) {
+  async function mutate(url: string, method: string, body?: unknown, done?: string, headers?: Record<string, string>) {
     setBusy(true);
-    const res = await api<{ key?: KeyRow; secret?: string }>(url, { method, body });
+    const res = await api<{ key?: KeyRow; secret?: string }>(url, { method, body, headers });
     setBusy(false);
     if (!res.ok) {
       toast(res.data.error || "That could not be saved.", "err");
@@ -163,7 +164,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
       <div className="page-head">
         <div>
           <h1>Settings</h1>
-          <p>{canManageKeys ? "Manage your workspace account, connect an agent, and control named keys. The full value of a new key is shown once, then only a fingerprint remains." : "Manage your workspace account and connect an agent."}</p>
+          <p>{canManageKeys ? "Manage your workspace account, connect an agent, and control named keys. Generate the key value in the form. After creation, save the full value from the confirmation panel. The page then keeps only a fingerprint." : "Manage your workspace account and connect an agent."}</p>
         </div>
         {canManageKeys && <button className="btn primary right" type="button" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New key</button>}
       </div>
@@ -244,7 +245,7 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
             <Icon name="lock" size={16} />
             <div>
               <h2>Copy “{revealed.name}” now</h2>
-              <div className="sub">This is the only time the full value is shown. Closing this panel hides it for good.</div>
+              <div className="sub">Save this value now. This panel hides the value when you close it. The page then keeps only a fingerprint.</div>
             </div>
           </div>
           <div className="card-pad stack">
@@ -387,8 +388,10 @@ export function SettingsConsole({ initialKeys, loadError, canManageKeys, envToke
           busy={busy}
           onClose={() => { if (!busy) setCreating(false); }}
           onSubmit={async (draft) => {
-            const data = await mutate("/api/admin/keys", "POST", draft);
+            if (!draft.operationId) return;
+            const data = await mutate("/api/admin/keys", "POST", { name: draft.name, note: draft.note, value: draft.value, expiresAt: draft.expiresAt, capabilities: draft.capabilities }, undefined, { "Idempotency-Key": draft.operationId });
             if (!data?.secret) return;
+            if (draft.fingerprint) clearClientOperationId("create-api-key", draft.fingerprint);
             setCreating(false);
             setRevealed({ name: data.key?.name || draft.name, secret: data.secret });
           }}
@@ -477,7 +480,7 @@ function toLocalInput(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; busy: boolean; initial?: KeyRow; onClose: () => void; onSubmit: (draft: { name: string; note: string; value: string; expiresAt: string | null; capabilities: McpCapability[] }) => Promise<void> }) {
+function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; busy: boolean; initial?: KeyRow; onClose: () => void; onSubmit: (draft: { name: string; note: string; value: string; expiresAt: string | null; capabilities: McpCapability[]; operationId?: string; fingerprint?: string }) => Promise<void> }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
   const [value, setValue] = useState("");
@@ -503,7 +506,15 @@ function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; b
             if (value.trim() && value.trim().length < 32) { setError("A key value needs at least 32 characters, or leave it blank to generate one."); return; }
             if (/\s/.test(value)) { setError("A key value cannot contain spaces."); return; }
             setError("");
-            await onSubmit({ name: trimmed, note: note.trim(), value: value.trim(), expiresAt: expiryMode === "scheduled" ? new Date(expires).toISOString() : null, capabilities });
+            const secret = value.trim() || generateLocal();
+            if (!value.trim()) setValue(secret);
+            const draft = { name: trimmed, note: note.trim(), value: secret, expiresAt: expiryMode === "scheduled" ? new Date(expires).toISOString() : null, capabilities };
+            if (initial) {
+              await onSubmit(draft);
+              return;
+            }
+            const operation = await clientOperationId("create-api-key", draft);
+            await onSubmit({ ...draft, operationId: operation.operationId, fingerprint: operation.fingerprint });
           }}>{busy ? <Spinner /> : null} {initial ? "Save" : "Create key"}</button>
         </>
       }
@@ -525,7 +536,7 @@ function KeyForm({ title, busy, initial, onClose, onSubmit }: { title: string; b
               <button className="btn sm" type="button" onClick={() => setShowValue((v) => !v)}>{showValue ? "Hide" : "Show"}</button>
               <button className="btn sm" type="button" onClick={() => { setValue(generateLocal()); setShowValue(true); }}>Generate</button>
             </div>
-            <span className="hint">At least 32 characters, no spaces. Generating here lets you copy it before you save. The server still shows it once after creation.</span>
+            <span className="hint">At least 32 characters, no spaces. The key value is generated here and remains available in this form if you need to retry.</span>
           </div>
         )}
         <fieldset className="stack" style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 12 }}>

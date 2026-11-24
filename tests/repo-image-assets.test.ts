@@ -135,6 +135,14 @@ describe("workspace image assets", () => {
     expect(lookedUp).toEqual({ kind: "replayed", asset: first.kind === "conflict" ? undefined : first.asset });
   });
 
+  it("separates the host asset-upload namespace from the MCP namespace", async () => {
+    const input = { name: "Brand mark", fileName: "logo.png", data: png };
+    const host = await addImageAssetWithOperation(input, { operationId: "same", credentialId: "host:user-a", tool: "host_upload_image_asset", argumentDigest: "digest" });
+    const mcp = await addImageAssetWithOperation(input, { operationId: "same", credentialId: "api_key:key-a", argumentDigest: "digest" });
+    expect([host.kind, mcp.kind]).toEqual(["created", "created"]);
+    expect(store.operations.map((item) => item.tool)).toEqual(["host_upload_image_asset", "upload_image_asset"]);
+  });
+
   it("clears an upload replay result atomically when its image asset is deleted", async () => {
     const operation = { operationId: "image-delete-1", credentialId: "api_key:key-a", argumentDigest: "digest-a" };
     const input = { name: "Disposable logo", fileName: "logo.png", data: png };
@@ -151,6 +159,19 @@ describe("workspace image assets", () => {
     if (retried.kind === "conflict") throw new Error("Unexpected upload operation conflict.");
     expect(retried.asset.id).not.toBe(uploaded.asset.id);
     await expect(getPublicImageAsset(retried.asset.url.split("/").pop()!)).resolves.toMatchObject({ data: png });
+  });
+
+  it("clears a host upload replay result when its image asset is deleted", async () => {
+    const operation = { operationId: "image-host-delete-1", credentialId: "host:user-a", tool: "host_upload_image_asset", argumentDigest: "digest-a" };
+    const input = { name: "Host logo", fileName: "logo.png", data: png };
+    const uploaded = await addImageAssetWithOperation(input, operation);
+    expect(uploaded.kind).toBe("created");
+    if (uploaded.kind === "conflict") throw new Error("Unexpected upload operation conflict.");
+    expect(store.operations.map((item) => item.tool)).toEqual(["host_upload_image_asset"]);
+
+    expect(await deleteImageAsset(uploaded.asset.id, uploaded.asset.name)).toEqual({ ok: true });
+    expect(store.operations).toHaveLength(0);
+    await expect(getImageUploadOperation(operation)).resolves.toBeNull();
   });
 
   it("cleans up a legacy upload replay row when its asset is already missing", async () => {

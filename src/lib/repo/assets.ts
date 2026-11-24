@@ -18,15 +18,15 @@ export class ImageAssetQuotaError extends Error {
 
 const MCP_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-function imageUploadOperationScope(tenantId: string, operation: { operationId: string; credentialId: string }) {
+function imageUploadOperationScope(tenantId: string, operation: { operationId: string; credentialId: string; tool?: string }) {
   return {
-    tenantId, tool: "upload_image_asset",
+    tenantId, tool: operation.tool ?? "upload_image_asset",
     credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
     operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
   };
 }
 
-export type ImageUploadOperation = { operationId: string; credentialId: string; argumentDigest: string };
+export type ImageUploadOperation = { operationId: string; credentialId: string; argumentDigest: string; tool?: string };
 export type ImageUploadOperationResult = { kind: "created" | "replayed"; asset: ImageAssetSummary } | { kind: "conflict" };
 
 async function findLiveImageUploadOperation(
@@ -266,12 +266,15 @@ export async function deleteImageAsset(id: string, expectedName: string): Promis
     const deleted = await assets.deleteOne(tenantFilter(tenantId, { _id: oid, name: expectedName, publicId: asset.publicId }), { session });
     if (!deleted.deletedCount) throw new ImageAssetDeleteAbort("changed");
     // An upload operation stores the original asset summary for safe retries.
-    // Remove that replay record in the same transaction so a later retry
-    // cannot return a URL for an asset that no longer exists.
-    await (await col.mcpOperations()).deleteMany(tenantFilter(tenantId, {
-      tool: "upload_image_asset",
-      "result.asset.id": oid.toHexString(),
-    }), { session });
+    // Remove host and MCP replay records in the same transaction so a later
+    // retry cannot return a URL for an asset that no longer exists.
+    const operations = await col.mcpOperations();
+    for (const tool of ["upload_image_asset", "host_upload_image_asset"]) {
+      await operations.deleteMany(tenantFilter(tenantId, {
+        tool,
+        "result.asset.id": oid.toHexString(),
+      }), { session });
+    }
     return "deleted" as const;
     });
   } catch (error) {

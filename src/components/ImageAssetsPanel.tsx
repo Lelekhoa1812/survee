@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, CopyButton, Icon, Modal, Spinner, useToast } from "./ui";
 import { IMAGE_ASSET_ACCEPT, MAX_IMAGE_BYTES, WORKSPACE_IMAGE_QUOTA_BYTES, type ImageAssetSummary } from "@/lib/image-assets";
+import { clearClientOperationId, clientOperationId } from "@/lib/client-idempotency";
 
 interface Page {
   assets?: ImageAssetSummary[];
@@ -69,22 +70,28 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
       setUploadProgress({ done: index + 1, total: uploadable.length });
       const form = new FormData();
       form.set("file", file);
-      form.set("name", uploadable.length === 1 ? name.trim() || file.name : file.name);
+      const assetName = uploadable.length === 1 ? name.trim() || file.name : file.name;
+      form.set("name", assetName);
       try {
-        const response = await fetch("/api/admin/assets", { method: "POST", body: form, credentials: "same-origin" });
-        const data = await response.json().catch(() => ({})) as { asset?: ImageAssetSummary; error?: string };
-        if (!response.ok || !data.asset) {
+        const bytes = await readFileBytes(file);
+        const hash = await crypto.subtle.digest("SHA-256", bytes);
+        const dataSha256 = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+        const scope = "upload-image-asset";
+        const operation = await clientOperationId(scope, { name: assetName, fileName: file.name, size: file.size, lastModified: file.lastModified, dataSha256 });
+        const response = await api<{ asset?: ImageAssetSummary }>("/api/admin/assets", { method: "POST", headers: { "Idempotency-Key": operation.operationId }, body: form });
+        if (!response.ok || !response.data.asset) {
           failed.push(file);
-          errors.push(`${file.name}: ${data.error || "The image could not be saved."}`);
+          errors.push(`${file.name}: ${response.data.error || "The image could not be saved."}`);
           continue;
         }
+        clearClientOperationId(scope, operation.fingerprint);
         saved += 1;
-      } catch {
+      } catch (error) {
         failed.push(file);
         errors.push(`${file.name}: Could not reach the server. Check your connection and try again.`);
       }
     }
-    setName("");
+    if (uploadable.length !== 1 || failed.length === 0) setName("");
     setFiles(failed);
     setFileInputKey((current) => current + 1);
     setUploadProgress(null);
@@ -191,6 +198,16 @@ export function ImageAssetsPanel({ canManage = true }: { canManage?: boolean }) 
       </Modal>}
     </>
   );
+}
+
+function readFileBytes(file: File): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === "function") return file.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("The image file could not be read."));
+    reader.onload = () => reader.result instanceof ArrayBuffer ? resolve(reader.result) : reject(new Error("The image file could not be read."));
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 function AssetRow({ asset, canManage, onRename, onDelete }: { asset: ImageAssetSummary; canManage: boolean; onRename: (asset: ImageAssetSummary, name: string) => Promise<void>; onDelete: () => void }) {

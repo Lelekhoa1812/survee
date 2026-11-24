@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Uploader, type UploadState } from "./Uploader";
 import { BasicQuestionnaireBuilder } from "./BasicQuestionnaireBuilder";
 import { api, Icon, Spinner, useToast } from "./ui";
+import { clearClientOperationId, clientOperationId } from "@/lib/client-idempotency";
 
 export function NewInterview() {
   const router = useRouter();
@@ -93,8 +94,11 @@ export function NewInterview() {
   async function create() {
     if (!ready || !upload.html) return;
     setBusy(true);
-    const res = await api<{ id: string }>("/api/admin/interviews", { method: "POST", body: { name, description, mode, html: upload.html, fileName: upload.fileName } });
+    const body = { name, description, mode, html: upload.html, fileName: upload.fileName };
+    const operation = await clientOperationId("create-interview", body);
+    const res = await api<{ id: string }>("/api/admin/interviews", { method: "POST", headers: { "Idempotency-Key": operation.operationId }, body });
     if (res.ok) {
+      clearClientOperationId("create-interview", operation.fingerprint);
       completed.current = true;
       await saveQueue.current;
       let cleanupFailed = false;

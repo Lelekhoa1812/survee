@@ -75,4 +75,12 @@ describe("addParticipantsWithOperation", () => {
     const replay = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => getAddPeopleOperation(args));
     expect(replay).toEqual({ kind: "replayed", people: created.people });
   });
+
+  it("keeps host REST add batches separate from MCP batches", async () => {
+    const hostArgs = { ...args, credentialId: "host:user-a", tool: "host_add_people" };
+    const host = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "session" }, () => addParticipantsWithOperation("123456789012345678901234", [{ name: "Ada" }], hostArgs));
+    const mcp = await withTenantPrincipal({ tenantId: "workspace-1", role: "admin", source: "api_key" }, () => addParticipantsWithOperation("123456789012345678901234", [{ name: "Ada" }], args));
+    expect([host.kind, mcp.kind]).toEqual(["created", "created"]);
+    expect(mocks.operations.map((item) => item.tool)).toEqual(["host_add_people", "add_people"]);
+  });
 });

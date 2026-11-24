@@ -27,6 +27,7 @@ const lookups = vi.fn();
 const activeTenants = new Set<string>();
 
 vi.mock("../src/lib/db", () => ({
+  withMongoTransaction: async (work: (session: unknown) => Promise<unknown>) => work({}),
   col: {
     tenants: async () => ({
       findOne: async (query: { _id: string; status: string }) => activeTenants.has(query._id) && query.status === "active" ? { _id: query._id } : null,
@@ -54,6 +55,9 @@ vi.mock("../src/lib/db", () => ({
     },
     events: async () => ({
       insertOne: async (row: Record<string, unknown>) => { eventRows.push(row); return { insertedId: row._id }; },
+    }),
+    mcpOperations: async () => ({
+      updateMany: async () => ({ matchedCount: 0, modifiedCount: 0 }),
     }),
     rateLimits: async () => ({
       findOneAndUpdate: async (query: { _id: string }) => {

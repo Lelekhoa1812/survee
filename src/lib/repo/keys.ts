@@ -1,15 +1,25 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ObjectId, type ObjectId as ObjectIdType } from "mongodb";
-import { col } from "../db";
+import { col, withMongoTransaction } from "../db";
 import { mcpToken } from "../env";
 import type { ApiKeyDoc, ApiKeyView } from "./types";
 import { currentTenantId, tenantFilter } from "../tenant-context";
 import { AXION_TENANT_ID } from "../env";
 import { DEFAULT_MCP_CAPABILITIES, effectiveMcpCapabilitiesForRole, parseMcpCapabilities, type McpCapability } from "../mcp/capabilities";
 import { isTenantActive } from "./tenants";
+import type { McpOperationDoc } from "./types";
+
+function isApiKeyHashDuplicate(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("code" in error) || error.code !== 11000) return false;
+  const pattern = "keyPattern" in error && error.keyPattern && typeof error.keyPattern === "object" ? error.keyPattern as Record<string, unknown> : null;
+  if (pattern && "hash" in pattern && !("operationIdHash" in pattern)) return true;
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  return message.includes("hash_unique");
+}
 
 const MIN_SECRET = 32;
 const MAX_SECRET = 256;
+const KEY_CREATE_OPERATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function hashKey(secret: string): string {
   return createHash("sha256").update(secret, "utf8").digest("hex");
@@ -105,6 +115,76 @@ export async function createApiKey(input: { name: string; note?: string; secret:
   return { ok: true, key: toKeyView(doc), secret: input.secret };
 }
 
+export type CreateHostApiKeyOperation = { operationId: string; credentialId: string; argumentDigest: string };
+export type CreateHostApiKeyResult =
+  | { kind: "created"; key: ApiKeyView }
+  | { kind: "replayed"; key: ApiKeyView }
+  | { kind: "conflict" }
+  | { kind: "unavailable" }
+  | { kind: "invalid"; error: string };
+
+/** Create a host key and retain a secret-free receipt atomically for seven-day retries. */
+export async function createApiKeyWithOperation(
+  input: { name: string; note?: string; secret: string; expiresAt?: Date | null; createdBy: string; capabilities?: McpCapability[] },
+  operation: CreateHostApiKeyOperation,
+): Promise<CreateHostApiKeyResult> {
+  const problem = validateKeySecret(input.secret);
+  if (problem) return { kind: "invalid", error: problem };
+  const capabilities = input.capabilities ?? [...DEFAULT_MCP_CAPABILITIES];
+  if (!parseMcpCapabilities(capabilities)) return { kind: "invalid", error: "Choose at least one valid access permission." };
+  const tenantId = await currentTenantId();
+  if (!tenantId) return { kind: "invalid", error: "An authenticated tenant is required." };
+  const scope = {
+    tenantId,
+    tool: "host_create_api_key",
+    credentialIdHash: createHash("sha256").update(operation.credentialId).digest("hex"),
+    operationIdHash: createHash("sha256").update(operation.operationId).digest("hex"),
+  };
+  const operations = await col.mcpOperations();
+  const keys = await col.apiKeys();
+  const run = () => withMongoTransaction(async (session) => {
+    const existing = await operations.findOne(scope, { session });
+    if (existing && existing.expiresAt > new Date()) {
+      if (existing.argumentDigest !== operation.argumentDigest) return { kind: "conflict" as const };
+      const keyId = typeof existing.result.keyId === "string" ? existing.result.keyId : "";
+      const key = /^[0-9a-f]{24}$/i.test(keyId) ? await keys.findOne(tenantFilter(tenantId, { _id: new ObjectId(keyId) }), { session }) : null;
+      return key ? { kind: "replayed" as const, key: toKeyView(key) } : { kind: "unavailable" as const };
+    }
+    if (existing) await operations.deleteOne({ _id: existing._id }, { session });
+
+    const { prefix, suffix } = splitSecret(input.secret);
+    const doc: ApiKeyDoc = {
+      _id: new ObjectId(), tenantId, name: input.name, note: input.note || undefined, prefix, suffix,
+      hash: hashKey(input.secret), createdAt: new Date(), createdBy: input.createdBy, capabilities,
+      expiresAt: input.expiresAt ?? undefined,
+    };
+    await keys.insertOne(doc, { session });
+    const createdAt = new Date();
+    const receipt: McpOperationDoc = {
+      _id: new ObjectId(), ...scope, argumentDigest: operation.argumentDigest,
+      result: { keyId: doc._id.toHexString() }, createdAt,
+      expiresAt: new Date(createdAt.getTime() + KEY_CREATE_OPERATION_TTL_MS),
+    };
+    await operations.insertOne(receipt, { session });
+    return { kind: "created" as const, key: toKeyView(doc) };
+  });
+  try {
+    return await run();
+  } catch (error) {
+    // The key hash index and the operation ledger index both use code 11000.
+    // A repeated secret is a normal validation error. Only a ledger collision
+    // is resolved by replaying the committed receipt.
+    if (isApiKeyHashDuplicate(error)) return { kind: "invalid", error: "A key with that value already exists." };
+    if (!(error && typeof error === "object" && "code" in error && error.code === 11000)) throw error;
+    const committed = await operations.findOne(scope);
+    if (!committed || committed.expiresAt <= new Date()) throw error;
+    if (committed.argumentDigest !== operation.argumentDigest) return { kind: "conflict" };
+    const keyId = typeof committed.result.keyId === "string" ? committed.result.keyId : "";
+    const key = /^[0-9a-f]{24}$/i.test(keyId) ? await keys.findOne(tenantFilter(tenantId, { _id: new ObjectId(keyId) })) : null;
+    return key ? { kind: "replayed", key: toKeyView(key) } : { kind: "unavailable" };
+  }
+}
+
 export async function updateApiKey(id: string, patch: { name?: string; note?: string | null; expiresAt?: Date | null; revoked?: boolean; capabilities?: McpCapability[] }): Promise<{ ok: true; key: ApiKeyView } | { ok: false; error: string }> {
   if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
   if (patch.capabilities !== undefined && !parseMcpCapabilities(patch.capabilities)) return { ok: false, error: "Choose at least one valid access permission." };
@@ -140,9 +220,20 @@ export async function deleteApiKey(id: string): Promise<{ ok: true } | { ok: fal
   if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: "Key not found." };
   const tenantId = await currentTenantId();
   if (!tenantId) return { ok: false, error: "Key not found." };
-  const result = await (await col.apiKeys()).deleteOne(tenantFilter(tenantId, { _id: new ObjectId(id) }));
-  if (!result.deletedCount) return { ok: false, error: "Key not found." };
-  return { ok: true };
+  const removed = await withMongoTransaction(async (session) => {
+    const result = await (await col.apiKeys()).deleteOne(tenantFilter(tenantId, { _id: new ObjectId(id) }), { session });
+    if (!result.deletedCount) return false;
+    // The create receipt keeps the key ID so a retry can find the row.
+    // Erase that ID with the key. Keep the argument digest so the same
+    // operation reports the key as gone instead of creating a replacement.
+    await (await col.mcpOperations()).updateMany(
+      tenantFilter(tenantId, { tool: "host_create_api_key", "result.keyId": id }),
+      { $set: { result: { deleted: true }, deletedAt: new Date() } },
+      { session },
+    );
+    return true;
+  });
+  return removed ? { ok: true } : { ok: false, error: "Key not found." };
 }
 
 /**

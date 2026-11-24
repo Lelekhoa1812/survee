@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from "node:crypto";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,6 +39,9 @@ async function clickSave(label: string) {
   const button = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes(label));
   if (!button) throw new Error(`Button not found: ${label}`);
   await act(async () => { button.click(); });
+  for (let attempt = 0; attempt < 150 && host.textContent?.includes("Saving "); attempt += 1) {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  }
 }
 
 beforeEach(() => {
@@ -49,10 +53,16 @@ beforeEach(() => {
     ? { ok: true, data: { usage: { assetCount: 4, totalBytes: 2048, quotaBytes: 100 * 1024 * 1024 } } }
     : { ok: true, data: { assets: [], nextCursor: null } });
   state.toast.mockReset();
-  vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
-    const file = (init?.body as FormData).get("file") as File;
-    return uploadResponse(file.name);
-  }));
+  state.api.mockImplementation(async (url: string, init?: { method?: string; body?: unknown }) => {
+    if (url.includes("/usage")) return { ok: true, data: { usage: { assetCount: 4, totalBytes: 2048, quotaBytes: 100 * 1024 * 1024 } } };
+    if (init?.method === "POST") {
+      const file = (init.body as FormData).get("file") as File;
+      const result = await uploadResponse(file.name).json();
+      return { ok: true, status: 201, data: result };
+    }
+    return { ok: true, data: { assets: [], nextCursor: null } };
+  });
+  vi.stubGlobal("crypto", webcrypto);
 });
 
 afterEach(() => {
@@ -81,23 +91,36 @@ describe("workspace image library uploader", () => {
     expect(host.textContent).toContain("2 images. They will save one at a time");
     await clickSave("Save 2 images");
 
-    const requests = vi.mocked(fetch).mock.calls;
+    const requests = state.api.mock.calls.filter(([url, init]) => url === "/api/admin/assets" && init?.method === "POST");
     expect(requests).toHaveLength(2);
     expect((requests[0][1]?.body as FormData).get("file")).toMatchObject({ name: "one.png" });
     expect((requests[1][1]?.body as FormData).get("file")).toMatchObject({ name: "two.webp" });
+    expect(requests[0][1]?.headers).toMatchObject({ "Idempotency-Key": expect.any(String) });
     expect(state.toast).toHaveBeenCalledWith("2 images saved to the workspace library.");
   });
 
   it("keeps failed files selected for retry while saving the rest of a batch", async () => {
     let failOnce = true;
-    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const file = (init?.body as FormData).get("file") as File;
       if (file.name === "retry.png" && failOnce) {
         failOnce = false;
         return { ok: false, json: async () => ({ error: "Temporary upload failure." }) };
       }
       return uploadResponse(file.name);
-    }));
+    });
+    state.api.mockImplementation(async (url: string, init?: { method?: string; body?: unknown }) => {
+      if (url.includes("/usage")) return { ok: true, data: { usage: { assetCount: 4, totalBytes: 2048, quotaBytes: 100 * 1024 * 1024 } } };
+      if (init?.method === "POST") {
+        const file = (init.body as FormData).get("file") as File;
+        if (file.name === "retry.png" && failOnce) {
+          failOnce = false;
+          return { ok: false, status: 503, data: { error: "Temporary upload failure." } };
+        }
+        return { ok: true, status: 201, data: await uploadResponse(file.name).json() };
+      }
+      return { ok: true, data: { assets: [], nextCursor: null } };
+    });
     await act(async () => root.render(createElement(ImageAssetsPanel)));
     await selectFiles([
       new File([new Uint8Array([1])], "saved.png", { type: "image/png" }),
@@ -110,7 +133,9 @@ describe("workspace image library uploader", () => {
     expect(state.toast).toHaveBeenCalledWith(expect.stringContaining("Failed files remain selected for retry."), "err");
     await clickSave("Save image");
 
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
-    expect((vi.mocked(fetch).mock.calls[2][1]?.body as FormData).get("file")).toMatchObject({ name: "retry.png" });
+    const requests = state.api.mock.calls.filter(([url, init]) => url === "/api/admin/assets" && init?.method === "POST");
+    expect(requests).toHaveLength(3);
+    expect((requests[2][1]?.body as FormData).get("file")).toMatchObject({ name: "retry.png" });
+    expect(requests[1][1]?.headers).toEqual(requests[2][1]?.headers);
   });
 });
