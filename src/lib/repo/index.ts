@@ -798,7 +798,7 @@ export async function listParticipantPage(
     const rows = await participants.aggregate<{ docs: ParticipantDoc[]; summary: { sourceBytes: number }[] }>([
       { $match: tenantFilter(tenantId, filter) },
       { $sort: { createdAt: -1, _id: -1 } },
-      { $limit: limit + 1 },
+      { $limit: limit },
       { $set: { _pageDocBytes: { $bsonSize: "$$ROOT" } } },
       { $setWindowFields: { output: { _pageSourceBytes: { $sum: "$_pageDocBytes", window: { documents: ["unbounded", "unbounded"] } } } } },
       { $facet: {
@@ -814,10 +814,9 @@ export async function listParticipantPage(
     participantSourceBytes = page?.summary[0]?.sourceBytes ?? 0;
     docs = page?.docs ?? [];
   } else {
-    docs = await participants.find(tenantFilter(tenantId, filter)).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
+    docs = await participants.find(tenantFilter(tenantId, filter)).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
   }
-  const hasMore = docs.length > limit;
-  const pageDocs = hasMore ? docs.slice(0, limit) : docs;
+  const pageDocs = docs;
   if (!pageDocs.length) return { people: [], nextCursor: null };
   const byParticipant = new Map<string, QuestionOrderAssignmentView[]>();
   if (includeOrderAssignments) {
@@ -834,6 +833,19 @@ export async function listParticipantPage(
     ...participantView(doc),
     ...(byParticipant.has(doc._id.toHexString()) ? { questionOrderAssignments: byParticipant.get(doc._id.toHexString()) } : {}),
   }));
+  const last = pageDocs[pageDocs.length - 1];
+  const hasMoreFilter: Record<string, unknown> = {
+    interviewId: oid,
+    ...(submittedOnly ? { status: "submitted" } : {}),
+    $or: [
+      { createdAt: { $lt: last.createdAt } },
+      { createdAt: last.createdAt, _id: { $lt: last._id } },
+    ],
+  };
+  // Fetch only a projected existence check. Hydrating the lookahead participant used
+  // to charge its entire answer document against this page's byte budget and could
+  // reject two individually valid large respondents that would fit on separate pages.
+  const hasMore = (await participants.find(tenantFilter(tenantId, hasMoreFilter), { projection: { _id: 1 } }).sort({ createdAt: -1, _id: -1 }).limit(1).toArray()).length > 0;
   return { people, nextCursor: hasMore ? encodeParticipantCursor(people[people.length - 1]) : null };
 }
 

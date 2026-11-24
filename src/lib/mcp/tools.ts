@@ -50,9 +50,9 @@ import {
   ParticipantReadLimitError,
   listVersions,
   noteMcp,
+  recordExportEvent,
   publishVersionIfCurrent,
   getQuestionnairePublishOperation,
-  regenerateToken,
   regenerateTokenWithOperation,
   getRegenerateLinkOperation,
   reopenParticipant,
@@ -1186,6 +1186,11 @@ const TOOLS: ToolDef[] = [
       // of the export. For text files, account for escaping without allocating it.
       if (exportEnvelopeBytes(data, textBody, fileBodyBytes) > MAX_EXPORT_OUTPUT_BYTES) throw new ExportOutputSizeLimitError();
       const encodedBody = binary ? file.body.toString("base64") : textFileBody!;
+      try {
+        await recordExportEvent(id, format);
+      } catch {
+        console.error("[audit] MCP export event persistence failed");
+      }
       return ok({ ...data, body: encodedBody }, textBody);
     },
   },
@@ -2122,13 +2127,13 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "regenerate_link",
-    description: "Replace a person's private link. The previous link stops working. Nothing is emailed automatically. Optional operationId makes uncertain retries return the same link for seven days.",
-    inputSchema: obj({ personId: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId"]),
+    description: "Replace a person's private link. The previous link stops working. Nothing is emailed automatically. Required operationId makes uncertain retries return the same link for seven days.",
+    inputSchema: obj({ personId: str, operationId: { type: "string", minLength: 1, maxLength: 128 } }, ["personId", "operationId"]),
     async run(args) {
       const id = asString(args.personId, 40);
       if (!id) return err("personId is required.");
-      if (args.operationId !== undefined && (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId))) return err("operationId must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
-      if (typeof args.operationId === "string") {
+      if (typeof args.operationId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(args.operationId)) return err("operationId is required and must contain 1 to 128 letters, numbers, dots, underscores, colons, or hyphens.", "invalid_args");
+      {
         const credentialId = stableMcpCredentialId();
         if (!credentialId) return err("operationId requires an authenticated MCP credential.", "invalid_args");
         const operation = { operationId: args.operationId, credentialId, argumentDigest: createHash("sha256").update(canonicalJson({ personId: id })).digest("hex") };
@@ -2148,10 +2153,6 @@ const TOOLS: ToolDef[] = [
         const link = inviteLink(result.token);
         return ok({ token: result.token, link: link.ok ? link.link : null, interviewId: result.interviewId });
       }
-      const token = await regenerateToken(id);
-      if (!token) return err("Person not found.", "not_found");
-      const link = inviteLink(token);
-      return ok({ token, link: link.ok ? link.link : null, interviewId: (await getParticipant(id))?.interviewId });
     },
   },
   {

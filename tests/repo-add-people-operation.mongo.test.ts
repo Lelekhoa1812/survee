@@ -170,6 +170,37 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  it("keeps a full lookahead respondent out of each streamed export page byte budget", async () => {
+    const database = client.db(dbName);
+    const participantIds = [new mongo.ObjectId(), new mongo.ObjectId()];
+    const createdAt = [new Date("2026-11-20T00:00:00.000Z"), new Date("2026-11-19T00:00:00.000Z")];
+    const payload = "x".repeat(5 * 1024 * 1024);
+    await database.collection("participants").insertMany(participantIds.map((_id, index) => ({
+      _id,
+      tenantId: "integration-workspace",
+      interviewId,
+      token: `large-page-token-${index}`,
+      name: `Large page ${index}`,
+      status: "invited",
+      answers: { note: { value: payload, updatedAt: createdAt[index] } },
+      recordGroups: {},
+      revision: 0,
+      createdAt: createdAt[index],
+      updatedAt: createdAt[index],
+    })));
+    try {
+      const first = await withTenantPrincipal({ tenantId: "integration-workspace", role: "admin", source: "api_key" }, () => repository.listParticipantPage(interviewId.toHexString(), null, 1, false, false, 8 * 1024 * 1024));
+      const second = await withTenantPrincipal({ tenantId: "integration-workspace", role: "admin", source: "api_key" }, () => repository.listParticipantPage(interviewId.toHexString(), first.nextCursor, 1, false, false, 8 * 1024 * 1024));
+
+      expect(first.people.map((person) => person.id)).toEqual([participantIds[0].toHexString()]);
+      expect(first.nextCursor).toBeTruthy();
+      expect(second.people.map((person) => person.id)).toEqual([participantIds[1].toHexString()]);
+      expect(second.nextCursor).toBeNull();
+    } finally {
+      await database.collection("participants").deleteMany({ _id: { $in: participantIds } });
+    }
+  }, 30_000);
+
   it("normalizes legacy signup claims and keeps the newest deterministic email owner", async () => {
     const signups = client.db(dbName).collection("pending_signups");
     const rows = await signups.find({}).sort({ email: 1 }).toArray();

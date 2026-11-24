@@ -106,6 +106,7 @@ vi.mock("../src/lib/repo", async () => {
     ...actual,
     consumeRateLimit: vi.fn(async () => true),
     noteMcp: vi.fn(async () => {}),
+    recordExportEvent: vi.fn(async () => true),
     reopenParticipant: vi.fn(async () => null),
     reopenParticipantWithOperation: vi.fn(async (_id: string) => ({ kind: "reopened" as const, person: { id: personId, interviewId, token: "person-token", name: "Ada Lovelace", status: "in_progress" as const, answers: {}, revision: 0, createdAt: "2026-11-13T00:00:00.000Z", updatedAt: "2026-11-13T00:00:00.000Z" } })),
     getReopenPersonOperation: vi.fn(async () => null),
@@ -197,7 +198,7 @@ import { handleMcp } from "../src/lib/mcp/http";
 import { jsonStringByteLength, listToolDefs } from "../src/lib/mcp/tools";
 import { MCP_TOOL_CAPABILITIES } from "../src/lib/mcp/capabilities";
 import { getWorkspaceAnalytics } from "../src/lib/repo/workspace-analytics";
-import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listInterviewPage, listParticipantPage, listParticipants, noteMcp, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation, updateParticipantWithOperation, getUpdatePersonOperation } from "../src/lib/repo";
+import { addParticipants, addParticipantsWithOperation, createAnalyticsRun, createInterview, createInterviewWithOperation, deleteInterview, deleteInterviewWithOperation, getDeleteInterviewOperation, getAddPeopleOperation, getCreateInterviewOperation, getInterview, getInterviewParticipantCounts, getParticipant, getVersion, iterateAnalyticsParticipants, listInterviewPage, listParticipantPage, listParticipants, noteMcp, recordExportEvent, ParticipantExportSizeLimitError, ParticipantReadLimitError, publishVersionIfCurrent, reopenParticipant, reopenParticipantWithOperation, getReopenPersonOperation, regenerateTokenWithOperation, getRegenerateLinkOperation, updateInterviewWithOperation, getUpdateInterviewOperation, getQuestionnairePublishOperation, updateParticipantWithOperation, getUpdatePersonOperation } from "../src/lib/repo";
 
 function call(name: string, args: Record<string, unknown>) {
   return handleMcp(new Request("https://kqa.example/api/mcp", {
@@ -217,6 +218,7 @@ beforeEach(() => {
   sent.length = 0;
   searches.length = 0;
   vi.mocked(noteMcp).mockClear();
+  vi.mocked(recordExportEvent).mockClear();
   vi.mocked(listInterviewPage).mockClear();
   vi.mocked(createInterview).mockClear();
   vi.mocked(createInterviewWithOperation).mockClear().mockResolvedValue({ kind: "created", result: { id: interviewId, interviewId, report: { ok: true, counts: { error: 0 }, diagnostics: [] } } });
@@ -289,6 +291,7 @@ describe("MCP tools", () => {
     expect(body.result.isError).toBeFalsy();
     expect(body.result.structuredContent.encoding).toBe("utf8");
     expect(JSON.parse(body.result.structuredContent.body!).participants).toHaveLength(2);
+    expect(recordExportEvent).toHaveBeenCalledWith(interviewId, "json");
 
     vi.mocked(listParticipants).mockRejectedValueOnce(new ParticipantReadLimitError());
     const limited = await call("export_interview", { interviewId, format: "json" });
@@ -318,6 +321,7 @@ describe("MCP tools", () => {
 
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.code).toBe("export_stale");
+    expect(recordExportEvent).not.toHaveBeenCalled();
   });
 
   it("checks the MCP export revision again after file serialization", async () => {
@@ -336,6 +340,7 @@ describe("MCP tools", () => {
 
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.code).toBe("export_stale");
+    expect(recordExportEvent).not.toHaveBeenCalled();
   });
 
   it("caps the encoded MCP envelope after JSON escaping expands a valid file", async () => {
@@ -1039,6 +1044,12 @@ describe("MCP tools", () => {
   });
 
   it("accepts regenerate_link operationId and replays the same private link", async () => {
+    const missing = await call("regenerate_link", { personId });
+    const missingBody = await missing.json() as { result: { isError?: boolean; structuredContent: { code?: string } } };
+    expect(missingBody.result).toMatchObject({ isError: true, structuredContent: { code: "invalid_args" } });
+    expect(getRegenerateLinkOperation).not.toHaveBeenCalled();
+    expect(regenerateTokenWithOperation).not.toHaveBeenCalled();
+
     const first = await call("regenerate_link", { personId, operationId: "rotate-1" });
     const body = await first.json() as { result: { structuredContent: { token?: string; interviewId?: string } } };
     expect(body.result.structuredContent).toMatchObject({ token: "rotated-token", interviewId });

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   participantBytes: 0,
   pageSourceBytes: 0,
   requestedLimit: 0,
+  pageHasMore: [] as boolean[],
+  lookaheadCalls: 0,
   sortedBy: {} as Record<string, number>,
   findCalls: 0,
   aggregateCalls: 0,
@@ -22,7 +24,11 @@ vi.mock("../src/lib/db", () => ({
       aggregate: (pipeline: Record<string, any>[]) => {
         mocks.aggregateCalls += 1;
         if (pipeline.some((stage) => Boolean(stage.$set?._pageDocBytes))) {
-          return { toArray: async () => [{ summary: mocks.pageSourceBytes ? [{ sourceBytes: mocks.pageSourceBytes }] : [], docs: mocks.pageDocs.length ? mocks.pageDocs.shift()! : mocks.docs }] };
+          mocks.requestedLimit = pipeline.find((stage) => stage.$limit)?.$limit ?? 0;
+          return { toArray: async () => [{
+            summary: mocks.pageSourceBytes ? [{ sourceBytes: mocks.pageSourceBytes }] : [],
+            docs: (mocks.pageDocs.length ? mocks.pageDocs.shift()! : mocks.docs).slice(0, mocks.requestedLimit),
+          }] };
         }
         const count = mocks.docs.length;
         const fits = count <= 100 && mocks.participantBytes <= 8 * 1024 * 1024;
@@ -31,16 +37,19 @@ vi.mock("../src/lib/db", () => ({
           docs: fits ? mocks.docs : [],
         }] };
       },
-      find: (filter: Record<string, any>) => {
-        mocks.findCalls += 1;
+      find: (filter: Record<string, any>, options?: Record<string, any>) => {
+        if (options?.projection?._id === 1) mocks.lookaheadCalls += 1;
+        else mocks.findCalls += 1;
         mocks.filters.push(filter);
         return {
         sort: (sort: Record<string, number>) => {
           mocks.sortedBy = sort;
           return {
             limit: (limit: number) => {
-              mocks.requestedLimit = limit;
-              return { toArray: async () => mocks.pageDocs.length ? mocks.pageDocs.shift()! : mocks.docs };
+              if (!options?.projection?._id) mocks.requestedLimit = limit;
+              return { toArray: async () => options?.projection?._id === 1
+                ? (mocks.pageHasMore.shift() ? [{ _id: new ObjectId() }] : [])
+                : (mocks.pageDocs.length ? mocks.pageDocs.shift()! : mocks.docs).slice(0, limit) };
             },
           };
         },
@@ -66,6 +75,8 @@ beforeEach(() => {
   mocks.participantBytes = 0;
   mocks.pageSourceBytes = 0;
   mocks.requestedLimit = 0;
+  mocks.pageHasMore = [];
+  mocks.lookaheadCalls = 0;
   mocks.sortedBy = {};
   mocks.findCalls = 0;
   mocks.aggregateCalls = 0;
@@ -116,11 +127,12 @@ describe("cursor participant pages", () => {
     const b = person("000000000000000000000002", "2026-01-02T00:00:00.000Z");
     const c = person("000000000000000000000003", "2026-01-03T00:00:00.000Z");
     mocks.pageDocs = [[c, b, a], [a]];
+    mocks.pageHasMore = [true, false];
 
     const first = await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 2));
     expect(first.people.map((row) => row.id)).toEqual([c._id.toHexString(), b._id.toHexString()]);
     expect(first.nextCursor).toBeTruthy();
-    expect(mocks.requestedLimit).toBe(3);
+    expect(mocks.requestedLimit).toBe(2);
     expect(mocks.sortedBy).toEqual({ createdAt: -1, _id: -1 });
 
     const second = await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", first.nextCursor!, 2));
@@ -139,7 +151,22 @@ describe("cursor participant pages", () => {
 
     expect(page.people.map((row) => row.id)).toEqual([personDoc._id.toHexString()]);
     expect(mocks.findCalls).toBe(0);
+    expect(mocks.lookaheadCalls).toBe(1);
     expect(mocks.aggregateCalls).toBe(1);
+  });
+
+  it("keeps a large lookahead respondent outside the current CSV page byte budget", async () => {
+    const personDoc = person("000000000000000000000008", "2026-01-08T00:00:00.000Z");
+    mocks.pageDocs = [[personDoc]];
+    mocks.pageSourceBytes = MAX_EXPORT_SOURCE_BYTES - 1;
+    mocks.pageHasMore = [true];
+
+    const page = await withTenantPrincipal({ tenantId: "workspace-1", role: "service", source: "service_token" }, () => listParticipantPage("111111111111111111111111", null, 1, false, true, MAX_EXPORT_SOURCE_BYTES));
+
+    expect(page.people.map((row) => row.id)).toEqual([personDoc._id.toHexString()]);
+    expect(page.nextCursor).toBeTruthy();
+    expect(mocks.requestedLimit).toBe(1);
+    expect(mocks.lookaheadCalls).toBe(1);
   });
 
   it("rejects a streamed CSV page whose source payload exceeds the page budget", async () => {
