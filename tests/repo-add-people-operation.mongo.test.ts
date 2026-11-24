@@ -34,6 +34,7 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
   let dbModule!: typeof import("../src/lib/db");
   let repository!: typeof import("../src/lib/repo");
   let mailRepository!: typeof import("../src/lib/repo/mail");
+  let campaignDrafts!: typeof import("../src/lib/campaign-drafts");
   let withTenantPrincipal!: typeof import("../src/lib/tenant-context").withTenantPrincipal;
   let interviewId!: import("mongodb").ObjectId;
   const previousEnv = {
@@ -55,6 +56,7 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     dbModule = await import("../src/lib/db");
     repository = await import("../src/lib/repo");
     mailRepository = await import("../src/lib/repo/mail");
+    campaignDrafts = await import("../src/lib/campaign-drafts");
     ({ withTenantPrincipal } = await import("../src/lib/tenant-context"));
     client = await new mongo.MongoClient(isolated.uri, { serverSelectionTimeoutMS: 8_000 }).connect();
     await dbModule.db(); // Also exercises the real index setup, including the unique operation scope index.
@@ -117,6 +119,29 @@ integration("MCP operation retries MongoDB replica-set integration", () => {
     }
     expect(await client.db(dbName).collection("participants").countDocuments({ tenantId: "integration-workspace", interviewId })).toBe(1);
     expect(await client.db(dbName).collection("mcp_operations").countDocuments({ tool: "add_people", tenantId: "integration-workspace" })).toBe(1);
+  });
+
+  it("enforces one actor draft per workspace and revision fences on Mongo", async () => {
+    const collection = client.db(dbName).collection("campaign_drafts") as import("mongodb").Collection<import("../src/lib/repo/types").CampaignDraftDoc>;
+    const tenantId = `draft-workspace-${randomUUID()}`;
+    const userId = `draft-user-${randomUUID()}`;
+    const input = { name: "Draft integration", description: "", mode: "single" as const, html: "<html>draft</html>", fileName: "draft.html" };
+    const attempts = await Promise.all([
+      campaignDrafts.saveCampaignDraftIn(collection, tenantId, userId, 0, input),
+      campaignDrafts.saveCampaignDraftIn(collection, tenantId, userId, 0, { ...input, name: "Concurrent" }),
+    ]);
+    expect(attempts.filter((result) => result.ok)).toHaveLength(1);
+    const saved = attempts.find((result) => result.ok);
+    expect(saved?.ok && saved.draft.revision).toBe(1);
+    expect(await collection.countDocuments({ tenantId, userId })).toBe(1);
+    expect(await collection.countDocuments({ tenantId: `${tenantId}-other`, userId })).toBe(0);
+
+    const next = await campaignDrafts.saveCampaignDraftIn(collection, tenantId, userId, 1, { name: "Draft integration", description: "", mode: "single" });
+    expect(next.ok && next.draft.revision).toBe(2);
+    expect(next.ok && next.draft.html).toBeUndefined();
+    expect(await campaignDrafts.saveCampaignDraftIn(collection, tenantId, userId, 1, input)).toMatchObject({ ok: false, currentRevision: 2 });
+    expect(await campaignDrafts.discardCampaignDraftIn(collection, tenantId, userId, 2)).toBe(true);
+    expect(await collection.countDocuments({ tenantId, userId })).toBe(0);
   });
 
   it("returns the exact committed result after the first response is lost", async () => {

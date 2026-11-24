@@ -11,6 +11,20 @@ export type MailTrigger = "admin" | "mcp";
 export type TenantRole = "owner" | "admin" | "member";
 export type MailResolutionPurpose = "email_change" | "token_rotation";
 
+/** collection: campaign_drafts. One resumable New Interview composition per actor and workspace. */
+export interface CampaignDraftDoc {
+  _id: ObjectId;
+  tenantId: string;
+  userId: string;
+  revision: number;
+  name: string;
+  description: string;
+  mode: InterviewMode;
+  html?: string;
+  fileName?: string;
+  updatedAt: Date;
+}
+
 /** collection: tenants */
 export interface TenantDoc {
   _id: string;

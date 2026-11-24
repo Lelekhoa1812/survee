@@ -61,6 +61,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   mocks.api.mockReset();
+  mocks.api.mockResolvedValue({ ok: true, status: 200, data: { draft: null } });
   mocks.toast.mockReset();
   mocks.files.length = 0;
 });
@@ -108,5 +109,22 @@ describe("new interview composer draft retention", () => {
     const revisedHtml = await fileText(mocks.files[1]);
     expect(revisedHtml).toContain("Corrected prompt");
     expect(revisedHtml).not.toContain("Original prompt");
+  });
+
+  it("autosaves meaningful composer changes and discards unsaved edits without recreating a draft", async () => {
+    mocks.api.mockImplementation(async (_url: string, init?: { method?: string }) => init?.method === "PUT"
+      ? { ok: true, status: 200, data: { revision: 1, updatedAt: "2026-11-24T00:00:00.000Z" } }
+      : { ok: true, status: 200, data: { draft: null } });
+    await act(async () => root.render(createElement(NewInterview)));
+    await change("#name", "Saved automatically");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 900)));
+    expect(mocks.api.mock.calls.some(([url, init]) => url === "/api/admin/campaign-draft" && init?.method === "PUT")).toBe(true);
+
+    await change("#name", "Unsaved change");
+    await click("Discard draft");
+    expect((host.querySelector("#name") as HTMLInputElement).value).toBe("");
+    const writesBeforeDebounce = mocks.api.mock.calls.filter(([url, init]) => url === "/api/admin/campaign-draft" && init?.method === "PUT").length;
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 900)));
+    expect(mocks.api.mock.calls.filter(([url, init]) => url === "/api/admin/campaign-draft" && init?.method === "PUT")).toHaveLength(writesBeforeDebounce);
   });
 });

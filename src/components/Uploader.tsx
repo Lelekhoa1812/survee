@@ -19,7 +19,7 @@ export interface UploadState {
   ok: boolean;
 }
 
-export function Uploader({ interviewId, onChange, compact, disabled = false, initialState, generatedFile }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean; initialState?: UploadState; generatedFile?: File }) {
+export function Uploader({ interviewId, onChange, compact, disabled = false, initialState, generatedFile, resetKey }: { interviewId?: string; onChange?: (s: UploadState) => void; compact?: boolean; disabled?: boolean; initialState?: UploadState; generatedFile?: File; resetKey?: number }) {
   const [state, setState] = useState<UploadState>(initialState ?? { settled: false, ok: false });
   const [phase, setPhase] = useState<"idle" | "static" | "live">("idle");
   const [error, setError] = useState("");
@@ -28,6 +28,15 @@ export function Uploader({ interviewId, onChange, compact, disabled = false, ini
   const run = useRef(0);
 
   useEffect(() => { onChange?.(state); }, [state, onChange]);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    run.current++;
+    setState({ settled: false, ok: false });
+    setPhase("idle");
+    setError("");
+    if (input.current) input.current.value = "";
+  }, [resetKey]);
 
   const handle = useCallback(async (file: File) => {
     const id = ++run.current;
